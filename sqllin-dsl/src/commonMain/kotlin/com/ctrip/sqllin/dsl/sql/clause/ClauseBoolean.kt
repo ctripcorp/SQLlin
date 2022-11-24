@@ -5,7 +5,7 @@ package com.ctrip.sqllin.dsl.sql.clause
  * @author yaqiao
  */
 
-class ClauseBoolean(valueName: String) : ClauseElement(valueName) {
+public class ClauseBoolean(valueName: String) : ClauseElement(valueName) {
 
     internal infix fun _is(bool: Boolean): SelectCondition {
         val sql = buildString {

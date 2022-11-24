@@ -7,6 +7,6 @@ import com.ctrip.sqllin.dsl.DBEntity
  * @author yaqiao
  */
 
-abstract class Table<T : DBEntity<T>>(
+public abstract class Table<T : DBEntity<T>>(
     internal val tableName: String,
 )

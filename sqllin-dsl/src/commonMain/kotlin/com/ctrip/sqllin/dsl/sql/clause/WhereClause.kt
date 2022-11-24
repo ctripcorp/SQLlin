@@ -11,19 +11,19 @@ import com.ctrip.sqllin.dsl.sql.statement.WhereSelectStatement
  * @author yaqiao
  */
 
-class WhereClause<T : DBEntity<T>> internal constructor(selectCondition: SelectCondition) : ConditionClause<T>(selectCondition) {
+public class WhereClause<T : DBEntity<T>> internal constructor(selectCondition: SelectCondition) : ConditionClause<T>(selectCondition) {
 
     override val clauseName: String = "WHERE"
 }
 
-fun <T : DBEntity<T>> WHERE(condition: SelectCondition): WhereClause<T> = WhereClause(condition)
+public fun <T : DBEntity<T>> WHERE(condition: SelectCondition): WhereClause<T> = WhereClause(condition)
 
-infix fun <T : DBEntity<T>> JoinSelectStatement<T>.WHERE(condition: SelectCondition): WhereSelectStatement<T> =
+public infix fun <T : DBEntity<T>> JoinSelectStatement<T>.WHERE(condition: SelectCondition): WhereSelectStatement<T> =
     appendToWhere(WhereClause(condition)).also {
         container changeLastStatement it
     }
 
-infix fun <T : DBEntity<T>> UpdateStatementWithoutWhereClause<T>.WHERE(condition: SelectCondition): String {
+public infix fun <T : DBEntity<T>> UpdateStatementWithoutWhereClause<T>.WHERE(condition: SelectCondition): String {
     val statement = UpdateDeleteStatement(buildString {
         append(sqlStr)
         append(WhereClause<T>(condition).clauseStr)

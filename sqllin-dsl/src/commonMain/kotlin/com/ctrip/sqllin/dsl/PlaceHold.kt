@@ -1,3 +1,3 @@
 package com.ctrip.sqllin.dsl
 
-expect interface PlaceHold
+internal expect interface PlaceHold

@@ -5,6 +5,6 @@ package com.ctrip.sqllin.dsl.sql.statement
  * @author yaqiao
  */
 
-sealed interface ExecutableStatement {
-    fun execute()
+public sealed interface ExecutableStatement {
+    public fun execute()
 }

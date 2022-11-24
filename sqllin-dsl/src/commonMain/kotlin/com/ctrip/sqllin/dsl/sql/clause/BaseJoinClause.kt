@@ -10,9 +10,9 @@ import com.ctrip.sqllin.dsl.sql.statement.JoinStatementWithoutCondition
  * @author yaqiao
  */
 
-sealed class BaseJoinClause<R : DBEntity<R>>(private vararg val tables: Table<*>) : SelectClause<R> {
+public sealed class BaseJoinClause<R : DBEntity<R>>(private vararg val tables: Table<*>) : SelectClause<R> {
 
-    abstract val clauseName: String
+    internal abstract val clauseName: String
 
     final override val clauseStr: String
         get() = buildString {
@@ -25,15 +25,15 @@ sealed class BaseJoinClause<R : DBEntity<R>>(private vararg val tables: Table<*>
         }
 }
 
-sealed class NaturalJoinClause<R : DBEntity<R>>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables)
+public sealed class NaturalJoinClause<R : DBEntity<R>>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables)
 
-sealed class JoinClause<R : DBEntity<R>>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables)
+public sealed class JoinClause<R : DBEntity<R>>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables)
 
 //infix fun <R : DBEntity<R>> JoinStatementWithoutCondition<R>.ON(condition: SelectCondition): JoinSelectStatement<R> =
     //convertToJoinSelectStatement(condition)
 
-inline infix fun <R : DBEntity<R>> JoinStatementWithoutCondition<R>.USING(clauseElement: ClauseElement): JoinSelectStatement<R> =
+public inline infix fun <R : DBEntity<R>> JoinStatementWithoutCondition<R>.USING(clauseElement: ClauseElement): JoinSelectStatement<R> =
     USING(listOf(clauseElement))
 
-infix fun <R : DBEntity<R>> JoinStatementWithoutCondition<R>.USING(clauseElements: Iterable<ClauseElement>): JoinSelectStatement<R> =
+public infix fun <R : DBEntity<R>> JoinStatementWithoutCondition<R>.USING(clauseElements: Iterable<ClauseElement>): JoinSelectStatement<R> =
     convertToJoinSelectStatement(clauseElements)

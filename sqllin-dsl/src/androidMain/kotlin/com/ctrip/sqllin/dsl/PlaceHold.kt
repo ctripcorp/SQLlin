@@ -1,3 +1,3 @@
 package com.ctrip.sqllin.dsl
 
-actual interface PlaceHold
+internal actual interface PlaceHold

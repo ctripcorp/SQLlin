@@ -5,7 +5,7 @@ package com.ctrip.sqllin.dsl.sql.clause
  * @author yaqiao
  */
 
-class ClauseString(valueName: String) : ClauseElement(valueName) {
+public class ClauseString(valueName: String) : ClauseElement(valueName) {
 
     // Equals, ==
     internal infix fun eq(str: String?): SelectCondition = appendString("=", "IS", str)

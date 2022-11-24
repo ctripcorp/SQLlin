@@ -23,11 +23,11 @@ import kotlin.jvm.Volatile
  */
 
 @Suppress("UNCHECKED_CAST")
-class Database(
+public class Database(
     configuration: DatabaseConfiguration,
 ) {
 
-    constructor(
+    public constructor(
         name: String,
         path: DatabasePath,
         version: Int,
@@ -44,12 +44,12 @@ class Database(
     /**
      * Close the database connection.
      */
-    fun close() = databaseConnection.close()
+    public fun close(): Unit = databaseConnection.close()
 
     /**
      * Start a scope with this database object that used for execute SQL.
      */
-    operator fun <T> invoke(block: Database.() -> T): T {
+    public operator fun <T> invoke(block: Database.() -> T): T {
         val result = block()
         executeAllStatement()
         return result
@@ -65,7 +65,7 @@ class Database(
     private inline val isInTransaction
         get() = transactionStatementsGroup != null
 
-    fun beginTransaction(): Boolean {
+    public fun beginTransaction(): Boolean {
         if (isInTransaction)
             return false
         transactionStatementsGroup = TransactionStatementsGroup(databaseConnection)
@@ -73,11 +73,11 @@ class Database(
         return true
     }
 
-    fun endTransaction() {
+    public fun endTransaction() {
         transactionStatementsGroup = null
     }
 
-    inline fun <T> transaction(block: Database.() -> T): T {
+    public inline fun <T> transaction(block: Database.() -> T): T {
         beginTransaction()
         try {
             return block()
@@ -112,19 +112,19 @@ class Database(
      * Insert.
      */
 
-    infix fun <T : DBEntity<T>> Table<T>.INSERT(entities: Iterable<T>) {
+    public infix fun <T : DBEntity<T>> Table<T>.INSERT(entities: Iterable<T>) {
         val statement = Insert.insert(this, databaseConnection, entities)
         addStatement(statement)
     }
 
-    infix fun <T : DBEntity<T>> Table<T>.INSERT(entity: T) =
+    public infix fun <T : DBEntity<T>> Table<T>.INSERT(entity: T): Unit =
         INSERT(listOf(entity))
 
     /**
      * Update.
      */
 
-    infix fun <T : DBEntity<T>> Table<T>.UPDATE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+    public infix fun <T : DBEntity<T>> Table<T>.UPDATE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
         transactionStatementsGroup?.let {
             val statement = Update.update(this, databaseConnection, it, clause)
             it addStatement statement
@@ -137,12 +137,12 @@ class Database(
      * Delete.
      */
 
-    infix fun Table<*>.DELETE(x: X) {
+    public infix fun Table<*>.DELETE(x: X) {
         val statement = Delete.deleteAllEntity(this, databaseConnection)
         addStatement(statement)
     }
 
-    infix fun <T : DBEntity<T>> Table<T>.DELETE(clause: WhereClause<T>) {
+    public infix fun <T : DBEntity<T>> Table<T>.DELETE(clause: WhereClause<T>) {
         val statement = Delete.delete(this, databaseConnection, clause)
         addStatement(statement)
     }
@@ -154,13 +154,13 @@ class Database(
     /**
      * Select with no any clause.
      */
-    inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT(x: X): FinalSelectStatement<T> =
+    public inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT(x: X): FinalSelectStatement<T> =
         select(getKSerializer(), false)
 
-    inline infix fun <reified T :DBEntity<T>> Table<T>.SELECT_DISTINCT(x: X): FinalSelectStatement<T> =
+    public inline infix fun <reified T :DBEntity<T>> Table<T>.SELECT_DISTINCT(x: X): FinalSelectStatement<T> =
         select(getKSerializer(), true)
 
-    fun <T : DBEntity<T>> Table<T>.select(serializer: KSerializer<T>, isDistinct: Boolean): FinalSelectStatement<T> {
+    public fun <T : DBEntity<T>> Table<T>.select(serializer: KSerializer<T>, isDistinct: Boolean): FinalSelectStatement<T> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -170,13 +170,13 @@ class Database(
     /**
      * Receive the 'WHERE' clause.
      */
-    inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT(clause: WhereClause<T>): WhereSelectStatement<T> =
+    public inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT(clause: WhereClause<T>): WhereSelectStatement<T> =
         select(getKSerializer(), clause, false)
 
-    inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT_DISTINCT(clause: WhereClause<T>): WhereSelectStatement<T> =
+    public inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT_DISTINCT(clause: WhereClause<T>): WhereSelectStatement<T> =
         select(getKSerializer(), clause, true)
 
-    fun <T : DBEntity<T>> Table<T>.select(serializer: KSerializer<T>, clause: WhereClause<T>, isDistinct: Boolean): WhereSelectStatement<T> {
+    public fun <T : DBEntity<T>> Table<T>.select(serializer: KSerializer<T>, clause: WhereClause<T>, isDistinct: Boolean): WhereSelectStatement<T> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -186,13 +186,13 @@ class Database(
     /**
      * Receive the 'ORDER BY' clause.
      */
-    inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
+    public inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
         select(getKSerializer(), clause, false)
 
-    inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT_DISTINCT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
+    public inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT_DISTINCT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
         select(getKSerializer(), clause, true)
 
-    fun <T : DBEntity<T>> Table<T>.select(serializer: KSerializer<T>, clause: OrderByClause<T>, isDistinct: Boolean): OrderBySelectStatement<T> {
+    public fun <T : DBEntity<T>> Table<T>.select(serializer: KSerializer<T>, clause: OrderByClause<T>, isDistinct: Boolean): OrderBySelectStatement<T> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -202,13 +202,13 @@ class Database(
     /**
      * Receive the 'LIMIT' clause.
      */
-    inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT(clause: LimitClause<T>): LimitSelectStatement<T> =
+    public inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT(clause: LimitClause<T>): LimitSelectStatement<T> =
         select(getKSerializer(), clause, false)
 
-    inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT_DISTINCT(clause: LimitClause<T>): LimitSelectStatement<T> =
+    public inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT_DISTINCT(clause: LimitClause<T>): LimitSelectStatement<T> =
         select(getKSerializer(), clause, true)
 
-    fun <T : DBEntity<T>> Table<T>.select(serializer: KSerializer<T>, clause: LimitClause<T>, isDistinct: Boolean): LimitSelectStatement<T> {
+    public fun <T : DBEntity<T>> Table<T>.select(serializer: KSerializer<T>, clause: LimitClause<T>, isDistinct: Boolean): LimitSelectStatement<T> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -218,20 +218,20 @@ class Database(
     /**
      * Receive the 'GROUP BY' clause.
      */
-    inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
+    public inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
         select(getKSerializer(), clause, false)
 
-    inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT_DISTINCT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
+    public inline infix fun <reified T : DBEntity<T>> Table<T>.SELECT_DISTINCT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
         select(getKSerializer(), clause, true)
 
-    fun <T : DBEntity<T>> Table<T>.select(serializer: KSerializer<T>, clause: GroupByClause<T>, isDistinct: Boolean): GroupBySelectStatement<T> {
+    public fun <T : DBEntity<T>> Table<T>.select(serializer: KSerializer<T>, clause: GroupByClause<T>, isDistinct: Boolean): GroupBySelectStatement<T> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
     }
 
-    inline fun <reified T : DBEntity<T>> getKSerializer(): KSerializer<T> = EmptySerializersModule().serializer()
+    public inline fun <reified T : DBEntity<T>> getKSerializer(): KSerializer<T> = EmptySerializersModule().serializer()
 
     /**
      * The 'UNION' clause of Select.
@@ -241,7 +241,7 @@ class Database(
 
     private fun getSelectStatementGroup(): StatementContainer = unionSelectStatementGroupStack.top ?: transactionStatementsGroup ?: executeEngine
 
-    inline fun <T : DBEntity<T>> Table<T>.UNION(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
+    public inline fun <T : DBEntity<T>> Table<T>.UNION(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
         beginUnion<T>()
         var selectStatement: SelectStatement<T>? = null
         try {
@@ -253,7 +253,7 @@ class Database(
         }
     }
 
-    inline fun <T : DBEntity<T>> Table<T>.UNION_ALL(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
+    public inline fun <T : DBEntity<T>> Table<T>.UNION_ALL(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
         beginUnion<T>()
         var selectStatement: SelectStatement<T>? = null
         try {
@@ -265,16 +265,16 @@ class Database(
         }
     }
 
-    fun <T : DBEntity<T>> beginUnion() {
+    public fun <T : DBEntity<T>> beginUnion() {
         unionSelectStatementGroupStack.push(UnionSelectStatementGroup<T>())
     }
 
-    fun <T : DBEntity<T>> createUnionSelectStatement(isUnionAll: Boolean): FinalSelectStatement<T> {
+    public fun <T : DBEntity<T>> createUnionSelectStatement(isUnionAll: Boolean): FinalSelectStatement<T> {
         check(unionSelectStatementGroupStack.isNotEmpty) { "Please invoke the 'beginUnion' before you invoke this function!!!" }
         return (unionSelectStatementGroupStack.top as UnionSelectStatementGroup<T>).unionStatements(isUnionAll)
     }
 
-    fun <T : DBEntity<T>> endUnion(selectStatement: SelectStatement<T>?) {
+    public fun <T : DBEntity<T>> endUnion(selectStatement: SelectStatement<T>?) {
         unionSelectStatementGroupStack.pop()
         selectStatement?.let { addSelectStatement(it) }
     }
@@ -283,13 +283,13 @@ class Database(
      * Receive the 'JOIN' clause.
      */
 
-    inline infix fun <T : DBEntity<T>, reified R : DBEntity<R>> Table<T>.SELECT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
+    public inline infix fun <T : DBEntity<T>, reified R : DBEntity<R>> Table<T>.SELECT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
         select(getKSerializer(), clause, false)
 
-    inline infix fun <T : DBEntity<T>, reified R : DBEntity<R>> Table<T>.SELECT_DISTINCT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
+    public inline infix fun <T : DBEntity<T>, reified R : DBEntity<R>> Table<T>.SELECT_DISTINCT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
         select(getKSerializer(), clause, true)
 
-    fun <T : DBEntity<T>, R : DBEntity<R>> Table<T>.select(serializer: KSerializer<R>, clause: JoinClause<R>, isDistinct: Boolean): JoinStatementWithoutCondition<R> {
+    public fun <T : DBEntity<T>, R : DBEntity<R>> Table<T>.select(serializer: KSerializer<R>, clause: JoinClause<R>, isDistinct: Boolean): JoinStatementWithoutCondition<R> {
         val container = getSelectStatementGroup()
         return Select.select(this, clause, isDistinct, serializer, databaseConnection, container, ::addSelectStatement)
     }
@@ -298,13 +298,13 @@ class Database(
      * Receive the natural join clause(includes 'NATURAL LEFT OUTER JOIN' and 'NATURAL INNER JOIN').
      */
 
-    inline infix fun <T : DBEntity<T>, reified R : DBEntity<R>> Table<T>.SELECT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
+    public inline infix fun <T : DBEntity<T>, reified R : DBEntity<R>> Table<T>.SELECT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
         select(getKSerializer(), clause, false)
 
-    inline infix fun <T : DBEntity<T>, reified R : DBEntity<R>> Table<T>.SELECT_DISTINCT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
+    public inline infix fun <T : DBEntity<T>, reified R : DBEntity<R>> Table<T>.SELECT_DISTINCT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
         select(getKSerializer(), clause, true)
 
-    fun <T : DBEntity<T>, R : DBEntity<R>> Table<T>.select(serializer: KSerializer<R>, clause: NaturalJoinClause<R>, isDistinct: Boolean): JoinSelectStatement<R> {
+    public fun <T : DBEntity<T>, R : DBEntity<R>> Table<T>.select(serializer: KSerializer<R>, clause: NaturalJoinClause<R>, isDistinct: Boolean): JoinSelectStatement<R> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)

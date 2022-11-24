@@ -12,4 +12,4 @@ internal class CrossJoinClause<R : DBEntity<R>>(vararg tables: Table<*>) : Natur
     override val clauseName: String = " CROSS JOIN "
 }
 
-fun <R : DBEntity<R>> CROSS_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = CrossJoinClause(*tables)
+public fun <R : DBEntity<R>> CROSS_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = CrossJoinClause(*tables)

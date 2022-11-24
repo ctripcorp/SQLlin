@@ -15,9 +15,9 @@ internal class InnerJoinClause<R : DBEntity<R>>(
     override val clauseName: String = " JOIN "
 }
 
-fun <R : DBEntity<R>> JOIN(vararg tables: Table<*>): JoinClause<R> = InnerJoinClause(*tables)
+public fun <R : DBEntity<R>> JOIN(vararg tables: Table<*>): JoinClause<R> = InnerJoinClause(*tables)
 
-inline fun <R : DBEntity<R>> INNER_JOIN(vararg tables: Table<*>): JoinClause<R> = JOIN(*tables)
+public inline fun <R : DBEntity<R>> INNER_JOIN(vararg tables: Table<*>): JoinClause<R> = JOIN(*tables)
 
 internal class NaturalInnerJoinClause<R : DBEntity<R>>(
     vararg tables: Table<*>,
@@ -26,6 +26,6 @@ internal class NaturalInnerJoinClause<R : DBEntity<R>>(
     override val clauseName: String = " NATURAL JOIN "
 }
 
-fun <R : DBEntity<R>> NATURAL_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NaturalInnerJoinClause(*tables)
+public fun <R : DBEntity<R>> NATURAL_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NaturalInnerJoinClause(*tables)
 
-inline fun <R : DBEntity<R>> NATURAL_INNER_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NATURAL_JOIN(*tables)
+public inline fun <R : DBEntity<R>> NATURAL_INNER_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NATURAL_JOIN(*tables)

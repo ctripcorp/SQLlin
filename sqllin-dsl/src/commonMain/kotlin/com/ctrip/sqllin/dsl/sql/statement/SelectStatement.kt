@@ -14,7 +14,7 @@ import kotlin.jvm.Volatile
  * @author yaqiao
  */
 
-sealed class SelectStatement<T : DBEntity<T>>(
+public sealed class SelectStatement<T : DBEntity<T>>(
     sqlStr: String,
     internal val deserializer: DeserializationStrategy<T>,
     internal val connection: DatabaseConnection,
@@ -35,7 +35,7 @@ sealed class SelectStatement<T : DBEntity<T>>(
         }
     }
 
-    fun getResults(): List<T> =
+    public fun getResults(): List<T> =
         result ?: throw IllegalStateException("You have to call 'execute' function before call 'getResults'!!!")
 
     protected fun buildSQL(clause: SelectClause<T>): String = buildString {
@@ -56,7 +56,7 @@ sealed class SelectStatement<T : DBEntity<T>>(
     }
 }
 
-class WhereSelectStatement<T : DBEntity<T>> internal constructor(
+public class WhereSelectStatement<T : DBEntity<T>> internal constructor(
     sqlStr: String,
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
@@ -73,7 +73,7 @@ class WhereSelectStatement<T : DBEntity<T>> internal constructor(
         GroupBySelectStatement(buildSQL(clause), deserializer, connection, container)
 }
 
-class JoinSelectStatement<T : DBEntity<T>> internal constructor(
+public class JoinSelectStatement<T : DBEntity<T>> internal constructor(
     sqlStr: String,
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
@@ -93,7 +93,7 @@ class JoinSelectStatement<T : DBEntity<T>> internal constructor(
         GroupBySelectStatement(buildSQL(clause), deserializer, connection, container)
 }
 
-class GroupBySelectStatement<T : DBEntity<T>> internal constructor(
+public class GroupBySelectStatement<T : DBEntity<T>> internal constructor(
     sqlStr: String,
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
@@ -107,7 +107,7 @@ class GroupBySelectStatement<T : DBEntity<T>> internal constructor(
         HavingSelectStatement(buildSQL(clause), deserializer, connection, container)
 }
 
-class HavingSelectStatement<T : DBEntity<T>> internal constructor(
+public class HavingSelectStatement<T : DBEntity<T>> internal constructor(
     sqlStr: String,
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
@@ -121,7 +121,7 @@ class HavingSelectStatement<T : DBEntity<T>> internal constructor(
         LimitSelectStatement(buildSQL(clause), deserializer, connection, container)
 }
 
-class OrderBySelectStatement<T : DBEntity<T>> internal constructor(
+public class OrderBySelectStatement<T : DBEntity<T>> internal constructor(
     sqlStr: String,
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
@@ -132,7 +132,7 @@ class OrderBySelectStatement<T : DBEntity<T>> internal constructor(
         LimitSelectStatement(buildSQL(clause), deserializer, connection, container)
 }
 
-class LimitSelectStatement<T : DBEntity<T>> internal constructor(
+public class LimitSelectStatement<T : DBEntity<T>> internal constructor(
     sqlStr: String,
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
@@ -143,7 +143,7 @@ class LimitSelectStatement<T : DBEntity<T>> internal constructor(
         FinalSelectStatement(buildSQL(clause), deserializer, connection, container)
 }
 
-class FinalSelectStatement<T : DBEntity<T>> internal constructor(
+public class FinalSelectStatement<T : DBEntity<T>> internal constructor(
     sqlStr: String,
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,

@@ -7,11 +7,11 @@ import com.ctrip.sqllin.dsl.DBEntity
  * @author yaqiao
  */
 
-class SetClause<T : DBEntity<T>> : Clause<T> {
+public class SetClause<T : DBEntity<T>> : Clause<T> {
 
     private val clauseBuilder = StringBuilder()
 
-    fun append(propertyName: String, propertyValue: String?) {
+    internal fun append(propertyName: String, propertyValue: String?) {
         clauseBuilder
             .append(propertyName)
             .append('=')
@@ -25,4 +25,4 @@ class SetClause<T : DBEntity<T>> : Clause<T> {
     }.toString()
 }
 
-inline fun <T : DBEntity<T>> SET(block: SetClause<T>.() -> Unit): SetClause<T> = SetClause<T>().apply(block)
+public inline fun <T : DBEntity<T>> SET(block: SetClause<T>.() -> Unit): SetClause<T> = SetClause<T>().apply(block)

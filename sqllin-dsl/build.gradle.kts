@@ -16,6 +16,7 @@ group = GROUP
 version = VERSION
 
 kotlin {
+    explicitApi()
     android {
         publishLibraryVariants("release")
     }

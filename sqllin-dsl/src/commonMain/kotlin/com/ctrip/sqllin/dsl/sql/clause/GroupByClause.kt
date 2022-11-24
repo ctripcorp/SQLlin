@@ -10,7 +10,7 @@ import com.ctrip.sqllin.dsl.sql.statement.WhereSelectStatement
  * @author yaqiao
  */
 
-class GroupByClause<T : DBEntity<T>> internal constructor(private val columnNames: List<ClauseElement>): SelectClause<T> {
+public class GroupByClause<T : DBEntity<T>> internal constructor(private val columnNames: List<ClauseElement>): SelectClause<T> {
 
     override val clauseStr: String
         get() = buildString {
@@ -23,26 +23,26 @@ class GroupByClause<T : DBEntity<T>> internal constructor(private val columnName
         }
 }
 
-fun <T : DBEntity<T>> GROUP_BY(vararg elements: ClauseElement): GroupByClause<T> = GroupByClause(elements.toList())
+public fun <T : DBEntity<T>> GROUP_BY(vararg elements: ClauseElement): GroupByClause<T> = GroupByClause(elements.toList())
 
-infix fun <T : DBEntity<T>> WhereSelectStatement<T>.GROUP_BY(element: ClauseElement): GroupBySelectStatement<T> =
+public infix fun <T : DBEntity<T>> WhereSelectStatement<T>.GROUP_BY(element: ClauseElement): GroupBySelectStatement<T> =
     appendToGroupBy(GroupByClause(listOf(element))).also {
         container changeLastStatement it
     }
 
-infix fun <T : DBEntity<T>> WhereSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement>): GroupBySelectStatement<T> {
+public infix fun <T : DBEntity<T>> WhereSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement>): GroupBySelectStatement<T> {
     val elementList = if (elements is List<ClauseElement>) elements else elements.toList()
     val statement = appendToGroupBy(GroupByClause(elementList))
     container changeLastStatement statement
     return statement
 }
 
-infix fun <T : DBEntity<T>> JoinSelectStatement<T>.GROUP_BY(element: ClauseElement): GroupBySelectStatement<T> =
+public infix fun <T : DBEntity<T>> JoinSelectStatement<T>.GROUP_BY(element: ClauseElement): GroupBySelectStatement<T> =
     appendToGroupBy(GroupByClause(listOf(element))).also {
         container changeLastStatement it
     }
 
-infix fun <T : DBEntity<T>> JoinSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement>): GroupBySelectStatement<T> {
+public infix fun <T : DBEntity<T>> JoinSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement>): GroupBySelectStatement<T> {
     val elementList = if (elements is List<ClauseElement>) elements else elements.toList()
     val statement = appendToGroupBy(GroupByClause(elementList))
     container changeLastStatement statement

@@ -9,24 +9,24 @@ import com.ctrip.sqllin.dsl.DBEntity
  * @author yaqiao
  */
 
-class UpdateStatementWithoutWhereClause<T : DBEntity<T>> internal constructor(
+public class UpdateStatementWithoutWhereClause<T : DBEntity<T>> internal constructor(
     preSQLStr: String,
     internal val statementContainer: StatementContainer,
     internal val connection: DatabaseConnection,
 ) : SingleStatement(preSQLStr) {
-    override fun execute() = connection.executeUpdateDelete(sqlStr)
+    public override fun execute(): Unit = connection.executeUpdateDelete(sqlStr)
 }
 
-class UpdateDeleteStatement internal constructor(
+public class UpdateDeleteStatement internal constructor(
     sqlStr: String,
     private val connection: DatabaseConnection,
 ) : SingleStatement(sqlStr) {
-    override fun execute() = connection.executeUpdateDelete(sqlStr)
+    public override fun execute(): Unit = connection.executeUpdateDelete(sqlStr)
 }
 
-class InsertStatement internal constructor(
+public class InsertStatement internal constructor(
     sqlStr: String,
     private val connection: DatabaseConnection,
 ) : SingleStatement(sqlStr) {
-    override fun execute() = connection.executeInsert(sqlStr)
+    public override fun execute(): Unit = connection.executeInsert(sqlStr)
 }

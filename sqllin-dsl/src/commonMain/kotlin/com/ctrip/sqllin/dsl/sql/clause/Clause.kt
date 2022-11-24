@@ -7,4 +7,4 @@ import com.ctrip.sqllin.dsl.DBEntity
  * @author yaqiao
  */
 
-sealed interface Clause<T : DBEntity<T>>
+public sealed interface Clause<T : DBEntity<T>>

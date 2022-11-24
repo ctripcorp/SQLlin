@@ -11,7 +11,7 @@ import kotlinx.serialization.DeserializationStrategy
  * @author yaqiao
  */
 
-class JoinStatementWithoutCondition<R : DBEntity<R>> internal constructor(
+public class JoinStatementWithoutCondition<R : DBEntity<R>> internal constructor(
     private val sqlStr: String,
     private val deserializer: DeserializationStrategy<R>,
     private val connection: DatabaseConnection,

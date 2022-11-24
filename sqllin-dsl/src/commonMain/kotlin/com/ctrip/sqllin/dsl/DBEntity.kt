@@ -7,7 +7,7 @@ import kotlinx.serialization.KSerializer
  * @author yaqiao
  */
 
-fun interface DBEntity<T> {
+public fun interface DBEntity<T> {
 
-    fun kSerializer(): KSerializer<T>
+    public fun kSerializer(): KSerializer<T>
 }

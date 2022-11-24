@@ -5,7 +5,7 @@ package com.ctrip.sqllin.dsl.sql.clause
  * @author yaqiao
  */
 
-class SelectCondition internal constructor(
+public class SelectCondition internal constructor(
     internal val conditionSQL: String,
 ) {
 

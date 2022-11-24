@@ -7,6 +7,6 @@ import com.ctrip.sqllin.dsl.DBEntity
  * @author yaqiao
  */
 
-sealed interface SelectClause<T : DBEntity<T>> : Clause<T> {
-    val clauseStr: String
+public sealed interface SelectClause<T : DBEntity<T>> : Clause<T> {
+    public val clauseStr: String
 }

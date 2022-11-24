@@ -5,6 +5,6 @@ package com.ctrip.sqllin.dsl.sql.clause
  * @author yaqiao
  */
 
-sealed class ClauseElement(
+public sealed class ClauseElement(
     internal val valueName: String
 )

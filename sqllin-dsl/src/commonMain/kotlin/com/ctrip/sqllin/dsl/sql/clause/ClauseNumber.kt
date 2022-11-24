@@ -5,7 +5,7 @@ package com.ctrip.sqllin.dsl.sql.clause
  * @author yaqiao
  */
 
-class ClauseNumber(valueName: String) : ClauseElement(valueName) {
+public class ClauseNumber(valueName: String) : ClauseElement(valueName) {
 
     // Less than, <
     internal infix fun lt(number: Number): SelectCondition = appendNumber("<", number)

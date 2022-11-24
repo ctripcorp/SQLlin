@@ -14,7 +14,7 @@ internal class HavingClause<T : DBEntity<T>>(selectCondition: SelectCondition) :
     override val clauseName: String = "HAVING"
 }
 
-infix fun <T : DBEntity<T>> GroupBySelectStatement<T>.HAVING(condition: SelectCondition): HavingSelectStatement<T> =
+public infix fun <T : DBEntity<T>> GroupBySelectStatement<T>.HAVING(condition: SelectCondition): HavingSelectStatement<T> =
     appendToHaving(HavingClause(condition)).also {
         container changeLastStatement it
     }

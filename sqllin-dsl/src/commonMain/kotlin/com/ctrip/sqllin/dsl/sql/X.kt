@@ -1,8 +1,8 @@
 package com.ctrip.sqllin.dsl.sql
 
 /**
- * Express "*" in SQL.
+ * Express "*" in SQL
  * @author yaqiao
  */
 
-object X
+public object X

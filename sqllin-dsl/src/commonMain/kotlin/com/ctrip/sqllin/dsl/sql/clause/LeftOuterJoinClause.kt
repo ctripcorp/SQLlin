@@ -15,7 +15,7 @@ internal class LeftOuterJoinClause<R : DBEntity<R>>(
     override val clauseName: String = " LEFT OUTER JOIN "
 }
 
-fun <R : DBEntity<R>> LEFT_OUTER_JOIN(vararg tables: Table<*>): JoinClause<R> = LeftOuterJoinClause(*tables)
+public fun <R : DBEntity<R>> LEFT_OUTER_JOIN(vararg tables: Table<*>): JoinClause<R> = LeftOuterJoinClause(*tables)
 
 internal class NaturalLeftOuterJoinClause<R : DBEntity<R>>(
     vararg tables: Table<*>
@@ -24,4 +24,4 @@ internal class NaturalLeftOuterJoinClause<R : DBEntity<R>>(
     override val clauseName: String = " NATURAL LEFT OUTER JOIN "
 }
 
-fun <R : DBEntity<R>> NATURAL_LEFT_OUTER_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NaturalLeftOuterJoinClause(*tables)
+public fun <R : DBEntity<R>> NATURAL_LEFT_OUTER_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NaturalLeftOuterJoinClause(*tables)

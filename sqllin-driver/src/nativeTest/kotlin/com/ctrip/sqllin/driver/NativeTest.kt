@@ -5,7 +5,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 
 /**
- * Native unit test.
+ * Native unit test
  * @author yaqiao
  */
 

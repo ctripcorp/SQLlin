@@ -6,4 +6,4 @@ package com.ctrip.sqllin.dsl.annotation
  */
 
 @Target(AnnotationTarget.CLASS)
-annotation class DBRow(val tableName: String = "")
+public annotation class DBRow(val tableName: String = "")
