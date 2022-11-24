@@ -12,12 +12,12 @@ import androidx.annotation.RequiresApi
  * @author yaqiao
  */
 
-fun Context.toDatabasePath(): DatabasePath = AndroidDatabasePath(this)
+public fun Context.toDatabasePath(): DatabasePath = AndroidDatabasePath(this)
 
 @JvmInline
-value class AndroidDatabasePath internal constructor(val context: Context) : DatabasePath
+internal value class AndroidDatabasePath internal constructor(val context: Context) : DatabasePath
 
-actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection {
+public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && config.inMemory)
         return DatabaseConnectionImpl(createInMemory(config.toAndroidOpenParams()))
     val helper = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)

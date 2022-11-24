@@ -5,18 +5,18 @@ package com.ctrip.sqllin.driver
  * @author yaqiao
  */
 
-interface DatabaseConnection {
+public interface DatabaseConnection {
 
-    fun execSQL(sql: String, bindParams: Array<Any?>? = null)
-    fun executeInsert(sql: String, bindParams: Array<Any?>? = null)
-    fun executeUpdateDelete(sql: String, bindParams: Array<Any?>? = null)
+    public fun execSQL(sql: String, bindParams: Array<Any?>? = null)
+    public fun executeInsert(sql: String, bindParams: Array<Any?>? = null)
+    public fun executeUpdateDelete(sql: String, bindParams: Array<Any?>? = null)
 
-    fun query(sql: String, bindParams: Array<String?>? = null): CommonCursor
+    public fun query(sql: String, bindParams: Array<String?>? = null): CommonCursor
 
-    fun beginTransaction()
-    fun setTransactionSuccessful()
-    fun endTransaction()
+    public fun beginTransaction()
+    public fun setTransactionSuccessful()
+    public fun endTransaction()
 
-    fun close()
-    val closed: Boolean
+    public fun close()
+    public val closed: Boolean
 }

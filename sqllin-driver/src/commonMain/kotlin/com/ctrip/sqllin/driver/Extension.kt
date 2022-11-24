@@ -9,11 +9,11 @@ package com.ctrip.sqllin.driver
  * Abstract database path, it is 'Context' in Android, and 'String' in native targets.
  * DO NOT implementation 'DatabasePath' by yourself!!!
  */
-interface DatabasePath
+public interface DatabasePath
 
-expect fun openDatabase(config: DatabaseConfiguration): DatabaseConnection
+public expect fun openDatabase(config: DatabaseConfiguration): DatabaseConnection
 
-inline fun <T> openDatabase(config: DatabaseConfiguration, block: (DatabaseConnection) -> T): T {
+public inline fun <T> openDatabase(config: DatabaseConfiguration, block: (DatabaseConnection) -> T): T {
     val connection = openDatabase(config)
     try {
         return block(connection)
@@ -22,7 +22,7 @@ inline fun <T> openDatabase(config: DatabaseConfiguration, block: (DatabaseConne
     }
 }
 
-inline fun <T> DatabaseConnection.withTransaction(block: (DatabaseConnection) -> T): T {
+public inline fun <T> DatabaseConnection.withTransaction(block: (DatabaseConnection) -> T): T {
     beginTransaction()
     try {
         val result = block(this)
@@ -33,7 +33,7 @@ inline fun <T> DatabaseConnection.withTransaction(block: (DatabaseConnection) ->
     }
 }
 
-inline fun <T> DatabaseConnection.withQuery(
+public inline fun <T> DatabaseConnection.withQuery(
     sql: String,
     bindParams: Array<String?>? = null,
     block: (CommonCursor) -> T,

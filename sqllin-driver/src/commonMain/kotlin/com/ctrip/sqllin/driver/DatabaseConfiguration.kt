@@ -5,7 +5,7 @@ package com.ctrip.sqllin.driver
  * @author yaqiao
  */
 
-data class DatabaseConfiguration(
+public data class DatabaseConfiguration(
     val name: String,
     val path: DatabasePath,
     val version: Int,

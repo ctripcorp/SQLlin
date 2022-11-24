@@ -7,7 +7,7 @@ import android.database.Cursor
  * @author yaqiao
  */
 
-class CursorImpl internal constructor(private val cursor: Cursor) : CommonCursor {
+public class CursorImpl internal constructor(private val cursor: Cursor) : CommonCursor {
 
     override fun getInt(columnIndex: Int): Int = cursor.getInt(columnIndex)
     override fun getLong(columnIndex: Int): Long = cursor.getLong(columnIndex)
@@ -37,5 +37,5 @@ class CursorImpl internal constructor(private val cursor: Cursor) : CommonCursor
         while (cursor.moveToNext())
     }
 
-    override fun close() = cursor.close()
+    override fun close(): Unit = cursor.close()
 }

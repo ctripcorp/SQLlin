@@ -1,11 +1,11 @@
 package com.ctrip.sqllin.driver
 
 /**
- * SQLite journal mode.
+ * SQLite journal mode
  * @author yaqiao
  */
 
-enum class JournalMode {
+public enum class JournalMode {
     DELETE, // Write-ahead logging
     WAL; // Rollback journal delete Mode
 }

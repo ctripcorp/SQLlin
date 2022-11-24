@@ -9,15 +9,15 @@ import co.touchlab.sqliter.createDatabaseManager
  * @author yaqiao
  */
 
-typealias NativeDatabaseConnection = co.touchlab.sqliter.DatabaseConnection
-typealias NativeDatabaseConfiguration = co.touchlab.sqliter.DatabaseConfiguration
-typealias NativeJournalMode = co.touchlab.sqliter.JournalMode
+internal typealias NativeDatabaseConnection = co.touchlab.sqliter.DatabaseConnection
+internal typealias NativeDatabaseConfiguration = co.touchlab.sqliter.DatabaseConfiguration
+internal typealias NativeJournalMode = co.touchlab.sqliter.JournalMode
 
-fun String.toDatabasePath(): DatabasePath = NativeDatabasePath(this)
+public fun String.toDatabasePath(): DatabasePath = NativeDatabasePath(this)
 
-value class NativeDatabasePath internal constructor(val pathString: String) : DatabasePath
+internal value class NativeDatabasePath internal constructor(val pathString: String) : DatabasePath
 
-actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection {
+public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection {
     val (name, path, version, isReadOnly, inMemory, journalMode, synchronousMode, busyTimeout, lookasideSlotSize, lookasideSlotCount, create, upgrade) = config
     val configNative = NativeDatabaseConfiguration(
         name = name,

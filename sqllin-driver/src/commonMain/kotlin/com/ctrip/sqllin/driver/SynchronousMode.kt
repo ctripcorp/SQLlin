@@ -1,10 +1,10 @@
 package com.ctrip.sqllin.driver
 
 /**
- * SQLite synchronous mode.
+ * SQLite synchronous mode
  * @author yaqiao
  */
 
-enum class SynchronousMode {
+public enum class SynchronousMode {
     OFF, NORMAL, FULL, EXTRA;
 }

@@ -7,7 +7,7 @@ import co.touchlab.sqliter.*
  * @author yaqiao
  */
 
-class CursorImpl internal constructor(
+public class CursorImpl internal constructor(
     private val cursor: Cursor,
     private val statement: Statement
 ) : CommonCursor {
@@ -27,5 +27,5 @@ class CursorImpl internal constructor(
             block(index++)
     }
 
-    override fun close() = statement.finalizeStatement()
+    override fun close(): Unit = statement.finalizeStatement()
 }

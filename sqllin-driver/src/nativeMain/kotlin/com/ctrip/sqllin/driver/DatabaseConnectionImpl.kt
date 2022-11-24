@@ -8,9 +8,9 @@ import co.touchlab.sqliter.bindString
  * @author yaqiao
  */
 
-class DatabaseConnectionImpl internal constructor(private val databaseConnection: NativeDatabaseConnection) : DatabaseConnection {
+public class DatabaseConnectionImpl internal constructor(private val databaseConnection: NativeDatabaseConnection) : DatabaseConnection {
 
-    override fun execSQL(sql: String, bindParams: Array<Any?>?) =
+    override fun execSQL(sql: String, bindParams: Array<Any?>?): Unit =
         if (bindParams == null)
             databaseConnection.rawExecSql(sql)
         else {
@@ -78,11 +78,11 @@ class DatabaseConnectionImpl internal constructor(private val databaseConnection
         return CursorImpl(statement.query(), statement)
     }
 
-    override fun beginTransaction() = databaseConnection.beginTransaction()
-    override fun endTransaction() = databaseConnection.endTransaction()
-    override fun setTransactionSuccessful() = databaseConnection.setTransactionSuccessful()
+    override fun beginTransaction(): Unit = databaseConnection.beginTransaction()
+    override fun endTransaction(): Unit = databaseConnection.endTransaction()
+    override fun setTransactionSuccessful(): Unit = databaseConnection.setTransactionSuccessful()
 
-    override fun close() = databaseConnection.close()
+    override fun close(): Unit = databaseConnection.close()
     override val closed: Boolean
         get() = databaseConnection.closed
 }
