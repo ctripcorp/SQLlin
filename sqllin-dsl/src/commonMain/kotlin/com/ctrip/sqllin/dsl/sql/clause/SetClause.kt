@@ -11,7 +11,7 @@ public class SetClause<T : DBEntity<T>> : Clause<T> {
 
     private val clauseBuilder = StringBuilder()
 
-    internal fun append(propertyName: String, propertyValue: String?) {
+    public fun append(propertyName: String, propertyValue: String?) {
         clauseBuilder
             .append(propertyName)
             .append('=')
