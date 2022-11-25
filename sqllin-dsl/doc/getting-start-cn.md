@@ -7,19 +7,27 @@
 将 _sqllin-dsl_、_sqllin-driver_ 以及 _sqllin-processor_ 依赖添加到你的 build.gradle.kts：
 
 ```kotlin
+plugins {
+    kotlin("multiplatform")
+    kotlin("plugin.serialization")
+    id("com.android.library")
+    id("com.google.devtools.ksp")
+}
+
 val sqllinVersion = "1.0-alpha01"
 
 kotlin {
     // ......
     sourceSets {
         val commonMain by getting {
+            kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
             dependencies {
                 // sqllin-dsl
-                implementation("com.ctrip.sqllin:sqllin-dsl:$sqllinVersion")
+                implementation("com.ctrip.kotlin:sqllin-dsl:$sqllinVersion")
                 // sqllin-driver
-                implementation("com.ctrip.sqllin:sqllin-driver:$sqllinVersion")
-                
-                // The sqllin-dsl 序列化与反序列化依赖 kotlinx-serialization
+                implementation("com.ctrip.kotlin:sqllin-driver:$sqllinVersion")
+
+                // The sqllin-dsl serialization and deserialization depends on kotlinx-serialization
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.4.1")
             }
         }
@@ -27,10 +35,10 @@ kotlin {
     }
 }
 
-// KSP 依赖
+// KSP dependencies
 dependencies {
     // sqllin-processor
-    add("kspCommonMainMetadata", "com.ctrip.sqllin:sqllin-processor:$sqllinVersion")
+    add("kspCommonMainMetadata", "com.ctrip.kotlin:sqllin-processor:$sqllinVersion")
 }
 ```
 

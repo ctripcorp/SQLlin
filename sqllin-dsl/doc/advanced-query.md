@@ -66,7 +66,7 @@ SQLlin supports joining a table now.
 We need other two `DBEntity`s:
 
 ```kotlin
-@DBRow
+@DBRow("transcript")
 @Serializable
 data class Transcript(
     val name: String?,
@@ -76,7 +76,6 @@ data class Transcript(
     override fun kSerializer(): KSerializer<Transcript> = serializer()
 }
 
-@DBRow
 @Serializable
 data class Student(
     val name: String?,
@@ -88,8 +87,8 @@ data class Student(
 }
 ```
 
-The `Transcript` represent a other table. And the `Student` represent the join query results' type, that have all column name that
-belong to `Person` and `Transcript`.
+The `Transcript` represent a other table. And the `Student` represent the join query results' type(so `Student`
+doesn't need to be annotated `@DBRow`), that have all column name that belong to `Person` and `Transcript`.
 
 ### Cross Join
 
