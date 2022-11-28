@@ -84,4 +84,4 @@ fun sample() {
 接下来我们将学习如何使用 SQL 函数以及高级查询：
 
 - [SQL 函数](sql-functions-cn.md)
-- [高级查询]()
+- [高级查询](advanced-query-cn.md)

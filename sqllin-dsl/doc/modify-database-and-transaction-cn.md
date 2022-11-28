@@ -148,4 +148,4 @@ fun sample() {
 
 - [查询](query-cn.md)
 - [SQL 函数](sql-functions-cn.md)
-- [高级查询]()
+- [高级查询](advanced-query-cn.md)

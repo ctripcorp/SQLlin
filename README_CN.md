@@ -45,7 +45,7 @@ _sqllin-processor_ 使用 KSP 处理注解并生成用以和 _sqllin-dsl_ 配合
 - [数据库的增删改与事务](./sqllin-dsl/doc/modify-database-and-transaction-cn.md)
 - [查询](./sqllin-dsl/doc/query-cn.md)
 - [SQL 函数](./sqllin-dsl/doc/sql-functions-cn.md)
-- [高级查询]()
+- [高级查询](./sqllin-dsl/doc/advanced-query-cn.md)
 
 虽然不建议直接使用 _sqllin-driver_, 但如果你想了解更多信息则可以阅读：
 

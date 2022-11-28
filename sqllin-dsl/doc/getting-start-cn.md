@@ -160,4 +160,4 @@ DBEntity 的属性数量可以比表中列的数量少。
 - [修改数据库与事物](modify-database-and-transaction-cn.md)
 - [查询](query-cn.md)
 - [SQL 函数](sql-functions-cn.md)
-- [高级查询]()
+- [高级查询](advanced-query-cn.md)
