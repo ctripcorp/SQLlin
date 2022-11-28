@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.ctrip.sqllin.sample
 
 import com.ctrip.sqllin.dsl.Database
@@ -32,10 +31,6 @@ import kotlinx.serialization.Serializable
  */
 
 class Sample(path: DatabasePath) {
-
-
-    private val tablePerson = "Book"
-    private val tableTranscript = "Transcript"
 
     private val db by lazy { Database(name = "Person.db", path = path, version = 1) }
 

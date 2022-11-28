@@ -13,18 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.ctrip.sqllin.processor
 
-import com.google.devtools.ksp.getAllSuperTypes
-import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
-import com.google.devtools.ksp.symbol.KSAnnotated
-import com.google.devtools.ksp.symbol.KSClassDeclaration
-import com.google.devtools.ksp.symbol.KSPropertyDeclaration
-import com.google.devtools.ksp.symbol.Nullability
+import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
+import com.google.devtools.ksp.symbol.*
 import java.io.OutputStreamWriter
 
 /**
@@ -33,7 +28,7 @@ import java.io.OutputStreamWriter
  */
 
 class ClauseProcessor(
-    private val codeGenerator: CodeGenerator,
+    private val environment: SymbolProcessorEnvironment,
 ) : SymbolProcessor {
 
     private companion object {
@@ -50,10 +45,13 @@ class ClauseProcessor(
         invoked = true
 
         val allClassAnnotatedWhereProperty = resolver.getSymbolsWithAnnotation(ANNOTATION_DATABASE_ROW_NAME) as Sequence<KSClassDeclaration>
-        val dbEntityType = resolver.getClassDeclarationByName(resolver.getKSNameFromString(CLASS_BASE_DB_ENTITY_NAME))!!.asStarProjectedType()
+        val dbEntityDeclaration = resolver.getClassDeclarationByName(resolver.getKSNameFromString(CLASS_BASE_DB_ENTITY_NAME))!!
         val serializableType = resolver.getClassDeclarationByName(resolver.getKSNameFromString(ANNOTATION_SERIALIZABLE))!!.asStarProjectedType()
         for (classDeclaration in allClassAnnotatedWhereProperty) {
-            if (classDeclaration.getAllSuperTypes().all { !it.isAssignableFrom(dbEntityType) }
+            val classType = classDeclaration.asStarProjectedType()
+            val classTypeReference = resolver.createKSTypeReferenceFromKSType(classType)
+            val classTypeArgument = resolver.getTypeArgument(classTypeReference, Variance.INVARIANT)
+            if (!dbEntityDeclaration.asType(listOf(classTypeArgument)).isAssignableFrom(classType)
                 || classDeclaration.annotations.all { !it.annotationType.resolve().isAssignableFrom(serializableType) })
                 continue // Don't handle the class that not implement 'BaseWhereProperty' or not annotated 'Serializable'
 
@@ -63,7 +61,7 @@ class ClauseProcessor(
             val tableName = classDeclaration.annotations.find {
                 it.annotationType.resolve().declaration.qualifiedName?.asString() == ANNOTATION_DATABASE_ROW_NAME
             }?.arguments?.first()?.value?.takeIf { (it as? String)?.isNotBlank() == true } ?: className
-            val outputStream = codeGenerator.createNewFile(
+            val outputStream = environment.codeGenerator.createNewFile(
                 dependencies = Dependencies(false),
                 packageName = packageName,
                 fileName = objectName,

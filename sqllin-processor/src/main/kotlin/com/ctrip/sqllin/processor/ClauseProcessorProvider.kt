@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.ctrip.sqllin.processor
 
 import com.google.devtools.ksp.processing.SymbolProcessor
@@ -28,5 +27,5 @@ import com.google.devtools.ksp.processing.SymbolProcessorProvider
 class ClauseProcessorProvider : SymbolProcessorProvider {
 
     override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor =
-        ClauseProcessor(environment.codeGenerator)
+        ClauseProcessor(environment)
 }
