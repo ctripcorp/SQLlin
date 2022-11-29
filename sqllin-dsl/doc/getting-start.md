@@ -157,7 +157,7 @@ Your DBEntity's property names should same with the database table's column name
 column names in the table. But the count of your DBEntity's properties can less than the count of columns.
 
 The `@DBRow`'s param `tableName` represent the table name in Database, please ensure pass
-the correct value. If you don't pass the parameter manually, _sqllin_processor_ will use the class
+the correct value. If you don't pass the parameter manually, _sqllin-processor_ will use the class
 name as table name, for example, `Person`'s default table name is "Person".
 
 In _sqllin-dsl_, objects serialization to SQL and deserialization from cursor depend on _kotlinx.serialization_. So, you also need add the `@Serializable` to your data class.

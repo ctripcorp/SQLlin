@@ -20,7 +20,7 @@ fun sample() {
     }
 }
 ```
-`PersonTable` 由 _sqllin_processor_ 生成，这是因为 `Person` 类被添加了 `@DBRow` 注解。任何被添加了 `@DBRow`
+`PersonTable` 由 _sqllin-processor_ 生成，这是因为 `Person` 类被添加了 `@DBRow` 注解。任何被添加了 `@DBRow`
 注解的类都会生成一个 `Table` object，它的名字为 `类名 + 'Table'`。
 
 现在让我们来进行真正的 _INSERT_ 操作：

@@ -51,6 +51,11 @@ _sqllin-processor_ 使用 KSP 处理注解并生成用以和 _sqllin-dsl_ 配合
 
 - [sqllin-driver 基本设计与使用]()
 
+## R8/ProGuard
+
+由于 _sqllin-dsl_ 的反序列化基于 [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization), R8/ProGuard 的配置请参考
+[kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization#Android) 。
+
 ## 注意
 
 **SQLlin 目前处于 alpha 阶段，未来 API 可能会发生破坏性变更。** 欢迎向我提交反馈。

@@ -3,7 +3,7 @@
 ## Design
 
 Initially, we need a multiplatform available low-level Kotlin API to call SQLite. Because we think _sqllin-dsl_
-should is platform independent. So, we need the _sqllin_driver_ and _sqllin_dsl_ based on it. Our goal is
+should is platform independent. So, we need the _sqllin-driver_ and _sqllin-dsl_ based on it. Our goal is
 writing the common API in Kotlin Multiplatform common source set and they have different implementation in
 different platforms.
 

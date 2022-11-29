@@ -101,7 +101,7 @@ fun joinSample() {
 }
 ```
 
-`CROSS_JOIN` 函数接收一个或多个 `Table` 作为参数。在普通的 _SELECT_ 语句中，该语句的查询结果的类型由 _sqllin_procrssor_ 生成的
+`CROSS_JOIN` 函数接收一个或多个 `Table` 作为参数。在普通的 _SELECT_ 语句中，该语句的查询结果的类型由 _sqllin-processor_ 生成的
 `Table` 决定，但是 _JOIN_ 操作符将会将其改变为指定的类型。在前面的示例中， _CROSS_JOIN_ 将该类型改变为了 `Student`。
 
 ### Inner Join
