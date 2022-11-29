@@ -5,6 +5,7 @@ plugins {
     kotlin("multiplatform")
     id("com.android.library")
     id("maven-publish")
+    signing
 }
 
 val GROUP: String by project
@@ -196,14 +197,6 @@ android {
     }
 }
 
-publishing {
-    repositories {
-        maven {
-
-        }
-    }
-}
-
 fun KotlinNativeTarget.setupNativeConfig() {
     val compileArgs = listOf("-Xruntime-logs=gc=info")
     compilations["main"].kotlinOptions.freeCompilerArgs += compileArgs
@@ -215,5 +208,53 @@ fun KotlinNativeTarget.setupNativeConfig() {
                 else -> "-lsqlite3"
             }
         }
+    }
+}
+
+val NEXUS_USERNAME: String by project
+val NEXUS_PASSWORD: String by project
+
+val javadocJar: TaskProvider<Jar> by tasks.registering(Jar::class) {
+    archiveClassifier.set("javadoc")
+}
+
+publishing {
+    publications.withType<MavenPublication> {
+        artifact(javadocJar)
+        with(pom) {
+            name.set("sqllin-driver")
+            description.set("Low-level API for SQLite in Kotlin Multiplatform")
+            url.set("https://github.com/ctripcorp/SQLlin")
+            licenses {
+                license {
+                    name.set("The Apache License, Version 2.0")
+                    url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                }
+            }
+            developers {
+                developer {
+                    id.set("qiaoyuang")
+                    name.set("Yuang Qiao")
+                    email.set("qiaoyuang2012@gmail.com")
+                }
+            }
+            scm {
+                url.set("https://github.com/ctripcorp/SQLlin")
+                connection.set("scm:git:https://github.com/ctripcorp/SQLlin.git")
+                developerConnection.set("scm:git:https://github.com/ctripcorp/SQLlin.git")
+            }
+        }
+    }
+    repositories {
+        maven {
+            credentials {
+                username = NEXUS_USERNAME
+                password = NEXUS_PASSWORD
+            }
+            url = uri("https://oss.sonatype.org/service/local/staging/deploy/maven2")
+        }
+    }
+    signing {
+        sign(publishing.publications)
     }
 }
