@@ -28,7 +28,7 @@ public sealed class ConditionClause<T : DBEntity<T>>(private val selectCondition
     internal abstract val clauseName: String
 
     final override val clauseStr: String
-        get() = selectCondition.conditionSQL.let { " $clauseName $it" }
+        get() = " $clauseName ${selectCondition.conditionSQL}"
 }
 
 // Less than, <.

@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.ctrip.sqllin.driver
 
 import android.content.Context
@@ -72,9 +71,10 @@ private class AndroidDBHelper(
 
 @RequiresApi(Build.VERSION_CODES.P)
 @Suppress("DEPRECATION")
-private fun DatabaseConfiguration.toAndroidOpenParams(): OpenParams = OpenParams.Builder().apply {
-    setJournalMode(journalMode.name)
-    setSynchronousMode(synchronousMode.name)
-    setIdleConnectionTimeout(busyTimeout.toLong())
-    setLookasideConfig(lookasideSlotSize, lookasideSlotCount)
-}.build()
+private fun DatabaseConfiguration.toAndroidOpenParams(): OpenParams = OpenParams
+    .Builder()
+    .setJournalMode(journalMode.name)
+    .setSynchronousMode(synchronousMode.name)
+    .setIdleConnectionTimeout(busyTimeout.toLong())
+    .setLookasideConfig(lookasideSlotSize, lookasideSlotCount)
+    .build()
