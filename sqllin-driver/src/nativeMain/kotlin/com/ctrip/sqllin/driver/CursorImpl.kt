@@ -37,7 +37,7 @@ public class CursorImpl internal constructor(
 
     override fun getColumnIndex(columnName: String): Int = cursor.getColumnIndexOrThrow(columnName)
 
-    override fun forEachRow(block: (Int) -> Unit) {
+    override fun forEachRows(block: (Int) -> Unit) {
         var index = 0
         while (cursor.next())
             block(index++)

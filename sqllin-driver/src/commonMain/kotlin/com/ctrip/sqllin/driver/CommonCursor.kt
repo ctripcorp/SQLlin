@@ -32,7 +32,7 @@ public interface CommonCursor {
 
     public fun getColumnIndex(columnName: String): Int
 
-    public fun forEachRow(block: (Int) -> Unit)
+    public fun forEachRows(block: (Int) -> Unit)
 
     public fun close()
 }

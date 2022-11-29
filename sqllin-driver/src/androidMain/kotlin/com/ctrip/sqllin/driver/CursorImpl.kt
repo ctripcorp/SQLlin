@@ -46,7 +46,7 @@ public class CursorImpl internal constructor(private val cursor: Cursor) : Commo
 
     override fun getColumnIndex(columnName: String): Int = cursor.getColumnIndexOrThrow(columnName)
 
-    override fun forEachRow(block: (Int) -> Unit) {
+    override fun forEachRows(block: (Int) -> Unit) {
         if (!cursor.moveToFirst()) return
         var index = 0
         do block(index++)

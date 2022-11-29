@@ -44,7 +44,7 @@ public sealed class SelectStatement<T : DBEntity<T>>(
         result = connection.withQuery(sqlStr) {
             val decoder = QueryDecoder(it)
             buildList {
-                it.forEachRow {
+                it.forEachRows {
                     add(decoder.decodeSerializableValue(deserializer))
                 }
             }
