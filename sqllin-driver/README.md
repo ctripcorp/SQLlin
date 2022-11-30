@@ -1,18 +1,20 @@
 # The sqllin-driver basic design and usage
 
+中文版请见[这里](README_CN.md)
+
 ## Design
 
 Initially, we need a multiplatform available low-level Kotlin API to call SQLite. Because we think _sqllin-dsl_
-should is platform independent. So, we need the _sqllin-driver_ and _sqllin-dsl_ based on it. Our goal is
+should is platform independent. So, we need the _sqllin-driver_, and _sqllin-dsl_ based on it. Our goal is
 writing the common API in Kotlin Multiplatform common source set and they have different implementation in
 different platforms.
 
-In Android, not many ways to choose from. If we use the Android Framework SQLite API, everything will be simple,
-but defect is many SQLite parameters cannot take effect on systems below Android P. But if we writing JNI code
-to call SQLite C functions by ourselves, it will have bigger problem: In systems above Android N, Google doesn't
-allow developers call system built-in SQLite C function in NDK. If we firmly choose this way, we have to compile
-the SQLite source code into _sqllin-driver_, this will complicate our project. Finally we still choose based on
-Android Framework Java API.
+In Android, not many ways to choose from. If we use the Android Framework SQLite Java API, everything will be simple,
+but defect is many SQLite parameters cannot take effect on systems below Android P. If we writing JNI code
+to call SQLite C functions by ourselves, above problem will be resolved, but this will lead to a bigger problem:
+In systems above Android N, Google doesn't allow developers call system built-in SQLite C function in NDK. If
+we firmly choose this way, we have to compile the SQLite source code into _sqllin-driver_, this will complicate
+our project. Finally we still choose based on Android Framework Java API.
 
 In Native platforms, things look different. We can call SQLite C API directly, this is the most intuitive way.
 The ability of Kotlin/Native interop with C is very perfect, but in Kotlin/Native you must use some very difficult
@@ -29,6 +31,23 @@ supports iOS, it also supports all the operating systems of Apple, Linux(x64) an
 
 I am not advice you use _sqllin-driver_ in your applications directly, but if you want to develop your own SQLite
 higher-level API library, you can use it.
+
+### Installation via Maven in Gradle
+
+```kotlin
+kotlin {
+    // ......
+    sourceSets {
+        val commonMain by getting {
+            dependencies {
+                // sqllin-driver
+                implementation("com.ctrip.kotlin:sqllin-driver:$sqllinVersion")
+            }
+        }
+        // ......
+    }
+}
+```
 
 ### Open and Close Database
 

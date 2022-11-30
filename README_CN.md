@@ -49,7 +49,7 @@ _sqllin-processor_ 使用 KSP 处理注解并生成用以和 _sqllin-dsl_ 配合
 
 虽然不建议直接使用 _sqllin-driver_, 但如果你想了解更多信息则可以阅读：
 
-- [sqllin-driver 基本设计与使用]()
+- [sqllin-driver 基本设计与使用](./sqllin-driver/README_CN.md)
 
 ## R8/ProGuard
 
