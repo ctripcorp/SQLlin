@@ -42,7 +42,7 @@ _sqllin-processor_ 使用 KSP 处理注解并生成用以和 _sqllin-dsl_ 配合
 你可以在下列文档中学习如何使用 _sqllin-dsl_：
 
 - [开始使用](./sqllin-dsl/doc/getting-start-cn.md)
-- [数据库的增删改与事务](./sqllin-dsl/doc/modify-database-and-transaction-cn.md)
+- [修改数据库与事务](./sqllin-dsl/doc/modify-database-and-transaction-cn.md)
 - [查询](./sqllin-dsl/doc/query-cn.md)
 - [SQL 函数](./sqllin-dsl/doc/sql-functions-cn.md)
 - [高级查询](./sqllin-dsl/doc/advanced-query-cn.md)
