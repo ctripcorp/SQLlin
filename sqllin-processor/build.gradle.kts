@@ -15,7 +15,6 @@ repositories {
 }
 
 java {
-    withSourcesJar()
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = JavaVersion.VERSION_1_8
 }
@@ -32,10 +31,20 @@ val javadocJar: TaskProvider<Jar> by tasks.registering(Jar::class) {
     archiveClassifier.set("javadoc")
 }
 
+val sourceJar: TaskProvider<Jar> by tasks.registering(Jar::class) {
+    archiveClassifier.set("sources")
+    from(project.the<SourceSetContainer>()["main"].allSource)
+}
+
 publishing {
     publications.create<MavenPublication>("Processor") {
         artifactId = "sqllin-processor"
-        setArtifacts(listOf("$buildDir/libs/sqllin-processor-$version.jar", javadocJar))
+        setArtifacts(
+            listOf(
+                "$buildDir/libs/sqllin-processor-$version.jar",
+                javadocJar, sourceJar,
+            )
+        )
         with(pom) {
             name.set("sqllin-processor")
             description.set("KSP code be used to generate the database column properties")
