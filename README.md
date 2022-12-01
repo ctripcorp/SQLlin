@@ -57,7 +57,7 @@ I don't recommend use _sqllin-driver_ directly, but if you want to learn more ab
 ## R8/ProGuard
 
 Due to _sqllin-dsl_'s deserialization based on [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization), R8/ProGuard configuration please refer to
-[kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization#Android).
+[kotlinx.serialization#Android](https://github.com/Kotlin/kotlinx.serialization#Android).
 
 ## Note
 
