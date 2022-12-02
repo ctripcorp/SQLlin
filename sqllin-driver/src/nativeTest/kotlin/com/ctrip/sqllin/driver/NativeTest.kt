@@ -15,6 +15,8 @@
  */
 package com.ctrip.sqllin.driver
 
+import kotlinx.cinterop.toKString
+import platform.posix.getenv
 import platform.posix.remove
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -58,5 +60,5 @@ class NativeTest {
     }
 
     private val path
-        get() = "/Library"
+        get() = "/Users/${getenv("USER")!!.toKString()}/Downloads"
 }
