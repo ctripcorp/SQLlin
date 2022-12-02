@@ -174,7 +174,12 @@ android {
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
     sourceSets.getByName("androidTest") {
         manifest.srcFile(File("src/androidTest/AndroidManifest.xml"))
-        java.setSrcDirs(listOf("src/androidTest/kotlin", "build/generated/ksp/android/androidDebug/kotlin"))
+        java.setSrcDirs(
+            listOf(
+                "src/androidTest/kotlin",
+                "src/commonTest/kotlin",
+                "build/generated/ksp/android/androidDebug/kotlin",
+            ))
     }
     defaultConfig {
         minSdk = 23

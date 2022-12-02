@@ -13,10 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.ctrip.sqllin.dsl
 
 import com.ctrip.sqllin.driver.toDatabasePath
+import kotlinx.cinterop.toKString
+import platform.posix.getenv
 import platform.posix.remove
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -25,7 +26,6 @@ import kotlin.test.Test
  * Native unit test
  * @author yaqiao
  */
-
 
 class NativeTest {
 
@@ -69,6 +69,6 @@ class NativeTest {
         }
     }
 
-    private val path
-        get() = "/Users/ccsa/Downloads"
+    private val path: String
+        get() = "/Users/${getenv("USER")!!.toKString()}/Downloads"
 }
