@@ -69,6 +69,9 @@ class NativeTest {
         }
     }
 
+    /**
+     * Just work on macOS, please replace it with a path that has permissions on your platform
+     */
     private val path: String
         get() = "/Users/${getenv("USER")!!.toKString()}/Downloads"
 }
