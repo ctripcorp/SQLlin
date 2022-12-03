@@ -71,7 +71,6 @@ kotlin {
         }
         val androidTest by getting {
             dependencies {
-                implementation(project(":sqllin-processor"))
                 implementation("androidx.test:core:1.5.0")
                 implementation("androidx.test:runner:1.5.1")
                 implementation("androidx.test:rules:1.5.0")
@@ -174,12 +173,7 @@ android {
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
     sourceSets.getByName("androidTest") {
         manifest.srcFile(File("src/androidTest/AndroidManifest.xml"))
-        java.setSrcDirs(
-            listOf(
-                "src/androidTest/kotlin",
-                "src/commonTest/kotlin",
-                "build/generated/ksp/android/androidDebug/kotlin",
-            ))
+        java.srcDir("src/androidTest/kotlin")
     }
     defaultConfig {
         minSdk = 23
@@ -214,8 +208,7 @@ fun KotlinNativeTarget.setupNativeConfig() {
 
 dependencies {
     val sourceSet = listOf(
-        //"kspCommonMainMetadata",
-        "kspAndroidTest",
+        "kspAndroidAndroidTest",
 
         "kspIosX64Test",
         "kspIosArm32Test",
