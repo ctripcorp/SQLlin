@@ -57,7 +57,7 @@ internal class QueryDecoder(
         get() = cursor.getColumnIndex(elementName)
 
     private inline fun <T> deserialize(block: (Int) -> T): T = cursorColumnIndex.let {
-        if (it >= 0) block(it) else throw SerializationException("The Cursor don't have this column")
+        if (it >= 0) block(it) else throw SerializationException("The Cursor doesn't have this column")
     }
 
     override fun decodeBoolean(): Boolean = deserialize { cursor.getInt(it) > 0 }

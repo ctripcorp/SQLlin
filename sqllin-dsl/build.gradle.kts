@@ -97,6 +97,9 @@ kotlin {
 
         val linuxX64Main by getting
 
+        val mingwX64Main by getting
+        val mingwX86Main by getting
+
         val nativeMain by creating {
             dependsOn(commonMain)
 
@@ -119,6 +122,9 @@ kotlin {
             tvosSimulatorArm64Main.dependsOn(this)
 
             linuxX64Main.dependsOn(this)
+
+            mingwX64Main.dependsOn(this)
+            mingwX86Main.dependsOn(this)
         }
 
         val iosX64Test by getting
@@ -140,6 +146,9 @@ kotlin {
         val tvosSimulatorArm64Test by getting
 
         val linuxX64Test by getting
+
+        val mingwX64Test by getting
+        val mingwX86Test by getting
 
         val nativeTest by creating {
             dependsOn(commonTest)
@@ -163,6 +172,9 @@ kotlin {
             tvosSimulatorArm64Test.dependsOn(this)
 
             linuxX64Test.dependsOn(this)
+
+            mingwX64Test.dependsOn(this)
+            mingwX86Test.dependsOn(this)
         }
     }
 }
@@ -200,6 +212,7 @@ fun KotlinNativeTarget.setupNativeConfig() {
         all {
             linkerOpts += when {
                 HostManager.hostIsLinux -> "-lsqlite3 -L/usr/lib/x86_64-linux-gnu -L/usr/lib"
+                HostManager.hostIsMingw -> "-lsqlite3 -Lc:\\msys64\\mingw64\\lib"
                 else -> "-lsqlite3"
             }
         }
