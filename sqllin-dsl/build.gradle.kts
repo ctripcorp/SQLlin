@@ -42,6 +42,9 @@ kotlin {
         tvosSimulatorArm64(),
 
         linuxX64(),
+
+        mingwX64(),
+        mingwX86(),
     ).forEach {
         it.setupNativeConfig()
     }
