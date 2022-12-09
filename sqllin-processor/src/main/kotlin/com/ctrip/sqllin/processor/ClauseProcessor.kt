@@ -82,13 +82,13 @@ class ClauseProcessor(
 
                 writer.write("    inline operator fun <R> invoke(block: $objectName.(table: $objectName) -> R): R = this.block(this)\n\n")
                 classDeclaration.getAllProperties().forEachIndexed { index, property ->
-                    val wherePropertyName = getWherePropertyTypeStr(property) ?: return@forEachIndexed
+                    val clauseElementTypeName = getClauseElementTypeStr(property) ?: return@forEachIndexed
                     val propertyName = property.simpleName.asString()
                     val elementName = "$className.serializer().descriptor.getElementName($index)"
 
                     // Write 'SelectClause' code.
                     writer.write("    val $propertyName\n")
-                    writer.write("        get() = $wherePropertyName($elementName)\n\n")
+                    writer.write("        get() = $clauseElementTypeName($elementName)\n\n")
 
                     // Write 'SetClause' code.
                     val isNotNull = property.type.resolve().nullability == Nullability.NOT_NULL
@@ -104,7 +104,7 @@ class ClauseProcessor(
         return emptyList()
     }
 
-    private fun getWherePropertyTypeStr(property: KSPropertyDeclaration): String? = when (
+    private fun getClauseElementTypeStr(property: KSPropertyDeclaration): String? = when (
         property.typeName
     ) {
         Int::class.qualifiedName,

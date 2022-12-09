@@ -34,3 +34,23 @@ data class Book(
 ) : DBEntity<Book> {
     override fun kSerializer(): KSerializer<Book> = serializer()
 }
+
+@DBRow("category")
+@Serializable
+data class Category(
+    val name: String,
+    val code: Int,
+) : DBEntity<Category> {
+    override fun kSerializer(): KSerializer<Category> = serializer()
+}
+
+@Serializable
+data class Joiner(
+    val name: String,
+    val author: String,
+    val price: Double,
+    val pages: Int,
+    val code: Int,
+) : DBEntity<Joiner> {
+    override fun kSerializer(): KSerializer<Joiner> = serializer()
+}

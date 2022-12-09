@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.ctrip.sqllin.dsl.sql.statement
 
 import com.ctrip.sqllin.driver.DatabaseConnection
@@ -39,12 +38,12 @@ public class JoinStatementWithoutCondition<R : DBEntity<R>> internal constructor
         require(iterator.hasNext()) { "Param 'clauseElements' must not be empty!!!" }
         val sql = buildString {
             append(sqlStr)
-            append(" USING ")
+            append(" USING (")
             do {
                 append(iterator.next().valueName)
                 val hasNext = iterator.hasNext()
-                if (hasNext)
-                    append(',')
+                val symbol = if (hasNext) ',' else ')'
+                append(symbol)
             } while (hasNext)
         }
         val joinStatement = JoinSelectStatement(sql, deserializer, connection, container)

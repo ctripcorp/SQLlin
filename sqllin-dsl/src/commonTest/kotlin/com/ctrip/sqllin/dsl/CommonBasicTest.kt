@@ -34,6 +34,8 @@ class CommonBasicTest(private val path: DatabasePath) {
 
     companion object {
         const val DATABASE_NAME = "BookStore.db"
+        const val SQL_CREATE_BOOK = "create table book (id integer primary key autoincrement, name text, author text, pages integer, price real)"
+        const val SQL_CREATE_CATEGORY = "create table category (id integer primary key autoincrement, name text, code integer)"
     }
 
     fun testInsert() {
@@ -231,16 +233,6 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals("Ken Kousen", resultOfGroupByAndHaving.first().author)
     }
 
-    private fun getDefaultDBConfig(): DatabaseConfiguration =
-        DatabaseConfiguration(
-            name = DATABASE_NAME,
-            path = path,
-            version = 1,
-            create = {
-                it.execSQL("create table book (id integer primary key autoincrement, name text, author text, pages integer, price real)")
-            }
-        )
-
     fun testUnionSelect() {
         val book0 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         val book1 = Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72)
@@ -307,4 +299,49 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(book4.author, selectStatement7?.getResults()?.first()?.author)
         assertEquals(book0.author, selectStatement8?.getResults()?.first()?.author)
     }
+
+    fun testJoinClause() {
+        val database = Database(getDefaultDBConfig())
+        var crossJoinStatement: SelectStatement<Joiner>? = null
+        var innerJoinStatement: SelectStatement<Joiner>? = null
+        var naturalInnerJoinStatement: SelectStatement<Joiner>? = null
+        var outerJoinStatement: SelectStatement<Joiner>? = null
+        var naturalOuterJoinStatement: SelectStatement<Joiner>? = null
+        val categories = listOf(
+            Category(name = "The Da Vinci Code", code = 123),
+            Category(name = "Kotlin Cookbook", code = 456),
+        )
+        val books = listOf(
+            Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96),
+            Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72),
+            Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95),
+            Book(name = "Kotlin Guide Pratique", author = "Ken Kousen", pages = 398, price = 39.99),
+            Book(name = "Modern Java Recipes", author ="Ken Kousen", pages = 322, price = 25.78),
+        )
+        database {
+            CategoryTable { table ->
+                table INSERT categories
+            }
+            BookTable { table ->
+                table INSERT books
+                //crossJoinStatement = table SELECT CROSS_JOIN(CategoryTable)
+                naturalInnerJoinStatement = table SELECT NATURAL_INNER_JOIN(CategoryTable)
+                naturalOuterJoinStatement = table SELECT NATURAL_LEFT_OUTER_JOIN(CategoryTable)
+            }
+        }
+        //assertEquals(crossJoinStatement?.getResults()?.size, categories.size * books.size)
+        assertEquals(naturalInnerJoinStatement?.getResults()?.size, categories.size)
+        assertEquals(naturalOuterJoinStatement?.getResults()?.size, books.size)
+    }
+
+    private fun getDefaultDBConfig(): DatabaseConfiguration =
+        DatabaseConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                it.execSQL(SQL_CREATE_BOOK)
+                it.execSQL(SQL_CREATE_CATEGORY)
+            }
+        )
 }

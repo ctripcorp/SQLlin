@@ -65,6 +65,9 @@ class AndroidTest {
     @Test
     fun testFunction() = commonTest.testFunction()
 
+    @Test
+    fun testCrossJoin() = commonTest.testJoinClause()
+
     @After
     fun setDown() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

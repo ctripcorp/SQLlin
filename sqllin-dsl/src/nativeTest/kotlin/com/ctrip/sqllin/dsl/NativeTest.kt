@@ -58,6 +58,9 @@ class NativeTest {
     @Test
     fun testFunction() = commonTest.testFunction()
 
+    @Test
+    fun testCrossJoin() = commonTest.testJoinClause()
+
     @AfterTest
     fun setDown() {
         listOf(

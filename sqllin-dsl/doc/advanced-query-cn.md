@@ -118,8 +118,8 @@ fun joinSample() {
 ```
 
 `INNER_JOIN` 与 `CROSS_JOIN` 非常相似，不同之处在于 `INNER_JOIN` 需要连接一个 `USING` 子句。如果一个 _INNER JOIN_ 语句没有
-`USING` 子句，那么它是不完整的，但是你的代码仍然可以编译，但它在运行时不会做任何事情。当前，SQLlin 只支持 `USING` 子句而不支持
-`ON` 子句，它将会在未来的版本中被支持。
+`USING` 子句，那么它是不完整的，但是你的代码仍然可以编译，但它在运行时不会做任何事情。当前 SQLlin 只支持 `USING` 子句而不支持
+`ON` 子句，`ON` 将会在未来的版本中被支持。
 
 `NATURAL_INNER_JOIN` 将会产生一个完整的 _SELECT_ 语句（与 `CROSS_JOIN` 相似）。所以，你不能再它末尾连接 `USING` 子句，这将由
 Kotlin 编译器来保证。
