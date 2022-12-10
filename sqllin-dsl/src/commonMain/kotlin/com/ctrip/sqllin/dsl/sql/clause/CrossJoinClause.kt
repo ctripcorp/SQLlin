@@ -23,8 +23,8 @@ import com.ctrip.sqllin.dsl.sql.Table
  * @author yaqiao
  */
 
-internal class CrossJoinClause<R : DBEntity<R>>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables) {
+internal class CrossJoinClause<R : DBEntity<R>>(vararg tables: Table<*>) : NaturalJoinClause<R>(*tables) {
     override val clauseName: String = " CROSS JOIN "
 }
 
-public fun <R : DBEntity<R>> CROSS_JOIN(vararg tables: Table<*>): BaseJoinClause<R> = CrossJoinClause(*tables)
+public fun <R : DBEntity<R>> CROSS_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = CrossJoinClause(*tables)

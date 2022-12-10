@@ -140,8 +140,7 @@ fun joinSample() {
 }
 ```
 
-`LEFT_OUTER_JOIN` 的用法与 `INNER_JOIN` 非常相似，但你使用它的时候要非常小心。由于 SQL 中的 _LEFT OUTER JOIN_
-自身的行为，查询结果将产生一些包含空值的行。如果你期待被反序列化的 `DBEntity` 拥有一些非空的属性，在反序列化的时候可能会发生 crash。
+`LEFT_OUTER_JOIN` 的用法与 `INNER_JOIN` 非常相似，不同之处仅仅是它们的返回结果。
 
 ## 最后
 

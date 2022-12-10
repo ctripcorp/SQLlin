@@ -302,7 +302,7 @@ class CommonBasicTest(private val path: DatabasePath) {
 
     fun testJoinClause() {
         val database = Database(getDefaultDBConfig())
-        var crossJoinStatement: SelectStatement<Joiner>? = null
+        var crossJoinStatement: SelectStatement<CrossJoiner>? = null
         var innerJoinStatement: SelectStatement<Joiner>? = null
         var naturalInnerJoinStatement: SelectStatement<Joiner>? = null
         var outerJoinStatement: SelectStatement<Joiner>? = null
@@ -324,12 +324,12 @@ class CommonBasicTest(private val path: DatabasePath) {
             }
             BookTable { table ->
                 table INSERT books
-                //crossJoinStatement = table SELECT CROSS_JOIN(CategoryTable)
+                crossJoinStatement = table SELECT_DISTINCT CROSS_JOIN(CategoryTable)
                 naturalInnerJoinStatement = table SELECT NATURAL_INNER_JOIN(CategoryTable)
                 naturalOuterJoinStatement = table SELECT NATURAL_LEFT_OUTER_JOIN(CategoryTable)
             }
         }
-        //assertEquals(crossJoinStatement?.getResults()?.size, categories.size * books.size)
+        assertEquals(crossJoinStatement?.getResults()?.size, categories.size * books.size)
         assertEquals(naturalInnerJoinStatement?.getResults()?.size, categories.size)
         assertEquals(naturalOuterJoinStatement?.getResults()?.size, books.size)
     }

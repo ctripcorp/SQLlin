@@ -145,9 +145,7 @@ fun joinSample() {
 }
 ```
 
-The `LEFT_OUTER_JOIN`'s usage is very similar to `INNER_JOIN`, but you should very careful to use it. Because of _LEFT OUTER JOIN_ in SQL
-own behavior, the queries results will produce some row include null value. If your `DBEntity` that you expect deserialized have some non-null 
-properties, you might get a crash while deserializing.
+The `LEFT_OUTER_JOIN`'s usage is very similar to `INNER_JOIN`, the difference just is their results.
 
 ## Finally
 

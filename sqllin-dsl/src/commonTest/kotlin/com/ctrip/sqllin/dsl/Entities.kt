@@ -54,3 +54,13 @@ data class Joiner(
 ) : DBEntity<Joiner> {
     override fun kSerializer(): KSerializer<Joiner> = serializer()
 }
+
+@Serializable
+data class CrossJoiner(
+    val author: String,
+    val price: Double,
+    val pages: Int,
+    val code: Int,
+) : DBEntity<CrossJoiner> {
+    override fun kSerializer(): KSerializer<CrossJoiner> = serializer()
+}
