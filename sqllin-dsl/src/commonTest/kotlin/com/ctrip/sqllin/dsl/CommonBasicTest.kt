@@ -325,12 +325,16 @@ class CommonBasicTest(private val path: DatabasePath) {
             BookTable { table ->
                 table INSERT books
                 crossJoinStatement = table SELECT_DISTINCT CROSS_JOIN(CategoryTable)
+                innerJoinStatement = table SELECT INNER_JOIN<Joiner>(CategoryTable) USING name
                 naturalInnerJoinStatement = table SELECT NATURAL_INNER_JOIN(CategoryTable)
+                outerJoinStatement = table SELECT LEFT_OUTER_JOIN<Joiner>(CategoryTable) USING name
                 naturalOuterJoinStatement = table SELECT NATURAL_LEFT_OUTER_JOIN(CategoryTable)
             }
         }
         assertEquals(crossJoinStatement?.getResults()?.size, categories.size * books.size)
+        assertEquals(innerJoinStatement?.getResults()?.size, categories.size)
         assertEquals(naturalInnerJoinStatement?.getResults()?.size, categories.size)
+        assertEquals(outerJoinStatement?.getResults()?.size, books.size)
         assertEquals(naturalOuterJoinStatement?.getResults()?.size, books.size)
     }
 
