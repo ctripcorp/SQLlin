@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.ctrip.sqllin.dsl.sql.clause
 
 import com.ctrip.sqllin.dsl.DBEntity
@@ -26,31 +25,31 @@ import com.ctrip.sqllin.dsl.sql.X
  */
 
 public fun <T : DBEntity<T>> Table<T>.count(element: ClauseElement): ClauseNumber =
-    ClauseNumber("count(${element.valueName})")
+    ClauseNumber("count(${element.valueName})", this)
 
 public fun <T : DBEntity<T>> Table<T>.count(x: X): ClauseNumber =
-    ClauseNumber("count(*)")
+    ClauseNumber("count(*)", this)
 
 public fun <T : DBEntity<T>> Table<T>.max(element: ClauseElement): ClauseNumber =
-    ClauseNumber("max(${element.valueName})")
+    ClauseNumber("max(${element.valueName})", this)
 
 public fun <T: DBEntity<T>> Table<T>.min(element: ClauseElement): ClauseNumber =
-    ClauseNumber("min(${element.valueName})")
+    ClauseNumber("min(${element.valueName})", this)
 
 public fun <T: DBEntity<T>> Table<T>.avg(element: ClauseElement): ClauseNumber =
-    ClauseNumber("avg(${element.valueName})")
+    ClauseNumber("avg(${element.valueName})", this)
 
 public fun <T: DBEntity<T>> Table<T>.sum(element: ClauseElement): ClauseNumber =
-    ClauseNumber("sum(${element.valueName})")
+    ClauseNumber("sum(${element.valueName})", this)
 
 public fun <T: DBEntity<T>> Table<T>.abs(number: ClauseElement): ClauseNumber =
-    ClauseNumber("abs(${number.valueName})")
+    ClauseNumber("abs(${number.valueName})", this)
 
 public fun <T: DBEntity<T>> Table<T>.upper(element: ClauseElement): ClauseString =
-    ClauseString("upper(${element.valueName})")
+    ClauseString("upper(${element.valueName})", this)
 
 public fun <T: DBEntity<T>> Table<T>.lower(element: ClauseElement): ClauseString =
-    ClauseString("lower(${element.valueName})")
+    ClauseString("lower(${element.valueName})", this)
 
 public fun <T: DBEntity<T>> Table<T>.length(element: ClauseElement): ClauseNumber =
-    ClauseNumber("length(${element.valueName})")
+    ClauseNumber("length(${element.valueName})", this)

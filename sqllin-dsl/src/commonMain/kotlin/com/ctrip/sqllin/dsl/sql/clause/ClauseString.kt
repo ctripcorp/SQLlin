@@ -13,15 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.ctrip.sqllin.dsl.sql.clause
+
+import com.ctrip.sqllin.dsl.sql.Table
 
 /**
  * Clause String
  * @author yaqiao
  */
 
-public class ClauseString(valueName: String) : ClauseElement(valueName) {
+public class ClauseString(
+    valueName: String,
+    table: Table<*>,
+) : ClauseElement(valueName, table) {
 
     // Equals, ==
     internal infix fun eq(str: String?): SelectCondition = appendString("=", "IS", str)
@@ -65,6 +69,8 @@ public class ClauseString(valueName: String) : ClauseElement(valueName) {
         return SelectCondition(sql)
     }
 
-    override fun hashCode(): Int = valueName.hashCode()
-    override fun equals(other: Any?): Boolean = (other as? ClauseString)?.valueName == valueName
+    override fun hashCode(): Int = valueName.hashCode() + table.tableName.hashCode()
+    override fun equals(other: Any?): Boolean = (other as? ClauseString)?.let {
+        it.valueName == valueName && it.table.tableName == table.tableName
+    } ?: false
 }

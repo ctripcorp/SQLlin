@@ -44,8 +44,8 @@ public sealed class NaturalJoinClause<R : DBEntity<R>>(vararg tables: Table<*>) 
 
 public sealed class JoinClause<R : DBEntity<R>>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables)
 
-//infix fun <R : DBEntity<R>> JoinStatementWithoutCondition<R>.ON(condition: SelectCondition): JoinSelectStatement<R> =
-    //convertToJoinSelectStatement(condition)
+public infix fun <R : DBEntity<R>> JoinStatementWithoutCondition<R>.ON(condition: SelectCondition): JoinSelectStatement<R> =
+    convertToJoinSelectStatement(condition)
 
 public inline infix fun <R : DBEntity<R>> JoinStatementWithoutCondition<R>.USING(clauseElement: ClauseElement): JoinSelectStatement<R> =
     USING(listOf(clauseElement))

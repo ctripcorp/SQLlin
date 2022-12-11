@@ -88,7 +88,7 @@ class ClauseProcessor(
 
                     // Write 'SelectClause' code.
                     writer.write("    val $propertyName\n")
-                    writer.write("        get() = $clauseElementTypeName($elementName)\n\n")
+                    writer.write("        get() = $clauseElementTypeName($elementName, this)\n\n")
 
                     // Write 'SetClause' code.
                     val isNotNull = property.type.resolve().nullability == Nullability.NOT_NULL

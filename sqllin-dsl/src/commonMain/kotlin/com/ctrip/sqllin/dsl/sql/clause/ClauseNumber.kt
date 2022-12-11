@@ -13,15 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.ctrip.sqllin.dsl.sql.clause
+
+import com.ctrip.sqllin.dsl.sql.Table
 
 /**
  * The 'WHERE' and 'HAVING' clause properties
  * @author yaqiao
  */
 
-public class ClauseNumber(valueName: String) : ClauseElement(valueName) {
+public class ClauseNumber(
+    valueName: String,
+    table: Table<*>,
+) : ClauseElement(valueName, table) {
 
     // Less than, <
     internal infix fun lt(number: Number): SelectCondition = appendNumber("<", number)
@@ -90,6 +94,8 @@ public class ClauseNumber(valueName: String) : ClauseElement(valueName) {
         return SelectCondition(sql)
     }
 
-    override fun hashCode(): Int = valueName.hashCode()
-    override fun equals(other: Any?): Boolean = (other as? ClauseNumber)?.valueName == valueName
+    override fun hashCode(): Int = valueName.hashCode() + table.tableName.hashCode()
+    override fun equals(other: Any?): Boolean = (other as? ClauseNumber)?.let {
+        it.valueName == valueName && it.table.tableName == table.tableName
+    } ?: false
 }
