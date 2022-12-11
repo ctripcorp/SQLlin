@@ -84,6 +84,15 @@ data class Student(
 ): DBEntity<Student> {
     override fun kSerializer(): KSerializer<Student> = serializer()
 }
+
+@Serializable
+data class CrossJoinStudent(
+    val age: Int?,
+    val math: Int,
+    val english: Int,
+): DBEntity<CrossJoinStudent> {
+    override fun kSerializer(): KSerializer<Student> = CrossJoinStudent()
+}
 ```
 
 `Transcript` 代表另一张表，`Student` 表示 join 的查询结果的类型（所以 `Student` 不需要被添加 `@DBRow` 注解），它拥有所有 `Person` 和 `Transcript`
@@ -95,14 +104,17 @@ data class Student(
 fun joinSample() {
     db {
         PersonTable { table ->
-            table SELECT CROSS_JOIN<Student>(TABLE<Transcript>(tableTranscript))
+            table SELECT CROSS_JOIN<CrossJoinStudent>(TranscriptTable)
         }
     }
 }
 ```
 
 `CROSS_JOIN` 函数接收一个或多个 `Table` 作为参数。在普通的 _SELECT_ 语句中，该语句的查询结果的类型由 _sqllin-processor_ 生成的
-`Table` 决定，但是 _JOIN_ 操作符将会将其改变为指定的类型。在前面的示例中， _CROSS_JOIN_ 将该类型改变为了 `Student`。
+`Table` 决定，但是 _JOIN_ 操作符将会将其改变为指定的类型。在前面的示例中， `CROSS_JOIN` 将该类型改变为了 `CrossJoinStudent`。
+
+注意，由于 SQL 中 _CROSS JOIN_ 自身的特性，如果附带 _CROSS JOIN_ 子句的 _SELECT_ 语句查询的列包含两个表中的同名列，这会导致查询失败。因为
+class 中不能包含两个同名的属性。因此请确保 `CROSS_JOIN` 函数转换后的结果类型不包含两个表中的同名列。
 
 ### Inner Join
 
@@ -110,8 +122,8 @@ fun joinSample() {
 fun joinSample() {
     db {
         PersonTable { table ->
-            table SELECT INNER_JOIN<Student>(TABLE<Transcript>(tableTranscript)) USING name
-            table SELECT NATURAL_INNER_JOIN<Student>(TABLE<Transcript>(tableTranscript))
+            table SELECT INNER_JOIN<Student>(TranscriptTable) USING name
+            table SELECT NATURAL_INNER_JOIN<Student>(TranscriptTable)
         }
     }
 }
@@ -133,8 +145,8 @@ Kotlin 编译器来保证。
 fun joinSample() {
     db {
         PersonTable { table ->
-            table SELECT LEFT_OUTER_JOIN<Student>(TABLE<Transcript>(tableTranscript)) USING name
-            table SELECT NATURAL_LEFT_OUTER_JOIN<Student>(TABLE<Transcript>(tableTranscript))
+            table SELECT LEFT_OUTER_JOIN<Student>(TranscriptTable) USING name
+            table SELECT NATURAL_LEFT_OUTER_JOIN<Student>(TranscriptTable)
         }
     }
 }
