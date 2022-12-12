@@ -25,30 +25,52 @@ import com.ctrip.sqllin.dsl.sql.Table
 public class ClauseNumber(
     valueName: String,
     table: Table<*>,
-) : ClauseElement(valueName, table) {
+    isFunction: Boolean,
+) : ClauseElement(valueName, table, isFunction){
 
     // Less than, <
     internal infix fun lt(number: Number): SelectCondition = appendNumber("<", number)
 
-    // Less or equal to, <=
+    // Less than, append to ClauseNumber
+    internal infix fun lt(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber("<", clauseNumber)
+
+    // Less than or equals to, <=
     internal infix fun lte(number: Number): SelectCondition = appendNumber("<=", number)
+
+    // Less than or equal to, append to ClauseNumber
+    internal infix fun lte(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber("<=", clauseNumber)
 
     // Equals, ==
     internal infix fun eq(number: Number?): SelectCondition = appendNullableNumber("=", "IS", number)
 
-    // Not equal to, !=
+    // Equals, append to ClauseNumber
+    internal infix fun eq(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber("=", clauseNumber)
+
+    // Not equals to, !=
     internal infix fun neq(number: Number?): SelectCondition = appendNullableNumber("!=", "IS NOT", number)
+
+    // Not equals to, append to ClauseNumber
+    internal infix fun neq(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber("!=", clauseNumber)
 
     // Greater than, >
     internal infix fun gt(number: Number): SelectCondition = appendNumber(">", number)
 
-    // Greater than or equal to, >=
+    // Greater, append to ClauseNumber
+    internal infix fun gt(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber(">", clauseNumber)
+
+    // Greater or equals to, >=
     internal infix fun gte(number: Number): SelectCondition = appendNumber(">=", number)
+
+    internal infix fun gte(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber(">=", clauseNumber)
 
     internal infix fun inIterable(numbers: Iterable<Number>): SelectCondition {
         val iterator = numbers.iterator()
         require(iterator.hasNext()) { "Param 'numbers' must not be empty!!!" }
         val sql = buildString {
+            if (!isFunction) {
+                append(table.tableName)
+                append('.')
+            }
             append(valueName)
             append(" IN (")
             do {
@@ -63,6 +85,10 @@ public class ClauseNumber(
 
     internal infix fun between(range: LongRange): SelectCondition {
         val sql = buildString {
+            if (!isFunction) {
+                append(table.tableName)
+                append('.')
+            }
             append(valueName)
             append(" BETWEEN ")
             append(range.first)
@@ -74,6 +100,10 @@ public class ClauseNumber(
 
     private fun appendNumber(symbol: String, number: Number): SelectCondition {
         val sql = buildString {
+            if (!isFunction) {
+                append(table.tableName)
+                append('.')
+            }
             append(valueName)
             append(' ')
             append(symbol)
@@ -85,11 +115,30 @@ public class ClauseNumber(
 
     private fun appendNullableNumber(notNullSymbol: String, nullSymbol: String, number: Number?): SelectCondition {
         val sql = buildString {
+            if (!isFunction) {
+                append(table.tableName)
+                append('.')
+            }
             append(valueName)
             append(' ')
             append(if (number == null) nullSymbol else notNullSymbol)
             append(' ')
             append(number ?: "NULL")
+        }
+        return SelectCondition(sql)
+    }
+
+    private fun appendClauseNumber(symbol: String, clauseNumber: ClauseNumber): SelectCondition {
+        val sql = buildString {
+            append(table.tableName)
+            append('.')
+            append(valueName)
+            append(' ')
+            append(symbol)
+            append(' ')
+            append(clauseNumber.table.tableName)
+            append('.')
+            append(clauseNumber.valueName)
         }
         return SelectCondition(sql)
     }

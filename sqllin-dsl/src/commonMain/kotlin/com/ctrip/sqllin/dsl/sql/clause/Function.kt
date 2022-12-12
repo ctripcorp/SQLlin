@@ -25,31 +25,31 @@ import com.ctrip.sqllin.dsl.sql.X
  */
 
 public fun <T : DBEntity<T>> Table<T>.count(element: ClauseElement): ClauseNumber =
-    ClauseNumber("count(${element.valueName})", this)
+    ClauseNumber("count(${element.valueName})", this, true)
 
 public fun <T : DBEntity<T>> Table<T>.count(x: X): ClauseNumber =
-    ClauseNumber("count(*)", this)
+    ClauseNumber("count(*)", this, true)
 
 public fun <T : DBEntity<T>> Table<T>.max(element: ClauseElement): ClauseNumber =
-    ClauseNumber("max(${element.valueName})", this)
+    ClauseNumber("max(${element.valueName})", this, true)
 
 public fun <T: DBEntity<T>> Table<T>.min(element: ClauseElement): ClauseNumber =
-    ClauseNumber("min(${element.valueName})", this)
+    ClauseNumber("min(${element.valueName})", this, true)
 
 public fun <T: DBEntity<T>> Table<T>.avg(element: ClauseElement): ClauseNumber =
-    ClauseNumber("avg(${element.valueName})", this)
+    ClauseNumber("avg(${element.valueName})", this, true)
 
 public fun <T: DBEntity<T>> Table<T>.sum(element: ClauseElement): ClauseNumber =
-    ClauseNumber("sum(${element.valueName})", this)
+    ClauseNumber("sum(${element.valueName})", this, true)
 
 public fun <T: DBEntity<T>> Table<T>.abs(number: ClauseElement): ClauseNumber =
-    ClauseNumber("abs(${number.valueName})", this)
+    ClauseNumber("abs(${number.valueName})", this, true)
 
 public fun <T: DBEntity<T>> Table<T>.upper(element: ClauseElement): ClauseString =
-    ClauseString("upper(${element.valueName})", this)
+    ClauseString("upper(${element.valueName})", this, true)
 
 public fun <T: DBEntity<T>> Table<T>.lower(element: ClauseElement): ClauseString =
-    ClauseString("lower(${element.valueName})", this)
+    ClauseString("lower(${element.valueName})", this, true)
 
 public fun <T: DBEntity<T>> Table<T>.length(element: ClauseElement): ClauseNumber =
-    ClauseNumber("length(${element.valueName})", this)
+    ClauseNumber("length(${element.valueName})", this, true)

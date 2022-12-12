@@ -25,4 +25,5 @@ import com.ctrip.sqllin.dsl.sql.Table
 public sealed class ClauseElement(
     internal val valueName: String,
     internal val table: Table<*>,
+    internal val isFunction: Boolean,
 )

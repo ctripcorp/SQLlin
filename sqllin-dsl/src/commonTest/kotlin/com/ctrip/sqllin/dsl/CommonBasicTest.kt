@@ -305,8 +305,10 @@ class CommonBasicTest(private val path: DatabasePath) {
         var crossJoinStatement: SelectStatement<CrossJoiner>? = null
         var innerJoinStatement: SelectStatement<Joiner>? = null
         var naturalInnerJoinStatement: SelectStatement<Joiner>? = null
+        var innerJoinStatementWithOn: SelectStatement<CrossJoiner>? = null
         var outerJoinStatement: SelectStatement<Joiner>? = null
         var naturalOuterJoinStatement: SelectStatement<Joiner>? = null
+        var outerJoinStatementWithOn: SelectStatement<CrossJoiner>? = null
         val categories = listOf(
             Category(name = "The Da Vinci Code", code = 123),
             Category(name = "Kotlin Cookbook", code = 456),
@@ -327,15 +329,19 @@ class CommonBasicTest(private val path: DatabasePath) {
                 crossJoinStatement = table SELECT_DISTINCT CROSS_JOIN(CategoryTable)
                 innerJoinStatement = table SELECT INNER_JOIN<Joiner>(CategoryTable) USING name
                 naturalInnerJoinStatement = table SELECT NATURAL_INNER_JOIN(CategoryTable)
+                innerJoinStatementWithOn = table SELECT INNER_JOIN<CrossJoiner>(CategoryTable) ON (name EQ CategoryTable.name)
                 outerJoinStatement = table SELECT LEFT_OUTER_JOIN<Joiner>(CategoryTable) USING name
                 naturalOuterJoinStatement = table SELECT NATURAL_LEFT_OUTER_JOIN(CategoryTable)
+                outerJoinStatementWithOn = table SELECT LEFT_OUTER_JOIN<CrossJoiner>(CategoryTable) ON (name EQ CategoryTable.name)
             }
         }
         assertEquals(crossJoinStatement?.getResults()?.size, categories.size * books.size)
         assertEquals(innerJoinStatement?.getResults()?.size, categories.size)
         assertEquals(naturalInnerJoinStatement?.getResults()?.size, categories.size)
+        assertEquals(innerJoinStatementWithOn?.getResults()?.size, categories.size)
         assertEquals(outerJoinStatement?.getResults()?.size, books.size)
         assertEquals(naturalOuterJoinStatement?.getResults()?.size, books.size)
+        assertEquals(outerJoinStatementWithOn?.getResults()?.size, books.size)
     }
 
     private fun getDefaultDBConfig(): DatabaseConfiguration =

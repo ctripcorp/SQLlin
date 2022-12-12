@@ -25,10 +25,15 @@ import com.ctrip.sqllin.dsl.sql.Table
 public class ClauseBoolean(
     valueName: String,
     table: Table<*>,
-) : ClauseElement(valueName, table) {
+    isFunction: Boolean,
+) : ClauseElement(valueName, table, isFunction) {
 
     internal infix fun _is(bool: Boolean): SelectCondition {
         val sql = buildString {
+            if (!isFunction) {
+                append(table.tableName)
+                append('.')
+            }
             append(valueName)
             append(' ')
             if (bool)

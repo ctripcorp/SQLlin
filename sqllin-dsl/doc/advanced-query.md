@@ -129,17 +129,19 @@ fun joinSample() {
         PersonTable { table ->
             table SELECT INNER_JOIN<Student>(TranscriptTable) USING name
             table SELECT NATURAL_INNER_JOIN<Student>(TranscriptTable)
+            table SELECT INNER_JOIN<CrossJoinStudent>(TranscriptTable) ON (name EQ TranscriptTable.name)
         }
     }
 }
 ```
 
-The `INNER_JOIN` is similar to `CROSS_JOIN`, the deference is `INNER_JOIN` need connect a `USING` clause. If a _INNER JOIN_ statement
-without the `USING` clause, it is incomplete, but your code still compiles and will do nothing in runtime. Now, SQLlin just supports `USING`
-clause, and doesn't support `ON` clause, it will be supported In future versions.
+The `INNER_JOIN` is similar to `CROSS_JOIN`, the deference is `INNER_JOIN` need connect a `USING` or `ON` clause. If a _INNER JOIN_ statement
+without the `USING` or `ON` clause, it is incomplete, but your code still compiles and will do nothing in runtime.
 
-The `NATURAL_INNER_JOIN` will produce a complete _SELECT_ statement(the same with `CROSS_JOIN`). So, you can't add `USING` clause to it, this is
+The `NATURAL_INNER_JOIN` will produce a complete _SELECT_ statement(the same with `CROSS_JOIN`). So, you can't add `USING` or `ON` clause to it, this is
 guaranteed by the Kotlin compiler.
+
+Note, the behavior of `INNER_JOIN` clause with `ON` clause is same to `CROSS_JOIN`, you can't select the column that has same name in two tables.
 
 The `INNER_JOIN` have an alias that named `JOIN`, and `NATURAL_INNER_JOIN` also have an alias that named `NATURAL_JOIN`. That's liked you can
 bypass the `INNER` keyword in SQL's inner join query.
@@ -153,12 +155,13 @@ fun joinSample() {
         PersonTable { table ->
             table SELECT LEFT_OUTER_JOIN<Student>(TranscriptTable) USING name
             table SELECT NATURAL_LEFT_OUTER_JOIN<Student>(TranscriptTable)
+            table SELECT LEFT_OUTER_JOIN<CrossJoinStudent>(TranscriptTable) ON (name EQ TranscriptTable.name)
         }
     }
 }
 ```
 
-The `LEFT_OUTER_JOIN`'s usage is very similar to `INNER_JOIN`, the difference just is their results.
+The `LEFT_OUTER_JOIN`'s usage is very similar to `INNER_JOIN`, the difference just is their API name.
 
 ## Finally
 

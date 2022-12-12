@@ -25,13 +25,20 @@ import com.ctrip.sqllin.dsl.sql.Table
 public class ClauseString(
     valueName: String,
     table: Table<*>,
-) : ClauseElement(valueName, table) {
+    isFunction: Boolean,
+) : ClauseElement(valueName, table, isFunction) {
 
     // Equals, ==
     internal infix fun eq(str: String?): SelectCondition = appendString("=", "IS", str)
 
-    // Not equal to, !=
+    // Equals, append another ClauseString
+    internal infix fun eq(clauseString: ClauseString): SelectCondition = appendClauseString("=", clauseString)
+
+    // Not equals to, !=
     internal infix fun neq(str: String?): SelectCondition = appendString("!=", "IS NOT", str)
+
+    // Not equal to, append another ClauseString
+    internal infix fun neq(clauseString: ClauseString): SelectCondition = appendClauseString("!=", clauseString)
 
     internal infix fun like(regex: String): SelectCondition = appendRegex("LIKE", regex)
 
@@ -39,6 +46,10 @@ public class ClauseString(
 
     private fun appendRegex(symbol: String, regex: String): SelectCondition {
         val sql = buildString {
+            if (!isFunction) {
+                append(table.tableName)
+                append('.')
+            }
             append(valueName)
             append(' ')
             append(symbol)
@@ -52,6 +63,10 @@ public class ClauseString(
 
     private fun appendString(notNullSymbol: String, nullSymbol: String, str: String?): SelectCondition {
         val sql = buildString {
+            if (!isFunction) {
+                append(table.tableName)
+                append('.')
+            }
             append(valueName)
             append(' ')
             val isNull = str == null
@@ -65,6 +80,21 @@ public class ClauseString(
                 append(str)
                 append('\'')
             }
+        }
+        return SelectCondition(sql)
+    }
+
+    private fun appendClauseString(symbol: String, clauseString: ClauseString): SelectCondition {
+        val sql = buildString {
+            append(table.tableName)
+            append('.')
+            append(valueName)
+            append(' ')
+            append(symbol)
+            append(' ')
+            append(clauseString.table.tableName)
+            append('.')
+            append(clauseString.valueName)
         }
         return SelectCondition(sql)
     }

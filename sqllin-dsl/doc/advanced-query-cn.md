@@ -124,17 +124,19 @@ fun joinSample() {
         PersonTable { table ->
             table SELECT INNER_JOIN<Student>(TranscriptTable) USING name
             table SELECT NATURAL_INNER_JOIN<Student>(TranscriptTable)
+            table SELECT INNER_JOIN<CrossJoinStudent>(TranscriptTable) ON (name EQ TranscriptTable.name)
         }
     }
 }
 ```
 
-`INNER_JOIN` 与 `CROSS_JOIN` 非常相似，不同之处在于 `INNER_JOIN` 需要连接一个 `USING` 子句。如果一个 _INNER JOIN_ 语句没有
-`USING` 子句，那么它是不完整的，但是你的代码仍然可以编译，但它在运行时不会做任何事情。当前 SQLlin 只支持 `USING` 子句而不支持
-`ON` 子句，`ON` 将会在未来的版本中被支持。
+`INNER_JOIN` 与 `CROSS_JOIN` 非常相似，不同之处在于 `INNER_JOIN` 需要连接一个 `USING` 或 `ON` 子句。如果一个 _INNER JOIN_ 语句没有
+`USING` 或 `ON` 子句，那么它是不完整的，但是你的代码仍然可以编译，但它在运行时不会做任何事情。
 
-`NATURAL_INNER_JOIN` 将会产生一个完整的 _SELECT_ 语句（与 `CROSS_JOIN` 相似）。所以，你不能再它末尾连接 `USING` 子句，这将由
+`NATURAL_INNER_JOIN` 将会产生一个完整的 _SELECT_ 语句（与 `CROSS_JOIN` 相似）。所以，你不能再它末尾连接 `USING` 或 `ON` 子句，这将由
 Kotlin 编译器来保证。
+
+注意，带有 `ON` 子句的 `INNER_JOIN` 子句的行为与 `CROSS_JOIN` 相同，你不能 select 在两个表中拥有相同名字的列。
 
 `INNER_JOIN` 拥有一个别名——`JOIN`， `NATURAL_INNER_JOIN` 也拥有一个别名——`NATURAL_JOIN` 。这就像你在 SQL 的 inner join
 查询中可以省略 `INNER` 关键字一样。
@@ -147,12 +149,13 @@ fun joinSample() {
         PersonTable { table ->
             table SELECT LEFT_OUTER_JOIN<Student>(TranscriptTable) USING name
             table SELECT NATURAL_LEFT_OUTER_JOIN<Student>(TranscriptTable)
+            table SELECT LEFT_OUTER_JOIN<CrossJoinStudent>(TranscriptTable) ON (name EQ TranscriptTable.name)
         }
     }
 }
 ```
 
-`LEFT_OUTER_JOIN` 的用法与 `INNER_JOIN` 非常相似，不同之处仅仅是它们的返回结果。
+`LEFT_OUTER_JOIN` 的用法与 `INNER_JOIN` 非常相似，不同之处仅仅是它们的 API 名字。
 
 ## 最后
 
