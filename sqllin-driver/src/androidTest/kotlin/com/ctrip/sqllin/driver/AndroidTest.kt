@@ -17,7 +17,6 @@ package com.ctrip.sqllin.driver
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.filters.SmallTest
 import androidx.test.internal.runner.junit4.AndroidJUnit4ClassRunner
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
@@ -29,7 +28,6 @@ import org.junit.runner.RunWith
  * @author yaqiao
  */
 
-@SmallTest
 @RunWith(AndroidJUnit4ClassRunner::class)
 class AndroidTest {
 

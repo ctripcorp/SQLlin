@@ -59,7 +59,7 @@ class NativeTest {
     fun testFunction() = commonTest.testFunction()
 
     @Test
-    fun testCrossJoin() = commonTest.testJoinClause()
+    fun testJoiClause() = commonTest.testJoinClause()
 
     @AfterTest
     fun setDown() {

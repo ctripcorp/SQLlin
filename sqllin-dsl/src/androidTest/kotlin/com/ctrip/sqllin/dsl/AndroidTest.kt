@@ -17,7 +17,6 @@ package com.ctrip.sqllin.dsl
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.filters.SmallTest
 import androidx.test.internal.runner.junit4.AndroidJUnit4ClassRunner
 import androidx.test.platform.app.InstrumentationRegistry
 import com.ctrip.sqllin.driver.toDatabasePath
@@ -30,7 +29,6 @@ import org.junit.runner.RunWith
  * @author yaqiao
  */
 
-@SmallTest
 @RunWith(AndroidJUnit4ClassRunner::class)
 class AndroidTest {
 
@@ -66,7 +64,7 @@ class AndroidTest {
     fun testFunction() = commonTest.testFunction()
 
     @Test
-    fun testCrossJoin() = commonTest.testJoinClause()
+    fun testJoinClause() = commonTest.testJoinClause()
 
     @After
     fun setDown() {
