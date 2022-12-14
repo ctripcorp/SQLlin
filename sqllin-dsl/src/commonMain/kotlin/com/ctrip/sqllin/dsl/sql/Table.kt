@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.ctrip.sqllin.dsl.sql
 
 import com.ctrip.sqllin.dsl.DBEntity
