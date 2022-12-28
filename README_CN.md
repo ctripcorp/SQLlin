@@ -23,7 +23,7 @@ fun sample() {
 
 SQLlin 支持如下平台：
 
-- Android
+- Android (6.0+)
 - iOS (x64, arm64, arm32, simulatorArm64)
 - macOS (x64, arm64)
 - watchOS (x86, x64, arm32, arm64, simulatorArm64)
