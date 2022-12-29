@@ -29,7 +29,7 @@ supports iOS, it also supports all the operating systems of Apple, Linux(x64) an
 
 ## Basic usage
 
-I am not advice you use _sqllin-driver_ in your applications directly, but if you want to develop your own SQLite
+I am not advice you use _sqllin-driver_ in your application projects directly, but if you want to develop your own SQLite
 higher-level API library, you can use it.
 
 ### Installation via Maven in Gradle

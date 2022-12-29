@@ -29,6 +29,7 @@ SQLlin 支持如下平台：
 - watchOS (x86, x64, arm32, arm64, simulatorArm64)
 - tvOS (x64, arm64, simulatorArm64)
 - Linux (x64)
+- Windows (mingwX86, mingwX64)
 
 SQLlin 的架构设计如下图所示：
 

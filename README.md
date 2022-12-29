@@ -31,6 +31,7 @@ SQLlin supports these platforms:
 - watchOS (x86, x64, arm32, arm64, simulatorArm64)
 - tvOS (x64, arm64, simulatorArm64)
 - Linux (x64)
+- Windows (mingwX86, mingwX64)
 
 
 The structure design of SQLlin is shown in the figure:
