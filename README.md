@@ -60,10 +60,6 @@ I don't recommend use _sqllin-driver_ directly, but if you want to learn more ab
 Due to _sqllin-dsl_'s deserialization based on [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization), R8/ProGuard configuration please refer to
 [kotlinx.serialization#Android](https://github.com/Kotlin/kotlinx.serialization#Android).
 
-## Note
-
-**SQLlin is alpha now, some APIs may undergo breaking changes in the future.** Welcome to give me your feedback.
-
 ## License
 
 Distributed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0).
