@@ -237,26 +237,33 @@ publishing {
     publications.withType<MavenPublication> {
         artifact(javadocJar)
         with(pom) {
-            name.set("sqllin-driver")
+            name.set(artifactId)
             description.set("Low-level API for SQLite in Kotlin Multiplatform")
-            url.set("https://github.com/ctripcorp/SQLlin")
+            val githubURL: String by project
+            url.set(githubURL)
             licenses {
                 license {
-                    name.set("The Apache License, Version 2.0")
-                    url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                    val licenseName: String by project
+                    name.set(licenseName)
+                    val licenseURL: String by project
+                    url.set(licenseURL)
                 }
             }
             developers {
                 developer {
-                    id.set("qiaoyuang")
-                    name.set("Yuang Qiao")
-                    email.set("qiaoyuang2012@gmail.com")
+                    val developerID: String by project
+                    id.set(developerID)
+                    val developerName: String by project
+                    name.set(developerName)
+                    val developerEmail: String by project
+                    email.set(developerEmail)
                 }
             }
             scm {
-                url.set("https://github.com/ctripcorp/SQLlin")
-                connection.set("scm:git:https://github.com/ctripcorp/SQLlin.git")
-                developerConnection.set("scm:git:https://github.com/ctripcorp/SQLlin.git")
+                url.set(githubURL)
+                val scmURL: String by project
+                connection.set(scmURL)
+                developerConnection.set(scmURL)
             }
         }
     }
@@ -266,7 +273,8 @@ publishing {
                 username = NEXUS_USERNAME
                 password = NEXUS_PASSWORD
             }
-            url = uri("https://oss.sonatype.org/service/local/staging/deploy/maven2")
+            val mavenRepositoryURL: String by project
+            url = uri(mavenRepositoryURL)
         }
     }
     signing {
