@@ -245,6 +245,9 @@ dependencies {
         "kspTvosSimulatorArm64Test",
 
         "kspLinuxX64Test",
+
+        "kspMingwX86Test",
+        "kspMingwX64Test",
     )
     sourceSet.forEach {
         add(it, project(":sqllin-processor"))
