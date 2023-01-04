@@ -16,6 +16,25 @@
 
 package com.ctrip.sqllin.sample
 
-expect class Platform() {
-    val platform: String
+import android.app.Application
+import android.content.Context
+import com.ctrip.sqllin.driver.DatabasePath
+import com.ctrip.sqllin.driver.toDatabasePath
+
+actual val databasePath: DatabasePath
+    get() = MyApplication.globalContext.toDatabasePath()
+
+// Just demo
+class MyApplication : Application() {
+
+    companion object {
+        @Suppress("StaticFieldLeak")
+        lateinit var globalContext: Context
+            private set
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        globalContext = applicationContext
+    }
 }
