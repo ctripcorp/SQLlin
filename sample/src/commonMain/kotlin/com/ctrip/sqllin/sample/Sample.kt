@@ -13,10 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.ctrip.sqllin.sample
 
+import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.dsl.Database
-import com.ctrip.sqllin.driver.DatabasePath
 import com.ctrip.sqllin.dsl.annotation.DBRow
 import com.ctrip.sqllin.dsl.DBEntity
 import com.ctrip.sqllin.dsl.sql.clause.*
@@ -30,9 +31,25 @@ import kotlinx.serialization.Serializable
  * @author yaqiao
  */
 
-class Sample(path: DatabasePath) {
+object Sample {
 
-    private val db by lazy { Database(name = "Person.db", path = path, version = 1) }
+    private val db by lazy {
+        Database(
+            DatabaseConfiguration(
+                name = "Person.db",
+                path = databasePath,
+                version = 1,
+                create = {
+                    // You must write SQL to String when the database is created or upgraded
+                    it.execSQL("CREATE TABLE person (id INTEGER PRIMARY KEY AUTOINCREMENT, age INTEGER, name TEXT);")
+                    it.execSQL("CREATE TABLE transcript (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, math INTEGER NOT NULL, english INTEGER NOT NULL);")
+                },
+                upgrade = { _, _, _ ->
+                    // You must write SQL to String when the database is created or upgraded
+                }
+            )
+        )
+    }
 
     fun sample() {
         val tom = Person(age = 4, name = "Tom")

@@ -16,8 +16,14 @@
 
 package com.ctrip.sqllin.sample
 
-import platform.UIKit.UIDevice
+import com.ctrip.sqllin.driver.DatabasePath
+import com.ctrip.sqllin.driver.toDatabasePath
+import platform.Foundation.NSDocumentDirectory
+import platform.Foundation.NSSearchPathForDirectoriesInDomains
+import platform.Foundation.NSUserDomainMask
 
-actual class Platform actual constructor() {
-    actual val platform: String = UIDevice.currentDevice.systemName() + " " + UIDevice.currentDevice.systemVersion
-}
+actual val databasePath: DatabasePath
+    get() {
+        val stringPath = (NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, true).firstOrNull() as? String ?: "")
+        return stringPath.toDatabasePath()
+    }

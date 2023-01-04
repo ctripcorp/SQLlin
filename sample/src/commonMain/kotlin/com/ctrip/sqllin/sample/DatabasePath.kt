@@ -16,8 +16,6 @@
 
 package com.ctrip.sqllin.sample
 
-class Greeting {
-    fun greeting(): String {
-        return "Hello, ${Platform().platform}!"
-    }
-}
+import com.ctrip.sqllin.driver.DatabasePath
+
+expect val databasePath: DatabasePath
