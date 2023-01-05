@@ -63,7 +63,7 @@ SQLlin doesn't yet support subqueries, we will develop as soon as possible.
 
 ## Join
 
-SQLlin supports joining a table now.
+SQLlin supports joining tables now.
 
 We need other two `DBEntity`s:
 
