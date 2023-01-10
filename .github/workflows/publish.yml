@@ -35,7 +35,7 @@ jobs:
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:assemble
 
-      - name: Run sqllin-driver Test
+      - name: Run sqllin-driver macOS X64 Tests
         run: ./test_driver_macos.sh
 
       - name: Build sqllin-processor
@@ -44,8 +44,31 @@ jobs:
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:assemble
 
-      - name: Run sqllin-dsl Test
+      - name: Run sqllin-dsl macOS X64 Tests
         run: ./test_dsl_macos.sh
+
+      - name: Run Android Instrumentation Tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 31
+          target: default
+          arch: x86_64
+          profile: pixel_6
+          script: ./test test_android.sh
+
+      - name: Upload sqllin-driver Reports
+        uses: actions/upload-artifact@v2
+        with:
+          name: Test-Reports
+          path: sqllin-driver/build/reports
+        if: always()
+
+      - name: Upload sqllin-dsl Reports
+        uses: actions/upload-artifact@v2
+        with:
+          name: Test-Reports
+          path: sqllin-dsl/build/reports
+        if: always()
 
       - name: Publish to MavenCentral
         run: ./publish_all.sh
@@ -73,8 +96,15 @@ jobs:
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:mingwX64MainKlibrary && ./gradlew :sqllin-driver:mingwX86MainKlibrary
 
-      - name: Run sqllin-driver Test
+      - name: Run sqllin-driver MinGW X64 Tests
         run: ./test_driver_windows.sh
+
+      - name: Upload sqllin-driver Reports
+        uses: actions/upload-artifact@v2
+        with:
+          name: Test-Reports
+          path: sqllin-driver/build/reports
+        if: always()
 
       - name: Build sqllin-processor
         run: ./gradlew :sqllin-processor:assemble
@@ -82,8 +112,15 @@ jobs:
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary && ./gradlew :sqllin-dsl:mingwX86MainKlibrary
 
-      - name: Run sqllin-dsl Test
+      - name: Run sqllin-dsl MinGW X64 Tests
         run: ./test_dsl_windows.sh
+
+      - name: Upload sqllin-dsl Reports
+        uses: actions/upload-artifact@v2
+        with:
+          name: Test-Reports
+          path: sqllin-dsl/build/reports
+        if: always()
 
       - name: Publish to MavenCentral
         run: ./publish_windows.sh
