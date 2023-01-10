@@ -14,7 +14,7 @@ fun sample() {
     }
 }
 ```
-在[修改数据库与事务](modify-database-and-transaction-cn.md)中，我们已经介绍过 _sqllin-processor_
+在[《修改数据库与事务》](modify-database-and-transaction-cn.md)中，我们已经介绍过 _sqllin-processor_
 会帮助我们生成一些 `ClauseElement` 来表示列名。SQL 函数将会接收一个 `ClauseElement` 作为参数并返回一个
 `ClauseElement` 作为结果。SQLlin 支持的函数如下：
 
@@ -23,7 +23,7 @@ fun sample() {
 `count` 函数有一个不同点，它可以接收一个 `X` 作为参数用于表示 SQL 中的 `count(*)`， 如前面的示例所示。
 
 SQLlin 当前只支持在条件语句中使用函数。我们将会考虑在未来的版本中支持在 _SELECT_ 关键字后使用函数。现在，
-如果你有类似的需求，你可以使用 [Kotlin 集合 API](https://kotlinlang.org/docs/collection-aggregate.html) 来处理查询结果：
+如果你有类似的需求，你可以使用 *[Kotlin 集合 API](https://kotlinlang.org/docs/collection-aggregate.html)* 来处理查询结果：
 
 ```kotlin
 fun sample() {
@@ -43,4 +43,4 @@ fun sample() {
 }
 ```
 
-最后，让我们来学习[高级查询](advanced-query-cn.md)吧。
+最后，让我们来学习[《高级查询》](advanced-query-cn.md)吧。

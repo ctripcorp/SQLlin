@@ -57,7 +57,7 @@ fun sample() {
 }
 ```
 
-让我们来理解 _WHERE_ 子句。`WHERE` 函数接收一个 `ClauseCondiction` 座位参数。示例中的 `age` 和 `name` 用于表示列名，它们是 `Table` 类的扩展属性，它们的类型是
+让我们来理解 _WHERE_ 子句。`WHERE` 函数接收一个 `ClauseCondiction` 作为参数。示例中的 `age` 和 `name` 用于表示列名，它们是 `Table` 类的扩展属性，它们的类型是
 `ClauseElement`，由 KSP 生成。
 
 `ClauseElement` 拥有一系列表示 SQL 操作的操作符，比如：`=`、`>`、`<`、`LIKE`、`IN`、`IS` 等等。当一个 `ClauseElement` 调用一个操作符时我们将会得到一个 
@@ -116,7 +116,7 @@ fun sample() {
 _SET_ 子句与其他子句不同，它接收一个 lambda 表达式作为参数，你可以在 lambda 中给列设置一个新值。lambda 表达式中的 `age` 是一个由 KSP
 生成的可写属性，并且它仅在 _SET_ 子句中可用，它与 _WHERE_ 子句中的只读属性 `age` 不同。
 
-你也可以编写没有 _WHERE_ 子句的 _UPDATE_ 语句用于删除所有的行，但使用它的时候你应该谨慎。
+你也可以编写没有 _WHERE_ 子句的 _UPDATE_ 语句用于更新所有的行，但使用它的时候你应该谨慎。
 
 ## 事务
 
@@ -144,7 +144,7 @@ fun sample() {
 
 ## 接下来
 
-你已经学习了如何使用 _INSERT_、_DELETE_ 以及 _UPDATE_ 语句，接下来你将学习 _SELECT_ 语句。 _SELECT_ 语句相比其他语句更复杂，做好准备噢 :)。
+你已经学习了如何使用 _INSERT_、_DELETE_ 以及 _UPDATE_ 语句，接下来你将学习 _SELECT_ 语句。 _SELECT_ 语句相比其他语句更复杂，做好准备哦 :)。
 
 - [查询](query-cn.md)
 - [SQL 函数](sql-functions-cn.md)

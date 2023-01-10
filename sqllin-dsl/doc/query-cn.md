@@ -22,10 +22,10 @@ fun sample() {
 
 `X` 表示没有任何子句，我们已经在 _DELETE_ 语句中见过它了。
 
-_SELECT_ 语句与其他语句的另一个不同点在于它拥有查询结果。所以你需要生命一个类型为 `SelectStatement<T>`
-的变量，泛型参数 `T` 是你希望反序列化的 `DBEntity`。你应该将你构建你的 _SELECT_ 语句赋值给此变量。
+_SELECT_ 语句与其他语句的另一个不同点在于它拥有查询结果。所以你需要声明一个类型为 `SelectStatement<T>`
+的变量，泛型参数 `T` 是你希望反序列化的 `DBEntity`。你应该将你构建的 _SELECT_ 语句赋值给此变量。
 
-注意，所有的语句只会在 _DatabaseScope_ 结束后执行，我们曾在[修改数据库与事务](modify-database-and-transaction-cn.md)中提到过这一点。
+注意，所有的语句只会在 _DatabaseScope_ 结束后执行，我们曾在[《修改数据库与事务》](modify-database-and-transaction-cn.md)中提到过这一点。
 所以你必须在 `database { ... }` 外部调用 `getResults` 函数，SQLlin 将会帮助你将查询结果反序列化为你期待的对象。
 
 ## 单子句

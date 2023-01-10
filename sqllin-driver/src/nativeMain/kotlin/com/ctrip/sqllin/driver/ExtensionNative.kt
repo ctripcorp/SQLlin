@@ -21,7 +21,7 @@ import co.touchlab.sqliter.SynchronousFlag
 import co.touchlab.sqliter.createDatabaseManager
 
 /**
- * SQLite extension iOS
+ * SQLite extension Native
  * @author yaqiao
  */
 
