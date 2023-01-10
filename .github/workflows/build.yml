@@ -59,7 +59,7 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_6
-          script: ./test test_android.sh
+          script: ./test_android.sh
 
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v2
