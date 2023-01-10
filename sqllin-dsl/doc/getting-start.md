@@ -164,7 +164,7 @@ In _sqllin-dsl_, objects serialization to SQL and deserialization from cursor de
 
 ## Next Step
 
-You have learned all the preparations, you can start learn how to operate database now.
+You have learned all the preparations, you can start learn how to operate database now:
 
 - [Modify Database and Transaction](modify-database-and-transaction.md)
 - [Query](query.md)

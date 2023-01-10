@@ -6,7 +6,7 @@
 
 _UNION_ 操作符用于合并两个查询结果相同的 _SELECT_ 语句。
 
-在 SQL 中， _UNION_ 操作符位于两个 _SELECT_ 语句中间，但是在 SQLlin 中，我们使用一个高阶函数来实现 _UNION_ ：
+在 SQL 中，*UNION* 操作符位于两个 _SELECT_ 语句中间，但是在 SQLlin 中，我们使用一个高阶函数来实现 *UNION*：
 
 ```kotlin
 fun sample() {
@@ -60,7 +60,7 @@ SQLlin 还不支持子查询，我们将会尽快开发该功能。
 
 ## Join
 
-SQLlin 目前支持 join 一个表。
+SQLlin 目前支持 join 表。
 
 我们需要另外两个 `DBEntity`：
 
