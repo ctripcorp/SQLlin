@@ -10,7 +10,7 @@ fun sample() {
     val tom = Person(age = 4, name = "Tom")
     val jerry = Person(age = 3, name = "Jerry")
     val jack = Person(age = 8, name = "Jack")
-    db {
+    val selectStatement: SelectStatement<Person> = db {
         PersonTable { table ->
             table INSERT listOf(tom, jerry, jack)
             table UPDATE SET { age = 5; name = "Tom" } WHERE ((age LTE 5) AND (name NEQ "Tom"))
@@ -18,8 +18,12 @@ fun sample() {
             table SELECT WHERE (age LTE 5) GROUP_BY age HAVING (upper(name) EQ "TOM") ORDER_BY (age to DESC) LIMIT 2 OFFSET 1
         }
     }
+    selectStatement.getResult().forEach { person ->
+        println(person.name)
+    }
 }
 ```
+SQLlin 能够直接向数据库插入 Kotlin 对象，也能够直接从数据库查询 Kotlin 对象。其序列化与反序列化能力基于 [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization)。
 
 SQLlin 支持如下平台：
 

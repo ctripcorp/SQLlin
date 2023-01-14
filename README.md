@@ -12,7 +12,7 @@ fun sample() {
     val tom = Person(age = 4, name = "Tom")
     val jerry = Person(age = 3, name = "Jerry")
     val jack = Person(age = 8, name = "Jack")
-    db {
+    val selectStatement: SelectStatement<Person> = db {
         PersonTable { table ->
             table INSERT listOf(tom, jerry, jack)
             table UPDATE SET { age = 5; name = "Tom" } WHERE ((age LTE 5) AND (name NEQ "Tom"))
@@ -20,8 +20,13 @@ fun sample() {
             table SELECT WHERE (age LTE 5) GROUP_BY age HAVING (upper(name) EQ "TOM") ORDER_BY (age to DESC) LIMIT 2 OFFSET 1
         }
     }
+    selectStatement.getResult().forEach { person ->
+        println(person.name)
+    }
 }
 ```
+SQLlin is able to insert Kotlin objects into database directly, and could query Kotlin objects directly from database. The serialization
+and deserialization ability based on [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization).
 
 SQLlin supports these platforms:
 
