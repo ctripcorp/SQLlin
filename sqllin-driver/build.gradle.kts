@@ -69,7 +69,7 @@ kotlin {
         val androidTest by getting {
             dependencies {
                 implementation("androidx.test:core:1.5.0")
-                implementation("androidx.test:runner:1.5.1")
+                implementation("androidx.test:runner:1.5.2")
                 implementation("androidx.test:rules:1.5.0")
             }
         }
@@ -181,7 +181,7 @@ kotlin {
 
 android {
     compileSdk = 33
-    buildToolsVersion = "33.0.0"
+    buildToolsVersion = "33.0.1"
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
     sourceSets.getByName("androidTest") {
         manifest.srcFile(File("src/androidTest/AndroidManifest.xml"))
@@ -198,16 +198,9 @@ android {
             isIncludeAndroidResources = true
         }
     }
-    buildTypes {
-        getByName("release") {
-            isMinifyEnabled = false
-            isShrinkResources = false
-            proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
-        }
-    }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
 }
 
