@@ -16,8 +16,6 @@
 
 package com.ctrip.sqllin.driver
 
-import kotlinx.cinterop.toKString
-import platform.posix.getenv
 import platform.posix.remove
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -64,5 +62,5 @@ class NativeTest {
      * Just work on macOS, please replace it with a path that has permissions on your platform
      */
     private val path: String
-        get() = "/Users/${getenv("USER")!!.toKString()}/Downloads"
+        get() = getPlatformStringPath()
 }
