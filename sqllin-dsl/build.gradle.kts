@@ -155,10 +155,14 @@ kotlin {
 
         val nativeTest by creating {
             dependsOn(commonTest)
+        }
+
+        val appleTest by creating {
+            dependsOn(nativeTest)
 
             iosX64Test.dependsOn(this)
-            iosArm64Test.dependsOn(this)
             iosArm32Test.dependsOn(this)
+            iosArm64Test.dependsOn(this)
             iosSimulatorArm64Test.dependsOn(this)
 
             macosX64Test.dependsOn(this)
@@ -173,8 +177,16 @@ kotlin {
             tvosX64Test.dependsOn(this)
             tvosArm64Test.dependsOn(this)
             tvosSimulatorArm64Test.dependsOn(this)
+        }
+
+        val linuxTest by creating {
+            dependsOn(nativeTest)
 
             linuxX64Test.dependsOn(this)
+        }
+
+        val mingwTest by creating {
+            dependsOn(nativeTest)
 
             mingwX64Test.dependsOn(this)
             mingwX86Test.dependsOn(this)

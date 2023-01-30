@@ -95,6 +95,11 @@ jobs:
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
 
+      - name: Set up MinGW
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x64
+
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:mingwX64MainKlibrary && ./gradlew :sqllin-driver:mingwX86MainKlibrary
 
