@@ -105,7 +105,7 @@ jobs:
       - name: Update Environment Variables
         shell: bash
         run: |
-          echo "c:\msys64\mingw64\bin" >> $GITHUB_PATH
+          echo "c:\msys64\mingw64\lib" >> $GITHUB_PATH
 
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:mingwX64MainKlibrary && ./gradlew :sqllin-driver:mingwX86MainKlibrary
