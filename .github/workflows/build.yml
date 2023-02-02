@@ -95,40 +95,28 @@ jobs:
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
 
-      #- name: Install msys2
-        #uses: msys2/setup-msys2@v2
-        #with:
-          #msystem: MINGW64
-          #update: true
-          #install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-sqlite3
-
-      #- name: Update Environment Variables
-        #shell: bash
-        #run: |
-          #echo "c:\msys64\mingw64\bin" >> $GITHUB_PATH
-
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:mingwX64MainKlibrary && ./gradlew :sqllin-driver:mingwX86MainKlibrary
 
-      #- name: Run sqllin-driver MinGW X64 Tests
-        #run: ./gradlew :sqllin-driver:cleanMingwX64Test && ./gradlew :sqllin-driver:mingwX64Test --stacktrace
+      - name: Run sqllin-driver MinGW X64 Tests
+        run: ./gradlew :sqllin-driver:cleanMingwX64Test && ./gradlew :sqllin-driver:mingwX64Test --stacktrace
 
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary && ./gradlew :sqllin-dsl:mingwX86MainKlibrary
 
-      #- name: Run sqllin-dsl MinGW X64 Tests
-        #run: ./gradlew :sqllin-dsl:cleanMingwX64Test && ./gradlew :sqllin-dsl:mingwX64Test --stacktrace
+      - name: Run sqllin-dsl MinGW X64 Tests
+        run: ./gradlew :sqllin-dsl:cleanMingwX64Test && ./gradlew :sqllin-dsl:mingwX64Test --stacktrace
 
-      #- name: Upload sqllin-driver Reports
-        #uses: actions/upload-artifact@v2
-        #with:
-          #name: Test-Reports
-          #path: sqllin-driver/build/reports
-        #if: always()
+      - name: Upload sqllin-driver Reports
+        uses: actions/upload-artifact@v2
+        with:
+          name: Test-Reports
+          path: sqllin-driver/build/reports
+        if: always()
 
-      #- name: Upload sqllin-dsl Reports
-        #uses: actions/upload-artifact@v2
-        #with:
-          #name: Test-Reports
-          #path: sqllin-dsl/build/reports
-        #if: always()
+      - name: Upload sqllin-dsl Reports
+        uses: actions/upload-artifact@v2
+        with:
+          name: Test-Reports
+          path: sqllin-dsl/build/reports
+        if: always()

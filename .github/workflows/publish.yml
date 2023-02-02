@@ -93,18 +93,6 @@ jobs:
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
 
-      #- name: Install msys2
-        #uses: msys2/setup-msys2@v2
-        #with:
-          #msystem: MINGW64
-          #update: true
-          #install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-sqlite3
-
-      #- name: Update Environment Variables
-        #shell: bash
-        #run: |
-          #echo "c:\msys64\mingw64\bin" >> $GITHUB_PATH
-
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:mingwX64MainKlibrary && ./gradlew :sqllin-driver:mingwX86MainKlibrary
 
