@@ -26,9 +26,11 @@ import platform.windows.MAX_PATH
  */
 
 actual fun getPlatformStringPath(): String = memScoped {
-    val pathPtr = alloc<CPointerVar<ByteVarOf<Byte>>>()
-    val dwRetVal = GetTempPathA(MAX_PATH, pathPtr.value)
-    if (dwRetVal > MAX_PATH.toUInt() || dwRetVal == 0u)
-        throw IllegalStateException("Get temp path fail")
-    pathPtr.value.toString()
+    val buf = ByteArray(MAX_PATH)
+    buf.usePinned { pinned ->
+        val dwRetVal = GetTempPathA((MAX_PATH - 1).toUInt(), pinned.addressOf(0))
+        if (dwRetVal > MAX_PATH.toUInt() || dwRetVal == 0u)
+            throw Error("Failed to read string from C")
+    }
+    buf.decodeToString()
 }
