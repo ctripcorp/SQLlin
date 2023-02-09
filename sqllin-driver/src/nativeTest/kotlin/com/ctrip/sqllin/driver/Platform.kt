@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-
 package com.ctrip.sqllin.driver
 
 /**
@@ -26,3 +25,8 @@ package com.ctrip.sqllin.driver
  * Get the DatabasePath
  */
 expect fun getPlatformStringPath(): String
+
+/**
+ * Get the file path separator, '\' in Windows, '/' in others
+ */
+expect val pathSeparator: Char

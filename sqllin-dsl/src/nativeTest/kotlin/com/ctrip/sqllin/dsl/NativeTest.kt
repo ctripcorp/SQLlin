@@ -28,6 +28,7 @@ import kotlin.test.Test
 
 class NativeTest {
 
+    private val path = getPlatformStringPath()
     private val commonTest = CommonBasicTest(path.toDatabasePath())
 
     @Test
@@ -58,22 +59,16 @@ class NativeTest {
     fun testFunction() = commonTest.testFunction()
 
     @Test
-    fun testJoiClause() = commonTest.testJoinClause()
+    fun testJoinClause() = commonTest.testJoinClause()
 
     @AfterTest
     fun setDown() {
         listOf(
-            "$path/${CommonBasicTest.DATABASE_NAME}",
-            "$path/${CommonBasicTest.DATABASE_NAME}-shm",
-            "$path/${CommonBasicTest.DATABASE_NAME}-wal",
+            "$path$pathSeparator${CommonBasicTest.DATABASE_NAME}",
+            "$path$pathSeparator${CommonBasicTest.DATABASE_NAME}-shm",
+            "$path$pathSeparator${CommonBasicTest.DATABASE_NAME}-wal",
         ).forEach {
             remove(it)
         }
     }
-
-    /**
-     * Just work on macOS, please replace it with a path that has permissions on your platform
-     */
-    private val path: String
-        get() = getPlatformStringPath()
 }
