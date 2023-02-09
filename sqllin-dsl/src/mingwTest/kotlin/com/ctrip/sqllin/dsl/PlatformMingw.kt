@@ -17,18 +17,13 @@
 package com.ctrip.sqllin.dsl
 
 import kotlinx.cinterop.*
-import platform.windows.GetTempPathA
-import platform.windows.MAX_PATH
+import platform.posix._getcwd
 
 /**
  * Windows platform-related functions
+ * The doc of _getcwd: https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/getcwd-wgetcwd?view=msvc-170
  * @author yaqiao
  */
 
-actual fun getPlatformStringPath(): String = memScoped {
-    val pathPtr = alloc<CPointerVar<ByteVarOf<Byte>>>()
-    val dwRetVal = GetTempPathA(MAX_PATH, pathPtr.value)
-    if (dwRetVal > MAX_PATH.toUInt() || dwRetVal == 0u)
-        throw IllegalStateException("Get temp path fail")
-    pathPtr.value.toString()
-}
+actual fun getPlatformStringPath(): String =
+    _getcwd(null, 0)?.toKString() ?: ""
