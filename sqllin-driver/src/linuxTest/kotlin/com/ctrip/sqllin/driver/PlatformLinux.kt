@@ -27,3 +27,5 @@ import platform.posix.mkdtemp
 
 actual fun getPlatformStringPath(): String =
     mkdtemp("/tmp/sqllin".utf8)?.toKString() ?: throw IllegalStateException("The temp path created error")
+
+actual val pathSeparator: Char = '/'

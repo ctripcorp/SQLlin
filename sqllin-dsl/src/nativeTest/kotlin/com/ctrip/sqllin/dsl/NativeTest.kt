@@ -63,9 +63,9 @@ class NativeTest {
     @AfterTest
     fun setDown() {
         listOf(
-            "$path/${CommonBasicTest.DATABASE_NAME}",
-            "$path/${CommonBasicTest.DATABASE_NAME}-shm",
-            "$path/${CommonBasicTest.DATABASE_NAME}-wal",
+            "$path$pathSeparator${CommonBasicTest.DATABASE_NAME}",
+            "$path$pathSeparator${CommonBasicTest.DATABASE_NAME}-shm",
+            "$path$pathSeparator${CommonBasicTest.DATABASE_NAME}-wal",
         ).forEach {
             remove(it)
         }

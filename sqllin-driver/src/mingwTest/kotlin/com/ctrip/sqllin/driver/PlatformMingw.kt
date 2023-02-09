@@ -27,3 +27,5 @@ import platform.posix._getcwd
 
 actual fun getPlatformStringPath(): String =
     _getcwd(null, 0)?.toKString() ?: ""
+
+actual val pathSeparator: Char = '\\'

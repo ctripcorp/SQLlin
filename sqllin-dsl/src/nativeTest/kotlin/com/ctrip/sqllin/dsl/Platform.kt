@@ -26,3 +26,8 @@ package com.ctrip.sqllin.dsl
  * Get the DatabasePath
  */
 expect fun getPlatformStringPath(): String
+
+/**
+ * Get the file path separator, '\' in Windows, '/' in others
+ */
+expect val pathSeparator: Char

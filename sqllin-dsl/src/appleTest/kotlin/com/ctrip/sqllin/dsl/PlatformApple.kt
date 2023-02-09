@@ -29,3 +29,5 @@ import platform.Foundation.NSUserDomainMask
 @OptIn(UnsafeNumber::class)
 actual fun getPlatformStringPath(): String =
     (NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, true).firstOrNull() as? String ?: "")
+
+actual val pathSeparator: Char = '/'

@@ -50,9 +50,9 @@ class NativeTest {
     @AfterTest
     fun setDown() {
         listOf(
-            "$path/${SQL.DATABASE_NAME}",
-            "$path/${SQL.DATABASE_NAME}-shm",
-            "$path/${SQL.DATABASE_NAME}-wal",
+            "$path$pathSeparator${SQL.DATABASE_NAME}",
+            "$path$pathSeparator${SQL.DATABASE_NAME}-shm",
+            "$path$pathSeparator${SQL.DATABASE_NAME}-wal",
         ).forEach {
             remove(it)
         }
