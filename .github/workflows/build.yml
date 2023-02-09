@@ -108,9 +108,6 @@ jobs:
           path: sqllin-driver/build/reports
         if: always()
 
-      - name: Build sqllin-processor
-        run: ./gradlew :sqllin-processor:assemble
-
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary && ./gradlew :sqllin-dsl:mingwX86MainKlibrary
 
