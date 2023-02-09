@@ -17,7 +17,7 @@
 package com.ctrip.sqllin.dsl
 
 import kotlinx.cinterop.*
-import platform.posix._getcwd
+import platform.posix._wgetcwd
 
 /**
  * Windows platform-related functions
@@ -26,6 +26,6 @@ import platform.posix._getcwd
  */
 
 actual fun getPlatformStringPath(): String =
-    _getcwd(null, 0)?.toKString() ?: throw IllegalStateException("Get database path wrong")
+    _wgetcwd(null, 0)?.toKString() ?: throw IllegalStateException("Get database path wrong")
 
 actual val pathSeparator: Char = '\\'

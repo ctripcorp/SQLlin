@@ -101,18 +101,21 @@ jobs:
       - name: Run sqllin-driver MinGW X64 Tests
         run: ./gradlew :sqllin-driver:cleanMingwX64Test && ./gradlew :sqllin-driver:mingwX64Test --stacktrace
 
-      - name: Build sqllin-dsl
-        run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary && ./gradlew :sqllin-dsl:mingwX86MainKlibrary
-
-      - name: Run sqllin-dsl MinGW X64 Tests
-        run: ./gradlew :sqllin-dsl:cleanMingwX64Test && ./gradlew :sqllin-dsl:mingwX64Test --stacktrace
-
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v2
         with:
           name: Test-Reports
           path: sqllin-driver/build/reports
         if: always()
+
+      - name: Build sqllin-processor
+        run: ./gradlew :sqllin-processor:assemble
+
+      - name: Build sqllin-dsl
+        run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary && ./gradlew :sqllin-dsl:mingwX86MainKlibrary
+
+      - name: Run sqllin-dsl MinGW X64 Tests
+        run: ./gradlew :sqllin-dsl:cleanMingwX64Test && ./gradlew :sqllin-dsl:mingwX64Test --stacktrace
 
       - name: Upload sqllin-dsl Reports
         uses: actions/upload-artifact@v2
