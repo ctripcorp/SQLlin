@@ -27,6 +27,7 @@ import kotlin.test.Test
 
 class NativeTest {
 
+    private val path = getPlatformStringPath()
     private val commonTest = CommonBasicTest(path.toDatabasePath())
 
     @Test
@@ -57,10 +58,4 @@ class NativeTest {
             remove(it)
         }
     }
-
-    /**
-     * Just work on macOS, please replace it with a path that has permissions on your platform
-     */
-    private val path: String
-        get() = getPlatformStringPath()
 }

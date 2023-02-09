@@ -26,6 +26,6 @@ import platform.posix._getcwd
  */
 
 actual fun getPlatformStringPath(): String =
-    _getcwd(null, 0)?.toKString() ?: ""
+    _getcwd(null, 0)?.toKString() ?: throw IllegalStateException("Get database path wrong")
 
 actual val pathSeparator: Char = '\\'
