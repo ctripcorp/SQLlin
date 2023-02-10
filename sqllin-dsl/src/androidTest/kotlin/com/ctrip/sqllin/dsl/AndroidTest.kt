@@ -26,7 +26,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Android instrument test
+ * Android instrumented test
  * @author yaqiao
  */
 

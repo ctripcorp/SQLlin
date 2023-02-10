@@ -38,9 +38,6 @@ jobs:
       - name: Run sqllin-driver macOS X64 Tests
         run: ./test_driver_macos.sh
 
-      - name: Build sqllin-processor
-        run: ./gradlew :sqllin-processor:assemble
-
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:assemble
 
@@ -71,7 +68,7 @@ jobs:
         if: always()
 
       - name: Publish to MavenCentral
-        run: ./publish_all.sh
+        run: ./publish_apple_android.sh
 
   build-on-windows:
     runs-on: windows-latest
@@ -99,18 +96,18 @@ jobs:
       - name: Run sqllin-driver MinGW X64 Tests
         run: ./gradlew :sqllin-driver:cleanMingwX64Test && ./gradlew :sqllin-driver:mingwX64Test --stacktrace
 
+      - name: Build sqllin-dsl
+        run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary && ./gradlew :sqllin-dsl:mingwX86MainKlibrary
+
+      - name: Run sqllin-dsl MinGW X64 Tests
+        run: ./gradlew :sqllin-dsl:cleanMingwX64Test && ./gradlew :sqllin-dsl:mingwX64Test --stacktrace
+
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v2
         with:
           name: Test-Reports
           path: sqllin-driver/build/reports
         if: always()
-
-      - name: Build sqllin-dsl
-        run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary && ./gradlew :sqllin-dsl:mingwX86MainKlibrary
-
-      - name: Run sqllin-dsl MinGW X64 Tests
-        run: ./gradlew :sqllin-dsl:cleanMingwX64Test && ./gradlew :sqllin-dsl:mingwX64Test --stacktrace
 
       - name: Upload sqllin-dsl Reports
         uses: actions/upload-artifact@v2
@@ -121,3 +118,64 @@ jobs:
 
       - name: Publish to MavenCentral
         run: ./gradlew :sqllin-driver:publishMingwX64PublicationToMavenRepository && ./gradlew :sqllin-driver:publishMingwX86PublicationToMavenRepository && ./gradlew :sqllin-dsl:publishMingwX64PublicationToMavenRepository &&./gradlew :sqllin-dsl:publishMingwX86PublicationToMavenRepository
+
+  build-on-linux:
+    runs-on: ubuntu-18.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Validate Gradle Wrapper
+        uses: gradle/wrapper-validation-action@v1
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: 11
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+
+      - name: Build sqllin-driver
+        run: ./gradlew :sqllin-driver:assemble
+
+      - name: Run sqllin-driver Linux X64 Tests
+        run: ./gradlew :sqllin-driver:cleanLinuxX64Test && ./gradlew :sqllin-driver:linuxX64Test --stacktrace
+
+      - name: Build sqllin-processor
+        run: ./gradlew :sqllin-processor:assemble
+
+      - name: Build sqllin-dsl
+        run: ./gradlew :sqllin-dsl:assemble
+
+      - name: Run sqllin-dsl Linux X64 Tests
+        run: ./gradlew :sqllin-dsl:cleanLinuxX64Test && ./gradlew :sqllin-dsl:linuxX64Test --stacktrace
+
+      - name: Run Android 8 Instrumentation Tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 26
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          script: ./test_android.sh
+
+      - name: Upload sqllin-driver Reports
+        uses: actions/upload-artifact@v2
+        with:
+          name: Test-Reports
+          path: sqllin-driver/build/reports
+        if: always()
+
+      - name: Upload sqllin-dsl Reports
+        uses: actions/upload-artifact@v2
+        with:
+          name: Test-Reports
+          path: sqllin-dsl/build/reports
+        if: always()
+
+      - name: Publish to MavenCentral
+        run: ./publish_linux_processor.sh
