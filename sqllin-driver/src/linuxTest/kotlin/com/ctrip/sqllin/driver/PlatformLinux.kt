@@ -17,8 +17,7 @@
 package com.ctrip.sqllin.driver
 
 import kotlinx.cinterop.toKString
-import kotlinx.cinterop.utf8
-import platform.posix.mkdtemp
+import platform.posix.getcwd
 
 /**
  * Linux platform-related functions
@@ -26,6 +25,6 @@ import platform.posix.mkdtemp
  */
 
 actual fun getPlatformStringPath(): String =
-    mkdtemp("/tmp/sqllin".utf8)?.toKString() ?: throw IllegalStateException("The temp path created error")
+    getcwd(null, 0)?.toKString() ?: throw IllegalStateException("The temp path created error")
 
 actual val pathSeparator: Char = '/'
