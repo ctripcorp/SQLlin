@@ -16,9 +16,6 @@
 
 package com.ctrip.sqllin.driver
 
-import co.touchlab.sqliter.Statement
-import co.touchlab.sqliter.bindString
-
 /**
  * Database manager Native actual
  * @author yaqiao

@@ -16,18 +16,10 @@
 
 package com.ctrip.sqllin.driver
 
-import co.touchlab.sqliter.DatabaseConfiguration.Extended
-import co.touchlab.sqliter.SynchronousFlag
-import co.touchlab.sqliter.createDatabaseManager
-
 /**
  * SQLite extension Native
  * @author yaqiao
  */
-
-internal typealias NativeDatabaseConnection = co.touchlab.sqliter.DatabaseConnection
-internal typealias NativeDatabaseConfiguration = co.touchlab.sqliter.DatabaseConfiguration
-internal typealias NativeJournalMode = co.touchlab.sqliter.JournalMode
 
 public fun String.toDatabasePath(): DatabasePath = NativeDatabasePath(this)
 

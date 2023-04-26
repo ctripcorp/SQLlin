@@ -22,7 +22,6 @@ kotlin {
 
     listOf(
         iosX64(),
-        iosArm32(),
         iosArm64(),
         iosSimulatorArm64(),
 
@@ -31,7 +30,6 @@ kotlin {
 
         watchosArm32(),
         watchosArm64(),
-        watchosX86(),
         watchosX64(),
         watchosSimulatorArm64(),
 
@@ -42,7 +40,6 @@ kotlin {
         linuxX64(),
 
         mingwX64(),
-        mingwX86(),
     ).forEach {
         it.setupNativeConfig()
     }
@@ -75,14 +72,12 @@ kotlin {
         }
 
         val iosX64Main by getting
-        val iosArm32Main by getting
         val iosArm64Main by getting
         val iosSimulatorArm64Main by getting
 
         val macosX64Main by getting
         val macosArm64Main by getting
 
-        val watchosX86Main by getting
         val watchosX64Main by getting
         val watchosArm32Main by getting
         val watchosArm64Main by getting
@@ -95,20 +90,21 @@ kotlin {
         val linuxX64Main by getting
 
         val mingwX64Main by getting
-        val mingwX86Main by getting
 
         val nativeMain by creating {
             dependsOn(commonMain)
+        }
+
+        val appleMain by creating {
+            dependsOn(nativeMain)
 
             iosX64Main.dependsOn(this)
-            iosArm32Main.dependsOn(this)
             iosArm64Main.dependsOn(this)
             iosSimulatorArm64Main.dependsOn(this)
 
             macosX64Main.dependsOn(this)
             macosArm64Main.dependsOn(this)
 
-            watchosX86Main.dependsOn(this)
             watchosX64Main.dependsOn(this)
             watchosArm32Main.dependsOn(this)
             watchosArm64Main.dependsOn(this)
@@ -117,25 +113,27 @@ kotlin {
             tvosX64Main.dependsOn(this)
             tvosArm64Main.dependsOn(this)
             tvosSimulatorArm64Main.dependsOn(this)
+        }
+
+        val linuxMain by creating {
+            dependsOn(nativeMain)
 
             linuxX64Main.dependsOn(this)
+        }
+
+        val mingwMain by creating {
+            dependsOn(nativeMain)
 
             mingwX64Main.dependsOn(this)
-            mingwX86Main.dependsOn(this)
-            dependencies {
-                implementation("co.touchlab:sqliter-driver:1.2.1")
-            }
         }
 
         val iosX64Test by getting
-        val iosArm32Test by getting
         val iosArm64Test by getting
         val iosSimulatorArm64Test by getting
 
         val macosX64Test by getting
         val macosArm64Test by getting
 
-        val watchosX86Test by getting
         val watchosX64Test by getting
         val watchosArm32Test by getting
         val watchosArm64Test by getting
@@ -148,7 +146,6 @@ kotlin {
         val linuxX64Test by getting
 
         val mingwX64Test by getting
-        val mingwX86Test by getting
 
         val nativeTest by creating {
             dependsOn(commonTest)
@@ -158,14 +155,12 @@ kotlin {
             dependsOn(nativeTest)
 
             iosX64Test.dependsOn(this)
-            iosArm32Test.dependsOn(this)
             iosArm64Test.dependsOn(this)
             iosSimulatorArm64Test.dependsOn(this)
 
             macosX64Test.dependsOn(this)
             macosArm64Test.dependsOn(this)
 
-            watchosX86Test.dependsOn(this)
             watchosX64Test.dependsOn(this)
             watchosArm32Test.dependsOn(this)
             watchosArm64Test.dependsOn(this)
@@ -186,7 +181,6 @@ kotlin {
             dependsOn(nativeTest)
 
             mingwX64Test.dependsOn(this)
-            mingwX86Test.dependsOn(this)
         }
     }
 }
@@ -216,16 +210,15 @@ android {
 }
 
 fun KotlinNativeTarget.setupNativeConfig() {
-    val compileArgs = listOf("-Xruntime-logs=gc=info")
-    compilations["main"].kotlinOptions.freeCompilerArgs += compileArgs
-    compilations["test"].kotlinOptions.freeCompilerArgs += compileArgs
-    binaries {
-        all {
-            linkerOpts += when {
-                HostManager.hostIsLinux -> listOf("-lsqlite3", "-L/usr/lib/x86_64-linux-gnu", "-L/usr/lib", "-L/usr/lib64")
-                HostManager.hostIsMingw -> listOf("-Lc:\\msys64\\mingw64\\lib", "-L$rootDir\\libs", "-lsqlite3")
-                else -> listOf("-lsqlite3")
-            }
+    val main by compilations.getting
+    val sqlite3 by main.cinterops.creating {
+        includeDirs("$projectDir/src/include")
+    }
+    binaries.all {
+        linkerOpts += when {
+            HostManager.hostIsLinux -> listOf("-lsqlite3", "-L/usr/lib/x86_64-linux-gnu", "-L/usr/lib", "-L/usr/lib64")
+            HostManager.hostIsMingw -> listOf("-Lc:\\msys64\\mingw64\\lib", "-L$rootDir\\libs", "-lsqlite3")
+            else -> listOf("-lsqlite3")
         }
     }
 }

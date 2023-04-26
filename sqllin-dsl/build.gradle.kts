@@ -24,7 +24,6 @@ kotlin {
 
     listOf(
         iosX64(),
-        iosArm32(),
         iosArm64(),
         iosSimulatorArm64(),
 
@@ -33,7 +32,6 @@ kotlin {
 
         watchosArm32(),
         watchosArm64(),
-        watchosX86(),
         watchosX64(),
         watchosSimulatorArm64(),
 
@@ -44,7 +42,6 @@ kotlin {
         linuxX64(),
 
         mingwX64(),
-        mingwX86(),
     ).forEach {
         it.setupNativeConfig()
     }
@@ -81,14 +78,12 @@ kotlin {
         }
 
         val iosX64Main by getting
-        val iosArm32Main by getting
         val iosArm64Main by getting
         val iosSimulatorArm64Main by getting
 
         val macosX64Main by getting
         val macosArm64Main by getting
 
-        val watchosX86Main by getting
         val watchosX64Main by getting
         val watchosArm32Main by getting
         val watchosArm64Main by getting
@@ -101,20 +96,17 @@ kotlin {
         val linuxX64Main by getting
 
         val mingwX64Main by getting
-        val mingwX86Main by getting
 
         val nativeMain by creating {
             dependsOn(commonMain)
 
             iosX64Main.dependsOn(this)
             iosArm64Main.dependsOn(this)
-            iosArm32Main.dependsOn(this)
             iosSimulatorArm64Main.dependsOn(this)
 
             macosX64Main.dependsOn(this)
             macosArm64Main.dependsOn(this)
 
-            watchosX86Main.dependsOn(this)
             watchosX64Main.dependsOn(this)
             watchosArm32Main.dependsOn(this)
             watchosArm64Main.dependsOn(this)
@@ -127,18 +119,15 @@ kotlin {
             linuxX64Main.dependsOn(this)
 
             mingwX64Main.dependsOn(this)
-            mingwX86Main.dependsOn(this)
         }
 
         val iosX64Test by getting
-        val iosArm32Test by getting
         val iosArm64Test by getting
         val iosSimulatorArm64Test by getting
 
         val macosX64Test by getting
         val macosArm64Test by getting
 
-        val watchosX86Test by getting
         val watchosX64Test by getting
         val watchosArm32Test by getting
         val watchosArm64Test by getting
@@ -151,7 +140,6 @@ kotlin {
         val linuxX64Test by getting
 
         val mingwX64Test by getting
-        val mingwX86Test by getting
 
         val nativeTest by creating {
             dependsOn(commonTest)
@@ -161,14 +149,12 @@ kotlin {
             dependsOn(nativeTest)
 
             iosX64Test.dependsOn(this)
-            iosArm32Test.dependsOn(this)
             iosArm64Test.dependsOn(this)
             iosSimulatorArm64Test.dependsOn(this)
 
             macosX64Test.dependsOn(this)
             macosArm64Test.dependsOn(this)
 
-            watchosX86Test.dependsOn(this)
             watchosX64Test.dependsOn(this)
             watchosArm32Test.dependsOn(this)
             watchosArm64Test.dependsOn(this)
@@ -189,7 +175,6 @@ kotlin {
             dependsOn(nativeTest)
 
             mingwX64Test.dependsOn(this)
-            mingwX86Test.dependsOn(this)
         }
     }
 }
@@ -238,14 +223,12 @@ dependencies {
         "kspAndroidAndroidTest",
 
         "kspIosX64Test",
-        "kspIosArm32Test",
         "kspIosArm64Test",
         "kspIosSimulatorArm64Test",
 
         "kspMacosX64Test",
         "kspMacosArm64Test",
 
-        "kspWatchosX86Test",
         "kspWatchosX64Test",
         "kspWatchosArm32Test",
         "kspWatchosArm64Test",
@@ -257,7 +240,6 @@ dependencies {
 
         "kspLinuxX64Test",
 
-        "kspMingwX86Test",
         "kspMingwX64Test",
     )
     sourceSet.forEach {

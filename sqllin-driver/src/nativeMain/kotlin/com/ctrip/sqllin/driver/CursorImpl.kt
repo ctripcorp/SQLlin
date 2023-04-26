@@ -16,8 +16,6 @@
 
 package com.ctrip.sqllin.driver
 
-import co.touchlab.sqliter.*
-
 /**
  * SQLite Cursor Native actual
  * @author yaqiao
