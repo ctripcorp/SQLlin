@@ -28,12 +28,14 @@ SQLlin 能够直接向数据库插入 Kotlin 对象，也能够直接从数据�
 SQLlin 支持如下平台：
 
 - Android (6.0+)
-- iOS (x64, arm64, arm32, simulatorArm64)
+- iOS (x64, arm64, ~~arm32~~, simulatorArm64)
 - macOS (x64, arm64)
-- watchOS (x86, x64, arm32, arm64, simulatorArm64)
+- watchOS (~~x86~~, x64, arm32, arm64, simulatorArm64)
 - tvOS (x64, arm64, simulatorArm64)
 - Linux (x64)
-- Windows (mingwX86, mingwX64)
+- Windows (~~mingwX86~~, mingwX64)
+
+> 注意：`iosArm32`、`watchosX86` 以及 `mingwX86` 将会在下个版本中被移除
 
 SQLlin 的架构设计如下图所示：
 
