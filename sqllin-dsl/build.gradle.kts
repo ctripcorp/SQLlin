@@ -56,7 +56,7 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 api(project(":sqllin-driver"))
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.4.1")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.5.0")
             }
         }
         val commonTest by getting {
@@ -66,10 +66,11 @@ kotlin {
         }
         val androidMain by getting {
             dependencies {
-                implementation("androidx.annotation:annotation:1.5.0")
+                implementation("androidx.annotation:annotation:1.6.0")
             }
         }
-        val androidTest by getting {
+        val androidInstrumentedTest by getting {
+            dependsOn(commonTest)
             dependencies {
                 implementation("androidx.test:core:1.5.0")
                 implementation("androidx.test:runner:1.5.2")
@@ -180,13 +181,8 @@ kotlin {
 }
 
 android {
+    namespace = "com.ctrip.sqllin.dsl"
     compileSdk = 33
-    buildToolsVersion = "33.0.1"
-    sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
-    sourceSets.getByName("androidTest") {
-        manifest.srcFile(File("src/androidTest/AndroidManifest.xml"))
-        java.srcDir("src/androidTest/kotlin")
-    }
     defaultConfig {
         minSdk = 23
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -199,7 +195,7 @@ android {
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_17
     }
 }
 
