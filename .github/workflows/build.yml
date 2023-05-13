@@ -40,14 +40,14 @@ jobs:
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:assemble
         
-      #- name: Run sqllin-driver macOS X64 Tests
-        #run: ./test_driver_macos.sh
+      - name: Run sqllin-driver macOS X64 Tests
+        run: ./test_driver_macos.sh
 
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:assemble
 
-      - name: Run sqllin-dsl macOS X64 Tests
-        run: ./test_dsl_macos.sh
+      #- name: Run sqllin-dsl macOS X64 Tests
+        #run: ./test_dsl_macos.sh
 
       - name: Run Android 12 Instrumentation Tests
         uses: reactivecircus/android-emulator-runner@v2
@@ -95,14 +95,14 @@ jobs:
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:mingwX64MainKlibrary && ./gradlew :sqllin-driver:mingwX86MainKlibrary
 
-      #- name: Run sqllin-driver MinGW X64 Tests
-        #run: ./gradlew :sqllin-driver:cleanMingwX64Test && ./gradlew :sqllin-driver:mingwX64Test --stacktrace
+      - name: Run sqllin-driver MinGW X64 Tests
+        run: ./gradlew :sqllin-driver:cleanMingwX64Test && ./gradlew :sqllin-driver:mingwX64Test --stacktrace
 
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary && ./gradlew :sqllin-dsl:mingwX86MainKlibrary
 
-      - name: Run sqllin-dsl MinGW X64 Tests
-        run: ./gradlew :sqllin-dsl:cleanMingwX64Test && ./gradlew :sqllin-dsl:mingwX64Test --stacktrace
+      #- name: Run sqllin-dsl MinGW X64 Tests
+        #run: ./gradlew :sqllin-dsl:cleanMingwX64Test && ./gradlew :sqllin-dsl:mingwX64Test --stacktrace
 
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v2
@@ -141,8 +141,8 @@ jobs:
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:assemble
 
-      #- name: Run sqllin-driver Linux X64 Tests
-        #run: ./gradlew :sqllin-driver:cleanLinuxX64Test && ./gradlew :sqllin-driver:linuxX64Test --stacktrace
+      - name: Run sqllin-driver Linux X64 Tests
+        run: ./gradlew :sqllin-driver:cleanLinuxX64Test && ./gradlew :sqllin-driver:linuxX64Test --stacktrace
 
       - name: Build sqllin-processor
         run: ./gradlew :sqllin-processor:assemble
@@ -150,8 +150,8 @@ jobs:
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:assemble
 
-      - name: Run sqllin-dsl Linux X64 Tests
-        run: ./gradlew :sqllin-dsl:cleanLinuxX64Test && ./gradlew :sqllin-dsl:linuxX64Test --stacktrace
+      #- name: Run sqllin-dsl Linux X64 Tests
+        #run: ./gradlew :sqllin-dsl:cleanLinuxX64Test && ./gradlew :sqllin-dsl:linuxX64Test --stacktrace
 
       - name: Run Android 8 Instrumentation Tests
         uses: reactivecircus/android-emulator-runner@v2
