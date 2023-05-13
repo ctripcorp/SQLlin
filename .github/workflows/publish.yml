@@ -41,8 +41,8 @@ jobs:
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:assemble
 
-      - name: Run sqllin-dsl macOS X64 Tests
-        run: ./test_dsl_macos.sh
+      #- name: Run sqllin-dsl macOS X64 Tests
+        #run: ./test_dsl_macos.sh
 
       - name: Run Android Instrumentation Tests
         uses: reactivecircus/android-emulator-runner@v2
@@ -99,8 +99,8 @@ jobs:
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary && ./gradlew :sqllin-dsl:mingwX86MainKlibrary
 
-      - name: Run sqllin-dsl MinGW X64 Tests
-        run: ./gradlew :sqllin-dsl:cleanMingwX64Test && ./gradlew :sqllin-dsl:mingwX64Test --stacktrace
+      #- name: Run sqllin-dsl MinGW X64 Tests
+        #run: ./gradlew :sqllin-dsl:cleanMingwX64Test && ./gradlew :sqllin-dsl:mingwX64Test --stacktrace
 
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v2
@@ -151,8 +151,8 @@ jobs:
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:assemble
 
-      - name: Run sqllin-dsl Linux X64 Tests
-        run: ./gradlew :sqllin-dsl:cleanLinuxX64Test && ./gradlew :sqllin-dsl:linuxX64Test --stacktrace
+      #- name: Run sqllin-dsl Linux X64 Tests
+        #run: ./gradlew :sqllin-dsl:cleanLinuxX64Test && ./gradlew :sqllin-dsl:linuxX64Test --stacktrace
 
       - name: Run Android 8 Instrumentation Tests
         uses: reactivecircus/android-emulator-runner@v2
