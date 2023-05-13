@@ -65,6 +65,10 @@ fun KotlinNativeTarget.setupIOSConfig() {
     compilations["main"].kotlinOptions.freeCompilerArgs += compileArgs
 }
 
+dependencies {
+    add("kspCommonMainMetadata", project(":sqllin-processor"))
+}
+
 afterEvaluate {  // WORKAROUND: both register() and named() fail – https://github.com/gradle/gradle/issues/9331
     tasks {
         withType<KotlinCompile<*>> {
@@ -72,8 +76,4 @@ afterEvaluate {  // WORKAROUND: both register() and named() fail – https://git
                 dependsOn("kspCommonMainKotlinMetadata")
         }
     }
-}
-
-dependencies {
-    add("kspCommonMainMetadata", project(":sqllin-processor"))
 }
