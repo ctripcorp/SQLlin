@@ -221,7 +221,7 @@ fun KotlinNativeTarget.setupNativeConfig() {
     binaries {
         all {
             linkerOpts += when {
-                HostManager.hostIsLinux -> listOf("-lsqlite3", "-L/usr/lib/x86_64-linux-gnu", "-L/usr/lib", "-L/usr/lib64", "-L$rootDir/libs/linux")
+                HostManager.hostIsLinux -> listOf("-lsqlite3", "-L/usr/lib/x86_64-linux-gnu", "-L/usr/lib", "-L/usr/lib64", "-L$rootDir/libs/linux".toString())
                 HostManager.hostIsMingw -> listOf("-Lc:\\msys64\\mingw64\\lib", "-L$rootDir\\libs\\windows", "-lsqlite3")
                 else -> listOf("-lsqlite3")
             }
