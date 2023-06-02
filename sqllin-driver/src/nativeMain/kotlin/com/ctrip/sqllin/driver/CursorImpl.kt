@@ -16,30 +16,52 @@
 
 package com.ctrip.sqllin.driver
 
-/**
- * SQLite Cursor Native actual
- * @author yaqiao
- */
-
 public class CursorImpl internal constructor(
-    private val cursor: Cursor,
-    private val statement: Statement
+    private val statement: SQLiteStatement
 ) : CommonCursor {
 
-    override fun getInt(columnIndex: Int): Int = cursor.getLong(columnIndex).toInt()
-    override fun getLong(columnIndex: Int): Long = cursor.getLong(columnIndex)
-    override fun getFloat(columnIndex: Int): Float = cursor.getDouble(columnIndex).toFloat()
-    override fun getDouble(columnIndex: Int): Double = cursor.getDouble(columnIndex)
-    override fun getString(columnIndex: Int): String? = cursor.getStringOrNull(columnIndex)
-    override fun getByteArray(columnIndex: Int): ByteArray? = cursor.getBytesOrNull(columnIndex)
+    override fun getInt(columnIndex: Int): Int = getLong(columnIndex).toInt()
 
-    override fun getColumnIndex(columnName: String): Int = cursor.getColumnIndexOrThrow(columnName)
+    override fun getLong(columnIndex: Int): Long = statement.columnGetLong(columnIndex)
+
+    override fun getFloat(columnIndex: Int): Float = getDouble(columnIndex).toFloat()
+
+    override fun getDouble(columnIndex: Int): Double = statement.columnGetDouble(columnIndex)
+
+    override fun getString(columnIndex: Int): String = statement.columnGetString(columnIndex)
+
+    override fun getByteArray(columnIndex: Int): ByteArray = statement.columnGetBlob(columnIndex)
+
+    override fun getColumnIndex(columnName: String): Int = columnNames[columnName] ?: throw IllegalArgumentException("Col for $columnName not found")
+
+    internal fun next() = statement.step()
 
     override fun forEachRows(block: (Int) -> Unit) {
         var index = 0
-        while (cursor.next())
+        while (next())
             block(index++)
     }
 
     override fun close(): Unit = statement.finalizeStatement()
+
+    private val columnNames: Map<String, Int> by lazy {
+        val count = statement.columnCount()
+        val map = HashMap<String, Int>(count)
+        repeat(count) {
+            val key = statement.columnName(it)
+            if (map.containsKey(key)) {
+                var index = 1
+                val basicKey = "$key&JOIN"
+                var finalKey = basicKey + index
+
+                while (map.containsKey(finalKey))
+                    finalKey = basicKey + ++index
+
+                map[finalKey] = it
+            } else {
+                map[key] = it
+            }
+        }
+        map
+    }
 }
