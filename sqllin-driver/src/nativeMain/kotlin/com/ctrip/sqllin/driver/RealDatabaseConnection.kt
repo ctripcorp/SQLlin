@@ -92,7 +92,7 @@ public class RealDatabaseConnection internal constructor(
     }
 
     private inline val checkFailTransaction: Transaction
-        get() = transaction.value ?: throw Exception("No transaction")
+        get() = transaction.value ?: throw IllegalStateException("No transaction")
 
     override fun close(): Unit = try {
         closedFlag.value = 1

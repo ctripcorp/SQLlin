@@ -57,6 +57,7 @@ class NativeTest {
             "$path$separatorChar${SQL.DATABASE_NAME}-wal",
         ).forEach {
             remove(it)
+            println("Delete file: $it")
         }
     }
 }

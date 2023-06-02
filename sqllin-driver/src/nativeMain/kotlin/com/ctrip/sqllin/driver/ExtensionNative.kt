@@ -33,6 +33,7 @@ internal value class NativeDatabasePath internal constructor(val pathString: Str
 private val connectionCreationLock = Lock()
 public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection = connectionCreationLock.withLock {
     val realDatabasePath = config.diskOrMemoryPath()
+    println("Database full path: $realDatabasePath")
     val database = openNativeDatabase(config, realDatabasePath)
     val realConnection = RealDatabaseConnection(database)
     realConnection.apply {
