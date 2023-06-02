@@ -53,8 +53,12 @@ public class ConcurrentDatabaseConnection internal constructor(
         delegateConnection.endTransaction()
     }
 
-    override fun close(): Unit = accessLock.withLock {
-        delegateConnection.closed
+    override fun close(): Unit = try {
+        accessLock.withLock {
+            delegateConnection.close()
+        }
+    } finally {
+        accessLock.close()
     }
 
     override val closed: Boolean

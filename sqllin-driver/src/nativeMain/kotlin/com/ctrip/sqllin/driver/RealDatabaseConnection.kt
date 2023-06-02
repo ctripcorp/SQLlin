@@ -94,9 +94,11 @@ public class RealDatabaseConnection internal constructor(
     private inline val checkFailTransaction: Transaction
         get() = transaction.value ?: throw Exception("No transaction")
 
-    override fun close() {
+    override fun close(): Unit = try {
         closedFlag.value = 1
         database.close()
+    } finally {
+        transactionLock.close()
     }
 
     override val closed: Boolean
