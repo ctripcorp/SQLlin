@@ -97,7 +97,6 @@ public class RealDatabaseConnection internal constructor(
     override fun close() {
         closedFlag.value = 1
         database.close()
-        newConnection.decrement()
     }
 
     override val closed: Boolean

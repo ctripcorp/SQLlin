@@ -20,7 +20,6 @@ import com.ctrip.sqllin.driver.cinterop.NativeDatabase.Companion.openNativeDatab
 import com.ctrip.sqllin.driver.platform.Lock
 import com.ctrip.sqllin.driver.platform.separatorChar
 import com.ctrip.sqllin.driver.platform.withLock
-import kotlin.native.concurrent.AtomicInt
 
 /**
  * SQLite extension Native
@@ -32,24 +31,20 @@ public fun String.toDatabasePath(): DatabasePath = NativeDatabasePath(this)
 internal value class NativeDatabasePath internal constructor(val pathString: String) : DatabasePath
 
 private val connectionCreationLock = Lock()
-internal val newConnection = AtomicInt(0)
 public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection = connectionCreationLock.withLock {
     val realDatabasePath = config.diskOrMemoryPath()
     val database = openNativeDatabase(config, realDatabasePath)
     val realConnection = RealDatabaseConnection(database)
     realConnection.apply {
         updateSynchronousMode(config.synchronousMode)
-        if (newConnection.value == 0) {
-            updateJournalMode(config.journalMode)
-            try {
-                migrateIfNeeded(config.create, config.upgrade, config.version)
-            } catch (e: Exception) {
-                // If this failed, we have to close the connection or we will end up leaking it.
-                println("attempted to run migration and failed. closing connection.")
-                close()
-                throw e
-            }
-            newConnection.increment()
+        updateJournalMode(config.journalMode)
+        try {
+            migrateIfNeeded(config.create, config.upgrade, config.version)
+        } catch (e: Exception) {
+            // If this failed, we have to close the connection or we will end up leaking it.
+            println("attempted to run migration and failed. closing connection.")
+            close()
+            throw e
         }
     }
     if (config.isReadOnly) realConnection else ConcurrentDatabaseConnection(realConnection)
