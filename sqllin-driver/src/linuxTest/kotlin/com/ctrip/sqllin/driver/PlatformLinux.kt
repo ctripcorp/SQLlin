@@ -18,6 +18,7 @@ package com.ctrip.sqllin.driver
 
 import kotlinx.cinterop.toKString
 import platform.posix.getcwd
+import platform.posix.remove
 
 /**
  * Linux platform-related functions
@@ -26,3 +27,5 @@ import platform.posix.getcwd
 
 actual fun getPlatformStringPath(): String =
     getcwd(null, 0)?.toKString() ?: throw IllegalStateException("The temp path created error")
+
+actual fun deleteFile(file: String): Boolean = remove(file) == 0
