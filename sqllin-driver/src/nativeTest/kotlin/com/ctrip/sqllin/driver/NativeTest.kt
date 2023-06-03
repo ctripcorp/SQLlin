@@ -56,8 +56,8 @@ class NativeTest {
             "$path$separatorChar${SQL.DATABASE_NAME}-shm",
             "$path$separatorChar${SQL.DATABASE_NAME}-wal",
         ).forEach {
-            remove(it)
-            println("Delete file: $it")
+            val resultCode = remove(it)
+            println("Delete file: $it, result: $resultCode")
         }
     }
 }

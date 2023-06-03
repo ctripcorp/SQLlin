@@ -50,7 +50,6 @@ kotlin {
         all {
             languageSettings {
                 optIn("kotlin.RequiresOptIn")
-                // languageVersion = "1.8"
             }
         }
         val commonMain by getting {

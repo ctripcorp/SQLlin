@@ -80,6 +80,7 @@ private fun join(prefix: String, suffix: String): String {
     return if (haveSlash) prefix + suffix else prefix + separatorChar + suffix
 }
 
+@OptIn(ExperimentalStdlibApi::class)
 private fun fixSlashes(origPath: String): String {
     // Remove duplicate adjacent slashes.
     var lastWasSlash = false
@@ -87,7 +88,7 @@ private fun fixSlashes(origPath: String): String {
     val length = newPath.size
     var newLength = 0
     val initialIndex = if (origPath.startsWith("file://", true)) 7 else 0
-    for (i in initialIndex until length) {
+    for (i in initialIndex ..< length) {
         val ch = newPath[i]
         if (ch == separatorChar) {
             if (!lastWasSlash) {
