@@ -1,8 +1,9 @@
 pluginManagement {
     val kspVersion: String by settings
+    val kotlinVersion: String by settings
     plugins {
         id("com.google.devtools.ksp") version kspVersion apply false
-        kotlin("plugin.serialization") version "1.7.20"
+        kotlin("plugin.serialization") version kotlinVersion
     }
     repositories {
         google()

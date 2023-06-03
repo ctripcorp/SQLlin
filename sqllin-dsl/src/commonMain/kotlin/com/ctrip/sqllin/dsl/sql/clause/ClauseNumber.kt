@@ -27,7 +27,7 @@ public class ClauseNumber(
     valueName: String,
     table: Table<*>,
     isFunction: Boolean,
-) : ClauseElement(valueName, table, isFunction){
+) : ClauseElement(valueName, table, isFunction) {
 
     // Less than, <
     internal infix fun lt(number: Number): SelectCondition = appendNumber("<", number)

@@ -26,5 +26,3 @@ import platform.posix.getcwd
 
 actual fun getPlatformStringPath(): String =
     getcwd(null, 0)?.toKString() ?: throw IllegalStateException("The temp path created error")
-
-actual val pathSeparator: Char = '/'

@@ -1,3 +1,4 @@
+import org.jetbrains.kotlin.gradle.dsl.KotlinCompile
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
@@ -31,7 +32,7 @@ kotlin {
             kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
             dependencies {
                 implementation(project(":sqllin-dsl"))
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.4.1")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.5.0")
             }
         }
         val androidMain by getting
@@ -48,18 +49,14 @@ kotlin {
 }
 
 android {
+    namespace = "com.ctrip.sqllin.sample"
     compileSdk = 33
-    buildToolsVersion = "33.0.1"
-    sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
-    sourceSets.getByName("androidTest") {
-        manifest.srcFile(File("src/androidTest/AndroidManifest.xml"))
-    }
     defaultConfig {
         minSdk = 23
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_17
     }
 }
 
@@ -70,4 +67,13 @@ fun KotlinNativeTarget.setupIOSConfig() {
 
 dependencies {
     add("kspCommonMainMetadata", project(":sqllin-processor"))
+}
+
+afterEvaluate {  // WORKAROUND: both register() and named() fail – https://github.com/gradle/gradle/issues/9331
+    tasks {
+        withType<KotlinCompile<*>> {
+            if (name != "kspCommonMainKotlinMetadata")
+                dependsOn("kspCommonMainKotlinMetadata")
+        }
+    }
 }
