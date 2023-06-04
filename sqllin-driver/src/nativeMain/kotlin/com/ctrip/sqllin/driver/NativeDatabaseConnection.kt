@@ -16,7 +16,7 @@
 
 package com.ctrip.sqllin.driver
 
-public abstract class NativeDatabaseConnection internal constructor() : DatabaseConnection {
+internal abstract class NativeDatabaseConnection : DatabaseConnection {
 
     internal abstract fun createStatement(sql: String): SQLiteStatement
 

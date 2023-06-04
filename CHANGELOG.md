@@ -1,6 +1,14 @@
 # SQLlin Change Log
 
-## v1.0.1/05-xx-2023
+## v1.1.0
+
+### sqllin-driver
+
+* Enable the `new driver` to replace [SQLiter](https://github.com/touchlab/SQLiter)
+* Make some unnecessary APIs be internal(`CursorImpl`, `DatabaseConnectionImpl` and more...)
+* Add the new public function `next` in `Cursor`
+
+## v1.0.1/05-13-2023
 
 * Update `Kotlin`'s version to `1.8.20`
 * Update `KSP`'s version to `1.8.20-1.0.11`
