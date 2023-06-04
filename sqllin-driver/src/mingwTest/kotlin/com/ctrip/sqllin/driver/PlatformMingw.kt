@@ -18,6 +18,7 @@ package com.ctrip.sqllin.driver
 
 import kotlinx.cinterop.*
 import platform.posix._wgetcwd
+import platform.windows.DeleteFileW
 
 /**
  * Windows platform-related functions
@@ -28,4 +29,4 @@ import platform.posix._wgetcwd
 actual fun getPlatformStringPath(): String =
     _wgetcwd(null, 0)?.toKString() ?: throw IllegalStateException("Get database path wrong")
 
-actual val pathSeparator: Char = '\\'
+actual fun deleteFile(file: String): Boolean = DeleteFileW(file) != 0

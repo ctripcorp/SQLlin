@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Ctrip.com.
+ * Copyright (C) 2023 Ctrip.com.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,19 @@
  * limitations under the License.
  */
 
-package com.ctrip.sqllin.driver
+package com.ctrip.sqllin.driver.platform
 
-import kotlinx.cinterop.toKString
-import platform.posix.getcwd
-import platform.posix.remove
+import kotlinx.cinterop.ByteVar
+import kotlinx.cinterop.CPointer
+import platform.Foundation.NSString
+import platform.Foundation.create
 
 /**
- * Linux platform-related functions
- * @author yaqiao
+ * The tools about bytes, implementation of Apple platforms
+ * @author yqiao
  */
 
-actual fun getPlatformStringPath(): String =
-    getcwd(null, 0)?.toKString() ?: throw IllegalStateException("The temp path created error")
+internal actual fun bytesToString(bv: CPointer<ByteVar>): String = NSString.create(uTF8String = bv).toString()
 
-actual fun deleteFile(file: String): Boolean = remove(file) == 0
+internal actual inline val separatorChar: Char
+    get() = '/'

@@ -91,13 +91,13 @@ jobs:
         uses: gradle/gradle-build-action@v2
 
       - name: Build sqllin-driver
-        run: ./gradlew :sqllin-driver:mingwX64MainKlibrary && ./gradlew :sqllin-driver:mingwX86MainKlibrary
+        run: ./gradlew :sqllin-driver:mingwX64MainKlibrary
 
       - name: Run sqllin-driver MinGW X64 Tests
         run: ./gradlew :sqllin-driver:cleanMingwX64Test && ./gradlew :sqllin-driver:mingwX64Test --stacktrace
 
       - name: Build sqllin-dsl
-        run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary && ./gradlew :sqllin-dsl:mingwX86MainKlibrary
+        run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary
 
       - name: Run sqllin-dsl MinGW X64 Tests
         run: ./gradlew :sqllin-dsl:cleanMingwX64Test && ./gradlew :sqllin-dsl:mingwX64Test --stacktrace
@@ -117,7 +117,7 @@ jobs:
         if: always()
 
       - name: Publish to MavenCentral
-        run: ./gradlew :sqllin-driver:publishMingwX64PublicationToMavenRepository && ./gradlew :sqllin-driver:publishMingwX86PublicationToMavenRepository && ./gradlew :sqllin-dsl:publishMingwX64PublicationToMavenRepository &&./gradlew :sqllin-dsl:publishMingwX86PublicationToMavenRepository
+        run: ./gradlew :sqllin-driver:publishMingwX64PublicationToMavenRepository && ./gradlew :sqllin-dsl:publishMingwX64PublicationToMavenRepository
 
   build-on-linux:
     runs-on: ubuntu-latest

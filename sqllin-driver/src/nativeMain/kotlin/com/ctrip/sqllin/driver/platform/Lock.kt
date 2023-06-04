@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Ctrip.com.
+ * Copyright (C) 2023 Ctrip.com.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,26 @@
  * limitations under the License.
  */
 
-package com.ctrip.sqllin.driver
-
-import kotlinx.cinterop.toKString
-import platform.posix.getcwd
-import platform.posix.remove
+package com.ctrip.sqllin.driver.platform
 
 /**
- * Linux platform-related functions
+ * A simple lock abstract.
+ * Implementations of this class should be re-entrant.
  * @author yaqiao
  */
+internal expect class Lock() {
+    fun lock()
+    fun unlock()
+    fun tryLock(): Boolean
 
-actual fun getPlatformStringPath(): String =
-    getcwd(null, 0)?.toKString() ?: throw IllegalStateException("The temp path created error")
+    fun close()
+}
 
-actual fun deleteFile(file: String): Boolean = remove(file) == 0
+internal inline fun <T> Lock.withLock(block: () -> T): T {
+    lock()
+    try {
+        return block()
+    } finally {
+        unlock()
+    }
+}

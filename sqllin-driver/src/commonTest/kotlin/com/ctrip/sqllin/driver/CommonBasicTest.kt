@@ -54,10 +54,10 @@ class CommonBasicTest(private val path: DatabasePath) {
                 isUpgrade0 = true
             }
         )
-        val connection0 = openDatabase(config0)
-        connection0.close()
-        assertEquals(true, isCreate0)
-        assertEquals(false, isUpgrade0)
+        openDatabase(config0) {
+            assertEquals(true, isCreate0)
+            assertEquals(false, isUpgrade0)
+        }
 
         var isCreate1 = false
         var isUpgrade1 = false
@@ -74,10 +74,10 @@ class CommonBasicTest(private val path: DatabasePath) {
                 isUpgrade1 = true
             }
         )
-        val connection1 = openDatabase(config1)
-        connection1.close()
-        assertEquals(false, isCreate1)
-        assertEquals(true, isUpgrade1)
+        openDatabase(config1) {
+            assertEquals(false, isCreate1)
+            assertEquals(true, isUpgrade1)
+        }
     }
 
     fun testInsert() {

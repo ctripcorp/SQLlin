@@ -16,57 +16,98 @@
 
 package com.ctrip.sqllin.driver
 
-import co.touchlab.sqliter.DatabaseConfiguration.Extended
-import co.touchlab.sqliter.SynchronousFlag
-import co.touchlab.sqliter.createDatabaseManager
+import com.ctrip.sqllin.driver.cinterop.NativeDatabase.Companion.openNativeDatabase
+import com.ctrip.sqllin.driver.platform.Lock
+import com.ctrip.sqllin.driver.platform.separatorChar
+import com.ctrip.sqllin.driver.platform.withLock
 
 /**
  * SQLite extension Native
  * @author yaqiao
  */
 
-internal typealias NativeDatabaseConnection = co.touchlab.sqliter.DatabaseConnection
-internal typealias NativeDatabaseConfiguration = co.touchlab.sqliter.DatabaseConfiguration
-internal typealias NativeJournalMode = co.touchlab.sqliter.JournalMode
-
 public fun String.toDatabasePath(): DatabasePath = NativeDatabasePath(this)
 
 internal value class NativeDatabasePath internal constructor(val pathString: String) : DatabasePath
 
-public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection {
-    val (name, path, version, isReadOnly, inMemory, journalMode, synchronousMode, busyTimeout, lookasideSlotSize, lookasideSlotCount, create, upgrade) = config
-    val configNative = NativeDatabaseConfiguration(
-        name = name,
-        version = version,
-        create = {
-            create(DatabaseConnectionImpl(it))
-        },
-        upgrade = { connection, oldVersion, newVersion ->
-            upgrade(DatabaseConnectionImpl(connection), oldVersion, newVersion)
-        },
-        inMemory = inMemory,
-        journalMode = when (journalMode) {
-            JournalMode.DELETE -> NativeJournalMode.DELETE
-            JournalMode.WAL -> NativeJournalMode.WAL
-        },
-        extendedConfig = Extended(
-            busyTimeout = busyTimeout,
-            basePath = (path as NativeDatabasePath).pathString,
-            synchronousFlag = when (synchronousMode) {
-                SynchronousMode.OFF -> SynchronousFlag.OFF
-                SynchronousMode.NORMAL -> SynchronousFlag.NORMAL
-                SynchronousMode.FULL -> SynchronousFlag.FULL
-                SynchronousMode.EXTRA -> SynchronousFlag.EXTRA
-            },
-            lookasideSlotSize = lookasideSlotSize,
-            lookasideSlotCount = lookasideSlotCount,
-        )
-    )
-    val databaseManager = createDatabaseManager(configNative)
-    return DatabaseConnectionImpl(
-        if (isReadOnly)
-            databaseManager.createSingleThreadedConnection()
+private val connectionCreationLock = Lock()
+public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection = connectionCreationLock.withLock {
+    val realDatabasePath = config.diskOrMemoryPath()
+    println("Database full path: $realDatabasePath")
+    val database = openNativeDatabase(config, realDatabasePath)
+    val realConnection = RealDatabaseConnection(database)
+    realConnection.apply {
+        updateSynchronousMode(config.synchronousMode)
+        updateJournalMode(config.journalMode)
+        try {
+            migrateIfNeeded(config.create, config.upgrade, config.version)
+        } catch (e: Exception) {
+            // If this failed, we have to close the connection or we will end up leaking it.
+            println("attempted to run migration and failed. closing connection.")
+            close()
+            throw e
+        }
+    }
+    if (config.isReadOnly) realConnection else ConcurrentDatabaseConnection(realConnection)
+}
+
+private fun DatabaseConfiguration.diskOrMemoryPath(): String =
+    if (inMemory) {
+        if (name.isBlank())
+            ":memory:"
         else
-            databaseManager.createMultiThreadedConnection()
-    )
+            "file:$name?mode=memory&cache=shared"
+    } else {
+        require(name.isNotBlank()) { "Database name cannot be blank" }
+        getDatabaseFullPath((path as NativeDatabasePath).pathString, name)
+    }
+
+private fun getDatabaseFullPath(dirPath: String, name: String): String {
+    val param = when {
+        dirPath.isEmpty() -> name
+        name.isEmpty() -> dirPath
+        else -> join(dirPath, name)
+    }
+    return fixSlashes(param)
+}
+
+private fun join(prefix: String, suffix: String): String {
+    val prefixLength = prefix.length
+    var haveSlash = prefixLength > 0 && prefix[prefixLength - 1] == separatorChar
+    if (!haveSlash) {
+        haveSlash = suffix.isNotEmpty() && suffix[0] == separatorChar
+    }
+    return if (haveSlash) prefix + suffix else prefix + separatorChar + suffix
+}
+
+@OptIn(ExperimentalStdlibApi::class)
+private fun fixSlashes(origPath: String): String {
+    // Remove duplicate adjacent slashes.
+    var lastWasSlash = false
+    val newPath = origPath.toCharArray()
+    val length = newPath.size
+    var newLength = 0
+    val initialIndex = if (origPath.startsWith("file://", true)) 7 else 0
+    for (i in initialIndex ..< length) {
+        val ch = newPath[i]
+        if (ch == separatorChar) {
+            if (!lastWasSlash) {
+                newPath[newLength++] = separatorChar
+                lastWasSlash = true
+            }
+        } else {
+            newPath[newLength++] = ch
+            lastWasSlash = false
+        }
+    }
+    // Remove any trailing slash (unless this is the root of the file system).
+    if (lastWasSlash && newLength > 1) {
+        newLength--
+    }
+
+    // Reuse the original string if possible.
+    return if (newLength != length) buildString(newLength) {
+        append(newPath)
+        setLength(newLength)
+    } else origPath
 }

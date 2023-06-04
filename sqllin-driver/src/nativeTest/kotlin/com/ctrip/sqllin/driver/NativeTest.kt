@@ -16,7 +16,7 @@
 
 package com.ctrip.sqllin.driver
 
-import platform.posix.remove
+import com.ctrip.sqllin.driver.platform.separatorChar
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
@@ -51,11 +51,12 @@ class NativeTest {
     @AfterTest
     fun setDown() {
         listOf(
-            "$path$pathSeparator${SQL.DATABASE_NAME}",
-            "$path$pathSeparator${SQL.DATABASE_NAME}-shm",
-            "$path$pathSeparator${SQL.DATABASE_NAME}-wal",
+            "$path$separatorChar${SQL.DATABASE_NAME}",
+            "$path$separatorChar${SQL.DATABASE_NAME}-shm",
+            "$path$separatorChar${SQL.DATABASE_NAME}-wal",
         ).forEach {
-            remove(it)
+            val result = deleteFile(it)
+            println("Delete file: $it, result: $result")
         }
     }
 }

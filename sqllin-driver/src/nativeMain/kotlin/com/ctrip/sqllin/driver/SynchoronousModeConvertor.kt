@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Ctrip.com.
+ * Copyright (C) 2023 Ctrip.com.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,15 @@
 
 package com.ctrip.sqllin.driver
 
-import kotlinx.cinterop.toKString
-import platform.posix.getcwd
-import platform.posix.remove
-
 /**
- * Linux platform-related functions
+ * Converting the SynchoronousMode Enum to Int value
  * @author yaqiao
  */
 
-actual fun getPlatformStringPath(): String =
-    getcwd(null, 0)?.toKString() ?: throw IllegalStateException("The temp path created error")
-
-actual fun deleteFile(file: String): Boolean = remove(file) == 0
+internal val SynchronousMode.value: Int
+    get() = when (this) {
+        SynchronousMode.OFF -> 0
+        SynchronousMode.NORMAL -> 1
+        SynchronousMode.FULL -> 2
+        SynchronousMode.EXTRA -> 3
+    }
