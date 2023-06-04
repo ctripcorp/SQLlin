@@ -98,7 +98,7 @@ public class RealDatabaseConnection internal constructor(
         closedFlag.value = 1
         database.close()
     } finally {
-        // transactionLock.close()
+        transactionLock.close()
     }
 
     override val closed: Boolean

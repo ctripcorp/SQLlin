@@ -19,8 +19,13 @@ package com.ctrip.sqllin.driver
 internal infix fun DatabaseConnection.updateSynchronousMode(mode: SynchronousMode): Unit =
     execSQL("PRAGMA synchronous=${mode.value}")
 
-internal infix fun DatabaseConnection.updateJournalMode(mode: JournalMode): Unit =
-    execSQL("PRAGMA journal_mode=${mode.name}")
+internal infix fun DatabaseConnection.updateJournalMode(mode: JournalMode) {
+    val journalModeCursor = query("PRAGMA journal_mode") as CursorImpl
+    journalModeCursor.next()
+    val currentJournalMode = journalModeCursor.getString(0)
+    if (currentJournalMode.equals(mode.name, ignoreCase = true))
+        execSQL("PRAGMA journal_mode=${mode.name}")
+}
 
 internal fun DatabaseConnection.migrateIfNeeded(
     create: (DatabaseConnection) -> Unit,
