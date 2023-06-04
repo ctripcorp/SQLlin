@@ -17,7 +17,6 @@
 package com.ctrip.sqllin.driver
 
 import com.ctrip.sqllin.driver.platform.separatorChar
-import platform.posix.remove
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
