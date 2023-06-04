@@ -50,9 +50,9 @@ internal fun <T> encodeEntities2UpdateValues(serializer: SerializationStrategy<T
         }.valuesSQL
     }.toList()
 
+@OptIn(ExperimentalStdlibApi::class, ExperimentalSerializationApi::class)
 internal infix fun StringBuilder.appendDBColumnName(descriptor: SerialDescriptor) {
-    // for (i in 0..<descriptor.elementsCount) {
-    for (i in 0 until descriptor.elementsCount) {
+    for (i in 0 ..< descriptor.elementsCount) {
         if (i != 0)
             append(',')
         append(descriptor.getElementName(i))

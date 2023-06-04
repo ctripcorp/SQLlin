@@ -16,11 +16,23 @@
 
 package com.ctrip.sqllin.driver
 
-internal infix fun DatabaseConnection.updateSynchronousMode(mode: SynchronousMode): Unit =
-    execSQL("PRAGMA synchronous=${mode.value}")
+internal infix fun DatabaseConnection.updateSynchronousMode(mode: SynchronousMode) {
+    val currentJournalMode = withQuery("PRAGMA synchronous;") {
+        (it as CursorImpl).next()
+        it.getInt(0)
+    }
+    if (currentJournalMode != mode.value)
+        execSQL("PRAGMA synchronous=${mode.value};")
+}
 
-internal infix fun DatabaseConnection.updateJournalMode(mode: JournalMode): Unit =
-    execSQL("PRAGMA journal_mode=${mode.name}")
+internal infix fun DatabaseConnection.updateJournalMode(mode: JournalMode) {
+    val currentJournalMode = withQuery("PRAGMA journal_mode;") {
+        (it as CursorImpl).next()
+        it.getString(0)
+    }
+    if (!currentJournalMode.equals(mode.name, ignoreCase = true))
+        execSQL("PRAGMA journal_mode=${mode.name};")
+}
 
 internal fun DatabaseConnection.migrateIfNeeded(
     create: (DatabaseConnection) -> Unit,
@@ -29,18 +41,19 @@ internal fun DatabaseConnection.migrateIfNeeded(
 ) {
     beginTransaction()
     try {
-        val versionQueryCursor = query("PRAGMA user_version;", null) as CursorImpl
-        versionQueryCursor.next()
-        val initialVersion = versionQueryCursor.getInt(0)
+        val initialVersion = withQuery("PRAGMA user_version;") {
+            (it as CursorImpl).next()
+            it.getInt(0)
+        }
         if (initialVersion == 0) {
             create(this)
-            execSQL("PRAGMA user_version = $version")
+            execSQL("PRAGMA user_version = $version;")
         } else if (initialVersion != version) {
             if (initialVersion > version) {
                 throw IllegalStateException("Database version $initialVersion newer than config version $version")
             }
             upgrade(this, initialVersion, version)
-            execSQL("PRAGMA user_version = $version")
+            execSQL("PRAGMA user_version = $version;")
         }
         setTransactionSuccessful()
     } finally {

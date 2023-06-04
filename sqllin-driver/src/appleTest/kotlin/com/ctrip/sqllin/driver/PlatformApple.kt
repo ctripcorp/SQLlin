@@ -20,6 +20,7 @@ import kotlinx.cinterop.UnsafeNumber
 import platform.Foundation.NSDocumentDirectory
 import platform.Foundation.NSSearchPathForDirectoriesInDomains
 import platform.Foundation.NSUserDomainMask
+import platform.posix.remove
 
 /**
  * Apple platform-related functions
@@ -29,3 +30,5 @@ import platform.Foundation.NSUserDomainMask
 @OptIn(UnsafeNumber::class)
 actual fun getPlatformStringPath(): String =
     (NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, true).firstOrNull() as? String ?: "")
+
+actual fun deleteFile(file: String): Boolean = remove(file) == 0
