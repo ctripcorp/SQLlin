@@ -23,7 +23,7 @@ import android.database.sqlite.SQLiteDatabase
  * @author yaqiao
  */
 
-public class DatabaseConnectionImpl internal constructor(private val database: SQLiteDatabase) : DatabaseConnection {
+internal class DatabaseConnectionImpl(private val database: SQLiteDatabase) : DatabaseConnection {
 
     override fun execSQL(sql: String, bindParams: Array<Any?>?): Unit =
         if (bindParams == null)

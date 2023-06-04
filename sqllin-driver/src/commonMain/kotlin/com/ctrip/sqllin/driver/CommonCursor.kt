@@ -34,5 +34,7 @@ public interface CommonCursor {
 
     public fun forEachRows(block: (Int) -> Unit)
 
+    public fun next(): Boolean
+
     public fun close()
 }

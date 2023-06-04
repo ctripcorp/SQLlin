@@ -19,7 +19,7 @@ package com.ctrip.sqllin.driver
 import com.ctrip.sqllin.driver.platform.Lock
 import com.ctrip.sqllin.driver.platform.withLock
 
-public class ConcurrentDatabaseConnection internal constructor(
+internal class ConcurrentDatabaseConnection(
     private val delegateConnection: NativeDatabaseConnection
 ) : NativeDatabaseConnection() {
 

@@ -16,7 +16,7 @@
 
 package com.ctrip.sqllin.driver
 
-public class CursorImpl internal constructor(
+internal class CursorImpl(
     private val statement: SQLiteStatement
 ) : CommonCursor {
 
@@ -34,7 +34,7 @@ public class CursorImpl internal constructor(
 
     override fun getColumnIndex(columnName: String): Int = columnNames[columnName] ?: throw IllegalArgumentException("Col for $columnName not found")
 
-    internal fun next() = statement.step()
+    override fun next(): Boolean = statement.step()
 
     override fun forEachRows(block: (Int) -> Unit) {
         var index = 0

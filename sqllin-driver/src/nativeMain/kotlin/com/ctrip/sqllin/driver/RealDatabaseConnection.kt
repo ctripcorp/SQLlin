@@ -22,7 +22,7 @@ import com.ctrip.sqllin.driver.platform.withLock
 import kotlin.native.concurrent.AtomicInt
 import kotlin.native.concurrent.AtomicReference
 
-public class RealDatabaseConnection internal constructor(
+internal class RealDatabaseConnection(
     private val database: NativeDatabase
 ) : NativeDatabaseConnection() {
 
