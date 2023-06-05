@@ -61,3 +61,5 @@ public inline fun <T> DatabaseConnection.withQuery(
         commonCursor.close()
     }
 }
+
+public expect fun deleteDatabase(path: DatabasePath, name: String): Boolean

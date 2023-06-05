@@ -7,6 +7,7 @@
 * Enable the `new driver` to replace [SQLiter](https://github.com/touchlab/SQLiter)
 * Make some unnecessary APIs be internal(`CursorImpl`, `DatabaseConnectionImpl` and more...)
 * Add the new public function `next` in `Cursor`
+* Add the new public function: `deleteDatabase`
 
 ## v1.0.1/05-13-2023
 

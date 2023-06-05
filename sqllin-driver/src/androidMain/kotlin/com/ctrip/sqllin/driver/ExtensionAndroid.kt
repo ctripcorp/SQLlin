@@ -22,6 +22,7 @@ import android.database.sqlite.SQLiteDatabase.*
 import android.database.sqlite.SQLiteOpenHelper
 import android.os.Build
 import androidx.annotation.RequiresApi
+import java.lang.IllegalArgumentException
 
 /**
  * SQLite extension Android
@@ -31,7 +32,7 @@ import androidx.annotation.RequiresApi
 public fun Context.toDatabasePath(): DatabasePath = AndroidDatabasePath(this)
 
 @JvmInline
-internal value class AndroidDatabasePath internal constructor(val context: Context) : DatabasePath
+internal value class AndroidDatabasePath(val context: Context) : DatabasePath
 
 public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && config.inMemory)
@@ -79,3 +80,7 @@ private fun DatabaseConfiguration.toAndroidOpenParams(): OpenParams = OpenParams
     .setIdleConnectionTimeout(busyTimeout.toLong())
     .setLookasideConfig(lookasideSlotSize, lookasideSlotCount)
     .build()
+
+public actual fun deleteDatabase(path: DatabasePath, name: String): Boolean =
+    (path as? AndroidDatabasePath)?.context?.deleteDatabase(name)
+        ?: throw IllegalArgumentException("Please use the `Context.toDatabasePath()` to get the DatabasePath")
