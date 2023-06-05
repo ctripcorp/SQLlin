@@ -16,6 +16,11 @@
 
 package com.ctrip.sqllin.driver
 
+/**
+ * Some extensions for DatabaseConnection
+ * @author yaqiao
+ */
+
 internal infix fun DatabaseConnection.updateSynchronousMode(mode: SynchronousMode) {
     val currentJournalMode = withQuery("PRAGMA synchronous;") {
         (it as CursorImpl).next()

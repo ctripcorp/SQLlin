@@ -5,7 +5,7 @@ import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.toKString
 
 /**
- * The tools about bytes, implementation of Linux
+ * The tools with Linux implementation
  * @author yqiao
  */
 

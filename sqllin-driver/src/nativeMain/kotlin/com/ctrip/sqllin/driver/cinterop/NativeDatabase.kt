@@ -43,6 +43,11 @@ import kotlinx.cinterop.toKString
 import kotlinx.cinterop.value
 import kotlinx.cinterop.wcstr
 
+/**
+ * The native database wrapper for `sqlite3`, interop with SQLite C APIs directly
+ * @author yaqiao
+ */
+
 internal class NativeDatabase(val dbPointer: CPointer<sqlite3>) {
 
     companion object {

@@ -16,6 +16,10 @@
 
 package com.ctrip.sqllin.driver
 
+/**
+ * SQLite native statement abstruct APIs
+ */
+
 internal interface SQLiteStatement {
 
     fun columnGetLong(columnIndex: Int): Long

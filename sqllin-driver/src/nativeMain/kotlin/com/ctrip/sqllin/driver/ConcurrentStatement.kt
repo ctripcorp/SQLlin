@@ -14,11 +14,16 @@
  * limitations under the License.
  */
 
-
 package com.ctrip.sqllin.driver
 
 import com.ctrip.sqllin.driver.platform.Lock
 import com.ctrip.sqllin.driver.platform.withLock
+
+/**
+ * The concurrent statement, use platform-related lock to ensure thread-safe,
+ * the lock come from the ConcurrentDatabaseConnection
+ * @author yaqiao
+ */
 
 internal class ConcurrentStatement(
     private val delegateStatement: SQLiteStatement,

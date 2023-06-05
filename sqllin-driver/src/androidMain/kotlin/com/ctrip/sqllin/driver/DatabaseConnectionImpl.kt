@@ -25,23 +25,23 @@ import android.database.sqlite.SQLiteDatabase
 
 internal class DatabaseConnectionImpl(private val database: SQLiteDatabase) : DatabaseConnection {
 
-    override fun execSQL(sql: String, bindParams: Array<Any?>?): Unit =
+    override fun execSQL(sql: String, bindParams: Array<Any?>?) =
         if (bindParams == null)
             database.execSQL(sql)
         else
             database.execSQL(sql, bindParams)
 
-    override fun executeInsert(sql: String, bindParams: Array<Any?>?): Unit = execSQL(sql, bindParams)
+    override fun executeInsert(sql: String, bindParams: Array<Any?>?) = execSQL(sql, bindParams)
 
-    override fun executeUpdateDelete(sql: String, bindParams: Array<Any?>?): Unit = execSQL(sql, bindParams)
+    override fun executeUpdateDelete(sql: String, bindParams: Array<Any?>?) = execSQL(sql, bindParams)
 
     override fun query(sql: String, bindParams: Array<String?>?): CommonCursor = CursorImpl(database.rawQuery(sql, bindParams))
 
-    override fun beginTransaction(): Unit = database.beginTransaction()
-    override fun endTransaction(): Unit = database.endTransaction()
-    override fun setTransactionSuccessful(): Unit = database.setTransactionSuccessful()
+    override fun beginTransaction() = database.beginTransaction()
+    override fun endTransaction() = database.endTransaction()
+    override fun setTransactionSuccessful() = database.setTransactionSuccessful()
 
-    override fun close(): Unit = database.close()
+    override fun close() = database.close()
     override val closed: Boolean
         get() = !database.isOpen
 }

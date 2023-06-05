@@ -16,8 +16,8 @@
 
 package com.ctrip.sqllin.dsl
 
+import com.ctrip.sqllin.driver.deleteDatabase
 import com.ctrip.sqllin.driver.toDatabasePath
-import platform.posix.remove
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
@@ -28,8 +28,8 @@ import kotlin.test.Test
 
 class NativeTest {
 
-    private val path = getPlatformStringPath()
-    private val commonTest = CommonBasicTest(path.toDatabasePath())
+    private val path = getPlatformStringPath().toDatabasePath()
+    private val commonTest = CommonBasicTest(path)
 
     @Test
     fun testInsert() = commonTest.testInsert()
@@ -63,12 +63,6 @@ class NativeTest {
 
     @AfterTest
     fun setDown() {
-        listOf(
-            "$path$pathSeparator${CommonBasicTest.DATABASE_NAME}",
-            "$path$pathSeparator${CommonBasicTest.DATABASE_NAME}-shm",
-            "$path$pathSeparator${CommonBasicTest.DATABASE_NAME}-wal",
-        ).forEach {
-            remove(it)
-        }
+        deleteDatabase(path, CommonBasicTest.DATABASE_NAME)
     }
 }

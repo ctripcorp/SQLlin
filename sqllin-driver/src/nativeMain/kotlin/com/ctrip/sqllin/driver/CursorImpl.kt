@@ -16,6 +16,11 @@
 
 package com.ctrip.sqllin.driver
 
+/**
+ * SQLite Cursor Native actual
+ * @author yaqiao
+ */
+
 internal class CursorImpl(
     private val statement: SQLiteStatement
 ) : CommonCursor {
@@ -42,7 +47,7 @@ internal class CursorImpl(
             block(index++)
     }
 
-    override fun close(): Unit = statement.finalizeStatement()
+    override fun close() = statement.finalizeStatement()
 
     private val columnNames: Map<String, Int> by lazy {
         val count = statement.columnCount()

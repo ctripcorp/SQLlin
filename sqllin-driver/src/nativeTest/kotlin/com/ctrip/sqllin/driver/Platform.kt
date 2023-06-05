@@ -25,5 +25,3 @@ package com.ctrip.sqllin.driver
  * Get the DatabasePath
  */
 expect fun getPlatformStringPath(): String
-
-expect fun deleteFile(file: String): Boolean
