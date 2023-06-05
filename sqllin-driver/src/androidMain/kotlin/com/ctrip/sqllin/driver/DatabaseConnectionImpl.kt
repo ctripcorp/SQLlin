@@ -42,6 +42,14 @@ internal class DatabaseConnectionImpl(private val database: SQLiteDatabase) : Da
     override fun setTransactionSuccessful() = database.setTransactionSuccessful()
 
     override fun close() = database.close()
+
+    @Deprecated(
+        message = "The property closed has been deprecated, please use the isClosed to replace it",
+        replaceWith = ReplaceWith("isClosed")
+    )
     override val closed: Boolean
+        get() = !database.isOpen
+
+    override val isClosed: Boolean
         get() = !database.isOpen
 }

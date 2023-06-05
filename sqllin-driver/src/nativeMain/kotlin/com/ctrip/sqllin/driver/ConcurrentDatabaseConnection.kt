@@ -66,8 +66,14 @@ internal class ConcurrentDatabaseConnection(
         accessLock.close()
     }
 
+    @Deprecated(
+        message = "The property closed has been deprecated, please use the isClosed to replace it",
+        replaceWith = ReplaceWith("isClosed")
+    )
     override val closed: Boolean
-        get() = delegateConnection.closed
+        get() = delegateConnection.isClosed
+    override val isClosed: Boolean
+        get() = delegateConnection.isClosed
 
     override fun createStatement(sql: String): SQLiteStatement =
         ConcurrentStatement(delegateConnection.createStatement(sql), accessLock)

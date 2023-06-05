@@ -34,5 +34,12 @@ public interface DatabaseConnection {
     public fun endTransaction()
 
     public fun close()
+
+    @Deprecated(
+        message = "The property closed has been deprecated, please use the isClosed to replace it",
+        replaceWith = ReplaceWith("isClosed")
+    )
     public val closed: Boolean
+
+    public val isClosed: Boolean
 }
