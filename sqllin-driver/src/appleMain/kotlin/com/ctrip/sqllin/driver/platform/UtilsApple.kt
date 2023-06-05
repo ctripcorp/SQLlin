@@ -22,7 +22,7 @@ import platform.Foundation.NSString
 import platform.Foundation.create
 
 /**
- * The tools about bytes, implementation of Apple platforms
+ * The tools with Apple platforms implementation
  * @author yqiao
  */
 

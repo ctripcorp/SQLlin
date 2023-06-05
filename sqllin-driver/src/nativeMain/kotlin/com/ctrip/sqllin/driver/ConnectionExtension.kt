@@ -16,6 +16,11 @@
 
 package com.ctrip.sqllin.driver
 
+/**
+ * Some extensions for DatabaseConnection
+ * @author yaqiao
+ */
+
 internal infix fun DatabaseConnection.updateSynchronousMode(mode: SynchronousMode) {
     val currentJournalMode = withQuery("PRAGMA synchronous;") {
         (it as CursorImpl).next()
@@ -38,25 +43,19 @@ internal fun DatabaseConnection.migrateIfNeeded(
     create: (DatabaseConnection) -> Unit,
     upgrade: (DatabaseConnection, Int, Int) -> Unit,
     version: Int,
-) {
-    beginTransaction()
-    try {
-        val initialVersion = withQuery("PRAGMA user_version;") {
-            (it as CursorImpl).next()
-            it.getInt(0)
+) = withTransaction {
+    val initialVersion = withQuery("PRAGMA user_version;") {
+        (it as CursorImpl).next()
+        it.getInt(0)
+    }
+    if (initialVersion == 0) {
+        create(this)
+        execSQL("PRAGMA user_version = $version;")
+    } else if (initialVersion != version) {
+        if (initialVersion > version) {
+            throw IllegalStateException("Database version $initialVersion newer than config version $version")
         }
-        if (initialVersion == 0) {
-            create(this)
-            execSQL("PRAGMA user_version = $version;")
-        } else if (initialVersion != version) {
-            if (initialVersion > version) {
-                throw IllegalStateException("Database version $initialVersion newer than config version $version")
-            }
-            upgrade(this, initialVersion, version)
-            execSQL("PRAGMA user_version = $version;")
-        }
-        setTransactionSuccessful()
-    } finally {
-        endTransaction()
+        upgrade(this, initialVersion, version)
+        execSQL("PRAGMA user_version = $version;")
     }
 }

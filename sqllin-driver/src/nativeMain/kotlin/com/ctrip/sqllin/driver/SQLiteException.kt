@@ -20,7 +20,7 @@ import com.ctrip.sqllin.driver.SQLiteResultCode.Companion.INVALID_CODE
 import com.ctrip.sqllin.driver.cinterop.SQLiteErrorType
 
 /**
- * SQLiteException
+ * The exceptions about SQLite, they include the native SQLite result codes and error message
  * @author yaqiao
  */
 

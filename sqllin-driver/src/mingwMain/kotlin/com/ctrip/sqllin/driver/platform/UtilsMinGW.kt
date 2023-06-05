@@ -5,7 +5,7 @@ import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.toKStringFromUtf8
 
 /**
- * The tools about bytes, implementation of MinGW
+ * The tools with Windows implementation
  * @author yqiao
  */
 

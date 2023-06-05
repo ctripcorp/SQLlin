@@ -19,21 +19,26 @@ package com.ctrip.sqllin.driver
 import com.ctrip.sqllin.driver.platform.Lock
 import com.ctrip.sqllin.driver.platform.withLock
 
+/**
+ * The concurrent database connection, use platform-related lock to ensure thread-safe
+ * @author yaqiao
+ */
+
 internal class ConcurrentDatabaseConnection(
     private val delegateConnection: NativeDatabaseConnection
 ) : NativeDatabaseConnection() {
 
     private val accessLock = Lock()
 
-    override fun execSQL(sql: String, bindParams: Array<Any?>?): Unit = accessLock.withLock {
+    override fun execSQL(sql: String, bindParams: Array<Any?>?) = accessLock.withLock {
         delegateConnection.execSQL(sql, bindParams)
     }
 
-    override fun executeInsert(sql: String, bindParams: Array<Any?>?): Unit = accessLock.withLock {
+    override fun executeInsert(sql: String, bindParams: Array<Any?>?) = accessLock.withLock {
         delegateConnection.executeInsert(sql, bindParams)
     }
 
-    override fun executeUpdateDelete(sql: String, bindParams: Array<Any?>?): Unit = accessLock.withLock {
+    override fun executeUpdateDelete(sql: String, bindParams: Array<Any?>?) = accessLock.withLock {
         delegateConnection.executeUpdateDelete(sql, bindParams)
     }
 
@@ -41,19 +46,19 @@ internal class ConcurrentDatabaseConnection(
         delegateConnection.query(sql, bindParams)
     }
 
-    override fun beginTransaction(): Unit = accessLock.withLock {
+    override fun beginTransaction() = accessLock.withLock {
         delegateConnection.beginTransaction()
     }
 
-    override fun setTransactionSuccessful(): Unit = accessLock.withLock {
+    override fun setTransactionSuccessful() = accessLock.withLock {
         delegateConnection.setTransactionSuccessful()
     }
 
-    override fun endTransaction(): Unit = accessLock.withLock {
+    override fun endTransaction() = accessLock.withLock {
         delegateConnection.endTransaction()
     }
 
-    override fun close(): Unit = try {
+    override fun close() = try {
         accessLock.withLock {
             delegateConnection.close()
         }
@@ -61,8 +66,14 @@ internal class ConcurrentDatabaseConnection(
         accessLock.close()
     }
 
+    @Deprecated(
+        message = "The property closed has been deprecated, please use the isClosed to replace it",
+        replaceWith = ReplaceWith("isClosed")
+    )
     override val closed: Boolean
-        get() = delegateConnection.closed
+        get() = delegateConnection.isClosed
+    override val isClosed: Boolean
+        get() = delegateConnection.isClosed
 
     override fun createStatement(sql: String): SQLiteStatement =
         ConcurrentStatement(delegateConnection.createStatement(sql), accessLock)

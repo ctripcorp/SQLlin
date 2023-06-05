@@ -26,7 +26,6 @@ import com.ctrip.sqllin.sqlite3.SQLITE_OPEN_CREATE
 import com.ctrip.sqllin.sqlite3.SQLITE_OPEN_READWRITE
 import com.ctrip.sqllin.sqlite3.SQLITE_OPEN_URI
 import com.ctrip.sqllin.sqlite3.sqlite3_busy_timeout
-import com.ctrip.sqllin.sqlite3.sqlite3_close
 import com.ctrip.sqllin.sqlite3.sqlite3_close_v2
 import com.ctrip.sqllin.sqlite3.sqlite3_db_config
 import com.ctrip.sqllin.sqlite3.sqlite3_db_readonly
@@ -43,7 +42,12 @@ import kotlinx.cinterop.toKString
 import kotlinx.cinterop.value
 import kotlinx.cinterop.wcstr
 
-internal class NativeDatabase(val dbPointer: CPointer<sqlite3>) {
+/**
+ * The native database wrapper for `sqlite3`, interop with SQLite C APIs directly
+ * @author yaqiao
+ */
+
+internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite3>) {
 
     companion object {
         fun openNativeDatabase(configuration: DatabaseConfiguration, realPath: String): NativeDatabase {
@@ -59,24 +63,24 @@ internal class NativeDatabase(val dbPointer: CPointer<sqlite3>) {
             }
 
             if (configuration.lookasideSlotSize >= 0 && configuration.lookasideSlotCount >= 0) {
-                val err = sqlite3_db_config(db, SQLITE_DBCONFIG_LOOKASIDE, null, configuration.lookasideSlotSize, configuration.lookasideSlotCount);
+                val err = sqlite3_db_config(db, SQLITE_DBCONFIG_LOOKASIDE, null, configuration.lookasideSlotSize, configuration.lookasideSlotCount)
                 if (err != SQLITE_OK) {
                     val error = sqlite3_errmsg(db)?.toKString()
-                    sqlite3_close(db)
+                    sqlite3_close_v2(db)
                     throw sqliteException("Cannot set lookaside : sqlite3_db_config(..., ${configuration.lookasideSlotSize}, %${configuration.lookasideSlotCount}) failed, ${error ?: ""}", err)
                 }
             }
 
             // Check that the database is really read/write when that is what we asked for.
             if ((sqliteFlags and SQLITE_OPEN_READWRITE > 0) && sqlite3_db_readonly(db, null) != 0) {
-                sqlite3_close(db)
+                sqlite3_close_v2(db)
                 throw sqliteException("Could not open the database in read/write mode")
             }
 
             // Set the default busy handler to retry automatically before returning SQLITE_BUSY.
             val err = sqlite3_busy_timeout(db, configuration.busyTimeout)
             if (err != SQLITE_OK) {
-                sqlite3_close(db)
+                sqlite3_close_v2(db)
                 throw sqliteException("Could not set busy timeout", err)
             }
 

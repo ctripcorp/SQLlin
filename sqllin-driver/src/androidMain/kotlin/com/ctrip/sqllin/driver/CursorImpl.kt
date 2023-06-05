@@ -55,5 +55,5 @@ internal class CursorImpl(private val cursor: Cursor) : CommonCursor {
 
     override fun next(): Boolean = cursor.moveToNext()
 
-    override fun close(): Unit = cursor.close()
+    override fun close() = cursor.close()
 }

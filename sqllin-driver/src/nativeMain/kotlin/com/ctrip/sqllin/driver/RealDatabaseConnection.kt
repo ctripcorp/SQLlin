@@ -22,6 +22,11 @@ import com.ctrip.sqllin.driver.platform.withLock
 import kotlin.native.concurrent.AtomicInt
 import kotlin.native.concurrent.AtomicReference
 
+/**
+ * Database manager Native actual
+ * @author yaqiao
+ */
+
 internal class RealDatabaseConnection(
     private val database: NativeDatabase
 ) : NativeDatabaseConnection() {
@@ -32,7 +37,7 @@ internal class RealDatabaseConnection(
 
     private data class Transaction(val isSuccessful: Boolean)
 
-    override fun execSQL(sql: String, bindParams: Array<Any?>?): Unit =
+    override fun execSQL(sql: String, bindParams: Array<Any?>?) =
         if (bindParams == null) {
             database.rawExecSql(sql)
         } else {
@@ -72,17 +77,17 @@ internal class RealDatabaseConnection(
         return statement.query()
     }
 
-    override fun beginTransaction(): Unit = transactionLock.withLock {
+    override fun beginTransaction() = transactionLock.withLock {
         database.rawExecSql("BEGIN;")
         transaction.value = Transaction(isSuccessful = false)
     }
 
-    override fun setTransactionSuccessful(): Unit = transactionLock.withLock {
+    override fun setTransactionSuccessful() = transactionLock.withLock {
         val trans = checkFailTransaction
         transaction.value = trans.copy(isSuccessful = true)
     }
 
-    override fun endTransaction(): Unit = transactionLock.withLock {
+    override fun endTransaction() = transactionLock.withLock {
         try {
             val sql = if (checkFailTransaction.isSuccessful) "COMMIT;" else "ROLLBACK;"
             database.rawExecSql(sql)
@@ -94,14 +99,21 @@ internal class RealDatabaseConnection(
     private inline val checkFailTransaction: Transaction
         get() = transaction.value ?: throw IllegalStateException("No transaction")
 
-    override fun close(): Unit = try {
+    override fun close() = try {
         closedFlag.value = 1
         database.close()
     } finally {
         transactionLock.close()
     }
 
+    @Deprecated(
+        message = "The property closed has been deprecated, please use the isClosed to replace it",
+        replaceWith = ReplaceWith("isClosed")
+    )
     override val closed: Boolean
+        get() = closedFlag.value != 0
+
+    override val isClosed: Boolean
         get() = closedFlag.value != 0
 
     override fun createStatement(sql: String): SQLiteStatement = database.prepareStatement(sql)

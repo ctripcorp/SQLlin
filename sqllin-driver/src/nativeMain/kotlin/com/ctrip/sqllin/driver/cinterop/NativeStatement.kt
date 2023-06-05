@@ -58,6 +58,11 @@ import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.toKString
 import platform.posix.usleep
 
+/**
+ * The native statement wrapper for `sqlite3_stmt`, interop with SQLite C APIs directly
+ * @author yaqiao
+ */
+
 internal class NativeStatement(
     private val database: NativeDatabase,
     private val cStatementPointer: CPointer<sqlite3_stmt>,

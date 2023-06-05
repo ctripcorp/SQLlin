@@ -16,6 +16,11 @@
 
 package com.ctrip.sqllin.driver
 
+/**
+ * The super class for DatabaseConnection on native platforms
+ * @author yaqiao
+ */
+
 internal abstract class NativeDatabaseConnection : DatabaseConnection {
 
     internal abstract fun createStatement(sql: String): SQLiteStatement

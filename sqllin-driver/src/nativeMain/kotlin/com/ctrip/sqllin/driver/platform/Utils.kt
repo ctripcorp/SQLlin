@@ -20,7 +20,7 @@ import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.CPointer
 
 /**
- * The tools about bytes
+ * The tools with platform-specific implementation
  * @author yqiao
  */
 

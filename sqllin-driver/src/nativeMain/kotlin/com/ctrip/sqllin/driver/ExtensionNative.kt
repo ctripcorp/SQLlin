@@ -20,6 +20,7 @@ import com.ctrip.sqllin.driver.cinterop.NativeDatabase.Companion.openNativeDatab
 import com.ctrip.sqllin.driver.platform.Lock
 import com.ctrip.sqllin.driver.platform.separatorChar
 import com.ctrip.sqllin.driver.platform.withLock
+import platform.posix.remove
 
 /**
  * SQLite extension Native
@@ -28,7 +29,7 @@ import com.ctrip.sqllin.driver.platform.withLock
 
 public fun String.toDatabasePath(): DatabasePath = NativeDatabasePath(this)
 
-internal value class NativeDatabasePath internal constructor(val pathString: String) : DatabasePath
+internal value class NativeDatabasePath(val pathString: String) : DatabasePath
 
 private val connectionCreationLock = Lock()
 public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection = connectionCreationLock.withLock {
@@ -73,11 +74,14 @@ private fun getDatabaseFullPath(dirPath: String, name: String): String {
 
 private fun join(prefix: String, suffix: String): String {
     val prefixLength = prefix.length
-    var haveSlash = prefixLength > 0 && prefix[prefixLength - 1] == separatorChar
-    if (!haveSlash) {
-        haveSlash = suffix.isNotEmpty() && suffix[0] == separatorChar
+    val haveSlash = (prefixLength > 0 && prefix[prefixLength - 1] == separatorChar)
+            || (suffix.isNotEmpty() && suffix[0] == separatorChar)
+    return buildString {
+        append(prefix)
+        if (!haveSlash)
+            append(separatorChar)
+        append(suffix)
     }
-    return if (haveSlash) prefix + suffix else prefix + separatorChar + suffix
 }
 
 @OptIn(ExperimentalStdlibApi::class)
@@ -110,4 +114,12 @@ private fun fixSlashes(origPath: String): String {
         append(newPath)
         setLength(newLength)
     } else origPath
+}
+
+public actual fun deleteDatabase(path: DatabasePath, name: String): Boolean {
+    val baseName = getDatabaseFullPath((path as NativeDatabasePath).pathString, name)
+    remove("$baseName-shm")
+    remove("$baseName-wal")
+    remove("$baseName-journal")
+    return remove(baseName) == 0
 }

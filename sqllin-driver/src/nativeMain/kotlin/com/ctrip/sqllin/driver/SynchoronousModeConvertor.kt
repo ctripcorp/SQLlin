@@ -17,7 +17,7 @@
 package com.ctrip.sqllin.driver
 
 /**
- * Converting the SynchoronousMode Enum to Int value
+ * Converting the SynchronousMode Enum to Int value
  * @author yaqiao
  */
 
