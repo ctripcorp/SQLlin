@@ -17,7 +17,7 @@
 package com.ctrip.sqllin.driver
 
 /**
- * The super class for DatabaseConnection on Native platforms
+ * The super class for DatabaseConnection on native platforms
  * @author yaqiao
  */
 

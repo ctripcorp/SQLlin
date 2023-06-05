@@ -2,9 +2,13 @@
 
 ## v1.1.0
 
+### All
+
+* Remove the `iosArm32`, `watchosX86` and `mingwX86` these three targets' support
+
 ### sqllin-driver
 
-* Enable the `new driver` to replace [SQLiter](https://github.com/touchlab/SQLiter)
+* Enable the `New Native Driver` to replace [SQLiter](https://github.com/touchlab/SQLiter)
 * Make some unnecessary APIs be internal(`CursorImpl`, `DatabaseConnectionImpl` and more...)
 * Add the new public function `next` in `Cursor`
 * Add the new public function: `deleteDatabase`
