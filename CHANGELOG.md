@@ -1,19 +1,21 @@
 # SQLlin Change Log
 
-## v1.1.0
+## v1.1.0 / 06-06-2023
 
 ### All
 
 * Remove the `iosArm32`, `watchosX86` and `mingwX86` these three targets' support
+* Add the new native target support: `watchosDeviceArm64`
+* Update `kotlinx.serialization`'s version to `1.5.1`
 
 ### sqllin-driver
 
 * Enable the `New Native Driver` to replace [SQLiter](https://github.com/touchlab/SQLiter)
 * Make some unnecessary APIs be internal (`CursorImpl`, `DatabaseConnectionImpl` and more...)
-* Add the new public function `next` in `Cursor`
+* Add the new public function in `Cursor#next`
 * Add the new public function `deleteDatabase`
-* Add the new public properties `isClosed` in `DatabaseConnection`
-* Deprecated the public properties `closed` in `DatabaseConnection`
+* Add the new public property: `DatabaseConnection#isClosed`
+* Deprecated the public property: `DatabaseConnection#closed`
 
 ## v1.0.1 / 05-13-2023
 

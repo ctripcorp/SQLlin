@@ -34,6 +34,7 @@ kotlin {
         watchosArm64(),
         watchosX64(),
         watchosSimulatorArm64(),
+        watchosDeviceArm64(),
 
         tvosArm64(),
         tvosX64(),
@@ -55,7 +56,7 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 api(project(":sqllin-driver"))
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.5.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.5.1")
             }
         }
         val commonTest by getting {
@@ -88,6 +89,7 @@ kotlin {
         val watchosArm32Main by getting
         val watchosArm64Main by getting
         val watchosSimulatorArm64Main by getting
+        val watchosDeviceArm64Main by getting
 
         val tvosX64Main by getting
         val tvosArm64Main by getting
@@ -111,6 +113,7 @@ kotlin {
             watchosArm32Main.dependsOn(this)
             watchosArm64Main.dependsOn(this)
             watchosSimulatorArm64Main.dependsOn(this)
+            watchosDeviceArm64Main.dependsOn(this)
 
             tvosX64Main.dependsOn(this)
             tvosArm64Main.dependsOn(this)
@@ -132,6 +135,7 @@ kotlin {
         val watchosArm32Test by getting
         val watchosArm64Test by getting
         val watchosSimulatorArm64Test by getting
+        val watchosDeviceArm64Test by getting
 
         val tvosX64Test by getting
         val tvosArm64Test by getting
@@ -159,6 +163,7 @@ kotlin {
             watchosArm32Test.dependsOn(this)
             watchosArm64Test.dependsOn(this)
             watchosSimulatorArm64Test.dependsOn(this)
+            watchosDeviceArm64Test.dependsOn(this)
 
             tvosX64Test.dependsOn(this)
             tvosArm64Test.dependsOn(this)
