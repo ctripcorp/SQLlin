@@ -17,7 +17,7 @@
 * Add the new public property: `DatabaseConnection#isClosed`
 * Deprecated the public property: `DatabaseConnection#closed`
 
-## v1.0.1 / 05-13-2023
+## v1.0.1 / 05-14-2023
 
 ### All
 

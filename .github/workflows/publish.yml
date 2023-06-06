@@ -44,10 +44,10 @@ jobs:
       - name: Run sqllin-dsl macOS X64 Tests
         run: ./test_dsl_macos.sh
 
-      - name: Run Android Instrumentation Tests
+      - name: Run Android 13 Instrumentation Tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 31
+          api-level: 33
           target: default
           arch: x86_64
           profile: pixel_6
