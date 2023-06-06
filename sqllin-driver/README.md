@@ -19,16 +19,17 @@ our project. Finally we still choose based on Android Framework Java API.
 In Native platforms, things look different. We can call SQLite C API directly, this is the most intuitive way.
 The ability of Kotlin/Native interop with C is very perfect, but in Kotlin/Native you must use some APIs to
 complete interop with C that very difficult to understanding, like: `memScoped`, `CPointer`, `CPointerVarOf`, `toKString` etc..
-So, in the begining, I chose the [SQLiter](https://github.com/touchlab/SQLiter), that's a Kotlin/Native multiplatform
+So, in the beginning, I chose the [SQLiter](https://github.com/touchlab/SQLiter), that's a Kotlin/Native multiplatform
 library. If I use it, I can put the Kotlin-C interop translate to Kotlin language-internal calls. It is very
 convenient. [SQLiter](https://github.com/touchlab/SQLiter) also is the driver that
 [SQLDelight](https://github.com/cashapp/sqldelight) to call SQLite C library in native platforms. It is not only
 supports iOS, it also supports all the operating systems of Apple, Linux(x64) and Windows(mingwX86, mingwX64).
 
 But a few months later. I found using [SQLiter](https://github.com/touchlab/SQLiter) also has some disadvantages. For
-example, [SQLiter](https://github.com/touchlab/SQLiter) updates very infrequently. I submited a PR too long time, but
-it still hasn't been merged, and no one replied to me. And, [SQLiter](https://github.com/touchlab/SQLiter) own a lot
-of functions that SQLlin doesn't need. So, I decided to implement interop with SQLite C APIs by myself as I originally conceived.
+example, [SQLiter](https://github.com/touchlab/SQLiter) updates very infrequently. I submitted a PR too long time, but
+it still hasn't been merged, and no one replied to me. And, after Kotlin `1.8.0`, Kotlin/Native added a new target:
+`watchosDeviceArm64`. Due to [SQLiter](https://github.com/touchlab/SQLiter) updates infrequently, SQLlin can't support
+`watchosDeviceArm64` either. So, I decided to implement interop with SQLite C APIs by myself as I originally conceived.
 
 Whatever, [SQLiter](https://github.com/touchlab/SQLiter) still is a good project. I referred to a lot of designs and code
 details from it and use them in _New Native Driver_ in _sqllin-driver_ .

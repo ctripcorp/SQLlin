@@ -32,7 +32,7 @@ kotlin {
             kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
             dependencies {
                 implementation(project(":sqllin-dsl"))
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.5.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.5.1")
             }
         }
         val androidMain by getting

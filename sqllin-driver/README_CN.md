@@ -20,8 +20,8 @@ Kotlin/Native 多平台库。如果我使用它，就可以将 Kotlin-C 互操�
 Windows（mingwX86, mingwX64）。
 
 但是在几个月后，我发现使用 [SQLiter](https://github.com/touchlab/SQLiter) 也有许多缺点。比如说，[SQLiter](https://github.com/touchlab/SQLiter) 的更新频率非常低。我提交了一个 PR
-很长时间没有被合并，也没有人回复我。并且，[SQLiter](https://github.com/touchlab/SQLiter) 拥有许多 SQLlin 不需要的功能。所以我决定自己重新实现与 SQLite C API 的互操作，
-就像最开始构想的那样。
+很长时间没有被合并，也没有人回复我。并且，在 Kotlin `1.8.0` 之后，Kotlin/Native 新增了一个目标平台：`watchosDeviceArm64`。由于 [SQLiter](https://github.com/touchlab/SQLiter)
+更新缓慢，SQLlin 也同样无法支持 `watchosDeviceArm64`。所以我决定自己重新实现与 SQLite C API 的互操作，就像最开始构想的那样。
 
 无论如何，[SQLiter](https://github.com/touchlab/SQLiter) 仍然是一个非常棒的项目。我参考了许多它的设计与实现细节并将它们用在了 _sqllin-driver_ 的*新 Native 驱动*中。
 
