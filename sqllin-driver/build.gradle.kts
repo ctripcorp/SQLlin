@@ -188,6 +188,9 @@ kotlin {
             mingwX64Test.dependsOn(this)
         }
     }
+
+    tasks.findByName("publishLinuxX64PublicationToMavenRepository")?.enabled = HostManager.hostIsLinux
+    tasks.findByName("publishMingwX64PublicationToMavenRepository")?.enabled = HostManager.hostIsMingw
 }
 
 android {
