@@ -17,7 +17,8 @@
 package com.ctrip.sqllin.driver
 
 /**
- * SQLite native statement abstruct APIs
+ * SQLite native statement abstract APIs
+ * @author yaqiao
  */
 
 internal interface SQLiteStatement {
