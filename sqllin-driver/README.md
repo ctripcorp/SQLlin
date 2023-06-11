@@ -18,7 +18,7 @@ our project. Finally we still choose based on Android Framework Java API.
 
 In Native platforms, things look different. We can call SQLite C API directly, this is the most intuitive way.
 The ability of Kotlin/Native interop with C is very perfect, but in Kotlin/Native you must use some APIs to
-complete interop with C that very difficult to understanding, like: `memScoped`, `CPointer`, `CPointerVarOf`, `toKString` etc..
+complete interop with C that very difficult to understanding, like: `memScoped`, `CPointer`, `CPointerVarOf`, `toKString`, etc..
 So, in the beginning, I chose the [SQLiter](https://github.com/touchlab/SQLiter), that's a Kotlin/Native multiplatform
 library. If I use it, I can put the Kotlin-C interop translate to Kotlin language-internal calls. It is very
 convenient. [SQLiter](https://github.com/touchlab/SQLiter) also is the driver that
@@ -30,6 +30,8 @@ example, [SQLiter](https://github.com/touchlab/SQLiter) updates very infrequentl
 it still hasn't been merged, and no one replied to me. And, after Kotlin `1.8.0`, Kotlin/Native added a new target:
 `watchosDeviceArm64`. Due to [SQLiter](https://github.com/touchlab/SQLiter) updates infrequently, SQLlin can't support
 `watchosDeviceArm64` either. So, I decided to implement interop with SQLite C APIs by myself as I originally conceived.
+Before the version `1.1.0`, _sqllin-driver_ use [SQLiter](https://github.com/touchlab/SQLiter), and after `1.1.0`(including),
+_sqllin-driver_ use the _New Native Driver_.
 
 Whatever, [SQLiter](https://github.com/touchlab/SQLiter) still is a good project. I referred to a lot of designs and code
 details from it and use them in _New Native Driver_ in _sqllin-driver_ .

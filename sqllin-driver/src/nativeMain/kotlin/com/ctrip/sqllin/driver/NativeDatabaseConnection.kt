@@ -25,7 +25,7 @@ internal abstract class NativeDatabaseConnection : DatabaseConnection {
 
     abstract fun createStatement(sql: String): SQLiteStatement
 
-    fun bindParamsToSQL(sql: String, bindParams: Array<Any?>?): SQLiteStatement = createStatement(sql).apply {
+    protected fun bindParamsToSQL(sql: String, bindParams: Array<Any?>?): SQLiteStatement = createStatement(sql).apply {
         bindParams?.run {
             require(isNotEmpty()) { "Empty bindArgs" }
             forEachIndexed { index, any ->

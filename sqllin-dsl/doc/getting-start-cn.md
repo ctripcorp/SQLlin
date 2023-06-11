@@ -14,7 +14,7 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-val sqllinVersion = "1.0.1"
+val sqllinVersion = "1.1.0"
 
 kotlin {
     // ......
@@ -28,7 +28,7 @@ kotlin {
                 implementation("com.ctrip.kotlin:sqllin-driver:$sqllinVersion")
 
                 // The sqllin-dsl serialization and deserialization depends on kotlinx-serialization
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.4.1")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.5.1")
             }
         }
         // ......
@@ -147,7 +147,7 @@ data class Person(
 你定义的 DBEntity 的属性名应与数据库表的列名相对应。DBEntity 不应该拥有名字与表中的所有列名均不相同的属性，但是
 DBEntity 的属性数量可以比表中列的数量少。
 
-`@DBRow` 的参数 `tableName` 表示数据库中的表明，请确保传入正确的值。如果不手动传入，_sqllin-processor_
+`@DBRow` 的参数 `tableName` 表示数据库中的表名，请确保传入正确的值。如果不手动传入，_sqllin-processor_
 将会使用类名作为表名，比如 `Person` 类的默认表名是"Person"。
 
 在 _sqllin-dsl_ 中，对象序列化为 SQL 语句，或者从游标中反序列化依赖 _kotlinx.serialization_，所以你需要在你的 data class
