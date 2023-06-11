@@ -23,9 +23,9 @@ package com.ctrip.sqllin.driver
 
 internal abstract class NativeDatabaseConnection : DatabaseConnection {
 
-    internal abstract fun createStatement(sql: String): SQLiteStatement
+    abstract fun createStatement(sql: String): SQLiteStatement
 
-    internal fun bindParamsToSQL(sql: String, bindParams: Array<Any?>?): SQLiteStatement = createStatement(sql).apply {
+    protected fun bindParamsToSQL(sql: String, bindParams: Array<Any?>?): SQLiteStatement = createStatement(sql).apply {
         bindParams?.run {
             require(isNotEmpty()) { "Empty bindArgs" }
             forEachIndexed { index, any ->

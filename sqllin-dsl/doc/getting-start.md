@@ -16,7 +16,7 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-val sqllinVersion = "1.0.1"
+val sqllinVersion = "1.1.0"
 
 kotlin {
     // ......
@@ -30,7 +30,7 @@ kotlin {
                 implementation("com.ctrip.kotlin:sqllin-driver:$sqllinVersion")
                 
                 // The sqllin-dsl serialization and deserialization depends on kotlinx-serialization
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.4.1")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.5.1")
             }
         }
         // ......
