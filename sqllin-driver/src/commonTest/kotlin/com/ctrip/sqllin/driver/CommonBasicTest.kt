@@ -26,16 +26,17 @@ import kotlin.test.assertEquals
 
 class CommonBasicTest(private val path: DatabasePath) {
 
-    private data class Book(
+    private class Book(
         val name: String,
         val author: String,
         val pages: Int,
         val price: Double,
+        val array: ByteArray,
     )
 
     private val bookList = listOf(
-        Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96),
-        Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95),
+        Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96, byteArrayOf()),
+        Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95, byteArrayOf(1, 2, 3)),
     )
 
     fun testCreateAndUpgrade() {
@@ -84,8 +85,8 @@ class CommonBasicTest(private val path: DatabasePath) {
         val readWriteConfig = getDefaultDBConfig(false)
         openDatabase(readWriteConfig) {
             it.withTransaction { connection ->
-                connection.executeInsert(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96))
-                connection.executeInsert(SQL.INSERT_BOOK, arrayOf("The Lost Symbol", "Dan Brown", 510, 19.95))
+                connection.executeInsert(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96, byteArrayOf()))
+                connection.executeInsert(SQL.INSERT_BOOK, arrayOf("The Lost Symbol", "Dan Brown", 510, 19.95, byteArrayOf(1, 2, 3)))
             }
         }
         val readOnlyConfig = getDefaultDBConfig(true)
@@ -98,6 +99,7 @@ class CommonBasicTest(private val path: DatabasePath) {
                     assertEquals(book.author, cursor.getString(++columnIndex))
                     assertEquals(book.pages, cursor.getInt(++columnIndex))
                     assertEquals(book.price, cursor.getDouble(++columnIndex))
+                    assertEquals(book.array.size, cursor.getByteArray(++columnIndex)?.size)
                 }
             }
         }
@@ -161,8 +163,8 @@ class CommonBasicTest(private val path: DatabasePath) {
         val readWriteConfig = getDefaultDBConfig(false)
         openDatabase(readWriteConfig) {
             it.withTransaction { connection ->
-                connection.executeInsert(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96))
-                connection.executeInsert(SQL.INSERT_BOOK, arrayOf("The Lost Symbol", "Dan Brown", 510, 19.95))
+                connection.executeInsert(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96, byteArrayOf()))
+                connection.executeInsert(SQL.INSERT_BOOK, arrayOf("The Lost Symbol", "Dan Brown", 510, 19.95, byteArrayOf(1, 2, 3)))
             }
 
             try {
@@ -202,13 +204,14 @@ class CommonBasicTest(private val path: DatabasePath) {
                             assertEquals(book.author, cursor.getString(++columnIndex))
                             assertEquals(book.pages, cursor.getInt(++columnIndex))
                             assertEquals(book.price, cursor.getDouble(++columnIndex))
+                            assertEquals(book.array.size, cursor.getByteArray(++columnIndex)?.size)
                         }
                     }
                 }
             }
             it.withTransaction { connection ->
-                connection.executeInsert(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96))
-                connection.executeInsert(SQL.INSERT_BOOK, arrayOf("The Lost Symbol", "Dan Brown", 510, 19.95))
+                connection.executeInsert(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96, byteArrayOf()))
+                connection.executeInsert(SQL.INSERT_BOOK, arrayOf("The Lost Symbol", "Dan Brown", 510, 19.95, byteArrayOf(1, 2, 3)))
             }
         }
     }

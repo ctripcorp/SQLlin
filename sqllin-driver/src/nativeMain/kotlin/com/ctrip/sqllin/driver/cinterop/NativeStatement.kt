@@ -35,6 +35,7 @@ import com.ctrip.sqllin.sqlite3.sqlite3_bind_int64
 import com.ctrip.sqllin.sqlite3.sqlite3_bind_null
 import com.ctrip.sqllin.sqlite3.sqlite3_bind_parameter_index
 import com.ctrip.sqllin.sqlite3.sqlite3_bind_text
+import com.ctrip.sqllin.sqlite3.sqlite3_bind_zeroblob
 import com.ctrip.sqllin.sqlite3.sqlite3_changes
 import com.ctrip.sqllin.sqlite3.sqlite3_clear_bindings
 import com.ctrip.sqllin.sqlite3.sqlite3_column_blob
@@ -86,12 +87,11 @@ internal class NativeStatement(
 
     override fun columnGetBlob(columnIndex: Int): ByteArray {
         val blobSize = sqlite3_column_bytes(cStatementPointer, columnIndex)
-        val blob = sqlite3_column_blob(cStatementPointer, columnIndex)
-
-        if (blobSize < 0 || blob == null)
-            throw sqliteException("Byte array size/type issue col $columnIndex")
-
-        return blob.readBytes(blobSize)
+        return if (blobSize == 0)
+            byteArrayOf()
+        else
+            sqlite3_column_blob(cStatementPointer, columnIndex)?.readBytes(blobSize)
+                ?: throw sqliteException("Byte array size/type issue col $columnIndex")
     }
 
     override fun columnCount(): Int = sqlite3_column_count(cStatementPointer)
@@ -106,9 +106,7 @@ internal class NativeStatement(
             when (val err = sqlite3_step(cStatementPointer)) {
                 SQLITE_ROW -> return true
                 SQLITE_DONE -> return false
-                SQLITE_LOCKED, SQLITE_BUSY -> {
-                    usleep(1000u)
-                }
+                SQLITE_LOCKED, SQLITE_BUSY -> usleep(1000u)
                 else -> throw sqliteException("sqlite3_step failed", err)
             }
         }
@@ -151,12 +149,11 @@ internal class NativeStatement(
     }
 
     private fun executeForLastInsertedRowId(): Long {
-        val err = executeNonQuery();
-        return if (err == SQLITE_DONE && sqlite3_changes(database.dbPointer) > 0) {
+        val err = executeNonQuery()
+        return if (err == SQLITE_DONE && sqlite3_changes(database.dbPointer) > 0)
             sqlite3_last_insert_rowid(database.dbPointer)
-        } else {
+        else
             -1
-        }
     }
 
     override fun executeUpdateDelete(): Int = try {
@@ -168,11 +165,10 @@ internal class NativeStatement(
 
     private fun executeForChangedRowCount(): Int {
         val err = executeNonQuery()
-        return if (err == SQLITE_DONE) {
+        return if (err == SQLITE_DONE)
             sqlite3_changes(database.dbPointer)
-        } else {
+        else
             -1
-        }
     }
 
     private fun executeNonQuery(): Int {
@@ -199,12 +195,14 @@ internal class NativeStatement(
     }
 
     override fun bindString(index: Int, value: String) = opResult(database) {
-        // TODO: Was using UTF 16 function previously. Do a little research.
         sqlite3_bind_text(cStatementPointer, index, value, -1, SQLITE_TRANSIENT)
     }
 
     override fun bindBlob(index: Int, value: ByteArray) = opResult(database) {
-        sqlite3_bind_blob(cStatementPointer, index, value.refTo(0), value.size, SQLITE_TRANSIENT)
+        if (value.isEmpty())
+            sqlite3_bind_zeroblob(cStatementPointer, index, 0)
+        else
+            sqlite3_bind_blob(cStatementPointer, index, value.refTo(0), value.size, SQLITE_TRANSIENT)
     }
 
     private inline fun opResult(database: NativeDatabase, block: () -> Int) {
