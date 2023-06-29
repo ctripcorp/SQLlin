@@ -49,7 +49,7 @@ fun sample() {
 ```roomsql
 SELECT * FROM person WHERE age >= 5
 UNION
-SELECT * FROM person WHERE length(name) <= 5
+SELECT * FROM person WHERE length(name) <= 8
 UNION ALL
 SELECT * FROM person WHERE name = "Tom"
 ```
