@@ -36,6 +36,14 @@ jobs:
     
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
+
+      - name: Cache build tooling
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.konan
+          key: ${{ runner.os }}-gradle-${{ hashFiles('*.gradle.kts') }}
         
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:assemble
@@ -92,6 +100,14 @@ jobs:
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
 
+      - name: Cache build tooling
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.konan
+          key: ${{ runner.os }}-gradle-${{ hashFiles('*.gradle.kts') }}
+
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:mingwX64MainKlibrary
 
@@ -137,6 +153,14 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
+
+      - name: Cache build tooling
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.konan
+          key: ${{ runner.os }}-gradle-${{ hashFiles('*.gradle.kts') }}
 
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:assemble
