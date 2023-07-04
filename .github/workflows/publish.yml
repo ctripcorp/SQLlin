@@ -32,6 +32,14 @@ jobs:
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
 
+      - name: Cache build tooling
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.konan
+          key: ${{ runner.os }}-gradle-${{ hashFiles('*.gradle.kts') }}
+
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:assemble
 
@@ -44,6 +52,31 @@ jobs:
       - name: Run sqllin-dsl macOS X64 Tests
         run: ./test_dsl_macos.sh
 
+      - name: Gradle Cache
+        uses: gradle/gradle-build-action@v2
+
+      - name: AVD Cache
+        uses: actions/cache@v3
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-33
+
+      - name: Create AVD and Generate Snapshot for Caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "Generated AVD snapshot for caching."
+
       - name: Run Android 13 Instrumentation Tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -51,6 +84,9 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
           script: ./test_android.sh
 
       - name: Upload sqllin-driver Reports
@@ -89,6 +125,14 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
+
+      - name: Cache build tooling
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.konan
+          key: ${{ runner.os }}-gradle-${{ hashFiles('*.gradle.kts') }}
 
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:mingwX64MainKlibrary
@@ -139,6 +183,14 @@ jobs:
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
 
+      - name: Cache build tooling
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.konan
+          key: ${{ runner.os }}-gradle-${{ hashFiles('*.gradle.kts') }}
+
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:assemble
 
@@ -154,6 +206,31 @@ jobs:
       - name: Run sqllin-dsl Linux X64 Tests
         run: ./gradlew :sqllin-dsl:cleanLinuxX64Test && ./gradlew :sqllin-dsl:linuxX64Test --stacktrace
 
+      - name: Gradle Cache
+        uses: gradle/gradle-build-action@v2
+
+      - name: AVD Cache
+        uses: actions/cache@v3
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-26
+
+      - name: Create AVD and Generate Snapshot for Caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 26
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "Generated AVD snapshot for caching."
+
       - name: Run Android 8 Instrumentation Tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -161,6 +238,9 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_2
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
           script: ./test_android.sh
 
       - name: Upload sqllin-driver Reports

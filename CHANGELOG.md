@@ -1,11 +1,22 @@
 # SQLlin Change Log
 
-## v1.1.0 / 06-06-2023
+- Date format: YYYY-MM-dd
+
+## v1.1.1 / 2023-xx-xx
+
+### sqllin-driver
+
+* Fix a bug about empty `ByteArray` on native platforms([#30](https://github.com/ctripcorp/SQLlin/pull/30))
+
+## v1.1.0 / 2023-06-06
 
 ### All
 
 * Remove the `iosArm32`, `watchosX86` and `mingwX86` these three targets' support
 * Add the new native target support: `watchosDeviceArm64`
+
+### sqllin-dsl
+
 * Update `kotlinx.serialization`'s version to `1.5.1`
 
 ### sqllin-driver
@@ -17,7 +28,7 @@
 * Add the new public property: `DatabaseConnection#isClosed`
 * Deprecated the public property: `DatabaseConnection#closed`
 
-## v1.0.1 / 05-14-2023
+## v1.0.1 / 2023-05-14
 
 ### All
 
@@ -31,7 +42,7 @@
 
 * Update `KSP`'s version to `1.8.20-1.0.11`
 
-## v1.0.0 / 12-29-2022
+## v1.0.0 / 2022-12-29
 
 ### All
 
@@ -47,7 +58,7 @@
 
 * Update `KSP`'s version to `1.7.20-1.0.8`
 
-## v1.0-alpha01 / 11-29-2022
+## v1.0-alpha01 / 2022-11-29
 
 ### Initial Release
 

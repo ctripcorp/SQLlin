@@ -52,7 +52,7 @@ Above code equals the SQL:
 ```roomsql
 SELECT * FROM person WHERE age >= 5
 UNION
-SELECT * FROM person WHERE length(name) <= 5
+SELECT * FROM person WHERE length(name) <= 8
 UNION ALL
 SELECT * FROM person WHERE name = "Tom"
 ```
@@ -161,7 +161,7 @@ fun joinSample() {
 }
 ```
 
-The `LEFT_OUTER_JOIN`'s usage is very similar to `INNER_JOIN`, the difference just is their API name.
+The `LEFT_OUTER_JOIN`'s usage is very similar to `INNER_JOIN`, the difference just is their API names.
 
 ## Finally
 

@@ -21,6 +21,6 @@ package com.ctrip.sqllin.dsl.sql.statement
  * @author yaqiao
  */
 
-public sealed class SingleStatement constructor(
+public sealed class SingleStatement(
     public val sqlStr: String,
 ) : ExecutableStatement
