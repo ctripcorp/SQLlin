@@ -222,7 +222,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 26
-          target: google_apis
+          target: default
           arch: x86_64
           profile: pixel_2
           force-avd-creation: false
