@@ -57,19 +57,19 @@ jobs:
       - name: Run sqllin-dsl macOS X64 Tests
         run: ./test_dsl_macos.sh
 
-      - name: Gradle cache
+      - name: Gradle Cache
         uses: gradle/gradle-build-action@v2
 
-      - name: AVD cache
+      - name: AVD Cache
         uses: actions/cache@v3
         id: avd-cache
         with:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-${33}
+          key: avd-33
 
-      - name: create AVD and generate snapshot for caching
+      - name: Create AVD and Generate Snapshot for Caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -205,19 +205,19 @@ jobs:
       - name: Run sqllin-dsl Linux X64 Tests
         run: ./gradlew :sqllin-dsl:cleanLinuxX64Test && ./gradlew :sqllin-dsl:linuxX64Test --stacktrace
 
-      - name: Gradle cache
+      - name: Gradle Cache
         uses: gradle/gradle-build-action@v2
 
-      - name: AVD cache
+      - name: AVD Cache
         uses: actions/cache@v3
         id: avd-cache
         with:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-${26}
+          key: avd-26
 
-      - name: create AVD and generate snapshot for caching
+      - name: Create AVD and Generate Snapshot for Caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
