@@ -37,7 +37,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
 
-      - name: Cache build tooling
+      - name: Cache Build Tooling
         uses: actions/cache@v2
         with:
           path: |
@@ -82,7 +82,7 @@ jobs:
           disable-animations: false
           script: echo "Generated AVD snapshot for caching."
 
-      - name: Run Android 13 Instrumentation Tests
+      - name: Run Android 13 Instrumented Tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 33
@@ -128,7 +128,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
 
-      - name: Cache build tooling
+      - name: Cache Build Tooling
         uses: actions/cache@v2
         with:
           path: |
@@ -182,7 +182,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
 
-      - name: Cache build tooling
+      - name: Cache Build Tooling
         uses: actions/cache@v2
         with:
           path: |
@@ -230,7 +230,7 @@ jobs:
           disable-animations: false
           script: echo "Generated AVD snapshot for caching."
 
-      - name: Run Android 8 Instrumentation Tests
+      - name: Run Android 8 Instrumented Tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 26
