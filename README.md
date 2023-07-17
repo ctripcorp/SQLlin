@@ -57,7 +57,7 @@ You can learn how to use _sqllin-dsl_ in these documentations:
 
 I don't recommend use _sqllin-driver_ directly, but if you want to learn more about it, you can read:
 
-- [The sqllin-driver basic design and usage](./sqllin-driver/README.md)
+- [The sqllin-driver Basic Design and Usage](./sqllin-driver/README.md)
 
 ## R8/ProGuard
 

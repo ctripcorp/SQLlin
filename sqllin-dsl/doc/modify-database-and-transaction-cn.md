@@ -20,8 +20,8 @@ fun sample() {
     }
 }
 ```
-`PersonTable` 由 _sqllin-processor_ 生成，这是因为 `Person` 类被添加了 `@DBRow` 注解。任何被添加了 `@DBRow`
-注解的类都会生成一个 `Table` object，它的名字为 `类名 + 'Table'`。
+`PersonTable` 由 _sqllin-processor_ 生成，这是因为 `Person` 类被添加了 `@DBRow` 注解。任何继承自 `DBEntity`
+且被添加了 `@DBRow` 注解的类都会生成一个 `Table` object，它的名字为 `类名 + 'Table'`。
 
 现在让我们来进行真正的 _INSERT_ 操作：
 
@@ -44,7 +44,7 @@ _INSERT_ 语句可以直接插入对象，你可以一次插入一个或多个�
 
 ## 删除
 
-_DELETE_ 语句将会比 _INSERT_ 语句稍微复杂。SQLlin 不像 [Room](https://developer.android.com/training/data-storage/room)
+_DELETE_ 语句将会比 _INSERT_ 语句稍微复杂。SQLlin 不像 [Jetpack Room](https://developer.android.com/training/data-storage/room)
 一样直接删除对象，而是使用 _WHERE_ 子句：
 
 ```kotlin
@@ -60,7 +60,7 @@ fun sample() {
 让我们来理解 _WHERE_ 子句。`WHERE` 函数接收一个 `ClauseCondiction` 作为参数。示例中的 `age` 和 `name` 用于表示列名，它们是 `Table` 类的扩展属性，它们的类型是
 `ClauseElement`，由 KSP 生成。
 
-`ClauseElement` 拥有一系列表示 SQL 操作的操作符，比如：`=`、`>`、`<`、`LIKE`、`IN`、`IS` 等等。当一个 `ClauseElement` 调用一个操作符时我们将会得到一个 
+`ClauseElement` 拥有一系列表示相应的 SQL 操作（`=`、`>`、`<`、`LIKE`、`IN`、`IS` 等等）的操作符。当一个 `ClauseElement` 调用一个操作符时我们将会得到一个 
 `ClauseCondiction`。多个 `ClauseCondiction` 可以使用 `AND` 或 `OR` 操作符连接并产生一个新的 `ClauseCondiction`。
 
 SQL 操作符与 SQLlin 操作符的对应关系如下表：
