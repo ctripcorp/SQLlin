@@ -24,7 +24,7 @@ import com.ctrip.sqllin.dsl.sql.statement.*
  * @author yaqiao
  */
 
-public class OrderByClause<T : DBEntity<T>> internal constructor(private val column2WayMap: Map<ClauseElement, OrderByWay>): SelectClause<T> {
+public class OrderByClause<T : DBEntity<T>> internal constructor(private val column2WayMap: Map<ClauseElement, OrderByWay>) : SelectClause<T> {
 
     override val clauseStr: String
         get() {

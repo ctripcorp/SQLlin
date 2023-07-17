@@ -45,16 +45,18 @@ class ClauseProcessor(
         if (invoked) return emptyList()
         invoked = true
 
-        val allClassAnnotatedWhereProperty = resolver.getSymbolsWithAnnotation(ANNOTATION_DATABASE_ROW_NAME) as Sequence<KSClassDeclaration>
+        val allClassAnnotatedWhereProperties = resolver.getSymbolsWithAnnotation(ANNOTATION_DATABASE_ROW_NAME) as Sequence<KSClassDeclaration>
         val dbEntityDeclaration = resolver.getClassDeclarationByName(resolver.getKSNameFromString(CLASS_BASE_DB_ENTITY_NAME))!!
         val serializableType = resolver.getClassDeclarationByName(resolver.getKSNameFromString(ANNOTATION_SERIALIZABLE))!!.asStarProjectedType()
-        for (classDeclaration in allClassAnnotatedWhereProperty) {
+
+        for (classDeclaration in allClassAnnotatedWhereProperties) {
+
             val classType = classDeclaration.asStarProjectedType()
             val classTypeReference = resolver.createKSTypeReferenceFromKSType(classType)
             val classTypeArgument = resolver.getTypeArgument(classTypeReference, Variance.INVARIANT)
             if (!dbEntityDeclaration.asType(listOf(classTypeArgument)).isAssignableFrom(classType)
                 || classDeclaration.annotations.all { !it.annotationType.resolve().isAssignableFrom(serializableType) })
-                continue // Don't handle the class that not implement 'BaseWhereProperty' or not annotated 'Serializable'
+                continue // Don't handle the class that don't implement 'DBEntity' or not annotated 'Serializable'
 
             val className = classDeclaration.simpleName.asString()
             val packageName = classDeclaration.packageName.asString()
@@ -62,6 +64,7 @@ class ClauseProcessor(
             val tableName = classDeclaration.annotations.find {
                 it.annotationType.resolve().declaration.qualifiedName?.asString() == ANNOTATION_DATABASE_ROW_NAME
             }?.arguments?.first()?.value?.takeIf { (it as? String)?.isNotBlank() == true } ?: className
+
             val outputStream = environment.codeGenerator.createNewFile(
                 dependencies = Dependencies(false),
                 packageName = packageName,

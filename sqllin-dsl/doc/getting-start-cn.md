@@ -76,7 +76,7 @@ val applicationContext: Context
     }
 ```
 
-在 iOS source set 中（在其他的 Apple 平台及 Linux 也类似），可以这样实现：
+在 iOS source set 中（在其他 Apple 平台也类似），可以这样实现：
 
 ```kotlin
 import com.ctrip.sqllin.driver.DatabasePath

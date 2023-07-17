@@ -80,7 +80,7 @@ val applicationContext: Context
     }
 ```
 
-In your iOS source set(similar in other Apple platforms and Linux), you can implement it by:
+In your iOS source set(similar in other Apple platforms), you can implement it by:
 
 ```kotlin
 import com.ctrip.sqllin.driver.DatabasePath
@@ -123,10 +123,10 @@ val database = Database(
 Note, because of limitation by Android Framework, `inMemory`, `journalMode`, `synchronousMode`, `busyTimeout`, `lookasideSlotSize`, `lookasideSlotCount` 
 only work on Android 9 and higher.
 
-Now, the operations those would change database structure have not supported by DSL yet. So, you need write these SQL statements by string
+Now, the operations that change database structure have not supported by DSL yet. So, you need to write these SQL statements by string
 as in `create` and `upgrade` parameters.
 
-Usually, you just need create one `Database` instance in your component lifecycle. So, you need close database manually in the component lifecycle end:
+Usually, you just need to create one `Database` instance in your component lifecycle. So, you need to close database manually when the lifecycle ended:
 
 ```kotlin
 override fun onDestroy() {
@@ -136,7 +136,7 @@ override fun onDestroy() {
 
 ## Defining Your DBEntity
 
-In _sqllin-dsl_, you can insert and query objects directly. So, you need use the correct way to define your data class. For example:
+In _sqllin-dsl_, you can insert and query objects directly. So, you need to use the correct way to define your data class. For example:
 
 ```kotlin
 import com.ctrip.sqllin.dsl.DBEntity
@@ -156,11 +156,11 @@ data class Person(
 Your DBEntity's property names should same with the database table's column names. The DBEntity cannot have properties with names different from all
 column names in the table. But the count of your DBEntity's properties can less than the count of columns.
 
-The `@DBRow`'s param `tableName` represent the table name in Database, please ensure pass
+The `@DBRow`'s param `tableName` represents the table name in Database, please ensure pass
 the correct value. If you don't pass the parameter manually, _sqllin-processor_ will use the class
 name as table name, for example, `Person`'s default table name is "Person".
 
-In _sqllin-dsl_, objects serialization to SQL and deserialization from cursor depend on _kotlinx.serialization_. So, you also need add the `@Serializable` to your data class.
+In _sqllin-dsl_, objects serialization to SQL and deserialization from cursor depend on _kotlinx.serialization_. So, you also need to add the `@Serializable` onto your data class.
 
 ## Next Step
 

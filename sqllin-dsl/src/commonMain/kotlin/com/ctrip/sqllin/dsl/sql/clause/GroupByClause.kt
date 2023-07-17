@@ -26,7 +26,7 @@ import com.ctrip.sqllin.dsl.sql.statement.WhereSelectStatement
  * @author yaqiao
  */
 
-public class GroupByClause<T : DBEntity<T>> internal constructor(private val columnNames: List<ClauseElement>): SelectClause<T> {
+public class GroupByClause<T : DBEntity<T>> internal constructor(private val columnNames: List<ClauseElement>) : SelectClause<T> {
 
     override val clauseStr: String
         get() = buildString {
