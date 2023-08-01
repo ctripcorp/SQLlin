@@ -27,6 +27,7 @@ SQLlin 能够直接向数据库插入 Kotlin 对象，也能够直接从数据�
 
 SQLlin 支持如下平台：
 
+- Multiplatform Common
 - Android (6.0+)
 - iOS (x64, arm64, simulatorArm64)
 - macOS (x64, arm64)
@@ -52,13 +53,13 @@ _sqllin-processor_ 使用 KSP 处理注解并生成用以和 _sqllin-dsl_ 配合
 - [SQL 函数](./sqllin-dsl/doc/sql-functions-cn.md)
 - [高级查询](./sqllin-dsl/doc/advanced-query-cn.md)
 
-虽然不建议直接使用 _sqllin-driver_, 但如果你想了解更多信息则可以阅读：
+虽然不建议直接使用 _sqllin-driver_，但如果你想了解更多信息则可以阅读：
 
 - [sqllin-driver 基本设计与使用](./sqllin-driver/README_CN.md)
 
 ## R8/ProGuard
 
-由于 _sqllin-dsl_ 的反序列化基于 [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization), R8/ProGuard 的配置请参考
+由于 _sqllin-dsl_ 的反序列化基于 [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization)，R8/ProGuard 的配置请参考
 [kotlinx.serialization#Android](https://github.com/Kotlin/kotlinx.serialization#Android) 。
 
 ## 开源许可
