@@ -19,7 +19,6 @@ package com.ctrip.sqllin.dsl.sql.operation
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.sql.statement.StatementContainer
 import com.ctrip.sqllin.dsl.sql.Table
-import com.ctrip.sqllin.dsl.DBEntity
 import com.ctrip.sqllin.dsl.sql.clause.SetClause
 import com.ctrip.sqllin.dsl.sql.statement.UpdateStatementWithoutWhereClause
 
@@ -33,7 +32,7 @@ internal object Update : Operation {
     override val sqlStr: String
         get() = "UPDATE "
 
-    fun <T : DBEntity<T>> update(
+    fun <T> update(
         table: Table<T>,
         connection: DatabaseConnection,
         container: StatementContainer,

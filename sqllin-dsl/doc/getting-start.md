@@ -139,7 +139,6 @@ override fun onDestroy() {
 In _sqllin-dsl_, you can insert and query objects directly. So, you need to use the correct way to define your data class. For example:
 
 ```kotlin
-import com.ctrip.sqllin.dsl.DBEntity
 import com.ctrip.sqllin.dsl.annotation.DBRow
 import kotlinx.serialization.Serializable
 
@@ -148,9 +147,7 @@ import kotlinx.serialization.Serializable
 data class Person(
     val name: String,
     val age: Int,
-) : DBEntity<Person> {
-    override fun kSerializer(): KSerializer<Person> = serializer()
-}
+)
 ```
 
 Your DBEntity's property names should same with the database table's column names. The DBEntity cannot have properties with names different from all

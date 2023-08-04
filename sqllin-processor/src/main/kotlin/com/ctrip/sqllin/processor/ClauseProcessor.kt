@@ -34,7 +34,6 @@ class ClauseProcessor(
 
     private companion object {
         const val ANNOTATION_DATABASE_ROW_NAME = "com.ctrip.sqllin.dsl.annotation.DBRow"
-        const val CLASS_BASE_DB_ENTITY_NAME = "com.ctrip.sqllin.dsl.DBEntity"
         const val ANNOTATION_SERIALIZABLE = "kotlinx.serialization.Serializable"
     }
 
@@ -46,16 +45,11 @@ class ClauseProcessor(
         invoked = true
 
         val allClassAnnotatedWhereProperties = resolver.getSymbolsWithAnnotation(ANNOTATION_DATABASE_ROW_NAME) as Sequence<KSClassDeclaration>
-        val dbEntityDeclaration = resolver.getClassDeclarationByName(resolver.getKSNameFromString(CLASS_BASE_DB_ENTITY_NAME))!!
         val serializableType = resolver.getClassDeclarationByName(resolver.getKSNameFromString(ANNOTATION_SERIALIZABLE))!!.asStarProjectedType()
 
         for (classDeclaration in allClassAnnotatedWhereProperties) {
 
-            val classType = classDeclaration.asStarProjectedType()
-            val classTypeReference = resolver.createKSTypeReferenceFromKSType(classType)
-            val classTypeArgument = resolver.getTypeArgument(classTypeReference, Variance.INVARIANT)
-            if (!dbEntityDeclaration.asType(listOf(classTypeArgument)).isAssignableFrom(classType)
-                || classDeclaration.annotations.all { !it.annotationType.resolve().isAssignableFrom(serializableType) })
+            if (classDeclaration.annotations.all { !it.annotationType.resolve().isAssignableFrom(serializableType) })
                 continue // Don't handle the class that don't implement 'DBEntity' or not annotated 'Serializable'
 
             val className = classDeclaration.simpleName.asString()

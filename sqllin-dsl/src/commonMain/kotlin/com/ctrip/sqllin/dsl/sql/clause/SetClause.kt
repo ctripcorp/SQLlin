@@ -16,14 +16,12 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
-import com.ctrip.sqllin.dsl.DBEntity
-
 /**
  * Present the single prediction in set clause
  * @author yaqiao
  */
 
-public class SetClause<T : DBEntity<T>> : Clause<T> {
+public class SetClause<T> : Clause<T> {
 
     private val clauseBuilder = StringBuilder()
 
@@ -41,4 +39,4 @@ public class SetClause<T : DBEntity<T>> : Clause<T> {
     }.toString()
 }
 
-public inline fun <T : DBEntity<T>> SET(block: SetClause<T>.() -> Unit): SetClause<T> = SetClause<T>().apply(block)
+public inline fun <T> SET(block: SetClause<T>.() -> Unit): SetClause<T> = SetClause<T>().apply(block)

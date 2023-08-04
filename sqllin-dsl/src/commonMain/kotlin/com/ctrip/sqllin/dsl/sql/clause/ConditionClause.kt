@@ -16,14 +16,12 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
-import com.ctrip.sqllin.dsl.DBEntity
-
 /**
  * Abstract clause that could link conditions, include 'WHERE' and 'HAVING'
  * @author yaquai
  */
 
-public sealed class ConditionClause<T : DBEntity<T>>(private val selectCondition: SelectCondition) : SelectClause<T> {
+public sealed class ConditionClause<T>(private val selectCondition: SelectCondition) : SelectClause<T> {
 
     internal abstract val clauseName: String
 

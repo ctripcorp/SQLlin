@@ -16,7 +16,6 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
-import com.ctrip.sqllin.dsl.DBEntity
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.statement.JoinSelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.JoinStatementWithoutCondition
@@ -26,7 +25,7 @@ import com.ctrip.sqllin.dsl.sql.statement.JoinStatementWithoutCondition
  * @author yaqiao
  */
 
-public sealed class BaseJoinClause<R : DBEntity<R>>(private vararg val tables: Table<*>) : SelectClause<R> {
+public sealed class BaseJoinClause<R>(private vararg val tables: Table<*>) : SelectClause<R> {
 
     internal abstract val clauseName: String
 
@@ -41,15 +40,15 @@ public sealed class BaseJoinClause<R : DBEntity<R>>(private vararg val tables: T
         }
 }
 
-public sealed class NaturalJoinClause<R : DBEntity<R>>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables)
+public sealed class NaturalJoinClause<R>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables)
 
-public sealed class JoinClause<R : DBEntity<R>>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables)
+public sealed class JoinClause<R>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables)
 
-public infix fun <R : DBEntity<R>> JoinStatementWithoutCondition<R>.ON(condition: SelectCondition): JoinSelectStatement<R> =
+public infix fun <R> JoinStatementWithoutCondition<R>.ON(condition: SelectCondition): JoinSelectStatement<R> =
     convertToJoinSelectStatement(condition)
 
-public inline infix fun <R : DBEntity<R>> JoinStatementWithoutCondition<R>.USING(clauseElement: ClauseElement): JoinSelectStatement<R> =
+public inline infix fun <R> JoinStatementWithoutCondition<R>.USING(clauseElement: ClauseElement): JoinSelectStatement<R> =
     USING(listOf(clauseElement))
 
-public infix fun <R : DBEntity<R>> JoinStatementWithoutCondition<R>.USING(clauseElements: Iterable<ClauseElement>): JoinSelectStatement<R> =
+public infix fun <R> JoinStatementWithoutCondition<R>.USING(clauseElements: Iterable<ClauseElement>): JoinSelectStatement<R> =
     convertToJoinSelectStatement(clauseElements)

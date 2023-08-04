@@ -16,7 +16,6 @@
 package com.ctrip.sqllin.dsl
 
 import com.ctrip.sqllin.dsl.annotation.DBRow
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 
 /**
@@ -31,14 +30,14 @@ data class Book(
     val author: String,
     val price: Double,
     val pages: Int,
-) : DBEntity<Book>
+)
 
 @DBRow("category")
 @Serializable
 data class Category(
     val name: String,
     val code: Int,
-) : DBEntity<Category>
+)
 
 @Serializable
 data class Joiner(
@@ -47,7 +46,7 @@ data class Joiner(
     val price: Double,
     val pages: Int,
     val code: Int,
-) : DBEntity<Joiner>
+)
 
 @Serializable
 data class CrossJoiner(
@@ -55,4 +54,4 @@ data class CrossJoiner(
     val price: Double,
     val pages: Int,
     val code: Int,
-) : DBEntity<CrossJoiner>
+)
