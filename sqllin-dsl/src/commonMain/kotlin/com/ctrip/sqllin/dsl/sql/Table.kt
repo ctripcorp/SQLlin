@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.dsl.sql
 
 import com.ctrip.sqllin.dsl.DBEntity
+import kotlinx.serialization.KSerializer
 
 /**
  * SQL table
@@ -25,4 +26,6 @@ import com.ctrip.sqllin.dsl.DBEntity
 
 public abstract class Table<T : DBEntity<T>>(
     internal val tableName: String,
-)
+) {
+    public abstract fun kSerializer(): KSerializer<T>
+}

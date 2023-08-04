@@ -34,12 +34,11 @@ internal object Insert : Operation {
         get() = "INSERT INTO "
 
     fun <T : DBEntity<T>> insert(table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>): SingleStatement {
-        val serializer = entities.firstOrNull()?.kSerializer() ?: throw IllegalArgumentException("Param 'entities' must not be empty!!!")
         val sql = buildString {
             append(sqlStr)
             append(table.tableName)
             append(' ')
-            append(encodeEntities2InsertValues(serializer, entities))
+            append(encodeEntities2InsertValues(table.kSerializer(), entities))
         }
         return InsertStatement(sql, connection)
     }

@@ -31,18 +31,14 @@ data class Book(
     val author: String,
     val price: Double,
     val pages: Int,
-) : DBEntity<Book> {
-    override fun kSerializer(): KSerializer<Book> = serializer()
-}
+) : DBEntity<Book>
 
 @DBRow("category")
 @Serializable
 data class Category(
     val name: String,
     val code: Int,
-) : DBEntity<Category> {
-    override fun kSerializer(): KSerializer<Category> = serializer()
-}
+) : DBEntity<Category>
 
 @Serializable
 data class Joiner(
@@ -51,9 +47,7 @@ data class Joiner(
     val price: Double,
     val pages: Int,
     val code: Int,
-) : DBEntity<Joiner> {
-    override fun kSerializer(): KSerializer<Joiner> = serializer()
-}
+) : DBEntity<Joiner>
 
 @Serializable
 data class CrossJoiner(
@@ -61,6 +55,4 @@ data class CrossJoiner(
     val price: Double,
     val pages: Int,
     val code: Int,
-) : DBEntity<CrossJoiner> {
-    override fun kSerializer(): KSerializer<CrossJoiner> = serializer()
-}
+) : DBEntity<CrossJoiner>

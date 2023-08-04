@@ -66,7 +66,7 @@ class ClauseProcessor(
             }?.arguments?.first()?.value?.takeIf { (it as? String)?.isNotBlank() == true } ?: className
 
             val outputStream = environment.codeGenerator.createNewFile(
-                dependencies = Dependencies(false),
+                dependencies = Dependencies(true, classDeclaration.containingFile!!),
                 packageName = packageName,
                 fileName = objectName,
             )
@@ -83,6 +83,8 @@ class ClauseProcessor(
 
                 writer.write("@OptIn(ExperimentalSerializationApi::class)\n")
                 writer.write("object $objectName : Table<$className>(\"$tableName\") {\n\n")
+
+                writer.write("    override fun kSerializer() = $className.serializer()\n\n")
 
                 writer.write("    inline operator fun <R> invoke(block: $objectName.(table: $objectName) -> R): R = this.block(this)\n\n")
                 classDeclaration.getAllProperties().forEachIndexed { index, property ->
