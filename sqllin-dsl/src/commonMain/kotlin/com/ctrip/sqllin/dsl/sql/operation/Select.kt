@@ -17,7 +17,6 @@
 package com.ctrip.sqllin.dsl.sql.operation
 
 import com.ctrip.sqllin.driver.DatabaseConnection
-import com.ctrip.sqllin.dsl.DBEntity
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.compiler.appendDBColumnName
@@ -34,7 +33,7 @@ internal object Select : Operation {
     override val sqlStr: String
         get() = "SELECT "
 
-    fun <T : DBEntity<T>> select(
+    fun <T> select(
         table: Table<T>,
         clause: WhereClause<T>,
         isDistinct: Boolean,
@@ -44,7 +43,7 @@ internal object Select : Operation {
     ): WhereSelectStatement<T> =
         WhereSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container)
 
-    fun <T : DBEntity<T>> select(
+    fun <T> select(
         table: Table<T>,
         clause: OrderByClause<T>,
         isDistinct: Boolean,
@@ -54,7 +53,7 @@ internal object Select : Operation {
     ): OrderBySelectStatement<T> =
         OrderBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container)
 
-    fun <T : DBEntity<T>> select(
+    fun <T> select(
         table: Table<T>,
         clause: LimitClause<T>,
         isDistinct: Boolean,
@@ -64,7 +63,7 @@ internal object Select : Operation {
     ): LimitSelectStatement<T> =
         LimitSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container)
 
-    fun <T : DBEntity<T>> select(
+    fun <T> select(
         table: Table<T>,
         clause: GroupByClause<T>,
         isDistinct: Boolean,
@@ -74,7 +73,7 @@ internal object Select : Operation {
     ): GroupBySelectStatement<T> =
         GroupBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container)
 
-    fun <R : DBEntity<R>> select(
+    fun <R> select(
         table: Table<*>,
         clause: NaturalJoinClause<R>,
         isDistinct: Boolean,
@@ -84,7 +83,7 @@ internal object Select : Operation {
     ) : JoinSelectStatement<R> =
         JoinSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container)
 
-    fun <R : DBEntity<R>> select(
+    fun <R> select(
         table: Table<*>,
         clause: JoinClause<R>,
         isDistinct: Boolean,
@@ -101,7 +100,7 @@ internal object Select : Operation {
             addSelectStatement,
         )
 
-    private fun <T : DBEntity<T>> buildSQL(
+    private fun <T> buildSQL(
         table: Table<*>,
         clause: SelectClause<T>,
         isDistinct: Boolean,
@@ -116,7 +115,7 @@ internal object Select : Operation {
         append(clause.clauseStr)
     }
 
-    fun <T : DBEntity<T>> select(
+    fun <T> select(
         table: Table<T>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<T>,

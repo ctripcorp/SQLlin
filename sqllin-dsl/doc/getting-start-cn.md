@@ -131,7 +131,6 @@ override fun onDestroy() {
 在 _sqllin-dsl_ 中，你可以直接插入或查找对象。所以，你需要使用正确的方式定义你的 data class，比如：
 
 ```kotlin
-import com.ctrip.sqllin.dsl.DBEntity
 import com.ctrip.sqllin.dsl.annotation.DBRow
 import kotlinx.serialization.Serializable
 
@@ -140,9 +139,7 @@ import kotlinx.serialization.Serializable
 data class Person(
     val name: String,
     val age: Int,
-) : DBEntity<Person> {
-    override fun kSerializer(): KSerializer<Person> = serializer()
-}
+)
 ```
 你定义的 DBEntity 的属性名应与数据库表的列名相对应。DBEntity 不应该拥有名字与表中的所有列名均不相同的属性，但是
 DBEntity 的属性数量可以比表中列的数量少。

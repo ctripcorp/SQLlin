@@ -17,7 +17,6 @@
 package com.ctrip.sqllin.dsl.sql.statement
 
 import com.ctrip.sqllin.driver.DatabaseConnection
-import com.ctrip.sqllin.dsl.DBEntity
 import com.ctrip.sqllin.dsl.sql.clause.ClauseElement
 import com.ctrip.sqllin.dsl.sql.clause.SelectCondition
 import kotlinx.serialization.DeserializationStrategy
@@ -27,7 +26,7 @@ import kotlinx.serialization.DeserializationStrategy
  * @author yaqiao
  */
 
-public class JoinStatementWithoutCondition<R : DBEntity<R>> internal constructor(
+public class JoinStatementWithoutCondition<R> internal constructor(
     private val sqlStr: String,
     private val deserializer: DeserializationStrategy<R>,
     private val connection: DatabaseConnection,

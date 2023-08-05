@@ -19,11 +19,9 @@ package com.ctrip.sqllin.sample
 import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.dsl.Database
 import com.ctrip.sqllin.dsl.annotation.DBRow
-import com.ctrip.sqllin.dsl.DBEntity
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 
 /**
@@ -97,9 +95,7 @@ object Sample {
 data class Person(
     val age: Int?,
     val name: String?,
-) : DBEntity<Person> {
-    override fun kSerializer(): KSerializer<Person> = serializer()
-}
+)
 
 @DBRow("transcript")
 @Serializable
@@ -107,9 +103,7 @@ data class Transcript(
     val name: String?,
     val math: Int,
     val english: Int,
-) : DBEntity<Transcript> {
-    override fun kSerializer(): KSerializer<Transcript> = serializer()
-}
+)
 
 @Serializable
 data class Student(
@@ -117,6 +111,4 @@ data class Student(
     val age: Int?,
     val math: Int,
     val english: Int,
-) : DBEntity<Student> {
-    override fun kSerializer(): KSerializer<Student> = serializer()
-}
+)

@@ -21,7 +21,6 @@ import com.ctrip.sqllin.dsl.sql.statement.SingleStatement
 import com.ctrip.sqllin.dsl.sql.statement.InsertStatement
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.compiler.encodeEntities2InsertValues
-import com.ctrip.sqllin.dsl.DBEntity
 
 /**
  * SQL insert
@@ -33,13 +32,12 @@ internal object Insert : Operation {
     override val sqlStr: String
         get() = "INSERT INTO "
 
-    fun <T : DBEntity<T>> insert(table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>): SingleStatement {
-        val serializer = entities.firstOrNull()?.kSerializer() ?: throw IllegalArgumentException("Param 'entities' must not be empty!!!")
+    fun <T> insert(table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>): SingleStatement {
         val sql = buildString {
             append(sqlStr)
             append(table.tableName)
             append(' ')
-            append(encodeEntities2InsertValues(serializer, entities))
+            append(encodeEntities2InsertValues(table.kSerializer(), entities))
         }
         return InsertStatement(sql, connection)
     }

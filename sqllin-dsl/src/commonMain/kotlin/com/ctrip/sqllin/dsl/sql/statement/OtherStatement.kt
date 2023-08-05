@@ -17,14 +17,13 @@
 package com.ctrip.sqllin.dsl.sql.statement
 
 import com.ctrip.sqllin.driver.DatabaseConnection
-import com.ctrip.sqllin.dsl.DBEntity
 
 /**
  * Update statement without 'WHERE' clause, that could execute or link 'WHERE' clause
  * @author yaqiao
  */
 
-public class UpdateStatementWithoutWhereClause<T : DBEntity<T>> internal constructor(
+public class UpdateStatementWithoutWhereClause<T> internal constructor(
     preSQLStr: String,
     internal val statementContainer: StatementContainer,
     internal val connection: DatabaseConnection,
