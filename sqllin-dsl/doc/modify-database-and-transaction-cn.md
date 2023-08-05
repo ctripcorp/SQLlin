@@ -1,6 +1,6 @@
 # 修改数据库与事务
 
-在[《开始使用》](getting-start-cn.md)中，我们学习了如何创建 `Database` 实例以及定义你自己的 `DBEntity`。现在我们将开始学习如何在 SQLlin 中编写 SQL 语句。
+在[《开始使用》](getting-start-cn.md)中，我们学习了如何创建 `Database` 实例以及定义你自己的数据库实体。现在我们将开始学习如何在 SQLlin 中编写 SQL 语句。
 
 ## 插入
 
@@ -20,8 +20,8 @@ fun sample() {
     }
 }
 ```
-`PersonTable` 由 _sqllin-processor_ 生成，这是因为 `Person` 类被添加了 `@DBRow` 注解。任何继承自 `DBEntity`
-且被添加了 `@DBRow` 注解的类都会生成一个 `Table` object，它的名字为 `类名 + 'Table'`。
+`PersonTable` 由 _sqllin-processor_ 生成，这是因为 `Person` 类被添加了 `@DBRow` 注解。任何添加了 `@DBRow`
+注解的类都会生成一个 `Table` object，它的名字为 `类名 + 'Table'`。
 
 现在让我们来进行真正的 _INSERT_ 操作：
 

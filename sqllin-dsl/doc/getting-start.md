@@ -134,7 +134,7 @@ override fun onDestroy() {
 }
 ```
 
-## Defining Your DBEntity
+## Defining Your database entity
 
 In _sqllin-dsl_, you can insert and query objects directly. So, you need to use the correct way to define your data class. For example:
 
@@ -150,8 +150,8 @@ data class Person(
 )
 ```
 
-Your DBEntity's property names should same with the database table's column names. The DBEntity cannot have properties with names different from all
-column names in the table. But the count of your DBEntity's properties can less than the count of columns.
+Your database entity's property names should same with the database table's column names. The database entity cannot have properties with names different from all
+column names in the table. But the count of your database entity's properties can less than the count of columns.
 
 The `@DBRow`'s param `tableName` represents the table name in Database, please ensure pass
 the correct value. If you don't pass the parameter manually, _sqllin-processor_ will use the class

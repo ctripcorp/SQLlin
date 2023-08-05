@@ -24,7 +24,7 @@ fun sample() {
 The `X` represents without any clause, we’ve seen it in _DELETE_ statements.
 
 The _SELECT_ statement has query results, this is another difference from other statements. So, you need to declare a variable that
-type is `SelectStatement<T>`. The generic parameter `T` is your `DBEntity` that you expect to deserialize. You should assign _SELECT_ statement you built to this variable.
+type is `SelectStatement<T>`. The generic parameter `T` is your database entity's type that you expect to deserialize. You should assign _SELECT_ statement you built to this variable.
 
 Note, all statements will only be executed when the _DatabaseScope_ ends, we mentioned this in the [Modify Database and Transaction](modify-database-and-transaction.md).
 So, you must invoke the `getResults` function outside the `database { ... }` block, SQLlin will help you deserialize query results to objects that you expected.

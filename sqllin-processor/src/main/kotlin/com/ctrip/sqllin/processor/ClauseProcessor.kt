@@ -50,7 +50,7 @@ class ClauseProcessor(
         for (classDeclaration in allClassAnnotatedWhereProperties) {
 
             if (classDeclaration.annotations.all { !it.annotationType.resolve().isAssignableFrom(serializableType) })
-                continue // Don't handle the class that don't implement 'DBEntity' or not annotated 'Serializable'
+                continue // Don't handle the class that don't annotated 'Serializable'
 
             val className = classDeclaration.simpleName.asString()
             val packageName = classDeclaration.packageName.asString()
