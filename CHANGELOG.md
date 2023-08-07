@@ -4,6 +4,11 @@
 
 ## v1.1.1 / 2023-xx-xx
 
+### sqllin-dsl
+
+* *Breaking Change*: Remove the public API `DBEntity`([#36](https://github.com/ctripcorp/SQLlin/pull/36)), any data classes used in _sqllin-dsl_ don't need to extend `DBEntity` anymore.
+
+
 ### sqllin-driver
 
 * Fix a bug about empty `ByteArray` on native platforms([#30](https://github.com/ctripcorp/SQLlin/pull/30))

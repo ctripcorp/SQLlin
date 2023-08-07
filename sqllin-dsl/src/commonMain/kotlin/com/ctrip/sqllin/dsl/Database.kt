@@ -171,10 +171,10 @@ public class Database(
      * Select with no any clause.
      */
     public inline infix fun <reified T> Table<T>.SELECT(x: X): FinalSelectStatement<T> =
-        select(getKSerializer(), false)
+        select(kSerializer(), false)
 
     public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(x: X): FinalSelectStatement<T> =
-        select(getKSerializer(), true)
+        select(kSerializer(), true)
 
     public fun <T> Table<T>.select(serializer: KSerializer<T>, isDistinct: Boolean): FinalSelectStatement<T> {
         val container = getSelectStatementGroup()
@@ -187,10 +187,10 @@ public class Database(
      * Receive the 'WHERE' clause.
      */
     public inline infix fun <reified T> Table<T>.SELECT(clause: WhereClause<T>): WhereSelectStatement<T> =
-        select(getKSerializer(), clause, false)
+        select(kSerializer(), clause, false)
 
     public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: WhereClause<T>): WhereSelectStatement<T> =
-        select(getKSerializer(), clause, true)
+        select(kSerializer(), clause, true)
 
     public fun <T> Table<T>.select(serializer: KSerializer<T>, clause: WhereClause<T>, isDistinct: Boolean): WhereSelectStatement<T> {
         val container = getSelectStatementGroup()
@@ -203,10 +203,10 @@ public class Database(
      * Receive the 'ORDER BY' clause.
      */
     public inline infix fun <reified T> Table<T>.SELECT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
-        select(getKSerializer(), clause, false)
+        select(kSerializer(), clause, false)
 
     public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
-        select(getKSerializer(), clause, true)
+        select(kSerializer(), clause, true)
 
     public fun <T> Table<T>.select(serializer: KSerializer<T>, clause: OrderByClause<T>, isDistinct: Boolean): OrderBySelectStatement<T> {
         val container = getSelectStatementGroup()
@@ -219,10 +219,10 @@ public class Database(
      * Receive the 'LIMIT' clause.
      */
     public inline infix fun <reified T> Table<T>.SELECT(clause: LimitClause<T>): LimitSelectStatement<T> =
-        select(getKSerializer(), clause, false)
+        select(kSerializer(), clause, false)
 
     public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: LimitClause<T>): LimitSelectStatement<T> =
-        select(getKSerializer(), clause, true)
+        select(kSerializer(), clause, true)
 
     public fun <T> Table<T>.select(serializer: KSerializer<T>, clause: LimitClause<T>, isDistinct: Boolean): LimitSelectStatement<T> {
         val container = getSelectStatementGroup()
@@ -235,10 +235,10 @@ public class Database(
      * Receive the 'GROUP BY' clause.
      */
     public inline infix fun <reified T> Table<T>.SELECT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
-        select(getKSerializer(), clause, false)
+        select(kSerializer(), clause, false)
 
     public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
-        select(getKSerializer(), clause, true)
+        select(kSerializer(), clause, true)
 
     public fun <T> Table<T>.select(serializer: KSerializer<T>, clause: GroupByClause<T>, isDistinct: Boolean): GroupBySelectStatement<T> {
         val container = getSelectStatementGroup()

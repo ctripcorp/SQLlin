@@ -126,9 +126,9 @@ override fun onDestroy() {
 }
 ```
 
-## 定义你的 DBEntity
+## 定义你的数据库实体
 
-在 _sqllin-dsl_ 中，你可以直接插入或查找对象。所以，你需要使用正确的方式定义你的 data class，比如：
+在 _sqllin-dsl_ 中，你可以直接插入或查找对象。所以，你需要使用正确的方式定义你的数据库实体，比如：
 
 ```kotlin
 import com.ctrip.sqllin.dsl.annotation.DBRow
@@ -141,8 +141,8 @@ data class Person(
     val age: Int,
 )
 ```
-你定义的 DBEntity 的属性名应与数据库表的列名相对应。DBEntity 不应该拥有名字与表中的所有列名均不相同的属性，但是
-DBEntity 的属性数量可以比表中列的数量少。
+你定义的数据库实体的属性名应与数据库表的列名相对应。数据库实体不应该拥有名字与表中的所有列名均不相同的属性，但是
+数据库实体的属性数量可以比表中列的数量少。
 
 `@DBRow` 的参数 `tableName` 表示数据库中的表名，请确保传入正确的值。如果不手动传入，_sqllin-processor_
 将会使用类名作为表名，比如 `Person` 类的默认表名是"Person"。
