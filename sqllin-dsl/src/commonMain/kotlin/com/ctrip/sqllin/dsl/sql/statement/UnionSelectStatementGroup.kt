@@ -16,14 +16,12 @@
 
 package com.ctrip.sqllin.dsl.sql.statement
 
-import com.ctrip.sqllin.dsl.DBEntity
-
 /**
  * Used for compose multi select statement that use the 'UNION' clause
  * @author yaqiao
  */
 
-internal class UnionSelectStatementGroup<T : DBEntity<T>> : StatementContainer {
+internal class UnionSelectStatementGroup<T> : StatementContainer {
 
     private var statementLinkedList: StatementLinkedList<SelectStatement<T>>? = null
 

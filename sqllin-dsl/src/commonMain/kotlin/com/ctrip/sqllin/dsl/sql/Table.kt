@@ -16,13 +16,15 @@
 
 package com.ctrip.sqllin.dsl.sql
 
-import com.ctrip.sqllin.dsl.DBEntity
+import kotlinx.serialization.KSerializer
 
 /**
  * SQL table
  * @author yaqiao
  */
 
-public abstract class Table<T : DBEntity<T>>(
+public abstract class Table<T>(
     internal val tableName: String,
-)
+) {
+    public abstract fun kSerializer(): KSerializer<T>
+}

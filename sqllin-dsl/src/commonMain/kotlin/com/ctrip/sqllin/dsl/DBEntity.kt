@@ -23,6 +23,7 @@ import kotlinx.serialization.KSerializer
  * @author yaqiao
  */
 
+@Deprecated(message = "The DBEntity hae benn deprecated, you don't need to implement this interface anymore")
 public fun interface DBEntity<T> {
 
     public fun kSerializer(): KSerializer<T>

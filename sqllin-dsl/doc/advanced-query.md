@@ -65,7 +65,7 @@ SQLlin doesn't yet support subqueries, we will develop as soon as possible.
 
 SQLlin supports joining tables now.
 
-We need other two `DBEntity`s:
+We need other two database entities:
 
 ```kotlin
 @DBRow("transcript")
@@ -74,9 +74,7 @@ data class Transcript(
     val name: String?,
     val math: Int,
     val english: Int,
-): DBEntity<Transcript> {
-    override fun kSerializer(): KSerializer<Transcript> = serializer()
-}
+)
 
 @Serializable
 data class Student(
@@ -84,18 +82,14 @@ data class Student(
     val age: Int?,
     val math: Int,
     val english: Int,
-): DBEntity<Student> {
-    override fun kSerializer(): KSerializer<Student> = serializer()
-}
+)
 
 @Serializable
 data class CrossJoinStudent(
     val age: Int?,
     val math: Int,
     val english: Int,
-): DBEntity<CrossJoinStudent> {
-    override fun kSerializer(): KSerializer<Student> = CrossJoinStudent()
-}
+)
 ```
 
 The `Transcript` represents a other table. And the `Student` represents the join query results' type(so `Student`

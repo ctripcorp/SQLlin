@@ -62,7 +62,7 @@ SQLlin 还不支持子查询，我们将会尽快开发该功能。
 
 SQLlin 目前支持 join 表。
 
-我们需要另外两个 `DBEntity`：
+我们需要另外两个数据库实体：
 
 ```kotlin
 @DBRow("transcript")
@@ -71,9 +71,7 @@ data class Transcript(
     val name: String?,
     val math: Int,
     val english: Int,
-): DBEntity<Transcript> {
-    override fun kSerializer(): KSerializer<Transcript> = serializer()
-}
+)
 
 @Serializable
 data class Student(
@@ -81,18 +79,14 @@ data class Student(
     val age: Int?,
     val math: Int,
     val english: Int,
-): DBEntity<Student> {
-    override fun kSerializer(): KSerializer<Student> = serializer()
-}
+)
 
 @Serializable
 data class CrossJoinStudent(
     val age: Int?,
     val math: Int,
     val english: Int,
-): DBEntity<CrossJoinStudent> {
-    override fun kSerializer(): KSerializer<Student> = CrossJoinStudent()
-}
+)
 ```
 
 `Transcript` 代表另一张表，`Student` 表示 join 的查询结果的类型（所以 `Student` 不需要被添加 `@DBRow` 注解），它拥有所有 `Person` 和 `Transcript`

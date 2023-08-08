@@ -16,7 +16,6 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
-import com.ctrip.sqllin.dsl.DBEntity
 import com.ctrip.sqllin.dsl.sql.statement.*
 
 /**
@@ -24,7 +23,7 @@ import com.ctrip.sqllin.dsl.sql.statement.*
  * @author yaqiao
  */
 
-public class OrderByClause<T : DBEntity<T>> internal constructor(private val column2WayMap: Map<ClauseElement, OrderByWay>) : SelectClause<T> {
+public class OrderByClause<T> internal constructor(private val column2WayMap: Map<ClauseElement, OrderByWay>) : SelectClause<T> {
 
     override val clauseStr: String
         get() {
@@ -50,37 +49,37 @@ public enum class OrderByWay(internal val str: String) {
     DESC("DESC")
 }
 
-public fun <T : DBEntity<T>> ORDER_BY(vararg column2Ways: Pair<ClauseElement, OrderByWay>): OrderByClause<T> =
+public fun <T> ORDER_BY(vararg column2Ways: Pair<ClauseElement, OrderByWay>): OrderByClause<T> =
     OrderByClause(mapOf(*column2Ways))
 
-public inline infix fun <T : DBEntity<T>> WhereSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
+public inline infix fun <T> WhereSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     ORDER_BY(mapOf(column2Way))
 
-public infix fun <T : DBEntity<T>> WhereSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
+public infix fun <T> WhereSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     appendToOrderBy(OrderByClause(column2WayMap)).also {
         container changeLastStatement it
     }
 
-public inline infix fun <T : DBEntity<T>> HavingSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
+public inline infix fun <T> HavingSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     ORDER_BY(mapOf(column2Way))
 
-public infix fun <T : DBEntity<T>> HavingSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
+public infix fun <T> HavingSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     appendToOrderBy(OrderByClause(column2WayMap)).also {
         container changeLastStatement it
     }
 
-public inline infix fun <T : DBEntity<T>> GroupBySelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
+public inline infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     ORDER_BY(mapOf(column2Way))
 
-public infix fun <T : DBEntity<T>> GroupBySelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
+public infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     appendToOrderBy(OrderByClause(column2WayMap)).also {
         container changeLastStatement it
     }
 
-public inline infix fun <T : DBEntity<T>> JoinSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
+public inline infix fun <T> JoinSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     ORDER_BY(mapOf(column2Way))
 
-public infix fun <T : DBEntity<T>> JoinSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
+public infix fun <T> JoinSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     appendToOrderBy(OrderByClause(column2WayMap)).also {
         container changeLastStatement it
     }
