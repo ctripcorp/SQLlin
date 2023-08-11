@@ -10,7 +10,7 @@
 
 ### sqllin-dsl
 
-* Deprecated the public API `DBEntity`([#36](https://github.com/ctripcorp/SQLlin/pull/36), [#37](https://github.com/ctripcorp/SQLlin/pull/37)), any data classes used in _sqllin-dsl_ don't need to extend `DBEntity` anymore.
+* Deprecated the public API `DBEntity`([#36](https://github.com/ctripcorp/SQLlin/pull/36), [#37](https://github.com/ctripcorp/SQLlin/pull/37)), any data classes used in _sqllin-dsl_ don't need to extend `DBEntity` anymore
 
 ### sqllin-driver
 
