@@ -24,7 +24,7 @@ import com.google.devtools.ksp.symbol.*
 import java.io.OutputStreamWriter
 
 /**
- * Generate the clause property for data class that present the database entity
+ * Generate the clause properties for data classes that present the database entity
  * @author yaqiao
  */
 
