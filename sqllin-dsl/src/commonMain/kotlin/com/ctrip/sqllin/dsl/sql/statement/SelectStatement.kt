@@ -22,7 +22,7 @@ import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.compiler.QueryDecoder
 import kotlinx.serialization.DeserializationStrategy
-import kotlin.jvm.Volatile
+import kotlin.concurrent.Volatile
 
 /**
  * Select statement

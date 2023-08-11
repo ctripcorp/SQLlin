@@ -19,8 +19,8 @@ package com.ctrip.sqllin.driver
 import com.ctrip.sqllin.driver.cinterop.NativeDatabase
 import com.ctrip.sqllin.driver.platform.Lock
 import com.ctrip.sqllin.driver.platform.withLock
-import kotlin.native.concurrent.AtomicInt
-import kotlin.native.concurrent.AtomicReference
+import kotlin.concurrent.AtomicInt
+import kotlin.concurrent.AtomicReference
 
 /**
  * Database manager Native actual

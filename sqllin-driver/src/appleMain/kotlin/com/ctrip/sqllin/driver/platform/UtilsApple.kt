@@ -16,8 +16,10 @@
 
 package com.ctrip.sqllin.driver.platform
 
+import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.CPointer
+import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSString
 import platform.Foundation.create
 
@@ -26,6 +28,7 @@ import platform.Foundation.create
  * @author yqiao
  */
 
+@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 internal actual fun bytesToString(bv: CPointer<ByteVar>): String = NSString.create(uTF8String = bv).toString()
 
 internal actual inline val separatorChar: Char

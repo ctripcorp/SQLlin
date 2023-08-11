@@ -33,20 +33,14 @@ import com.ctrip.sqllin.sqlite3.sqlite3_errmsg
 import com.ctrip.sqllin.sqlite3.sqlite3_exec
 import com.ctrip.sqllin.sqlite3.sqlite3_open_v2
 import com.ctrip.sqllin.sqlite3.sqlite3_prepare16_v2
-import kotlinx.cinterop.CPointer
-import kotlinx.cinterop.CPointerVar
-import kotlinx.cinterop.alloc
-import kotlinx.cinterop.memScoped
-import kotlinx.cinterop.ptr
-import kotlinx.cinterop.toKString
-import kotlinx.cinterop.value
-import kotlinx.cinterop.wcstr
+import kotlinx.cinterop.*
 
 /**
  * The native database wrapper for `sqlite3`, interop with SQLite C APIs directly
  * @author yaqiao
  */
 
+@OptIn(ExperimentalForeignApi::class)
 internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite3>) {
 
     companion object {

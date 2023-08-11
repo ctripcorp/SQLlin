@@ -18,12 +18,14 @@ package com.ctrip.sqllin.driver.platform
 
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.CPointer
+import kotlinx.cinterop.ExperimentalForeignApi
 
 /**
  * The tools with platform-specific implementation
  * @author yqiao
  */
 
+@OptIn(ExperimentalForeignApi::class)
 internal expect fun bytesToString(bv: CPointer<ByteVar>): String
 
 internal expect val separatorChar: Char
