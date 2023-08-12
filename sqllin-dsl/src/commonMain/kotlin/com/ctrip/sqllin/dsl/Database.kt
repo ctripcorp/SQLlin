@@ -31,7 +31,7 @@ import com.ctrip.sqllin.dsl.sql.statement.TransactionStatementsGroup
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.serializer
-import kotlin.jvm.Volatile
+import kotlin.concurrent.Volatile
 
 /**
  * Database object

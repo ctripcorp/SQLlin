@@ -51,12 +51,7 @@ import com.ctrip.sqllin.sqlite3.sqlite3_finalize
 import com.ctrip.sqllin.sqlite3.sqlite3_last_insert_rowid
 import com.ctrip.sqllin.sqlite3.sqlite3_reset
 import com.ctrip.sqllin.sqlite3.sqlite3_step
-import kotlinx.cinterop.ByteVar
-import kotlinx.cinterop.CPointer
-import kotlinx.cinterop.readBytes
-import kotlinx.cinterop.refTo
-import kotlinx.cinterop.reinterpret
-import kotlinx.cinterop.toKString
+import kotlinx.cinterop.*
 import platform.posix.usleep
 
 /**
@@ -64,6 +59,7 @@ import platform.posix.usleep
  * @author yaqiao
  */
 
+@OptIn(ExperimentalForeignApi::class)
 internal class NativeStatement(
     private val database: NativeDatabase,
     private val cStatementPointer: CPointer<sqlite3_stmt>,

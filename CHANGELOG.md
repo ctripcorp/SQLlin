@@ -2,16 +2,23 @@
 
 - Date format: YYYY-MM-dd
 
-## v1.1.1 / 2023-xx-xx
+## v1.1.1 / 2023-08-12
+
+### All
+
+* Update `Kotlin`'s version to `1.9.0`
 
 ### sqllin-dsl
 
-* *Breaking Change*: Remove the public API `DBEntity`([#36](https://github.com/ctripcorp/SQLlin/pull/36)), any data classes used in _sqllin-dsl_ don't need to extend `DBEntity` anymore.
-
+* Deprecated the public API `DBEntity`([#36](https://github.com/ctripcorp/SQLlin/pull/36), [#37](https://github.com/ctripcorp/SQLlin/pull/37)), any data classes used in _sqllin-dsl_ don't need to extend `DBEntity` anymore
 
 ### sqllin-driver
 
 * Fix a bug about empty `ByteArray` on native platforms([#30](https://github.com/ctripcorp/SQLlin/pull/30))
+
+### sqllin-processor
+
+* Update `KSP`'s version to `1.9.0-1.0.13`
 
 ## v1.1.0 / 2023-06-06
 

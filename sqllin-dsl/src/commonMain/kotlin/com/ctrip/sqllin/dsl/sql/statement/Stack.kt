@@ -16,7 +16,7 @@
 
 package com.ctrip.sqllin.dsl.sql.statement
 
-import kotlin.jvm.Volatile
+import kotlin.concurrent.Volatile
 
 /**
  * A sample Stack implementation

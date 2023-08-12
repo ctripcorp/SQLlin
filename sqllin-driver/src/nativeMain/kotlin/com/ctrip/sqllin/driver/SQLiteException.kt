@@ -33,7 +33,7 @@ public class SQLiteResultCode(message: String, resultCode: Int) : SQLiteExceptio
     "$message | error code ${
         kotlin.run { 
             val code = resultCode and 0xff
-            SQLiteErrorType.values().find { it.code == code } 
+            SQLiteErrorType.entries.find { it.code == code } 
         }
     }") {
     internal companion object {

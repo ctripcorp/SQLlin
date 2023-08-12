@@ -16,6 +16,7 @@
 
 package com.ctrip.sqllin.driver
 
+import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.toKString
 import platform.posix.getcwd
 
@@ -24,5 +25,6 @@ import platform.posix.getcwd
  * @author yaqiao
  */
 
+@OptIn(ExperimentalForeignApi::class)
 actual fun getPlatformStringPath(): String =
-    getcwd(null, 0)?.toKString() ?: throw IllegalStateException("The temp path created error")
+    getcwd(null, 0u)?.toKString() ?: throw IllegalStateException("The temp path created error")
