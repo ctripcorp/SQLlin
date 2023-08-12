@@ -25,5 +25,6 @@ import platform.posix._wgetcwd
  * @author yaqiao
  */
 
+@OptIn(ExperimentalForeignApi::class)
 actual fun getPlatformStringPath(): String =
     _wgetcwd(null, 0)?.toKString() ?: throw IllegalStateException("Get database path wrong")
