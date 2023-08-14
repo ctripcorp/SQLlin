@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.driver.platform
 
 import kotlinx.cinterop.Arena
+import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.ptr
 import platform.posix.PTHREAD_MUTEX_RECURSIVE
@@ -37,6 +38,7 @@ import platform.posix.pthread_mutexattr_t
  * @author yaqiao
  */
 
+@OptIn(ExperimentalForeignApi::class)
 internal actual class Lock actual constructor() {
 
     private val arena = Arena()
