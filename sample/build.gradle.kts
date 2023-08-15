@@ -11,7 +11,7 @@ plugins {
 version = "1.0"
 
 kotlin {
-    android {
+    androidTarget {
         publishLibraryVariants("release")
     }
     iosX64 {

@@ -16,7 +16,7 @@ version = VERSION
 
 kotlin {
     explicitApi()
-    android {
+    androidTarget {
         publishLibraryVariants("release")
     }
 
