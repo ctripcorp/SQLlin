@@ -41,9 +41,9 @@ SQLlin 的架构设计如下图所示：
 ![sqllin-structure](sqllin-structure.png)
 
 SQLlin 拥有两个主要部分：_sqllin-dsl_ 与 _sqllin-driver_。_sqllin-driver_ 是一套通用的多平台 SQLite 低阶 API，大多数情况下不推荐直接使用。
-_sqllin-dsl_ 是 SQL 语句的 DSL 实现并且它依赖 _sqllin-driver_。
+_sqllin-dsl_ 是 SQL 语句的 DSL 实现并且它基于 _sqllin-driver_。
 
-_sqllin-processor_ 使用 KSP 处理注解并生成用以和 _sqllin-dsl_ 配合使用的代码。
+_sqllin-processor_ 使用 KSP 处理注解并生成用于和 _sqllin-dsl_ 配合使用的代码。
 
 你可以在下列文档中学习如何使用 _sqllin-dsl_：
 
