@@ -25,7 +25,7 @@ import platform.Foundation.create
 
 /**
  * The tools with Apple platforms implementation
- * @author yqiao
+ * @author yaqiao
  */
 
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
