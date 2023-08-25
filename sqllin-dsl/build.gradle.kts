@@ -259,7 +259,7 @@ publishing {
         artifact(javadocJar)
         with(pom) {
             name.set(artifactId)
-            description.set("SQL DSL API for SQLite in Kotlin Multiplatform")
+            description.set("SQL DSL APIs for SQLite on Kotlin Multiplatform")
             val githubURL: String by project
             url.set(githubURL)
             licenses {

@@ -22,7 +22,7 @@ import kotlinx.cinterop.ExperimentalForeignApi
 
 /**
  * The tools with platform-specific implementation
- * @author yqiao
+ * @author yaqiao
  */
 
 @OptIn(ExperimentalForeignApi::class)

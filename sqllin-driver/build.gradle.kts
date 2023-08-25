@@ -235,7 +235,7 @@ publishing {
         artifact(javadocJar)
         with(pom) {
             name.set(artifactId)
-            description.set("Low-level API for SQLite in Kotlin Multiplatform")
+            description.set("Low-level API for SQLite on Kotlin Multiplatform")
             val githubURL: String by project
             url.set(githubURL)
             licenses {

@@ -7,7 +7,7 @@ import kotlinx.cinterop.toKString
 
 /**
  * The tools with Linux implementation
- * @author yqiao
+ * @author yaqiao
  */
 
 @OptIn(ExperimentalForeignApi::class)

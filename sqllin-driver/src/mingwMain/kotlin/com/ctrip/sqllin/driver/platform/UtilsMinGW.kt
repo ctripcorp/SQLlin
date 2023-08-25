@@ -7,7 +7,7 @@ import kotlinx.cinterop.toKStringFromUtf8
 
 /**
  * The tools with Windows implementation
- * @author yqiao
+ * @author yaqiao
  */
 
 @OptIn(ExperimentalForeignApi::class)

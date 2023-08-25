@@ -60,7 +60,7 @@ class ClauseProcessor(
             }?.arguments?.first()?.value?.takeIf { (it as? String)?.isNotBlank() == true } ?: className
 
             val outputStream = environment.codeGenerator.createNewFile(
-                dependencies = Dependencies(true, classDeclaration.containingFile!!),
+                dependencies = classDeclaration.containingFile?.let { Dependencies(true, it) } ?: Dependencies(true),
                 packageName = packageName,
                 fileName = objectName,
             )
