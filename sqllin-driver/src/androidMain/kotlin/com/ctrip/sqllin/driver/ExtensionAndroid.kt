@@ -35,7 +35,7 @@ internal value class AndroidDatabasePath(val context: Context) : DatabasePath
 
 public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && config.inMemory)
-        return DatabaseConnectionImpl(createInMemory(config.toAndroidOpenParams()))
+        return AndroidDatabaseConnection(createInMemory(config.toAndroidOpenParams()))
     val helper = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
         AndroidDBHelper(config)
     else
@@ -44,7 +44,7 @@ public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnectio
         helper.readableDatabase
     else
         helper.writableDatabase
-    return DatabaseConnectionImpl(database)
+    return AndroidDatabaseConnection(database)
 }
 
 private class OldAndroidDBHelper(
@@ -52,10 +52,10 @@ private class OldAndroidDBHelper(
 ) : SQLiteOpenHelper((config.path as AndroidDatabasePath).context, config.name, null, config.version) {
 
     override fun onCreate(db: SQLiteDatabase) =
-        config.create(DatabaseConnectionImpl(db))
+        config.create(AndroidDatabaseConnection(db))
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) =
-        config.upgrade(DatabaseConnectionImpl(db), oldVersion, newVersion)
+        config.upgrade(AndroidDatabaseConnection(db), oldVersion, newVersion)
 }
 
 @RequiresApi(Build.VERSION_CODES.P)
@@ -64,10 +64,10 @@ private class AndroidDBHelper(
 ) : SQLiteOpenHelper((config.path as AndroidDatabasePath).context, config.name, config.version, config.toAndroidOpenParams()) {
 
     override fun onCreate(db: SQLiteDatabase) =
-        config.create(DatabaseConnectionImpl(db))
+        config.create(AndroidDatabaseConnection(db))
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) =
-        config.upgrade(DatabaseConnectionImpl(db), oldVersion, newVersion)
+        config.upgrade(AndroidDatabaseConnection(db), oldVersion, newVersion)
 }
 
 @RequiresApi(Build.VERSION_CODES.P)

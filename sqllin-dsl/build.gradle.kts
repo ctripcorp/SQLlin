@@ -22,6 +22,14 @@ kotlin {
         publishLibraryVariants("release")
     }
 
+    jvm {
+        compilations.all {
+            kotlinOptions {
+                jvmTarget = "11"
+            }
+        }
+    }
+
     listOf(
         iosX64(),
         iosArm64(),
@@ -77,6 +85,8 @@ kotlin {
                 implementation("androidx.test:rules:1.5.0")
             }
         }
+
+        val jvmMain by getting
 
         val iosX64Main by getting
         val iosArm64Main by getting

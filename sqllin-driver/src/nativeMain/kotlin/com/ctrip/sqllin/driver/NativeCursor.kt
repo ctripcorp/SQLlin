@@ -21,7 +21,7 @@ package com.ctrip.sqllin.driver
  * @author yaqiao
  */
 
-internal class CursorImpl(
+internal class NativeCursor(
     private val statement: SQLiteStatement
 ) : CommonCursor {
 

@@ -18,7 +18,7 @@ package com.ctrip.sqllin.driver.cinterop
 
 import cnames.structs.sqlite3_stmt
 import com.ctrip.sqllin.driver.CommonCursor
-import com.ctrip.sqllin.driver.CursorImpl
+import com.ctrip.sqllin.driver.NativeCursor
 import com.ctrip.sqllin.driver.SQLiteStatement
 import com.ctrip.sqllin.driver.platform.bytesToString
 import com.ctrip.sqllin.driver.sqliteException
@@ -176,7 +176,7 @@ internal class NativeStatement(
         return err
     }
 
-    override fun query(): CommonCursor = CursorImpl(this)
+    override fun query(): CommonCursor = NativeCursor(this)
 
     override fun bindNull(index: Int) = opResult(database) {
         sqlite3_bind_null(cStatementPointer, index)

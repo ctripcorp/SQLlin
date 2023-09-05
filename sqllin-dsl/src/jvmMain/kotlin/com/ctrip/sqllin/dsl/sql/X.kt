@@ -14,17 +14,11 @@
  * limitations under the License.
  */
 
-package com.ctrip.sqllin.driver
+package com.ctrip.sqllin.dsl.sql
 
 /**
- * Converting the SynchronousMode Enum to Int value
+ * Express "*" in SQL, and also as placeholder
  * @author yaqiao
  */
 
-internal val SynchronousMode.value: Int
-    get() = when (this) {
-        SynchronousMode.OFF -> 0
-        SynchronousMode.NORMAL -> 1
-        SynchronousMode.FULL -> 2
-        SynchronousMode.EXTRA -> 3
-    }
+public actual object X

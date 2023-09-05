@@ -21,4 +21,4 @@ package com.ctrip.sqllin.dsl.sql
  * @author yaqiao
  */
 
-public object X
+public expect object X

@@ -21,6 +21,6 @@ package com.ctrip.sqllin.driver
  * @author yaqiao
  */
 
-public enum class SynchronousMode {
-    OFF, NORMAL, FULL, EXTRA;
+public enum class SynchronousMode(internal val value: Int) {
+    OFF(0), NORMAL(1), FULL(2), EXTRA(3);
 }

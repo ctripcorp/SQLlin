@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Ctrip.com.
+ * Copyright (C) 2023 Ctrip.com.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,51 +16,47 @@
 
 package com.ctrip.sqllin.driver
 
-import com.ctrip.sqllin.driver.cinterop.NativeDatabase.Companion.openNativeDatabase
-import com.ctrip.sqllin.driver.platform.Lock
-import com.ctrip.sqllin.driver.platform.separatorChar
-import com.ctrip.sqllin.driver.platform.withLock
-import platform.posix.remove
+import org.sqlite.SQLiteConfig
+import java.io.File
+import java.sql.DriverManager
 
 /**
- * SQLite extension Native
+ * SQLite extension JDBC
  * @author yaqiao
  */
 
-public fun String.toDatabasePath(): DatabasePath = NativeDatabasePath(this)
+public fun String.toDatabasePath(): DatabasePath = JDBCDatabasePath(this)
 
-internal value class NativeDatabasePath(val pathString: String) : DatabasePath
+@JvmInline
+internal value class JDBCDatabasePath(val pathString: String) : DatabasePath
 
-private val connectionCreationLock = Lock()
-public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection = connectionCreationLock.withLock {
-    val realDatabasePath = config.diskOrMemoryPath()
-    println("Database full path: $realDatabasePath")
-    val database = openNativeDatabase(config, realDatabasePath)
-    val realConnection = RealDatabaseConnection(database)
-    realConnection.apply {
-        updateSynchronousMode(config.synchronousMode)
-        updateJournalMode(config.journalMode)
-        try {
-            migrateIfNeeded(config.create, config.upgrade, config.version)
-        } catch (e: Exception) {
-            // If this failed, we have to close the connection or we will end up leaking it.
-            println("attempted to run migration and failed. closing connection.")
-            close()
-            throw e
-        }
-    }
-    if (config.isReadOnly) realConnection else ConcurrentDatabaseConnection(realConnection)
+private typealias JDBCJournalMode = SQLiteConfig.JournalMode
+private typealias JDBCSynchronousMode = SQLiteConfig.SynchronousMode
+
+public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection {
+    val sqliteConfig = SQLiteConfig().apply {
+        setUserVersion(config.version)
+        setReadOnly(config.isReadOnly)
+        setJournalMode(when (config.journalMode) {
+            JournalMode.DELETE -> JDBCJournalMode.DELETE
+            JournalMode.WAL -> JDBCJournalMode.WAL
+        })
+        setSynchronous(when (config.synchronousMode) {
+            SynchronousMode.OFF -> JDBCSynchronousMode.OFF
+            SynchronousMode.NORMAL -> JDBCSynchronousMode.NORMAL
+            SynchronousMode.FULL, SynchronousMode.EXTRA -> JDBCSynchronousMode.FULL
+        })
+        busyTimeout = config.busyTimeout
+    }.toProperties()
+    return JDBCConnection(DriverManager.getConnection(config.diskOrMemoryPath(), sqliteConfig))
 }
 
 private fun DatabaseConfiguration.diskOrMemoryPath(): String =
     if (inMemory) {
-        if (name.isBlank())
-            ":memory:"
-        else
-            "file:$name?mode=memory&cache=shared"
+        "jdbc:sqlite::memory:"
     } else {
         require(name.isNotBlank()) { "Database name cannot be blank" }
-        getDatabaseFullPath((path as NativeDatabasePath).pathString, name)
+        getDatabaseFullPath((path as JDBCDatabasePath).pathString, name)
     }
 
 private fun getDatabaseFullPath(dirPath: String, name: String): String {
@@ -73,8 +69,10 @@ private fun getDatabaseFullPath(dirPath: String, name: String): String {
 }
 
 private fun join(prefix: String, suffix: String): String {
-    val haveSlash = (prefix.isNotEmpty() && prefix.last() == separatorChar)
-            || (suffix.isNotEmpty() && suffix.first() == separatorChar)
+    val separatorChar = '/'
+    val windowsSeparatorChar = '\\'
+    val haveSlash = (prefix.isNotEmpty() && (prefix.last() == separatorChar || prefix.last() == windowsSeparatorChar))
+            || (suffix.isNotEmpty() && (suffix.first() == separatorChar || suffix.first() == windowsSeparatorChar))
     return buildString {
         append(prefix)
         if (!haveSlash)
@@ -85,6 +83,8 @@ private fun join(prefix: String, suffix: String): String {
 
 private fun fixSlashes(origPath: String): String {
     // Remove duplicate adjacent slashes.
+    val separatorChar = '/'
+    val windowsSeparatorChar = '\\'
     var lastWasSlash = false
     val newPath = origPath.toCharArray()
     val length = newPath.size
@@ -92,7 +92,7 @@ private fun fixSlashes(origPath: String): String {
     val initialIndex = if (origPath.startsWith("file://", true)) 7 else 0
     for (i in initialIndex ..< length) {
         val ch = newPath[i]
-        if (ch == separatorChar) {
+        if (ch == separatorChar || ch == windowsSeparatorChar) {
             if (!lastWasSlash) {
                 newPath[newLength++] = separatorChar
                 lastWasSlash = true
@@ -109,15 +109,22 @@ private fun fixSlashes(origPath: String): String {
 
     // Reuse the original string if possible.
     return if (newLength != length) buildString(newLength) {
+        val jdbcPrefix = "jdbc:sqlite:"
+        append(jdbcPrefix)
         append(newPath)
-        setLength(newLength)
+        setLength(jdbcPrefix.length + newLength)
     } else origPath
 }
 
 public actual fun deleteDatabase(path: DatabasePath, name: String): Boolean {
-    val baseName = getDatabaseFullPath((path as NativeDatabasePath).pathString, name)
-    remove("$baseName-shm")
-    remove("$baseName-wal")
-    remove("$baseName-journal")
-    return remove(baseName) == 0
+    val baseName = getDatabaseFullPath((path as JDBCDatabasePath).pathString, name)
+    sequenceOf(
+        File("$baseName-shm"),
+        File("$baseName-wal"),
+        File("$baseName-journal"),
+    ).forEach {
+        if (it.exists())
+            it.delete()
+    }
+    return File(baseName).delete()
 }

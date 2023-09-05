@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Ctrip.com.
+ * Copyright (C) 2023 Ctrip.com.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
-package com.ctrip.sqllin.dsl
+package com.ctrip.sqllin.dsl.sql
 
-internal expect interface PlaceHold
+/**
+ * Express "*" in SQL, and also as placeholder
+ * @author yaqiao
+ */
+
+public actual object X

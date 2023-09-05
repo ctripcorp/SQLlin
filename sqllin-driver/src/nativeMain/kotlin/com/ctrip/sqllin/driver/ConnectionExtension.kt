@@ -23,7 +23,7 @@ package com.ctrip.sqllin.driver
 
 internal infix fun DatabaseConnection.updateSynchronousMode(mode: SynchronousMode) {
     val currentJournalMode = withQuery("PRAGMA synchronous;") {
-        (it as CursorImpl).next()
+        (it as NativeCursor).next()
         it.getInt(0)
     }
     if (currentJournalMode != mode.value)
@@ -32,7 +32,7 @@ internal infix fun DatabaseConnection.updateSynchronousMode(mode: SynchronousMod
 
 internal infix fun DatabaseConnection.updateJournalMode(mode: JournalMode) {
     val currentJournalMode = withQuery("PRAGMA journal_mode;") {
-        (it as CursorImpl).next()
+        (it as NativeCursor).next()
         it.getString(0)
     }
     if (!currentJournalMode.equals(mode.name, ignoreCase = true))
@@ -45,7 +45,7 @@ internal fun DatabaseConnection.migrateIfNeeded(
     version: Int,
 ) = withTransaction {
     val initialVersion = withQuery("PRAGMA user_version;") {
-        (it as CursorImpl).next()
+        (it as NativeCursor).next()
         it.getInt(0)
     }
     if (initialVersion == 0) {

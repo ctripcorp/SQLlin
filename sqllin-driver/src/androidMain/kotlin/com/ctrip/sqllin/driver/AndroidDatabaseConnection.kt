@@ -19,11 +19,11 @@ package com.ctrip.sqllin.driver
 import android.database.sqlite.SQLiteDatabase
 
 /**
- * Database manager Android actual
+ * Database connection Android actual
  * @author yaqiao
  */
 
-internal class DatabaseConnectionImpl(private val database: SQLiteDatabase) : DatabaseConnection {
+internal class AndroidDatabaseConnection(private val database: SQLiteDatabase) : DatabaseConnection {
 
     override fun execSQL(sql: String, bindParams: Array<Any?>?) =
         if (bindParams == null)
@@ -35,7 +35,7 @@ internal class DatabaseConnectionImpl(private val database: SQLiteDatabase) : Da
 
     override fun executeUpdateDelete(sql: String, bindParams: Array<Any?>?) = execSQL(sql, bindParams)
 
-    override fun query(sql: String, bindParams: Array<String?>?): CommonCursor = CursorImpl(database.rawQuery(sql, bindParams))
+    override fun query(sql: String, bindParams: Array<String?>?): CommonCursor = AndroidCursor(database.rawQuery(sql, bindParams))
 
     override fun beginTransaction() = database.beginTransaction()
     override fun endTransaction() = database.endTransaction()

@@ -87,7 +87,7 @@ internal class ConcurrentStatement(
     }
 
     override fun query(): CommonCursor = accessLock.withLock {
-        CursorImpl(this)
+        NativeCursor(this)
     }
 
     override fun bindNull(index: Int) = accessLock.withLock {
