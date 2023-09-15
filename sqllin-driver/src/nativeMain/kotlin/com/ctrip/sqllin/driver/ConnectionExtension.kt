@@ -45,7 +45,7 @@ internal fun DatabaseConnection.migrateIfNeeded(
     version: Int,
 ) = withTransaction {
     val initialVersion = withQuery("PRAGMA user_version;") {
-        (it as NativeCursor).next()
+        it.next()
         it.getInt(0)
     }
     if (initialVersion == 0) {

@@ -19,6 +19,8 @@ package com.ctrip.sqllin.driver
 import org.sqlite.SQLiteConfig
 import java.io.File
 import java.sql.DriverManager
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /**
  * SQLite extension JDBC
@@ -33,10 +35,10 @@ internal value class JDBCDatabasePath(val pathString: String) : DatabasePath
 private typealias JDBCJournalMode = SQLiteConfig.JournalMode
 private typealias JDBCSynchronousMode = SQLiteConfig.SynchronousMode
 
+private val lock = ReentrantLock()
+
 public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection {
     val sqliteConfig = SQLiteConfig().apply {
-        setUserVersion(config.version)
-        setReadOnly(config.isReadOnly)
         setJournalMode(when (config.journalMode) {
             JournalMode.DELETE -> JDBCJournalMode.DELETE
             JournalMode.WAL -> JDBCJournalMode.WAL
@@ -48,12 +50,26 @@ public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnectio
         })
         busyTimeout = config.busyTimeout
     }.toProperties()
-    return JDBCConnection(DriverManager.getConnection(config.diskOrMemoryPath(), sqliteConfig))
+    val path = config.diskOrMemoryPath()
+    println("Database full path: $path")
+    val jdbcPath = "jdbc:sqlite:$path"
+    return lock.withLock {
+        JdbcConnection(DriverManager.getConnection(jdbcPath, sqliteConfig)).apply {
+            try {
+                migrateIfNeeded(config.create, config.upgrade, config.version)
+            } catch (e: Exception) {
+                // If this failed, we have to close the connection, or we will end up leaking it.
+                println("attempted to run migration and failed. closing connection.")
+                close()
+                throw e
+            }
+        }
+    }
 }
 
 private fun DatabaseConfiguration.diskOrMemoryPath(): String =
     if (inMemory) {
-        "jdbc:sqlite::memory:"
+        ":memory:"
     } else {
         require(name.isNotBlank()) { "Database name cannot be blank" }
         getDatabaseFullPath((path as JDBCDatabasePath).pathString, name)
@@ -109,10 +125,8 @@ private fun fixSlashes(origPath: String): String {
 
     // Reuse the original string if possible.
     return if (newLength != length) buildString(newLength) {
-        val jdbcPrefix = "jdbc:sqlite:"
-        append(jdbcPrefix)
         append(newPath)
-        setLength(jdbcPrefix.length + newLength)
+        setLength(newLength)
     } else origPath
 }
 
@@ -127,4 +141,25 @@ public actual fun deleteDatabase(path: DatabasePath, name: String): Boolean {
             it.delete()
     }
     return File(baseName).delete()
+}
+
+internal fun DatabaseConnection.migrateIfNeeded(
+    create: (DatabaseConnection) -> Unit,
+    upgrade: (DatabaseConnection, Int, Int) -> Unit,
+    version: Int,
+) = withTransaction {
+    val initialVersion = withQuery("PRAGMA user_version;") {
+        it.next()
+        it.getInt(0)
+    }
+    if (initialVersion == 0) {
+        create(this)
+        execSQL("PRAGMA user_version = $version;")
+    } else if (initialVersion != version) {
+        if (initialVersion > version) {
+            throw IllegalStateException("Database version $initialVersion newer than config version $version")
+        }
+        upgrade(this, initialVersion, version)
+        execSQL("PRAGMA user_version = $version;")
+    }
 }

@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * @author yaqiao
  */
 
-internal class JDBCConnection(private val connection: Connection) : DatabaseConnection {
+internal class JdbcConnection(private val connection: Connection) : DatabaseConnection {
 
     private fun bindParamsToSQL(sql: String, bindParams: Array<Any?>?): PreparedStatement = connection.prepareStatement(sql).apply {
         bindParams?.run {
@@ -88,7 +88,7 @@ internal class JDBCConnection(private val connection: Connection) : DatabaseConn
                 statement.setString(index + 1, it)
             }
         }
-        return statement.executeQuery()?.let { JDBCCursor(it) } ?: throw IllegalStateException("The query result is null.")
+        return statement.executeQuery()?.let { JdbcCursor(it) } ?: throw IllegalStateException("The query result is null.")
     }
 
     private val isTransactionSuccess = AtomicBoolean(false)

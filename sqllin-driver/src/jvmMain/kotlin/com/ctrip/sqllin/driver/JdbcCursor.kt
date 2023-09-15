@@ -22,20 +22,21 @@ import java.sql.ResultSet
  * SQLite Cursor JDBC actual
  * @author yaqiao
  */
-internal class JDBCCursor(private val resultSet: ResultSet) : CommonCursor {
+internal class JdbcCursor(private val resultSet: ResultSet) : CommonCursor {
 
-    override fun getInt(columnIndex: Int): Int = resultSet.getInt(columnIndex)
+    override fun getInt(columnIndex: Int): Int = resultSet.getInt(columnIndex + 1)
 
-    override fun getLong(columnIndex: Int): Long = resultSet.getLong(columnIndex)
+    override fun getLong(columnIndex: Int): Long = resultSet.getLong(columnIndex + 1)
 
-    override fun getFloat(columnIndex: Int): Float = resultSet.getFloat(columnIndex)
+    override fun getFloat(columnIndex: Int): Float = resultSet.getFloat(columnIndex + 1)
 
-    override fun getDouble(columnIndex: Int): Double = resultSet.getDouble(columnIndex)
+    override fun getDouble(columnIndex: Int): Double = resultSet.getDouble(columnIndex + 1)
 
-    override fun getString(columnIndex: Int): String? = resultSet.getString(columnIndex)
+    override fun getString(columnIndex: Int): String? = resultSet.getString(columnIndex + 1)
 
-    override fun getByteArray(columnIndex: Int): ByteArray? = resultSet.getBytes(columnIndex)
-    override fun getColumnIndex(columnName: String): Int = resultSet.findColumn(columnName)
+    override fun getByteArray(columnIndex: Int): ByteArray? = resultSet.getBytes(columnIndex + 1)
+
+    override fun getColumnIndex(columnName: String): Int = resultSet.findColumn(columnName + 1)
 
     override fun forEachRows(block: (Int) -> Unit) {
         var index = 0

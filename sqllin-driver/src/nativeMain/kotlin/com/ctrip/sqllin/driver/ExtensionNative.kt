@@ -43,7 +43,7 @@ public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnectio
         try {
             migrateIfNeeded(config.create, config.upgrade, config.version)
         } catch (e: Exception) {
-            // If this failed, we have to close the connection or we will end up leaking it.
+            // If this failed, we have to close the connection, or we will end up leaking it.
             println("attempted to run migration and failed. closing connection.")
             close()
             throw e
