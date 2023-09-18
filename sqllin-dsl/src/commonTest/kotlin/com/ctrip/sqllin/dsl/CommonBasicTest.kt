@@ -250,6 +250,9 @@ class CommonBasicTest(private val path: DatabasePath) {
                 }
             }
         }
+        statement!!.getResults().forEach {
+            println(it)
+        }
         assertEquals(7, statement!!.getResults().size)
         assertEquals(2, statement!!.getResults().count { it == book0 })
         assertEquals(2, statement!!.getResults().count { it == book1 })
