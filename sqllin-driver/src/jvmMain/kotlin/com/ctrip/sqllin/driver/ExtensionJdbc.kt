@@ -54,7 +54,12 @@ public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnectio
     println("Database full path: $path")
     val jdbcPath = "jdbc:sqlite:$path"
     return lock.withLock {
-        JdbcConnection(DriverManager.getConnection(jdbcPath, sqliteConfig)).apply {
+        val jdbcDatabaseConnection = JdbcDatabaseConnection(DriverManager.getConnection(jdbcPath, sqliteConfig))
+        val finalDatabaseConnection = if (config.isReadOnly)
+            jdbcDatabaseConnection
+        else
+            ConcurrentDatabaseConnection(jdbcDatabaseConnection)
+        finalDatabaseConnection.apply {
             try {
                 migrateIfNeeded(config.create, config.upgrade, config.version)
             } catch (e: Exception) {

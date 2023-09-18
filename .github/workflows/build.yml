@@ -149,7 +149,7 @@ jobs:
         run: ./gradlew :sqllin-driver:cleanMingwX64Test && ./gradlew :sqllin-driver:mingwX64Test --stacktrace
 
       - name: Run sqllin-driver JVM Unit Tests on MinGW X64
-        run: ./gradlew :sqllin-driver:cleanJvmTest && ./gradlew :sqllin-driver:JvmTest --stacktrace
+        run: ./gradlew :sqllin-driver:cleanJvmTest && ./gradlew :sqllin-driver:jvmTest --stacktrace
 
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary
@@ -158,7 +158,7 @@ jobs:
         run: ./gradlew :sqllin-dsl:cleanMingwX64Test && ./gradlew :sqllin-dsl:mingwX64Test --stacktrace
 
       - name: Run sqllin-dsl JVM Unit Tests on MinGW X64
-        run: ./gradlew :sqllin-dsl:cleanJvmTest && ./gradlew :sqllin-dsl:JvmTest --stacktrace
+        run: ./gradlew :sqllin-dsl:cleanJvmTest && ./gradlew :sqllin-dsl:jvmTest --stacktrace
 
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v2
@@ -206,7 +206,7 @@ jobs:
         run: ./gradlew :sqllin-driver:assemble
 
       - name: Run sqllin-driver Linux X64 Tests
-        run: ./gradlew :sqllin-driver:cleanLinuxX64Test && ./gradlew :sqllin-driver:linuxX64Test --stacktrace
+        run: ./test_driver_linux.sh
 
       - name: Run sqllin-driver JVM Unit Tests on Linux X64
         run: ./test_driver_jvm.sh
@@ -218,7 +218,7 @@ jobs:
         run: ./gradlew :sqllin-dsl:assemble
 
       - name: Run sqllin-dsl Linux X64 Tests
-        run: ./gradlew :sqllin-dsl:cleanLinuxX64Test && ./gradlew :sqllin-dsl:linuxX64Test --stacktrace
+        run: ./test_dsl_linux.sh
 
       - name: Run sqllin-dsl JVM Unit Tests on Linux X64
         run: ./test_dsl_jvm.sh

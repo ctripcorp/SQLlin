@@ -19,9 +19,7 @@ package com.ctrip.sqllin.driver
 import java.lang.IllegalStateException
 import java.sql.Connection
 
-import java.math.BigDecimal
 import java.sql.PreparedStatement
-import java.sql.Types
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -29,39 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * @author yaqiao
  */
 
-internal class JdbcConnection(private val connection: Connection) : DatabaseConnection {
-
-    private fun bindParamsToSQL(sql: String, bindParams: Array<Any?>?): PreparedStatement = connection.prepareStatement(sql).apply {
-        bindParams?.run {
-            require(isNotEmpty()) { "Empty bindArgs" }
-            forEachIndexed { index, any ->
-                val realIndex = index + 1
-                when (any) {
-                    is String -> setString(realIndex, any)
-                    is Long -> setLong(realIndex, any)
-                    is Double -> setDouble(realIndex, any)
-                    is ByteArray -> setBytes(realIndex, any)
-                    null -> setNull(realIndex, Types.NULL)
-
-                    is Int -> setInt(realIndex, any)
-                    is Float -> setFloat(realIndex, any)
-                    is Boolean -> setBoolean(realIndex, any)
-                    is Char -> setString(realIndex, any.toString())
-                    is Short -> setShort(realIndex, any)
-                    is Byte -> setByte(realIndex, any)
-
-                    is ULong -> setLong(realIndex, any.toLong())
-                    is UInt -> setInt(realIndex, any.toInt())
-                    is UShort -> setShort(realIndex, any.toShort())
-                    is UByte -> setByte(realIndex, any.toByte())
-
-                    is BigDecimal -> setBigDecimal(realIndex, any)
-
-                    else -> throw IllegalArgumentException("No supported element type.")
-                }
-            }
-        }
-    }
+internal class JdbcDatabaseConnection(private val connection: Connection) : AbstractJdbcDatabaseConnection() {
 
     override fun execSQL(sql: String, bindParams: Array<Any?>?) {
         bindParamsToSQL(sql, bindParams).use {
@@ -123,4 +89,6 @@ internal class JdbcConnection(private val connection: Connection) : DatabaseConn
         get() = connection.isClosed
     override val isClosed: Boolean
         get() = connection.isClosed
+
+    override fun createStatement(sql: String): PreparedStatement = connection.prepareStatement(sql)
 }
