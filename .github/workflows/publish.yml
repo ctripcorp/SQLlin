@@ -46,11 +46,17 @@ jobs:
       - name: Run sqllin-driver macOS X64 Tests
         run: ./test_driver_macos.sh
 
+      - name: Run sqllin-driver JVM Unit Tests on macOS X64
+        run: ./test_driver_jvm.sh
+
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:assemble
 
       - name: Run sqllin-dsl macOS X64 Tests
         run: ./test_dsl_macos.sh
+
+      - name: Run sqllin-dsl JVM Unit Tests on macOS X64
+        run: ./test_dsl_jvm.sh
 
       - name: Gradle Cache
         uses: gradle/gradle-build-action@v2
@@ -140,11 +146,17 @@ jobs:
       - name: Run sqllin-driver MinGW X64 Tests
         run: ./gradlew :sqllin-driver:cleanMingwX64Test && ./gradlew :sqllin-driver:mingwX64Test --stacktrace
 
+      - name: Run sqllin-driver JVM Unit Tests on MinGW X64
+        run: ./gradlew :sqllin-driver:cleanJvmTest && ./gradlew :sqllin-driver:JvmTest --stacktrace
+
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary
 
       - name: Run sqllin-dsl MinGW X64 Tests
         run: ./gradlew :sqllin-dsl:cleanMingwX64Test && ./gradlew :sqllin-dsl:mingwX64Test --stacktrace
+
+      - name: Run sqllin-dsl JVM Unit Tests on MinGW X64
+        run: ./gradlew :sqllin-dsl:cleanJvmTest && ./gradlew :sqllin-dsl:JvmTest --stacktrace
 
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v2
@@ -197,6 +209,9 @@ jobs:
       - name: Run sqllin-driver Linux X64 Tests
         run: ./gradlew :sqllin-driver:cleanLinuxX64Test && ./gradlew :sqllin-driver:linuxX64Test --stacktrace
 
+      - name: Run sqllin-driver JVM Unit Tests on Linux X64
+        run: ./test_driver_jvm.sh
+
       - name: Build sqllin-processor
         run: ./gradlew :sqllin-processor:assemble
 
@@ -205,6 +220,9 @@ jobs:
 
       - name: Run sqllin-dsl Linux X64 Tests
         run: ./gradlew :sqllin-dsl:cleanLinuxX64Test && ./gradlew :sqllin-dsl:linuxX64Test --stacktrace
+
+      - name: Run sqllin-dsl JVM Unit Tests on Linux X64
+        run: ./test_dsl_jvm.sh
 
       - name: Gradle Cache
         uses: gradle/gradle-build-action@v2

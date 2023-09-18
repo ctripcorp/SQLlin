@@ -88,6 +88,8 @@ kotlin {
 
         val jvmMain by getting
 
+        val jvmTest by getting
+
         val iosX64Main by getting
         val iosArm64Main by getting
         val iosSimulatorArm64Main by getting
@@ -234,6 +236,8 @@ fun KotlinNativeTarget.setupNativeConfig() {
 dependencies {
     val sourceSet = listOf(
         "kspAndroidAndroidTest",
+
+        "kspJvmTest",
 
         "kspIosX64Test",
         "kspIosArm64Test",

@@ -36,7 +36,7 @@ internal class JdbcCursor(private val resultSet: ResultSet) : CommonCursor {
 
     override fun getByteArray(columnIndex: Int): ByteArray? = resultSet.getBytes(columnIndex + 1)
 
-    override fun getColumnIndex(columnName: String): Int = resultSet.findColumn(columnName + 1)
+    override fun getColumnIndex(columnName: String): Int = resultSet.findColumn(columnName) - 1
 
     override fun forEachRows(block: (Int) -> Unit) {
         var index = 0
