@@ -119,5 +119,8 @@ public actual fun deleteDatabase(path: DatabasePath, name: String): Boolean {
     remove("$baseName-shm")
     remove("$baseName-wal")
     remove("$baseName-journal")
-    return remove(baseName) == 0
+    val result = remove(baseName) == 0
+    if (!result)
+        println("Delete the database file failed, file path: $baseName")
+    return result
 }

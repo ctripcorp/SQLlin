@@ -145,7 +145,10 @@ public actual fun deleteDatabase(path: DatabasePath, name: String): Boolean {
         if (it.exists())
             it.delete()
     }
-    return File(baseName).delete()
+    val result = File(baseName).delete()
+    if (!result)
+        println("Delete the database file failed, file path: $baseName")
+    return result
 }
 
 internal fun DatabaseConnection.migrateIfNeeded(
