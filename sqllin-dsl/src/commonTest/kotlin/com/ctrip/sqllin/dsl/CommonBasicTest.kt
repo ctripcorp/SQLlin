@@ -236,7 +236,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         val book0 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         val book1 = Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72)
         val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
-        val book3 = Book(name = "Kotlin Guide Pratique", author = "Ken Kousen", pages = 398, price = 39.99)
+        val book3 = Book(name = "Kotlin Guide Pratique", author = "Ken Kousen", pages = 398, price = 40.08)
         var statement: SelectStatement<Book>? = null
         database {
             statement = BookTable { table ->
@@ -249,9 +249,6 @@ class CommonBasicTest(private val path: DatabasePath) {
                     table SELECT X
                 }
             }
-        }
-        statement!!.getResults().forEach {
-            println(it)
         }
         assertEquals(7, statement!!.getResults().size)
         assertEquals(2, statement!!.getResults().count { it == book0 })

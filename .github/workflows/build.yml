@@ -51,8 +51,8 @@ jobs:
       - name: Run sqllin-driver macOS X64 Tests
         run: ./test_driver_macos.sh
 
-      #- name: Run sqllin-driver JVM Unit Tests on macOS X64
-        #run: ./test_driver_jvm.sh
+      - name: Run sqllin-driver JVM Unit Tests on macOS X64
+        run: ./test_driver_jvm.sh
 
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:assemble
@@ -60,8 +60,8 @@ jobs:
       - name: Run sqllin-dsl macOS X64 Tests
         run: ./test_dsl_macos.sh
 
-      #- name: Run sqllin-dsl JVM Unit Tests on macOS X64
-        #run: ./test_dsl_jvm.sh
+      - name: Run sqllin-dsl JVM Unit Tests on macOS X64
+        run: ./test_dsl_jvm.sh
 
       - name: Gradle Cache
         uses: gradle/gradle-build-action@v2
@@ -208,8 +208,8 @@ jobs:
       - name: Run sqllin-driver Linux X64 Tests
         run: ./test_driver_linux.sh
 
-      #- name: Run sqllin-driver JVM Unit Tests on Linux X64
-        #run: ./test_driver_jvm.sh
+      - name: Run sqllin-driver JVM Unit Tests on Linux X64
+        run: ./test_driver_jvm.sh
 
       - name: Build sqllin-processor
         run: ./gradlew :sqllin-processor:assemble
@@ -220,8 +220,8 @@ jobs:
       - name: Run sqllin-dsl Linux X64 Tests
         run: ./test_dsl_linux.sh
 
-      #- name: Run sqllin-dsl JVM Unit Tests on Linux X64
-        #run: ./test_dsl_jvm.sh
+      - name: Run sqllin-dsl JVM Unit Tests on Linux X64
+        run: ./test_dsl_jvm.sh
 
       - name: Gradle Cache
         uses: gradle/gradle-build-action@v2
