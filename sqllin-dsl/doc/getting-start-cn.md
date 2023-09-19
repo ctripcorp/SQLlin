@@ -14,7 +14,7 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-val sqllinVersion = "1.1.1"
+val sqllinVersion = "1.2.0"
 
 kotlin {
     // ......
@@ -114,7 +114,8 @@ val database = Database(
     )
 )
 ```
-注意，由于 Android Framework 的限制，`inMemory`、`journalMode`、`synchronousMode`、`busyTimeout`、`lookasideSlotSize`、`lookasideSlotCount` 这些参数仅在 Android 9 及以上版本生效。
+注意，由于 Android Framework 的限制，`inMemory`、`journalMode`、`lookasideSlotSize`、`lookasideSlotCount` 这些参数仅在 Android 9 及以上版本生效。 并且，由于
+[sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)（SQLlin 在 JVM 上基于它）不支持 `sqlite3_config()`，`lookasideSlotSize` 和 `lookasideSlotCount` 两个属性在 JVM 平台不生效。
 
 当前由于会改变数据库结构的操作暂时还没有 DSL 化支持。因此，你需要在 `create` 和 `update` 参数中使用字符串编写 SQL 语句。
 

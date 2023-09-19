@@ -2,6 +2,18 @@
 
 - Date format: YYYY-MM-dd
 
+## v1.2.0 / 2023-09-19
+
+### sqllin-dsl
+
+* Add the new JVM target
+
+### sqllin-driver
+
+* Add the new JVM target
+* Breaking change: Remove the public property: `DatabaseConnection#closed`
+* The Android (<= 9) target supports to set the `journalMode` and `synchronousMode` now
+
 ## v1.1.1 / 2023-08-12
 
 ### All

@@ -106,13 +106,6 @@ internal class RealDatabaseConnection(
         transactionLock.close()
     }
 
-    @Deprecated(
-        message = "The property closed has been deprecated, please use the isClosed to replace it",
-        replaceWith = ReplaceWith("isClosed")
-    )
-    override val closed: Boolean
-        get() = closedFlag.value != 0
-
     override val isClosed: Boolean
         get() = closedFlag.value != 0
 

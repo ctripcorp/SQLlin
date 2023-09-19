@@ -345,6 +345,7 @@ class CommonBasicTest(private val path: DatabasePath) {
             name = DATABASE_NAME,
             path = path,
             version = 1,
+            inMemory = true,
             create = {
                 it.execSQL(SQL_CREATE_BOOK)
                 it.execSQL(SQL_CREATE_CATEGORY)

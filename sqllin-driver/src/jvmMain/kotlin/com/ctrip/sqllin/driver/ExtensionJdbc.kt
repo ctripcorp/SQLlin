@@ -27,26 +27,23 @@ import kotlin.concurrent.withLock
  * @author yaqiao
  */
 
-public fun String.toDatabasePath(): DatabasePath = JDBCDatabasePath(this)
+public fun String.toDatabasePath(): DatabasePath = StringDatabasePath(this)
 
-@JvmInline
-internal value class JDBCDatabasePath(val pathString: String) : DatabasePath
-
-private typealias JDBCJournalMode = SQLiteConfig.JournalMode
-private typealias JDBCSynchronousMode = SQLiteConfig.SynchronousMode
+private typealias JdbcJournalMode = SQLiteConfig.JournalMode
+private typealias JdbcSynchronousMode = SQLiteConfig.SynchronousMode
 
 private val lock = ReentrantLock()
 
 public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection {
     val sqliteConfig = SQLiteConfig().apply {
         setJournalMode(when (config.journalMode) {
-            JournalMode.DELETE -> JDBCJournalMode.DELETE
-            JournalMode.WAL -> JDBCJournalMode.WAL
+            JournalMode.DELETE -> JdbcJournalMode.DELETE
+            JournalMode.WAL -> JdbcJournalMode.WAL
         })
         setSynchronous(when (config.synchronousMode) {
-            SynchronousMode.OFF -> JDBCSynchronousMode.OFF
-            SynchronousMode.NORMAL -> JDBCSynchronousMode.NORMAL
-            SynchronousMode.FULL, SynchronousMode.EXTRA -> JDBCSynchronousMode.FULL
+            SynchronousMode.OFF -> JdbcSynchronousMode.OFF
+            SynchronousMode.NORMAL -> JdbcSynchronousMode.NORMAL
+            SynchronousMode.FULL, SynchronousMode.EXTRA -> JdbcSynchronousMode.FULL
         })
         busyTimeout = config.busyTimeout
     }.toProperties()
@@ -59,84 +56,20 @@ public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnectio
             jdbcDatabaseConnection
         else
             ConcurrentDatabaseConnection(jdbcDatabaseConnection)
-        finalDatabaseConnection.apply {
-            try {
-                migrateIfNeeded(config.create, config.upgrade, config.version)
-            } catch (e: Exception) {
-                // If this failed, we have to close the connection, or we will end up leaking it.
-                println("attempted to run migration and failed. closing connection.")
-                close()
-                throw e
-            }
+        try {
+            finalDatabaseConnection.migrateIfNeeded(config.create, config.upgrade, config.version)
+        } catch (e: Exception) {
+            // If this failed, we have to close the connection, or we will end up leaking it.
+            println("attempted to run migration and failed. closing connection.")
+            finalDatabaseConnection.close()
+            throw e
         }
+        finalDatabaseConnection
     }
-}
-
-private fun DatabaseConfiguration.diskOrMemoryPath(): String =
-    if (inMemory) {
-        ":memory:"
-    } else {
-        require(name.isNotBlank()) { "Database name cannot be blank" }
-        getDatabaseFullPath((path as JDBCDatabasePath).pathString, name)
-    }
-
-private fun getDatabaseFullPath(dirPath: String, name: String): String {
-    val param = when {
-        dirPath.isEmpty() -> name
-        name.isEmpty() -> dirPath
-        else -> join(dirPath, name)
-    }
-    return fixSlashes(param)
-}
-
-private fun join(prefix: String, suffix: String): String {
-    val separatorChar = '/'
-    val windowsSeparatorChar = '\\'
-    val haveSlash = (prefix.isNotEmpty() && (prefix.last() == separatorChar || prefix.last() == windowsSeparatorChar))
-            || (suffix.isNotEmpty() && (suffix.first() == separatorChar || suffix.first() == windowsSeparatorChar))
-    return buildString {
-        append(prefix)
-        if (!haveSlash)
-            append(separatorChar)
-        append(suffix)
-    }
-}
-
-private fun fixSlashes(origPath: String): String {
-    // Remove duplicate adjacent slashes.
-    val separatorChar = '/'
-    val windowsSeparatorChar = '\\'
-    var lastWasSlash = false
-    val newPath = origPath.toCharArray()
-    val length = newPath.size
-    var newLength = 0
-    val initialIndex = if (origPath.startsWith("file://", true)) 7 else 0
-    for (i in initialIndex ..< length) {
-        val ch = newPath[i]
-        if (ch == separatorChar || ch == windowsSeparatorChar) {
-            if (!lastWasSlash) {
-                newPath[newLength++] = separatorChar
-                lastWasSlash = true
-            }
-        } else {
-            newPath[newLength++] = ch
-            lastWasSlash = false
-        }
-    }
-    // Remove any trailing slash (unless this is the root of the file system).
-    if (lastWasSlash && newLength > 1) {
-        newLength--
-    }
-
-    // Reuse the original string if possible.
-    return if (newLength != length) buildString(newLength) {
-        append(newPath)
-        setLength(newLength)
-    } else origPath
 }
 
 public actual fun deleteDatabase(path: DatabasePath, name: String): Boolean {
-    val baseName = getDatabaseFullPath((path as JDBCDatabasePath).pathString, name)
+    val baseName = getDatabaseFullPath((path as StringDatabasePath).pathString, name)
     sequenceOf(
         File("$baseName-shm"),
         File("$baseName-wal"),
@@ -149,25 +82,4 @@ public actual fun deleteDatabase(path: DatabasePath, name: String): Boolean {
     if (!result)
         println("Delete the database file failed, file path: $baseName")
     return result
-}
-
-internal fun DatabaseConnection.migrateIfNeeded(
-    create: (DatabaseConnection) -> Unit,
-    upgrade: (DatabaseConnection, Int, Int) -> Unit,
-    version: Int,
-) = withTransaction {
-    val initialVersion = withQuery("PRAGMA user_version;") {
-        it.next()
-        it.getInt(0)
-    }
-    if (initialVersion == 0) {
-        create(this)
-        execSQL("PRAGMA user_version = $version;")
-    } else if (initialVersion != version) {
-        if (initialVersion > version) {
-            throw IllegalStateException("Database version $initialVersion newer than config version $version")
-        }
-        upgrade(this, initialVersion, version)
-        execSQL("PRAGMA user_version = $version;")
-    }
 }
