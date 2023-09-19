@@ -36,7 +36,8 @@ internal value class AndroidDatabasePath(val context: Context) : DatabasePath
 public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && config.inMemory)
         return AndroidDatabaseConnection(createInMemory(config.toAndroidOpenParams()))
-    val helper = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+    val isEqualsOrHigherThanAndroidP = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+    val helper = if (isEqualsOrHigherThanAndroidP)
         AndroidDBHelper(config)
     else
         OldAndroidDBHelper(config)
@@ -44,7 +45,12 @@ public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnectio
         helper.readableDatabase
     else
         helper.writableDatabase
-    return AndroidDatabaseConnection(database)
+    val connection = AndroidDatabaseConnection(database)
+    if (!isEqualsOrHigherThanAndroidP) {
+        connection.updateSynchronousMode(config.synchronousMode)
+        connection.updateJournalMode(config.journalMode)
+    }
+    return connection
 }
 
 private class OldAndroidDBHelper(

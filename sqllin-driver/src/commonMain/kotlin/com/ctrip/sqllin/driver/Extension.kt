@@ -16,6 +16,9 @@
 
 package com.ctrip.sqllin.driver
 
+import com.ctrip.sqllin.driver.platform.separatorChar
+import kotlin.jvm.JvmInline
+
 /**
  * SQLite extension function
  * @author yaqiao
@@ -63,3 +66,107 @@ public inline fun <T> DatabaseConnection.withQuery(
 }
 
 public expect fun deleteDatabase(path: DatabasePath, name: String): Boolean
+
+internal infix fun DatabaseConnection.updateSynchronousMode(mode: SynchronousMode) {
+    val currentJournalMode = withQuery("PRAGMA synchronous;") {
+        it.next()
+        it.getInt(0)
+    }
+    if (currentJournalMode != mode.value)
+        execSQL("PRAGMA synchronous=${mode.value};")
+}
+
+internal infix fun DatabaseConnection.updateJournalMode(mode: JournalMode) {
+    val currentJournalMode = withQuery("PRAGMA journal_mode;") {
+        it.next()
+        it.getString(0)
+    }
+    if (!currentJournalMode.equals(mode.name, ignoreCase = true))
+        withQuery("PRAGMA journal_mode=${mode.name};") {}
+}
+
+internal fun DatabaseConnection.migrateIfNeeded(
+    create: (DatabaseConnection) -> Unit,
+    upgrade: (DatabaseConnection, Int, Int) -> Unit,
+    version: Int,
+) = withTransaction {
+    val initialVersion = withQuery("PRAGMA user_version;") {
+        it.next()
+        it.getInt(0)
+    }
+    if (initialVersion == 0) {
+        create(this)
+        execSQL("PRAGMA user_version = $version;")
+    } else if (initialVersion != version) {
+        if (initialVersion > version) {
+            throw IllegalStateException("Database version $initialVersion newer than config version $version")
+        }
+        upgrade(this, initialVersion, version)
+        execSQL("PRAGMA user_version = $version;")
+    }
+}
+
+internal fun DatabaseConfiguration.diskOrMemoryPath(): String =
+    if (inMemory) {
+        if (name.isBlank())
+            ":memory:"
+        else
+            "file:$name?mode=memory&cache=shared"
+    } else {
+        require(name.isNotBlank()) { "Database name cannot be blank" }
+        getDatabaseFullPath((path as StringDatabasePath).pathString, name)
+    }
+
+internal fun getDatabaseFullPath(dirPath: String, name: String): String {
+    val param = when {
+        dirPath.isEmpty() -> name
+        name.isEmpty() -> dirPath
+        else -> join(dirPath, name)
+    }
+    return fixSlashes(param)
+}
+
+private fun join(prefix: String, suffix: String): String {
+    val haveSlash = (prefix.isNotEmpty() && prefix.last() == separatorChar)
+            || (suffix.isNotEmpty() && suffix.first() == separatorChar)
+    return buildString {
+        append(prefix)
+        if (!haveSlash)
+            append(separatorChar)
+        append(suffix)
+    }
+}
+
+private fun fixSlashes(origPath: String): String {
+    // Remove duplicate adjacent slashes.
+    var lastWasSlash = false
+    val newPath = origPath.toCharArray()
+    val length = newPath.size
+    var newLength = 0
+    val initialIndex = if (origPath.startsWith("file://", true)) 7 else 0
+    for (i in initialIndex ..< length) {
+        val ch = newPath[i]
+        if (ch == separatorChar) {
+            if (!lastWasSlash) {
+                newPath[newLength++] = separatorChar
+                lastWasSlash = true
+            }
+        } else {
+            newPath[newLength++] = ch
+            lastWasSlash = false
+        }
+    }
+    // Remove any trailing slash (unless this is the root of the file system).
+    if (lastWasSlash && newLength > 1) {
+        newLength--
+    }
+
+    // Reuse the original string if possible.
+    return if (newLength != length) buildString(newLength) {
+        append(newPath)
+        setLength(newLength)
+    } else origPath
+}
+
+@JvmInline
+internal value class StringDatabasePath(val pathString: String) : DatabasePath

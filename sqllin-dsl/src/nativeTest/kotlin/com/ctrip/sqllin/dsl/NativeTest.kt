@@ -19,6 +19,7 @@ package com.ctrip.sqllin.dsl
 import com.ctrip.sqllin.driver.deleteDatabase
 import com.ctrip.sqllin.driver.toDatabasePath
 import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -60,6 +61,11 @@ class NativeTest {
 
     @Test
     fun testJoinClause() = commonTest.testJoinClause()
+
+    @BeforeTest
+    fun setUp() {
+        deleteDatabase(path, CommonBasicTest.DATABASE_NAME)
+    }
 
     @AfterTest
     fun setDown() {

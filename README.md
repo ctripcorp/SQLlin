@@ -32,6 +32,7 @@ SQLlin supports these platforms:
 
 - Multiplatform Common
 - Android (6.0+)
+- JVM (Java 11+, since `1.2.0`)
 - iOS (x64, arm64, simulatorArm64)
 - macOS (x64, arm64)
 - watchOS (x64, arm32, arm64, simulatorArm64, deviceArm64)

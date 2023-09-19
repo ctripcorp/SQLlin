@@ -16,7 +16,7 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-val sqllinVersion = "1.1.1"
+val sqllinVersion = "1.2.0"
 
 kotlin {
     // ......
@@ -120,8 +120,9 @@ val database = Database(
 )
 ```
 
-Note, because of limitation by Android Framework, `inMemory`, `journalMode`, `synchronousMode`, `busyTimeout`, `lookasideSlotSize`, `lookasideSlotCount` 
-only work on Android 9 and higher.
+Note, because of limitation by Android Framework, the `inMemory`, `busyTimeout`, `lookasideSlotSize`, `lookasideSlotCount` 
+only work on Android 9 and higher. And, because of [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)(SQLlin base on it on JVM) doesn't support
+`sqlite3_config()`, the `lookasideSlotSize` and `lookasideSlotCount` don't work on JVM target.
 
 Now, the operations that change database structure have not supported by DSL yet. So, you need to write these SQL statements by string
 as in `create` and `upgrade` parameters.

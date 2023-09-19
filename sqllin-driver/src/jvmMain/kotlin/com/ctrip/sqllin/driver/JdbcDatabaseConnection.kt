@@ -81,12 +81,6 @@ internal class JdbcDatabaseConnection(private val connection: Connection) : Abst
 
     override fun close() = connection.close()
 
-    @Deprecated(
-        message = "The property closed has been deprecated, please use the isClosed to replace it",
-        replaceWith = ReplaceWith("isClosed")
-    )
-    override val closed: Boolean
-        get() = connection.isClosed
     override val isClosed: Boolean
         get() = connection.isClosed
 

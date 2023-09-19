@@ -22,6 +22,7 @@ import androidx.test.internal.runner.junit4.AndroidJUnit4ClassRunner
 import androidx.test.platform.app.InstrumentationRegistry
 import com.ctrip.sqllin.driver.toDatabasePath
 import org.junit.After
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -66,6 +67,12 @@ class AndroidTest {
 
     @Test
     fun testJoinClause() = commonTest.testJoinClause()
+
+    @Before
+    fun setUp() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.deleteDatabase(CommonBasicTest.DATABASE_NAME)
+    }
 
     @After
     fun setDown() {
