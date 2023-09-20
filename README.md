@@ -40,9 +40,9 @@ SQLlin supports these platforms:
 - Linux (x64)
 - Windows (mingwX64)
 
-The structure design of SQLlin is shown in the figure:
+The architecture design of SQLlin is shown in the figure:
 
-![sqllin-structure](sqllin-structure.png)
+![sqllin-architecture](sqllin-architecture.png)
 
 SQLlin has two major parts: _sqllin-dsl_ and _sqllin-driver_. The _sqllin-driver_ is a common multiplatform SQLite low-level
 API, most of the time it is not recommended to use it directly. The _sqllin-dsl_ is the SQL statements DSL implementation and based on _sqllin-driver_. 
