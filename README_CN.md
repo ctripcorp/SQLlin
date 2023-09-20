@@ -39,7 +39,7 @@ SQLlin 支持如下平台：
 
 SQLlin 的架构设计如下图所示：
 
-![sqllin-structure](sqllin-structure.png)
+![sqllin-architecture](sqllin-architecture.png)
 
 SQLlin 拥有两个主要部分：_sqllin-dsl_ 与 _sqllin-driver_。_sqllin-driver_ 是一套通用的多平台 SQLite 低阶 API，大多数情况下不推荐直接使用。
 _sqllin-dsl_ 是 SQL 语句的 DSL 实现并且它基于 _sqllin-driver_。
