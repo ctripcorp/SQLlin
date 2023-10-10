@@ -4,9 +4,9 @@
 
 **Welcome to use SQLlin !!!**
 
-## Installation via Maven in Gradle
+## Installation via Maven with Gradle
 
-Add the _sqllin-dsl_, _sqllin-driver_ and _sqllin-processor_ dependencies in your build.gradle.kts: 
+Add the _sqllin-dsl_, _sqllin-driver_ and _sqllin-processor_ dependencies into your `build.gradle.kts`: 
 
 ```kotlin
 plugins {
@@ -43,6 +43,9 @@ dependencies {
     add("kspCommonMainMetadata", "com.ctrip.kotlin:sqllin-processor:$sqllinVersion")
 }
 ```
+
+> Note: If you want to add dependiences of SQLlin into your Kotlin/Native exectable program project, sometimes you need to add the `linkerOpts`
+> of SQLite into your `build.gradle.kts` correctly. You can refer to [issue #48](https://github.com/ctripcorp/SQLlin/issues/48) to get more information.
 
 ## Creating the Database
 
