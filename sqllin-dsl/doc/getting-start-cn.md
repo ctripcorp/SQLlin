@@ -4,7 +4,7 @@
 
 ## 在 Gradle 中使用 Maven 引入
 
-将 _sqllin-dsl_、_sqllin-driver_ 以及 _sqllin-processor_ 依赖添加到你的 build.gradle.kts：
+将 _sqllin-dsl_、_sqllin-driver_ 以及 _sqllin-processor_ 依赖添加到你的 `build.gradle.kts`：
 
 ```kotlin
 plugins {
@@ -41,6 +41,8 @@ dependencies {
     add("kspCommonMainMetadata", "com.ctrip.kotlin:sqllin-processor:$sqllinVersion")
 }
 ```
+> 注意：如果你想将 SQLlin 的依赖添加到你的 Kotlin/Native 可执行程序工程，有时你需要正确添加对 SQLite 的 `linkerOpts` 到你的
+> `build.gradle.kts`。你可以参考 [issue #48](https://github.com/ctripcorp/SQLlin/issues/48) 来获取更多信息。
 
 ## 创建数据库
 
