@@ -50,7 +50,7 @@ internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite
             val db = memScoped {
                 val dbPtr = alloc<CPointerVar<sqlite3>>()
                 if(configuration.isReadOnly) {
-                    //from SQLITE_OPEN_READWRITE docs: if opening in read-write mode fails due to OS-level permissions, an attempt is made to open it in read-only mode
+                    //from sqlite3_open_v2 docs: if opening in read-write mode fails due to OS-level permissions, an attempt is made to open it in read-only mode
                     val openResult = sqlite3_open_v2(realPath, dbPtr.ptr, SQLITE_OPEN_READWRITE or SQLITE_OPEN_URI, null)
                     if (openResult == SQLITE_OK) return@memScoped dbPtr.value!!
                 }
