@@ -24,7 +24,6 @@ import com.ctrip.sqllin.sqlite3.SQLITE_DBCONFIG_LOOKASIDE
 import com.ctrip.sqllin.sqlite3.SQLITE_OK
 import com.ctrip.sqllin.sqlite3.SQLITE_OPEN_CREATE
 import com.ctrip.sqllin.sqlite3.SQLITE_OPEN_READWRITE
-import com.ctrip.sqllin.sqlite3.SQLITE_OPEN_READONLY
 import com.ctrip.sqllin.sqlite3.SQLITE_OPEN_URI
 import com.ctrip.sqllin.sqlite3.sqlite3_busy_timeout
 import com.ctrip.sqllin.sqlite3.sqlite3_close_v2
