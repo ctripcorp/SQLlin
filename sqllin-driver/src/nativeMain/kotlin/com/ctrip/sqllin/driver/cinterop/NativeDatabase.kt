@@ -57,7 +57,7 @@ internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite
                 }
                 val openResult = sqlite3_open_v2(realPath, dbPtr.ptr, sqliteFlags, null)
                 if (openResult != SQLITE_OK) {
-                    throw sqliteException(sqlite3_errmsg(dbPtr.value)?.toKString() ?: "", openResult)             
+                    throw sqliteException(sqlite3_errmsg(dbPtr.value)?.toKString() ?: "", openResult)
                 }
                 dbPtr.value!!
             }
