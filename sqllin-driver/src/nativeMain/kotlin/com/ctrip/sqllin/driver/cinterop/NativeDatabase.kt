@@ -46,13 +46,16 @@ internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite
 
     companion object {
         fun openNativeDatabase(configuration: DatabaseConfiguration, realPath: String): NativeDatabase {
-            val sqliteFlags = if(configuration.isReadOnly) SQLITE_OPEN_READONLY else (SQLITE_OPEN_READWRITE or SQLITE_OPEN_CREATE)
+            val sqliteFlags = SQLITE_OPEN_READWRITE or SQLITE_OPEN_URI
 
             val db = memScoped {
                 val dbPtr = alloc<CPointerVar<sqlite3>>()
-                val openResult = sqlite3_open_v2(realPath, dbPtr.ptr, SQLITE_OPEN_URI or sqliteFlags, null)
+                val openResult = sqlite3_open_v2(realPath, dbPtr.ptr, sqliteFlags, null)
                 if (openResult != SQLITE_OK) {
-                    throw sqliteException(sqlite3_errmsg(dbPtr.value)?.toKString() ?: "", openResult)
+                    val openCreateResult = sqlite3_open_v2(realPath, dbPtr.ptr, sqliteFlags or SQLITE_OPEN_CREATE, null)
+                    if (openCreateResult != SQLITE_OK) {
+                        throw sqliteException(sqlite3_errmsg(dbPtr.value)?.toKString() ?: "", openCreateResult)
+                    }                
                 }
                 dbPtr.value!!
             }
