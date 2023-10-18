@@ -21,6 +21,7 @@ import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.symbol.*
+import com.google.devtools.ksp.validate
 import java.io.OutputStreamWriter
 
 /**
@@ -37,17 +38,15 @@ class ClauseProcessor(
         const val ANNOTATION_SERIALIZABLE = "kotlinx.serialization.Serializable"
     }
 
-    private var invoked = false
-
     @Suppress("UNCHECKED_CAST")
     override fun process(resolver: Resolver): List<KSAnnotated> {
-        if (invoked) return emptyList()
-        invoked = true
+        val allDBRowClasses = resolver.getSymbolsWithAnnotation(ANNOTATION_DATABASE_ROW_NAME)
+        val invalidateDBRowClasses = allDBRowClasses.filter { !it.validate() }.toList()
 
-        val allClassAnnotatedWhereProperties = resolver.getSymbolsWithAnnotation(ANNOTATION_DATABASE_ROW_NAME) as Sequence<KSClassDeclaration>
+        val validateDBRowClasses = allDBRowClasses.filter { it.validate() } as Sequence<KSClassDeclaration>
         val serializableType = resolver.getClassDeclarationByName(resolver.getKSNameFromString(ANNOTATION_SERIALIZABLE))!!.asStarProjectedType()
 
-        for (classDeclaration in allClassAnnotatedWhereProperties) {
+        for (classDeclaration in validateDBRowClasses) {
 
             if (classDeclaration.annotations.all { !it.annotationType.resolve().isAssignableFrom(serializableType) })
                 continue // Don't handle the class that don't annotated 'Serializable'
@@ -101,7 +100,7 @@ class ClauseProcessor(
                 writer.write("}")
             }
         }
-        return emptyList()
+        return invalidateDBRowClasses
     }
 
     private fun getClauseElementTypeStr(property: KSPropertyDeclaration): String? = when (

@@ -20,19 +20,7 @@ import cnames.structs.sqlite3
 import cnames.structs.sqlite3_stmt
 import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.sqliteException
-import com.ctrip.sqllin.sqlite3.SQLITE_DBCONFIG_LOOKASIDE
-import com.ctrip.sqllin.sqlite3.SQLITE_OK
-import com.ctrip.sqllin.sqlite3.SQLITE_OPEN_CREATE
-import com.ctrip.sqllin.sqlite3.SQLITE_OPEN_READWRITE
-import com.ctrip.sqllin.sqlite3.SQLITE_OPEN_URI
-import com.ctrip.sqllin.sqlite3.sqlite3_busy_timeout
-import com.ctrip.sqllin.sqlite3.sqlite3_close_v2
-import com.ctrip.sqllin.sqlite3.sqlite3_db_config
-import com.ctrip.sqllin.sqlite3.sqlite3_db_readonly
-import com.ctrip.sqllin.sqlite3.sqlite3_errmsg
-import com.ctrip.sqllin.sqlite3.sqlite3_exec
-import com.ctrip.sqllin.sqlite3.sqlite3_open_v2
-import com.ctrip.sqllin.sqlite3.sqlite3_prepare16_v2
+import com.ctrip.sqllin.sqlite3.*
 import kotlinx.cinterop.*
 
 /**
@@ -49,15 +37,15 @@ internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite
 
             val db = memScoped {
                 val dbPtr = alloc<CPointerVar<sqlite3>>()
-                if(configuration.isReadOnly) {
-                    //from sqlite3_open_v2 docs: if opening in read-write mode fails due to OS-level permissions, an attempt is made to open it in read-only mode
+                if (configuration.isReadOnly) {
+                    // From sqlite3_open_v2 docs: "if opening in read-write mode fails due to OS-level permissions, an attempt is made to open it in read-only mode."
                     val openResult = sqlite3_open_v2(realPath, dbPtr.ptr, SQLITE_OPEN_READWRITE or SQLITE_OPEN_URI, null)
-                    if (openResult == SQLITE_OK) return@memScoped dbPtr.value!!
+                    if (openResult == SQLITE_OK)
+                        return@memScoped dbPtr.value!!
                 }
                 val openResult = sqlite3_open_v2(realPath, dbPtr.ptr, sqliteFlags, null)
-                if (openResult != SQLITE_OK) {
+                if (openResult != SQLITE_OK)
                     throw sqliteException(sqlite3_errmsg(dbPtr.value)?.toKString() ?: "", openResult)
-                }
                 dbPtr.value!!
             }
 
@@ -71,7 +59,7 @@ internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite
             }
 
             // Check that the database is really read/write when that is what we asked for.
-            if ((sqliteFlags and SQLITE_OPEN_READWRITE > 0) && sqlite3_db_readonly(db, null) != 0) {
+            if (!configuration.isReadOnly && sqlite3_db_readonly(db, null) != 0) {
                 sqlite3_close_v2(db)
                 throw sqliteException("Could not open the database in read/write mode")
             }

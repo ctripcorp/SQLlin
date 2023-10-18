@@ -2,6 +2,25 @@
 
 - Date format: YYYY-MM-dd
 
+## v1.2.1 / 2023-10-18
+
+### All
+
+* Update `Kotlin`'s version to `1.9.10`
+
+### sqllin-driver
+
+* Fix the problem: [Native driver does not respect isReadOnly](https://github.com/ctripcorp/SQLlin/issues/50). ***On native platforms***. 
+Now, if a user set `isReadOnly = true` in `DatabaseConfigurtaion`, the database file must exist. And, if opening in read-write mode 
+fails due to OS-level permissions, the user will get a read-only database, and if the user try to modify the database, will receive
+a runtime exception. Thanks for [@nbransby](https://github.com/nbransby)
+
+### sqllin-processor
+
+* Update `KSP`'s version to `1.9.10-1.0.13`
+* Now, if your data class with `@DBRow` can't be solved or imported successfully(Using `KSNode#validate` to judge), the
+`ClauseProcessor` would try to resolve it in second round
+
 ## v1.2.0 / 2023-09-19
 
 ### sqllin-dsl

@@ -26,6 +26,8 @@ Windows（mingwX86, mingwX64）。
 
 无论如何，[SQLiter](https://github.com/touchlab/SQLiter) 仍然是一个非常棒的项目。我参考了许多它的设计与实现细节并将它们用在了 _sqllin-driver_ 的*新 Native 驱动*中。
 
+从 `1.2.0` 开始, SQLlin 开始支持 JVM 目标平台，基于 [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)。
+
 ## 基本用法
 
 我不建议您在应用程序工程中直接使用 _sqllin-driver_ ，但是如果你想开发自己的 SQLite 高阶 API 库，你可以使用它。

@@ -74,7 +74,7 @@ kotlin {
         }
         val androidMain by getting {
             dependencies {
-                implementation("androidx.annotation:annotation:1.6.0")
+                implementation("androidx.annotation:annotation:1.7.0")
             }
         }
         val androidInstrumentedTest by getting {
