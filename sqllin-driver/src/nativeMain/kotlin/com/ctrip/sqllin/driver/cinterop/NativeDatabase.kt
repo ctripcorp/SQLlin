@@ -20,18 +20,7 @@ import cnames.structs.sqlite3
 import cnames.structs.sqlite3_stmt
 import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.sqliteException
-import com.ctrip.sqllin.sqlite3.SQLITE_DBCONFIG_LOOKASIDE
-import com.ctrip.sqllin.sqlite3.SQLITE_OK
-import com.ctrip.sqllin.sqlite3.SQLITE_OPEN_CREATE
-import com.ctrip.sqllin.sqlite3.SQLITE_OPEN_READWRITE
-import com.ctrip.sqllin.sqlite3.SQLITE_OPEN_URI
-import com.ctrip.sqllin.sqlite3.sqlite3_busy_timeout
-import com.ctrip.sqllin.sqlite3.sqlite3_close_v2
-import com.ctrip.sqllin.sqlite3.sqlite3_db_config
-import com.ctrip.sqllin.sqlite3.sqlite3_errmsg
-import com.ctrip.sqllin.sqlite3.sqlite3_exec
-import com.ctrip.sqllin.sqlite3.sqlite3_open_v2
-import com.ctrip.sqllin.sqlite3.sqlite3_prepare16_v2
+import com.ctrip.sqllin.sqlite3.*
 import kotlinx.cinterop.*
 
 /**
@@ -70,10 +59,10 @@ internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite
             }
 
             // Check that the database is really read/write when that is what we asked for.
-            /*if ((sqliteFlags and SQLITE_OPEN_READWRITE > 0) && sqlite3_db_readonly(db, null) != 0) {
+            if (!configuration.isReadOnly && sqlite3_db_readonly(db, null) != 0) {
                 sqlite3_close_v2(db)
                 throw sqliteException("Could not open the database in read/write mode")
-            }*/
+            }
 
             // Set the default busy handler to retry automatically before returning SQLITE_BUSY.
             val err = sqlite3_busy_timeout(db, configuration.busyTimeout)
