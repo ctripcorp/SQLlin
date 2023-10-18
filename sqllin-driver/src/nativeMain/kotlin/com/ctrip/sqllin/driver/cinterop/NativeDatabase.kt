@@ -28,7 +28,6 @@ import com.ctrip.sqllin.sqlite3.SQLITE_OPEN_URI
 import com.ctrip.sqllin.sqlite3.sqlite3_busy_timeout
 import com.ctrip.sqllin.sqlite3.sqlite3_close_v2
 import com.ctrip.sqllin.sqlite3.sqlite3_db_config
-import com.ctrip.sqllin.sqlite3.sqlite3_db_readonly
 import com.ctrip.sqllin.sqlite3.sqlite3_errmsg
 import com.ctrip.sqllin.sqlite3.sqlite3_exec
 import com.ctrip.sqllin.sqlite3.sqlite3_open_v2
@@ -49,15 +48,15 @@ internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite
 
             val db = memScoped {
                 val dbPtr = alloc<CPointerVar<sqlite3>>()
-                if(configuration.isReadOnly) {
-                    //from sqlite3_open_v2 docs: if opening in read-write mode fails due to OS-level permissions, an attempt is made to open it in read-only mode
+                if (configuration.isReadOnly) {
+                    // From sqlite3_open_v2 docs: "if opening in read-write mode fails due to OS-level permissions, an attempt is made to open it in read-only mode."
                     val openResult = sqlite3_open_v2(realPath, dbPtr.ptr, SQLITE_OPEN_READWRITE or SQLITE_OPEN_URI, null)
-                    if (openResult == SQLITE_OK) return@memScoped dbPtr.value!!
+                    if (openResult == SQLITE_OK)
+                        return@memScoped dbPtr.value!!
                 }
                 val openResult = sqlite3_open_v2(realPath, dbPtr.ptr, sqliteFlags, null)
-                if (openResult != SQLITE_OK) {
+                if (openResult != SQLITE_OK)
                     throw sqliteException(sqlite3_errmsg(dbPtr.value)?.toKString() ?: "", openResult)
-                }
                 dbPtr.value!!
             }
 
@@ -71,10 +70,10 @@ internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite
             }
 
             // Check that the database is really read/write when that is what we asked for.
-            if ((sqliteFlags and SQLITE_OPEN_READWRITE > 0) && sqlite3_db_readonly(db, null) != 0) {
+            /*if ((sqliteFlags and SQLITE_OPEN_READWRITE > 0) && sqlite3_db_readonly(db, null) != 0) {
                 sqlite3_close_v2(db)
                 throw sqliteException("Could not open the database in read/write mode")
-            }
+            }*/
 
             // Set the default busy handler to retry automatically before returning SQLITE_BUSY.
             val err = sqlite3_busy_timeout(db, configuration.busyTimeout)
