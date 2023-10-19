@@ -47,7 +47,7 @@ The architecture design of SQLlin is shown in the figure:
 SQLlin has two major parts: _sqllin-dsl_ and _sqllin-driver_. The _sqllin-driver_ is a common multiplatform SQLite low-level
 API, most of the time it is not recommended to use it directly. The _sqllin-dsl_ is the SQL statements DSL implementation and based on _sqllin-driver_. 
 
-The _sqllin-processor_ uses KSP to process annotations and generate codes for use with _sqllin-dsl_.
+The _sqllin-processor_ uses KSP to process annotations and generate code for use with _sqllin-dsl_.
 
 You can learn how to use _sqllin-dsl_ in these documentations:
 

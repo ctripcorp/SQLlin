@@ -89,6 +89,7 @@ internal fun DatabaseConnection.migrateIfNeeded(
     create: (DatabaseConnection) -> Unit,
     upgrade: (DatabaseConnection, Int, Int) -> Unit,
     version: Int,
+    isActualReadOnly: Boolean,
 ) = withTransaction {
     val initialVersion = withQuery("PRAGMA user_version;") {
         it.next()
@@ -98,9 +99,10 @@ internal fun DatabaseConnection.migrateIfNeeded(
         create(this)
         execSQL("PRAGMA user_version = $version;")
     } else if (initialVersion != version) {
-        if (initialVersion > version) {
+        if (initialVersion > version)
             throw IllegalStateException("Database version $initialVersion newer than config version $version")
-        }
+        if (isActualReadOnly)
+            throw IllegalArgumentException("Under the ready-only mode, you should ensure your version parameter same with the version in database file")
         upgrade(this, initialVersion, version)
         execSQL("PRAGMA user_version = $version;")
     }

@@ -99,6 +99,9 @@ internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite
         }
     }
 
+    val isActualReadOnly: Boolean
+        get() = sqlite3_db_readonly(dbPointer, null) != 0
+
     fun close(){
         val err = sqlite3_close_v2(dbPointer)
         if (err != SQLITE_OK) {
