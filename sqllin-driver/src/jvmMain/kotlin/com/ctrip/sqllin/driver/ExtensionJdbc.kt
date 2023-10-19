@@ -51,13 +51,14 @@ public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnectio
     println("Database full path: $path")
     val jdbcPath = "jdbc:sqlite:$path"
     return lock.withLock {
-        val jdbcDatabaseConnection = JdbcDatabaseConnection(DriverManager.getConnection(jdbcPath, sqliteConfig))
+        val driverConnection = DriverManager.getConnection(jdbcPath, sqliteConfig)
+        val jdbcDatabaseConnection = JdbcDatabaseConnection(driverConnection)
         val finalDatabaseConnection = if (config.isReadOnly)
             jdbcDatabaseConnection
         else
             ConcurrentDatabaseConnection(jdbcDatabaseConnection)
         try {
-            finalDatabaseConnection.migrateIfNeeded(config.create, config.upgrade, config.version)
+            finalDatabaseConnection.migrateIfNeeded(config.create, config.upgrade, config.version, driverConnection.isReadOnly)
         } catch (e: Exception) {
             // If this failed, we have to close the connection, or we will end up leaking it.
             println("attempted to run migration and failed. closing connection.")

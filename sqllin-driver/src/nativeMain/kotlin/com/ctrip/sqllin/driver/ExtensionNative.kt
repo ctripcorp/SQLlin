@@ -38,7 +38,7 @@ public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnectio
         updateSynchronousMode(config.synchronousMode)
         updateJournalMode(config.journalMode)
         try {
-            migrateIfNeeded(config.create, config.upgrade, config.version)
+            migrateIfNeeded(config.create, config.upgrade, config.version, database.isActualReadOnly)
         } catch (e: Exception) {
             // If this failed, we have to close the connection, or we will end up leaking it.
             println("attempted to run migration and failed. closing connection.")
