@@ -189,7 +189,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
+    @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
     fun testConcurrency() = runBlocking {
         val readWriteConfig = getDefaultDBConfig(false)
         openDatabase(readWriteConfig) {

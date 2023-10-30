@@ -23,6 +23,10 @@ import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.ASC
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 
@@ -338,6 +342,45 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(outerJoinStatement?.getResults()?.size, books.size)
         assertEquals(naturalOuterJoinStatement?.getResults()?.size, books.size)
         assertEquals(outerJoinStatementWithOn?.getResults()?.size, books.size)
+    }
+
+    fun testConcurrency() = runBlocking(Dispatchers.Default) {
+        val book1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
+        val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
+        val database = Database(getDefaultDBConfig())
+        launch {
+            var statement: SelectStatement<Book>? = null
+            database suspendedScope {
+                statement = BookTable { table ->
+                    table INSERT listOf(book1, book2)
+                    table SELECT X
+                }
+            }
+
+            assertEquals(true, statement!!.getResults().any { it == book1 })
+            assertEquals(true, statement!!.getResults().any { it == book2 })
+        }
+        delay(100)
+        launch {
+            val book1NewPrice = 18.96
+            val book2NewPrice = 21.95
+            val newBook1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = book1NewPrice)
+            val newBook2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = book2NewPrice)
+            var newResult: SelectStatement<Book>? = null
+            database suspendedScope {
+                newResult = transaction {
+                    BookTable { table ->
+                        table UPDATE SET { price = book1NewPrice } WHERE (name EQ book1.name AND (price EQ book1.price))
+                        table UPDATE SET { price = book2NewPrice } WHERE (name EQ book2.name AND (price EQ book2.price))
+                        table SELECT X
+                    }
+                }
+            }
+
+            assertEquals(true, newResult!!.getResults().any { it == newBook1 })
+            assertEquals(true, newResult!!.getResults().any { it == newBook2 })
+        }
+        Unit
     }
 
     private fun getDefaultDBConfig(): DatabaseConfiguration =

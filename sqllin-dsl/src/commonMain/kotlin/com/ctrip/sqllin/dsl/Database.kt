@@ -73,18 +73,14 @@ public class Database(
         return result
     }
 
-    private val statementsCompositionMutex by lazy { Mutex() }
-    private val statementsExecutionMutex by lazy { Mutex() }
+    private val statementsMutex by lazy { Mutex() }
 
-    public suspend infix fun <T> suspendedScope(block: suspend Database.() -> T): T {
-        val result = statementsCompositionMutex.withLock {
-            block()
-        }
-        statementsExecutionMutex.withLock {
+    public suspend infix fun <T> suspendedScope(block: suspend Database.() -> T): T =
+        statementsMutex.withLock {
+            val result = block()
             executeAllStatement()
+            result
         }
-        return result
-    }
 
     /**
      * Transaction.
