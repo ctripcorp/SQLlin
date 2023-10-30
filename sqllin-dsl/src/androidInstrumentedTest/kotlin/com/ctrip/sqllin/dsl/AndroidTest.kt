@@ -68,6 +68,9 @@ class AndroidTest {
     @Test
     fun testJoinClause() = commonTest.testJoinClause()
 
+    @Test
+    fun testConcurrency() = commonTest.testConcurrency()
+
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
