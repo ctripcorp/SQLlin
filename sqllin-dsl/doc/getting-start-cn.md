@@ -159,5 +159,6 @@ data class Person(
 
 - [修改数据库与事务](modify-database-and-transaction-cn.md)
 - [查询](query-cn.md)
+- [并发安全](concurrency-safety-cn.md)
 - [SQL 函数](sql-functions-cn.md)
 - [高级查询](advanced-query-cn.md)

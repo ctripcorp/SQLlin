@@ -2,6 +2,13 @@
 
 - Date format: YYYY-MM-dd
 
+## v1.2.2 / 2023-xx-xx
+
+### sqllin-dsl
+
+* Add the new API `Database#suspendedScope`, it could be used to ensure concurrency safety
+* Begin with this version, _sqllin-dsl_ depends on _kotlinx.coroutines_ version `1.7.3`
+
 ## v1.2.1 / 2023-10-18
 
 ### All

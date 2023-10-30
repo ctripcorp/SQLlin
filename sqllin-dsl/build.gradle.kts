@@ -65,6 +65,8 @@ kotlin {
             dependencies {
                 api(project(":sqllin-driver"))
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.5.1")
+                val coroutinesVersion: String by project
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
             }
         }
         val commonTest by getting {

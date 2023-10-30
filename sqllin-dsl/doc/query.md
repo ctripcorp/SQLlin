@@ -82,7 +82,8 @@ fun sample() {
 
 ## Next Step
 
-Next step, we will learn how to use SQL functions and advanced query：
+Next step, we will learn the concurrency safety, how to use SQL functions and advanced query：
 
+- [Concurrency Safety](concurrency-safety.md)
 - [SQL Functions](sql-functions.md)
 - [Advanced Query](advanced-query.md)
