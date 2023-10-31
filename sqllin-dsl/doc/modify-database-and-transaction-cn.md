@@ -147,5 +147,6 @@ fun sample() {
 你已经学习了如何使用 _INSERT_、_DELETE_ 以及 _UPDATE_ 语句，接下来你将学习 _SELECT_ 语句。 _SELECT_ 语句相比其他语句更复杂，做好准备哦 :)。
 
 - [查询](query-cn.md)
+- [并发安全](concurrency-safety-cn.md)
 - [SQL 函数](sql-functions-cn.md)
 - [高级查询](advanced-query-cn.md)

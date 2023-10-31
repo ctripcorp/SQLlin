@@ -54,6 +54,7 @@ You can learn how to use _sqllin-dsl_ in these documentations:
 - [Getting Start](./sqllin-dsl/doc/getting-start.md)
 - [Modify Database and Transaction](./sqllin-dsl/doc/modify-database-and-transaction.md)
 - [Query](./sqllin-dsl/doc/query.md)
+- [Concurrency Safety](./sqllin-dsl/doc/concurrency-safety.md)
 - [SQL Functions](./sqllin-dsl/doc/sql-functions.md)
 - [Advanced Query](./sqllin-dsl/doc/advanced-query.md)
 

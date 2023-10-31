@@ -169,5 +169,6 @@ You have learned all the preparations, you can start learn how to operate databa
 
 - [Modify Database and Transaction](modify-database-and-transaction.md)
 - [Query](query.md)
+- [Concurrency Safety](concurrency-safety.md)
 - [SQL Functions](sql-functions.md)
 - [Advanced Query](advanced-query.md)

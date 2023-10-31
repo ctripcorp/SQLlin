@@ -51,6 +51,7 @@ _sqllin-processor_ 使用 KSP 处理注解并生成用于和 _sqllin-dsl_ 配合
 - [开始使用](./sqllin-dsl/doc/getting-start-cn.md)
 - [修改数据库与事务](./sqllin-dsl/doc/modify-database-and-transaction-cn.md)
 - [查询](./sqllin-dsl/doc/query-cn.md)
+- [并发安全](./sqllin-dsl/doc/concurrency-safety-cn.md)
 - [SQL 函数](./sqllin-dsl/doc/sql-functions-cn.md)
 - [高级查询](./sqllin-dsl/doc/advanced-query-cn.md)
 

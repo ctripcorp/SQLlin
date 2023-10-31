@@ -28,6 +28,8 @@ import com.ctrip.sqllin.dsl.sql.operation.Select
 import com.ctrip.sqllin.dsl.sql.statement.*
 import com.ctrip.sqllin.dsl.sql.statement.DatabaseExecuteEngine
 import com.ctrip.sqllin.dsl.sql.statement.TransactionStatementsGroup
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.serializer
@@ -70,6 +72,15 @@ public class Database(
         executeAllStatement()
         return result
     }
+
+    private val statementsMutex by lazy { Mutex() }
+
+    public suspend infix fun <T> suspendedScope(block: suspend Database.() -> T): T =
+        statementsMutex.withLock {
+            val result = block()
+            executeAllStatement()
+            result
+        }
 
     /**
      * Transaction.

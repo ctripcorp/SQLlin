@@ -22,6 +22,10 @@ import com.ctrip.sqllin.dsl.annotation.DBRow
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
 /**
@@ -81,6 +85,21 @@ object Sample {
                 table SELECT NATURAL_JOIN<Student>(TranscriptTable)
                 table SELECT LEFT_OUTER_JOIN<Student>(TranscriptTable) USING name
                 table SELECT NATURAL_LEFT_OUTER_JOIN<Student>(TranscriptTable)
+            }
+        }
+    }
+
+    fun concurrentSafeCall() {
+        CoroutineScope(Dispatchers.Default).launch {
+            db suspendedScope {
+                PersonTable { table ->
+                    table SELECT CROSS_JOIN<Student>(TranscriptTable)
+                    table SELECT INNER_JOIN<Student>(TranscriptTable) USING name
+                    delay(100)
+                    table SELECT NATURAL_JOIN<Student>(TranscriptTable)
+                    table SELECT LEFT_OUTER_JOIN<Student>(TranscriptTable) USING name
+                    table SELECT NATURAL_LEFT_OUTER_JOIN<Student>(TranscriptTable)
+                }
             }
         }
     }

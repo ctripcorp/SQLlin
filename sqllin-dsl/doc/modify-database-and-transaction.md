@@ -149,7 +149,7 @@ fun sample() {
 }
 ```
 
-The `transaction {...}` is a member function in `Database`, it inside or outside of `TABLE(databaseName) {...}` is doesn't matter. 
+The `transaction {...}` is a member function in `Database`, it inside or outside of `TABLE(databaseName) {...}` doesn't matter.
 
 ## Next Step
 
@@ -157,5 +157,6 @@ You have learned how to use _INSERT_, _DELETE_ and _UPDATE_ statements. Next ste
 _SELECT_ statement is more complex than other statements, be ready :).
 
 - [Query](query.md)
+- [Concurrency Safety](concurrency-safety.md)
 - [SQL Functions](sql-functions.md)
 - [Advanced Query](advanced-query.md)

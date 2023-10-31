@@ -14,6 +14,13 @@ kotlin {
     androidTarget {
         publishLibraryVariants("release")
     }
+    jvm {
+        compilations.all {
+            kotlinOptions {
+                jvmTarget = "11"
+            }
+        }
+    }
     iosX64 {
         setupIOSConfig()
     }
@@ -33,9 +40,12 @@ kotlin {
             dependencies {
                 implementation(project(":sqllin-dsl"))
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.5.1")
+                val coroutinesVersion: String by project
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
             }
         }
         val androidMain by getting
+        val jvmMain by getting
         val iosX64Main by getting
         val iosArm64Main by getting
         val iosSimulatorArm64Main by getting

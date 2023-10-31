@@ -62,6 +62,9 @@ class NativeTest {
     @Test
     fun testJoinClause() = commonTest.testJoinClause()
 
+    @Test
+    fun testConcurrency() = commonTest.testConcurrency()
+
     @BeforeTest
     fun setUp() {
         deleteDatabase(path, CommonBasicTest.DATABASE_NAME)
