@@ -353,6 +353,7 @@ class CommonBasicTest(private val path: DatabasePath) {
             database suspendedScope {
                 statement = BookTable { table ->
                     table INSERT listOf(book1, book2)
+                    delay(100)
                     table SELECT X
                 }
             }
@@ -360,13 +361,13 @@ class CommonBasicTest(private val path: DatabasePath) {
             assertEquals(true, statement!!.getResults().any { it == book1 })
             assertEquals(true, statement!!.getResults().any { it == book2 })
         }
-        delay(100)
         launch {
             val book1NewPrice = 18.96
             val book2NewPrice = 21.95
             val newBook1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = book1NewPrice)
             val newBook2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = book2NewPrice)
             var newResult: SelectStatement<Book>? = null
+            delay(50)
             database suspendedScope {
                 newResult = transaction {
                     BookTable { table ->
