@@ -4,10 +4,19 @@
 
 ## v1.2.2 / 2023-xx-xx
 
+### All
+
+* Update `Kotlin`'s version to `1.9.20`
+
 ### sqllin-dsl
 
-* Add the new API `Database#suspendedScope`, it could be used to ensure concurrency safety
+* Add the new API `Database#suspendedScope`, it could be used to ensure concurrency safety([#55](https://github.com/ctripcorp/SQLlin/pull/55))
 * Begin with this version, _sqllin-dsl_ depends on _kotlinx.coroutines_ version `1.7.3`
+* ***Breaking change***: Remove the public class `DBEntity`, we have deprecated it in version `1.1.1`
+
+### sqllin-processor
+
+* Update `KSP`'s version to `1.9.20-1.0.13`
 
 ## v1.2.1 / 2023-10-18
 
@@ -37,7 +46,7 @@ a runtime exception. Thanks for [@nbransby](https://github.com/nbransby)
 ### sqllin-driver
 
 * Add the new JVM target
-* Breaking change: Remove the public property: `DatabaseConnection#closed`
+* ***Breaking change***: Remove the public property: `DatabaseConnection#closed`
 * The Android (<= 9) target supports to set the `journalMode` and `synchronousMode` now
 
 ## v1.1.1 / 2023-08-12
