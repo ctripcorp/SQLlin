@@ -1,5 +1,4 @@
 import org.jetbrains.kotlin.gradle.dsl.KotlinCompile
-import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
     kotlin("multiplatform")
@@ -21,15 +20,9 @@ kotlin {
             }
         }
     }
-    iosX64 {
-        setupIOSConfig()
-    }
-    iosArm64 {
-        setupIOSConfig()
-    }
-    iosSimulatorArm64 {
-        setupIOSConfig()
-    }
+    iosX64()
+    iosArm64()
+    iosSimulatorArm64()
     
     sourceSets {
         all {
@@ -43,17 +36,6 @@ kotlin {
                 val coroutinesVersion: String by project
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
             }
-        }
-        val androidMain by getting
-        val jvmMain by getting
-        val iosX64Main by getting
-        val iosArm64Main by getting
-        val iosSimulatorArm64Main by getting
-        val iosMain by creating {
-            dependsOn(commonMain)
-            iosX64Main.dependsOn(this)
-            iosArm64Main.dependsOn(this)
-            iosSimulatorArm64Main.dependsOn(this)
         }
     }
 }
@@ -70,11 +52,6 @@ android {
     }
 }
 
-fun KotlinNativeTarget.setupIOSConfig() {
-    val compileArgs = listOf("-Xallocator=mimalloc", "-Xruntime-logs=gc=info")
-    compilations["main"].kotlinOptions.freeCompilerArgs += compileArgs
-}
-
 dependencies {
     add("kspCommonMainMetadata", project(":sqllin-processor"))
 }
@@ -86,4 +63,8 @@ afterEvaluate {  // WORKAROUND: both register() and named() fail – https://git
                 dependsOn("kspCommonMainKotlinMetadata")
         }
     }
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+    compilerOptions.freeCompilerArgs.add("-Xexpect-actual-classes")
 }

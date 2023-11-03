@@ -16,11 +16,14 @@
 
 package com.ctrip.sqllin.driver.cinterop
 
+import kotlinx.cinterop.ExperimentalForeignApi
+
 /**
  * The result codes Enum
  * @author yaqiao
  */
 
+@OptIn(ExperimentalForeignApi::class)
 internal enum class SQLiteErrorType(val code: Int) {
     SQLITE_OK(com.ctrip.sqllin.sqlite3.SQLITE_OK),   /* Successful result */
 
