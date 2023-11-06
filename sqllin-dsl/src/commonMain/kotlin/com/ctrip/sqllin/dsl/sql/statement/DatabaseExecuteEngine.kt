@@ -16,6 +16,8 @@
 
 package com.ctrip.sqllin.dsl.sql.statement
 
+import kotlin.concurrent.Volatile
+
 /**
  * Collect and execute all SQL statement in 'database {}' block
  * @author yaqiao
@@ -23,25 +25,32 @@ package com.ctrip.sqllin.dsl.sql.statement
 
 internal class DatabaseExecuteEngine : StatementContainer {
 
-    private var statementLinkedList: StatementLinkedList<ExecutableStatement>? = null
+    @Volatile
+    private var statementsLinkedList: StatementLinkedList<ExecutableStatement>? = null
 
     override infix fun changeLastStatement(statement: SingleStatement) {
-        if (statementLinkedList?.lastStatement is UpdateStatementWithoutWhereClause<*>
-            || statementLinkedList?.lastStatement is SelectStatement<*>)
-            statementLinkedList!!.resetLastStatement(statement)
+        if (statementsLinkedList?.lastStatement is UpdateStatementWithoutWhereClause<*>
+            || statementsLinkedList?.lastStatement is SelectStatement<*>)
+            statementsLinkedList!!.resetLastStatement(statement)
         else
             throw IllegalStateException("Current statement can't append clause.")
     }
 
     infix fun addStatement(statement: ExecutableStatement) {
-        if (statementLinkedList != null)
-            statementLinkedList!!.addStatement(statement)
+        if (statementsLinkedList != null)
+            statementsLinkedList!!.addStatement(statement)
         else
-            statementLinkedList = StatementLinkedList(statement)
+            statementsLinkedList = StatementLinkedList(statement)
     }
 
-    fun executeAllStatement() = statementLinkedList?.run {
-        forEach {
+    fun prepareForExecution(): StatementLinkedList<ExecutableStatement> {
+        val executiveLinkedList = statementsLinkedList
+        statementsLinkedList = null
+        return executiveLinkedList ?: throw IllegalStateException("The statementsLinkedList can't be null")
+    }
+
+    infix fun executeAllStatement(executiveLinkedList: StatementLinkedList<ExecutableStatement>) {
+        executiveLinkedList.forEach {
             when (it) {
                 is SingleStatement -> {
                     println("SQL String: ${it.sqlStr}")
@@ -50,6 +59,5 @@ internal class DatabaseExecuteEngine : StatementContainer {
                 is TransactionStatementsGroup -> it.execute()
             }
         }
-        statementLinkedList = null
-    } ?: Unit
+    }
 }

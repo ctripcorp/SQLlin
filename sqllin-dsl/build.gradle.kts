@@ -54,6 +54,7 @@ kotlin {
         tvosSimulatorArm64(),
 
         linuxX64(),
+        linuxArm64(),
 
         mingwX64(),
     ).forEach {
@@ -94,6 +95,7 @@ kotlin {
     }
 
     tasks.findByName("publishLinuxX64PublicationToMavenRepository")?.enabled = HostManager.hostIsLinux
+    tasks.findByName("publishLinuxArm64PublicationToMavenRepository")?.enabled = HostManager.hostIsLinux
     tasks.findByName("publishMingwX64PublicationToMavenRepository")?.enabled = HostManager.hostIsMingw
 }
 

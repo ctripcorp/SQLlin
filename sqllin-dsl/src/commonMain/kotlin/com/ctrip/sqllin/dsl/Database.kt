@@ -69,18 +69,26 @@ public class Database(
      */
     public operator fun <T> invoke(block: Database.() -> T): T {
         val result = block()
-        executeAllStatement()
+        executeAllStatements(prepareForExecution())
         return result
     }
 
-    private val statementsMutex by lazy { Mutex() }
+    private val assembledMutex by lazy { Mutex() }
+    private val executiveMutex by lazy { Mutex() }
 
-    public suspend infix fun <T> suspendedScope(block: suspend Database.() -> T): T =
-        statementsMutex.withLock {
+    public suspend infix fun <T> suspendedScope(block: suspend Database.() -> T): T {
+        val (result, executiveLinkedList) = assembledMutex.withLock {
             val result = block()
-            executeAllStatement()
-            result
+            val executiveLinkedList = executiveMutex.withLock {
+                prepareForExecution()
+            }
+            result to executiveLinkedList
         }
+        executiveMutex.withLock {
+            executeAllStatements(executiveLinkedList)
+        }
+        return result
+    }
 
     /**
      * Transaction.
@@ -96,7 +104,7 @@ public class Database(
         if (isInTransaction)
             return false
         transactionStatementsGroup = TransactionStatementsGroup(databaseConnection)
-        executeEngine.addStatement(transactionStatementsGroup!!)
+        executiveEngine.addStatement(transactionStatementsGroup!!)
         return true
     }
 
@@ -117,13 +125,13 @@ public class Database(
      * SQL execute.
      */
 
-    private val executeEngine = DatabaseExecuteEngine()
+    private val executiveEngine = DatabaseExecuteEngine()
 
     private fun addStatement(statement: SingleStatement) {
         if (isInTransaction)
             transactionStatementsGroup!!.addStatement(statement)
         else
-            executeEngine.addStatement(statement)
+            executiveEngine.addStatement(statement)
     }
 
     private fun <T> addSelectStatement(statement: SelectStatement<T>) {
@@ -133,7 +141,9 @@ public class Database(
             addStatement(statement)
     }
 
-    private fun executeAllStatement() = executeEngine.executeAllStatement()
+    private fun prepareForExecution() = executiveEngine.prepareForExecution()
+    private fun executeAllStatements(executiveLinkedList: StatementLinkedList<ExecutableStatement>) =
+        executiveEngine executeAllStatement executiveLinkedList
 
     /**
      * Insert.
@@ -156,8 +166,8 @@ public class Database(
             val statement = Update.update(this, databaseConnection, it, clause)
             it addStatement statement
             statement
-        } ?: Update.update(this, databaseConnection, executeEngine, clause).also {
-            executeEngine addStatement it
+        } ?: Update.update(this, databaseConnection, executiveEngine, clause).also {
+            executiveEngine addStatement it
         }
 
     /**
@@ -266,7 +276,7 @@ public class Database(
 
     private val unionSelectStatementGroupStack by lazy { Stack<UnionSelectStatementGroup<*>>() }
 
-    private fun getSelectStatementGroup(): StatementContainer = unionSelectStatementGroupStack.top ?: transactionStatementsGroup ?: executeEngine
+    private fun getSelectStatementGroup(): StatementContainer = unionSelectStatementGroupStack.top ?: transactionStatementsGroup ?: executiveEngine
 
     public inline fun <T> Table<T>.UNION(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
         beginUnion<T>()

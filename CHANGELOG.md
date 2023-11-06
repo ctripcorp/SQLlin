@@ -10,9 +10,14 @@
 
 ### sqllin-dsl
 
+* Add the new native target support: `linuxArm64`
 * Add the new API `Database#suspendedScope`, it could be used to ensure concurrency safety([#55](https://github.com/ctripcorp/SQLlin/pull/55))
 * Begin with this version, _sqllin-dsl_ depends on _kotlinx.coroutines_ version `1.7.3`
-* ***Breaking change***: Remove the public class `DBEntity`, we have deprecated it in version `1.1.1`
+* **Breaking change**: Remove the public class `DBEntity`, we have deprecated it in version `1.1.1`
+
+### sqllin-driver
+
+* Add the new native target support: `linuxArm64`
 
 ### sqllin-processor
 
@@ -46,7 +51,7 @@ a runtime exception. Thanks for [@nbransby](https://github.com/nbransby)
 ### sqllin-driver
 
 * Add the new JVM target
-* ***Breaking change***: Remove the public property: `DatabaseConnection#closed`
+* **Breaking change**: Remove the public property: `DatabaseConnection#closed`
 * The Android (<= 9) target supports to set the `journalMode` and `synchronousMode` now
 
 ## v1.1.1 / 2023-08-12
