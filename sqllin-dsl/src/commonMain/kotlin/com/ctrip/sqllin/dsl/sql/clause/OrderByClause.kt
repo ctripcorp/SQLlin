@@ -52,6 +52,7 @@ public enum class OrderByWay(internal val str: String) {
 public fun <T> ORDER_BY(vararg column2Ways: Pair<ClauseElement, OrderByWay>): OrderByClause<T> =
     OrderByClause(mapOf(*column2Ways))
 
+@Suppress("NOTHING_TO_INLINE")
 public inline infix fun <T> WhereSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     ORDER_BY(mapOf(column2Way))
 
@@ -60,6 +61,7 @@ public infix fun <T> WhereSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseE
         container changeLastStatement it
     }
 
+@Suppress("NOTHING_TO_INLINE")
 public inline infix fun <T> HavingSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     ORDER_BY(mapOf(column2Way))
 
@@ -68,6 +70,7 @@ public infix fun <T> HavingSelectStatement<T>.ORDER_BY(column2WayMap: Map<Clause
         container changeLastStatement it
     }
 
+@Suppress("NOTHING_TO_INLINE")
 public inline infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     ORDER_BY(mapOf(column2Way))
 
@@ -76,6 +79,7 @@ public infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column2WayMap: Map<Claus
         container changeLastStatement it
     }
 
+@Suppress("NOTHING_TO_INLINE")
 public inline infix fun <T> JoinSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     ORDER_BY(mapOf(column2Way))
 
