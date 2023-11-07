@@ -71,6 +71,9 @@ class AndroidTest {
     @Test
     fun testConcurrency() = commonTest.testConcurrency()
 
+    @Test
+    fun testPrimitiveTypeForKSP() = commonTest.testPrimitiveTypeForKSP()
+
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
