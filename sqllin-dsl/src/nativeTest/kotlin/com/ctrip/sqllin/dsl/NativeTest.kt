@@ -65,6 +65,9 @@ class NativeTest {
     @Test
     fun testConcurrency() = commonTest.testConcurrency()
 
+    @Test
+    fun testPrimitiveTypeForKSP() = commonTest.testPrimitiveTypeForKSP()
+
     @BeforeTest
     fun setUp() {
         deleteDatabase(path, CommonBasicTest.DATABASE_NAME)

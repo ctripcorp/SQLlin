@@ -384,6 +384,26 @@ class CommonBasicTest(private val path: DatabasePath) {
         Unit
     }
 
+    fun testPrimitiveTypeForKSP() {
+        TestPrimitiveTypeForKSPTable {
+            SET<TestPrimitiveTypeForKSP> {
+                assertEquals(0, testInt)
+                assertEquals(0L, testLong)
+                assertEquals(0, testShort)
+                assertEquals(0, testByte)
+                assertEquals(0F, testFloat)
+                assertEquals(0.0, testDouble)
+                assertEquals(0U, testUInt)
+                assertEquals(0UL, testULong)
+                assertEquals(0U, testUShort)
+                assertEquals(0U, testUByte)
+                assertEquals(false, testBoolean)
+                assertEquals('0', testChar)
+                assertEquals("", testString)
+            }
+        }
+    }
+
     private fun getDefaultDBConfig(): DatabaseConfiguration =
         DatabaseConfiguration(
             name = DATABASE_NAME,

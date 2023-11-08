@@ -129,15 +129,15 @@ class ClauseProcessor(
         property.typeName
     ) {
         Int::class.qualifiedName -> "0"
-        Long::class.qualifiedName -> "0l"
-        Short::class.qualifiedName -> "0s"
-        Byte::class.qualifiedName -> "0b"
-        Float::class.qualifiedName -> "0f"
+        Long::class.qualifiedName -> "0L"
+        Short::class.qualifiedName -> "0"
+        Byte::class.qualifiedName -> "0"
+        Float::class.qualifiedName -> "0F"
         Double::class.qualifiedName -> "0.0"
-        UInt::class.qualifiedName -> "0u"
-        ULong::class.qualifiedName -> "0ul"
-        UShort::class.qualifiedName -> "0us"
-        UByte::class.qualifiedName -> "0ub"
+        UInt::class.qualifiedName -> "0U"
+        ULong::class.qualifiedName -> "0UL"
+        UShort::class.qualifiedName -> "0U"
+        UByte::class.qualifiedName -> "0U"
         Boolean::class.qualifiedName -> "false"
 
         Char::class.qualifiedName -> "'0'"

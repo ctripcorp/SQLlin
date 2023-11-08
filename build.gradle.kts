@@ -7,7 +7,7 @@ buildscript {
     dependencies {
         val kotlinVersion: String by project
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
-        classpath("com.android.tools.build:gradle:7.4.2")
+        classpath("com.android.tools.build:gradle:8.1.2")
     }
 }
 
@@ -16,8 +16,4 @@ allprojects {
         google()
         mavenCentral()
     }
-}
-
-tasks.register("clean", Delete::class) {
-    delete(rootProject.buildDir)
 }

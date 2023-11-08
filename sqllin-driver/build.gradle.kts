@@ -1,7 +1,6 @@
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetTree
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.jetbrains.kotlin.konan.target.HostManager
 
 plugins {
@@ -57,6 +56,14 @@ kotlin {
         mingwX64(),
     ).forEach {
         it.setupNativeConfig()
+    }
+
+    targets.configureEach {
+        compilations.configureEach {
+            compilerOptions.configure {
+                freeCompilerArgs.add("-Xexpect-actual-classes")
+            }
+        }
     }
     
     sourceSets {
@@ -181,8 +188,4 @@ publishing {
         useInMemoryPgpKeys(SIGNING_KEY_ID, SIGNING_KEY, SIGNING_PASSWORD)
         sign(publishing.publications)
     }
-}
-
-tasks.withType<KotlinCompile> {
-    compilerOptions.freeCompilerArgs.add("-Xexpect-actual-classes")
 }
