@@ -29,6 +29,9 @@ kotlin {
 
                 // The sqllin-dsl serialization and deserialization depends on kotlinx-serialization
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.5.1")
+
+                // Since 1.2.2, sqllin-dsl depends on kotlinx.coroutines
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
             }
         }
         // ......
