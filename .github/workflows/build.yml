@@ -46,7 +46,7 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('*.gradle.kts') }}
         
       - name: Build sqllin-driver
-        run: ./gradlew :sqllin-driver:assemble
+        run: ./gradlew :sqllin-driver:assemble -PonCICD
         
       - name: Run sqllin-driver macOS X64 Tests
         run: ./test_driver_macos.sh
@@ -55,7 +55,7 @@ jobs:
         run: ./test_driver_jvm.sh
 
       - name: Build sqllin-dsl
-        run: ./gradlew :sqllin-dsl:assemble
+        run: ./gradlew :sqllin-dsl:assemble -PonCICD
 
       - name: Run sqllin-dsl macOS X64 Tests
         run: ./test_dsl_macos.sh
@@ -203,7 +203,7 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('*.gradle.kts') }}
 
       - name: Build sqllin-driver
-        run: ./gradlew :sqllin-driver:assemble
+        run: ./gradlew :sqllin-driver:assemble -PonCICD
 
       - name: Run sqllin-driver Linux X64 Tests
         run: ./test_driver_linux.sh
@@ -215,7 +215,7 @@ jobs:
         run: ./gradlew :sqllin-processor:assemble
 
       - name: Build sqllin-dsl
-        run: ./gradlew :sqllin-dsl:assemble
+        run: ./gradlew :sqllin-dsl:assemble -PonCICD
 
       - name: Run sqllin-dsl Linux X64 Tests
         run: ./test_dsl_linux.sh

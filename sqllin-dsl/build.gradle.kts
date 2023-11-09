@@ -100,10 +100,21 @@ kotlin {
             }
         }
     }
+}
 
-    tasks.findByName("publishLinuxX64PublicationToMavenRepository")?.enabled = HostManager.hostIsLinux
-    tasks.findByName("publishLinuxArm64PublicationToMavenRepository")?.enabled = HostManager.hostIsLinux
-    tasks.findByName("publishMingwX64PublicationToMavenRepository")?.enabled = HostManager.hostIsMingw
+gradle.taskGraph.whenReady {
+    if (!project.hasProperty("onCICD"))
+        return@whenReady
+    tasks.forEach {
+        when {
+            it.name.contains("linux", true) -> {
+                it.enabled = HostManager.hostIsLinux
+            }
+            it.name.contains("mingw", true) -> {
+                it.enabled = HostManager.hostIsMingw
+            }
+        }
+    }
 }
 
 android {

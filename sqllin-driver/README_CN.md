@@ -4,7 +4,7 @@
 
 最初我们需要一个多平台可用的低阶 Kotlin API 来调用 SQLite。因为我们认为 _sqllin-dsl_ 应该是平台无关的。
 所以我们需要 _sqllin-driver_ ，并且 _sqllin-dsl_ 要基于它。我们的目标是编写 Kotlin Multiplatform common
-source set 可用的通用的 API，并且它们在不同的平台有不同的实现。
+source set 可用的通用 API，并且它们在不同的平台有不同的实现。
 
 在 Android 上，并没有太多的方法可供我们选择。如果我们使用 Android Framework SQLite JAVA
 API，事情将会变得非常简单，但是缺点是很多 SQLite 参数不能再 Android P 以下版本的系统上生效。如果我们自己编写
