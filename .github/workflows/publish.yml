@@ -110,7 +110,7 @@ jobs:
         if: always()
 
       - name: Publish to MavenCentral
-        run: ./publish_apple_android.sh
+        run: ./publish_apple_android_jvm.sh
 
   build-on-windows:
     runs-on: windows-latest
