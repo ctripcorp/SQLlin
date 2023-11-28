@@ -23,17 +23,19 @@ import com.ctrip.sqllin.dsl.sql.statement.*
  * @author yaqiao
  */
 
-public class OrderByClause<T> internal constructor(private val column2WayMap: Map<ClauseElement, OrderByWay>) : SelectClause<T> {
+public sealed interface OrderByClause<T> : SelectClause<T>
+
+internal class CompleteOrderByClause<T>(private val column2WayMap: Map<ClauseElement, OrderByWay>) : OrderByClause<T> {
 
     override val clauseStr: String
         get() {
-            require(column2WayMap.isNotEmpty()) { "Please provider at least one 'BaseClauseElement' -> 'OrderByWay' entry when you use the 'ORDER BY' clause!!!" }
+            require(column2WayMap.isNotEmpty()) { "Please provider at least one 'BaseClauseElement' -> 'OrderByWay' entry for 'ORDER BY' clause!!!" }
             return buildString {
                 append(" ORDER BY ")
                 val iterator = column2WayMap.entries.iterator()
                 do {
-                    val (number, way) = iterator.next()
-                    append(number.valueName)
+                    val (element, way) = iterator.next()
+                    append(element.valueName)
                     append(' ')
                     append(way.str)
                     val hasNext = iterator.hasNext()
@@ -50,14 +52,14 @@ public enum class OrderByWay(internal val str: String) {
 }
 
 public fun <T> ORDER_BY(vararg column2Ways: Pair<ClauseElement, OrderByWay>): OrderByClause<T> =
-    OrderByClause(mapOf(*column2Ways))
+    CompleteOrderByClause(mapOf(*column2Ways))
 
 @Suppress("NOTHING_TO_INLINE")
 public inline infix fun <T> WhereSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     ORDER_BY(mapOf(column2Way))
 
 public infix fun <T> WhereSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
-    appendToOrderBy(OrderByClause(column2WayMap)).also {
+    appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
         container changeLastStatement it
     }
 
@@ -66,7 +68,7 @@ public inline infix fun <T> HavingSelectStatement<T>.ORDER_BY(column2Way: Pair<C
     ORDER_BY(mapOf(column2Way))
 
 public infix fun <T> HavingSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
-    appendToOrderBy(OrderByClause(column2WayMap)).also {
+    appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
         container changeLastStatement it
     }
 
@@ -75,7 +77,7 @@ public inline infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column2Way: Pair<
     ORDER_BY(mapOf(column2Way))
 
 public infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
-    appendToOrderBy(OrderByClause(column2WayMap)).also {
+    appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
         container changeLastStatement it
     }
 
@@ -84,6 +86,62 @@ public inline infix fun <T> JoinSelectStatement<T>.ORDER_BY(column2Way: Pair<Cla
     ORDER_BY(mapOf(column2Way))
 
 public infix fun <T> JoinSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
-    appendToOrderBy(OrderByClause(column2WayMap)).also {
+    appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
+        container changeLastStatement it
+    }
+
+internal class SimpleOrderByClause<T>(private val columns: Iterable<ClauseElement>) : OrderByClause<T> {
+
+    override val clauseStr: String
+        get() {
+            val iterator = columns.iterator()
+            require(iterator.hasNext()) { "Please provider at least one 'BaseClauseElement' for 'ORDER BY' clause!!!" }
+            return buildString {
+                append(" ORDER BY ")
+                append(iterator.next().valueName)
+                while (iterator.hasNext()) {
+                    append(',')
+                    append(iterator.next().valueName)
+                }
+                append(' ')
+            }
+        }
+}
+public fun <T> ORDER_BY(vararg elements: ClauseElement): OrderByClause<T> =
+    SimpleOrderByClause(elements.toList())
+
+@Suppress("NOTHING_TO_INLINE")
+public inline infix fun <T> WhereSelectStatement<T>.ORDER_BY(column: ClauseElement): OrderBySelectStatement<T> =
+    ORDER_BY(listOf(column))
+
+public infix fun <T> WhereSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement>): OrderBySelectStatement<T> =
+    appendToOrderBy(SimpleOrderByClause(columns)).also {
+        container changeLastStatement it
+    }
+
+@Suppress("NOTHING_TO_INLINE")
+public inline infix fun <T> HavingSelectStatement<T>.ORDER_BY(column: ClauseElement): OrderBySelectStatement<T> =
+    ORDER_BY(listOf(column))
+
+public infix fun <T> HavingSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement>): OrderBySelectStatement<T> =
+    appendToOrderBy(SimpleOrderByClause(columns)).also {
+        container changeLastStatement it
+    }
+
+@Suppress("NOTHING_TO_INLINE")
+public inline infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column: ClauseElement): OrderBySelectStatement<T> =
+    ORDER_BY(listOf(column))
+
+public infix fun <T> GroupBySelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement>): OrderBySelectStatement<T> =
+    appendToOrderBy(SimpleOrderByClause(columns)).also {
+        container changeLastStatement it
+    }
+
+@Suppress("NOTHING_TO_INLINE")
+public inline infix fun <T> JoinSelectStatement<T>.ORDER_BY(column: ClauseElement): OrderBySelectStatement<T> =
+    ORDER_BY(listOf(column))
+
+public infix fun <T> JoinSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement>): OrderBySelectStatement<T> =
+    appendToOrderBy(SimpleOrderByClause(columns)).also {
         container changeLastStatement it
     }

@@ -16,44 +16,38 @@
 
 package com.ctrip.sqllin.dsl.sql.statement
 
-import kotlin.concurrent.Volatile
-
 /**
  * Collect and execute all SQL statement in 'database {}' block
  * @author yaqiao
  */
 
-internal class DatabaseExecuteEngine : StatementContainer {
+internal class DatabaseExecuteEngine(
+    private val enableSimpleSQLLog: Boolean,
+) : StatementContainer {
 
-    @Volatile
-    private var statementsLinkedList: StatementLinkedList<ExecutableStatement>? = null
+    private lateinit var statementsLinkedList: StatementLinkedList<ExecutableStatement>
 
     override infix fun changeLastStatement(statement: SingleStatement) {
-        if (statementsLinkedList?.lastStatement is UpdateStatementWithoutWhereClause<*>
-            || statementsLinkedList?.lastStatement is SelectStatement<*>)
-            statementsLinkedList!!.resetLastStatement(statement)
+        if (statementsLinkedList.lastStatement is UpdateStatementWithoutWhereClause<*>
+            || statementsLinkedList.lastStatement is SelectStatement<*>)
+            statementsLinkedList.resetLastStatement(statement)
         else
             throw IllegalStateException("Current statement can't append clause.")
     }
 
     infix fun addStatement(statement: ExecutableStatement) {
-        if (statementsLinkedList != null)
-            statementsLinkedList!!.addStatement(statement)
+        if (::statementsLinkedList.isInitialized)
+            statementsLinkedList.addStatement(statement)
         else
             statementsLinkedList = StatementLinkedList(statement)
     }
 
-    fun prepareForExecution(): StatementLinkedList<ExecutableStatement> {
-        val executiveLinkedList = statementsLinkedList
-        statementsLinkedList = null
-        return executiveLinkedList ?: throw IllegalStateException("The statementsLinkedList can't be null")
-    }
-
-    infix fun executeAllStatement(executiveLinkedList: StatementLinkedList<ExecutableStatement>) {
-        executiveLinkedList.forEach {
+    fun executeAllStatement() {
+        statementsLinkedList.forEach {
             when (it) {
                 is SingleStatement -> {
-                    println("SQL String: ${it.sqlStr}")
+                    if (enableSimpleSQLLog)
+                        println("SQL String: ${it.sqlStr}")
                     it.execute()
                 }
                 is TransactionStatementsGroup -> it.execute()

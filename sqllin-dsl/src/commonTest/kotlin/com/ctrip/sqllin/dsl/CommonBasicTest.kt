@@ -154,12 +154,16 @@ class CommonBasicTest(private val path: DatabasePath) {
         val book1 = Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72)
         val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
         var statementOfOrderBy: SelectStatement<Book>? = null
+        var statementOfOrderBy2: SelectStatement<Book>? = null
         var statementOfWhereAndOrderBy: SelectStatement<Book>? = null
+        var statementOfWhereAndOrderBy2: SelectStatement<Book>? = null
         database {
             BookTable { table ->
                 table INSERT listOf(book0, book1, book2)
                 statementOfOrderBy = table SELECT ORDER_BY(price to DESC)
+                statementOfOrderBy2 = table SELECT ORDER_BY(price)
                 statementOfWhereAndOrderBy = table SELECT WHERE(author EQ "Dan Brown") ORDER_BY mapOf(pages to ASC)
+                statementOfWhereAndOrderBy2 = table SELECT WHERE(author EQ "Dan Brown") ORDER_BY pages
             }
         }
         assertEquals(3, statementOfOrderBy?.getResults()?.size)
@@ -173,8 +177,29 @@ class CommonBasicTest(private val path: DatabasePath) {
             assertEquals(actualBook, book)
         }
 
+        assertEquals(3, statementOfOrderBy2?.getResults()?.size)
+        statementOfOrderBy2!!.getResults().forEachIndexed { index, book ->
+            val actualBook = when (index) {
+                0 -> book0
+                1 -> book2
+                2 -> book1
+                else -> throw IllegalStateException("Select got some wrong")
+            }
+            assertEquals(actualBook, book)
+        }
+
         assertEquals(2, statementOfWhereAndOrderBy?.getResults()?.size)
         statementOfWhereAndOrderBy!!.getResults().forEachIndexed { index, book ->
+            val actualBook = when (index) {
+                0 -> book0
+                1 -> book2
+                else -> throw IllegalStateException("Select got some wrong")
+            }
+            assertEquals(actualBook, book)
+        }
+
+        assertEquals(2, statementOfWhereAndOrderBy2?.getResults()?.size)
+        statementOfWhereAndOrderBy2!!.getResults().forEachIndexed { index, book ->
             val actualBook = when (index) {
                 0 -> book0
                 1 -> book2
@@ -353,33 +378,32 @@ class CommonBasicTest(private val path: DatabasePath) {
             database suspendedScope {
                 statement = BookTable { table ->
                     table INSERT listOf(book1, book2)
-                    delay(100)
                     table SELECT X
                 }
             }
 
-            assertEquals(true, statement!!.getResults().any { it == book1 })
-            assertEquals(true, statement!!.getResults().any { it == book2 })
-        }
-        launch {
-            val book1NewPrice = 18.96
-            val book2NewPrice = 21.95
-            val newBook1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = book1NewPrice)
-            val newBook2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = book2NewPrice)
-            var newResult: SelectStatement<Book>? = null
-            delay(50)
-            database suspendedScope {
-                newResult = transaction {
-                    BookTable { table ->
-                        table UPDATE SET { price = book1NewPrice } WHERE (name EQ book1.name AND (price EQ book1.price))
-                        table UPDATE SET { price = book2NewPrice } WHERE (name EQ book2.name AND (price EQ book2.price))
-                        table SELECT X
+            launch {
+                val book1NewPrice = 18.96
+                val book2NewPrice = 21.95
+                val newBook1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = book1NewPrice)
+                val newBook2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = book2NewPrice)
+                var newResult: SelectStatement<Book>? = null
+                database suspendedScope {
+                    newResult = transaction {
+                        BookTable { table ->
+                            table UPDATE SET { price = book1NewPrice } WHERE (name EQ book1.name AND (price EQ book1.price))
+                            table UPDATE SET { price = book2NewPrice } WHERE (name EQ book2.name AND (price EQ book2.price))
+                            table SELECT X
+                        }
                     }
                 }
+
+                assertEquals(true, newResult!!.getResults().any { it == newBook1 })
+                assertEquals(true, newResult!!.getResults().any { it == newBook2 })
             }
 
-            assertEquals(true, newResult!!.getResults().any { it == newBook1 })
-            assertEquals(true, newResult!!.getResults().any { it == newBook2 })
+            assertEquals(true, statement!!.getResults().any { it == book1 })
+            assertEquals(true, statement!!.getResults().any { it == book2 })
         }
         Unit
     }

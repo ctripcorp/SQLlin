@@ -2,6 +2,30 @@
 
 - Date format: YYYY-MM-dd
 
+## v1.2.3 / 2023-11-28
+
+### All
+
+* Update `Kotlin`'s version to `1.9.21`
+
+### sqllin-dsl
+
+* Now, the `ORDER_BY` clause could ignore the `OrderByWay` parameter like SQL.
+* Optimize the performance in concurrent scenarios. Some types have changed, but users don't need to change the code.
+* Now, `SelectStatement` has been changed to lazy deserialization mode, that's means the first time you invoke the 
+function `SelectStatement#getResults` will consume more time. But, correspondingly, executing `SELECT` statements will be faster.
+* Add the `enableSimpleSQLLog` parameter to `Database`'s constructor, default by `true`, if you set it to
+`false`, you can disable the simple SQL logout.
+
+### sqllin-driver
+
+* Deprecated the public API `CommonCursor#forEachRows`, you can replace with `CommonCursor#forEachRow`. This
+change just for fixing a typo :). And, the `CommonCursor#forEachRows` will be removed in next version.
+
+### sqllin-processor
+
+* Update `KSP`'s version to `1.9.21-1.0.15`
+
 ## v1.2.2 / 2023-11-08
 
 ### All
@@ -35,13 +59,13 @@
 * Fix the problem: [Native driver does not respect isReadOnly](https://github.com/ctripcorp/SQLlin/issues/50). ***On native platforms***. 
 Now, if a user set `isReadOnly = true` in `DatabaseConfigurtaion`, the database file must exist. And, if opening in read-write mode 
 fails due to OS-level permissions, the user will get a read-only database, and if the user try to modify the database, will receive
-a runtime exception. Thanks for [@nbransby](https://github.com/nbransby)
+a runtime exception. Thanks for [@nbransby](https://github.com/nbransby).
 
 ### sqllin-processor
 
 * Update `KSP`'s version to `1.9.10-1.0.13`
 * Now, if your data class with `@DBRow` can't be solved or imported successfully(Using `KSNode#validate` to judge), the
-`ClauseProcessor` would try to resolve it in second round
+`ClauseProcessor` would try to resolve it in second round.
 
 ## v1.2.0 / 2023-09-19
 
@@ -63,7 +87,7 @@ a runtime exception. Thanks for [@nbransby](https://github.com/nbransby)
 
 ### sqllin-dsl
 
-* Deprecated the public API `DBEntity`([#36](https://github.com/ctripcorp/SQLlin/pull/36), [#37](https://github.com/ctripcorp/SQLlin/pull/37)), any data classes used in _sqllin-dsl_ don't need to extend `DBEntity` anymore
+* Deprecated the public API `DBEntity`([#36](https://github.com/ctripcorp/SQLlin/pull/36), [#37](https://github.com/ctripcorp/SQLlin/pull/37)), any data classes used in _sqllin-dsl_ don't need to extend `DBEntity` anymore.
 
 ### sqllin-driver
 

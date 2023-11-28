@@ -16,8 +16,8 @@
 
 package com.ctrip.sqllin.dsl.sql.statement
 
+import com.ctrip.sqllin.driver.CommonCursor
 import com.ctrip.sqllin.driver.DatabaseConnection
-import com.ctrip.sqllin.driver.withQuery
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.compiler.QueryDecoder
@@ -39,19 +39,23 @@ public sealed class SelectStatement<T>(
     @Volatile
     private var result: List<T>? = null
 
+    @Volatile
+    private var cursor: CommonCursor? = null
+
     final override fun execute() {
-        result = connection.withQuery(sqlStr) {
-            val decoder = QueryDecoder(it)
-            buildList {
-                it.forEachRows {
-                    add(decoder.decodeSerializableValue(deserializer))
-                }
-            }
-        }
+        cursor = connection.query(sqlStr)
     }
 
-    public fun getResults(): List<T> =
-        result ?: throw IllegalStateException("You have to call 'execute' function before call 'getResults'!!!")
+    @OptIn(ExperimentalStdlibApi::class)
+    public fun getResults(): List<T> = result ?: cursor?.use {
+        val decoder = QueryDecoder(it)
+        result = buildList {
+            it.forEachRow {
+                add(decoder.decodeSerializableValue(deserializer))
+            }
+        }
+        result!!
+    } ?: throw IllegalStateException("You have to call 'execute' function before call 'getResults'!!!")
 
     protected fun buildSQL(clause: SelectClause<T>): String = buildString {
         append(sqlStr)

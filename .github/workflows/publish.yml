@@ -100,14 +100,14 @@ jobs:
         with:
           name: Test-Reports
           path: sqllin-driver/build/reports
-        if: always()
+        if: failure()
 
       - name: Upload sqllin-dsl Reports
         uses: actions/upload-artifact@v2
         with:
           name: Test-Reports
           path: sqllin-dsl/build/reports
-        if: always()
+        if: failure()
 
       - name: Publish to MavenCentral
         run: ./publish_apple_android_jvm.sh
@@ -163,14 +163,14 @@ jobs:
         with:
           name: Test-Reports
           path: sqllin-driver/build/reports
-        if: always()
+        if: failure()
 
       - name: Upload sqllin-dsl Reports
         uses: actions/upload-artifact@v2
         with:
           name: Test-Reports
           path: sqllin-dsl/build/reports
-        if: always()
+        if: failure()
 
       - name: Publish to MavenCentral
         run: ./gradlew :sqllin-driver:publishMingwX64PublicationToMavenRepository && ./gradlew :sqllin-dsl:publishMingwX64PublicationToMavenRepository
@@ -266,14 +266,14 @@ jobs:
         with:
           name: Test-Reports
           path: sqllin-driver/build/reports
-        if: always()
+        if: failure()
 
       - name: Upload sqllin-dsl Reports
         uses: actions/upload-artifact@v2
         with:
           name: Test-Reports
           path: sqllin-dsl/build/reports
-        if: always()
+        if: failure()
 
       - name: Publish to MavenCentral
         run: ./publish_linux_processor.sh

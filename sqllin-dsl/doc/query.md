@@ -38,31 +38,30 @@ _GROUP BY_. The sample code like this:
 fun sample() {
     database {
         PersonTable { table ->
-             table SELECT WHERE(age LTE 5)
-             table SELECT ORDER_BY(age to DESC)
-             table SELECT LIMIT(3)
-             table SELECT GROUP_BY(name)
+            table SELECT WHERE(age LTE 5)
+            table SELECT ORDER_BY(age to DESC)
+            table SELECT ORDER_BY(age)
+            table SELECT LIMIT(3)
+            table SELECT GROUP_BY(name)
         }
     }
 }
 ```
-
-In _ORDER BY_ clause, The sorting method (`ASC` or `DESC`) must be explicitly written.
 
 ## Clause Connection
 
 Sometimes we need to use multiple clauses once. In SQL, some clauses must be added after other clauses. For example, the _HAVING_ behind with
 the _GROUP BY_. SQLlin makes sure you don't make mistakes in the order of clauses, the clauses connection regular like this chart: 
 
-|Clause/Statement| Can Connect                      |
-|---|----------------------------------|
+|Clause/Statement| Connectable                  |
+|---|------------------------------|
 |SELECT| WHERE, ORDER BY, LIMIT, GROUP BY |
-|WHERE| LIMIT, ORDER BY, GROUP BY        |
-|GROUP BY| HAVING, ORDER BY                 |
-|HAVING| ORDER BY, LIMIT                  |
-|ORDER BY| LIMIT                            |
-|LIMIT| OFFSET                           |
-|OFFSET| /                                |
+|WHERE| LIMIT, ORDER BY, GROUP BY    |
+|GROUP BY| HAVING, ORDER BY             |
+|HAVING| ORDER BY, LIMIT              |
+|ORDER BY| LIMIT                        |
+|LIMIT| OFFSET                       |
+|OFFSET| /                            |
 
 A _SELECT_ statement with multiple clauses like this:
 
