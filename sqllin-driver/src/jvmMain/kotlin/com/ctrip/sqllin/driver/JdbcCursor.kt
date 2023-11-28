@@ -38,7 +38,13 @@ internal class JdbcCursor(private val resultSet: ResultSet) : CommonCursor {
 
     override fun getColumnIndex(columnName: String): Int = resultSet.findColumn(columnName) - 1
 
-    override fun forEachRows(block: (Int) -> Unit) {
+    @Deprecated(
+        message = "Please use the new API: forEachRow",
+        replaceWith = ReplaceWith(expression = "forEachRow"),
+    )
+    override fun forEachRows(block: (Int) -> Unit) = forEachRow(block)
+
+    override fun forEachRow(block: (Int) -> Unit) {
         var index = 0
         while (next())
             block(index++)

@@ -92,7 +92,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         val readOnlyConfig = getDefaultDBConfig(true)
         openDatabase(readOnlyConfig) {
             it.withQuery(SQL.QUERY_BOOK, null) { cursor ->
-                cursor.forEachRows { rowIndex ->
+                cursor.forEachRow { rowIndex ->
                     val book = bookList[rowIndex]
                     var columnIndex = 0
                     assertEquals(book.name, cursor.getString(++columnIndex))
@@ -121,7 +121,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         val readOnlyConfig = getDefaultDBConfig(true)
         openDatabase(readOnlyConfig) {
             it.withQuery(SQL.QUERY_BOOK, null) { cursor ->
-                cursor.forEachRows { rowIndex ->
+                cursor.forEachRow { rowIndex ->
                     val (name, price) = when (rowIndex) {
                         0 -> "The Da Vinci Code" to 18.99
                         1 -> "The Lost Symbol" to 25.88
@@ -147,7 +147,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         val readOnlyConfig = getDefaultDBConfig(true)
         openDatabase(readOnlyConfig) {
             it.withQuery(SQL.QUERY_BOOK, null) { cursor ->
-                cursor.forEachRows {
+                cursor.forEachRow {
                     val book = bookList.first()
                     var columnIndex = 0
                     assertEquals(book.name, cursor.getString(++columnIndex))
@@ -180,7 +180,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         val readOnlyConfig = getDefaultDBConfig(true)
         openDatabase(readOnlyConfig) {
             it.withQuery(SQL.QUERY_BOOK, null) { cursor ->
-                cursor.forEachRows { rowIndex ->
+                cursor.forEachRow { rowIndex ->
                     val (name, price) = bookList[rowIndex].run { name to price }
                     assertEquals(name, cursor.getString(1))
                     assertEquals(price, cursor.getDouble(4))
@@ -197,7 +197,7 @@ class CommonBasicTest(private val path: DatabasePath) {
                 val readOnlyConfig = getDefaultDBConfig(true)
                 openDatabase(readOnlyConfig) { connection ->
                     connection.withQuery(SQL.QUERY_BOOK, null) { cursor ->
-                        cursor.forEachRows { rowIndex ->
+                        cursor.forEachRow { rowIndex ->
                             val book = bookList[rowIndex]
                             var columnIndex = 0
                             assertEquals(book.name, cursor.getString(++columnIndex))

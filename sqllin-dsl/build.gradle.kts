@@ -119,7 +119,7 @@ gradle.taskGraph.whenReady {
 
 android {
     namespace = "com.ctrip.sqllin.dsl"
-    compileSdk = 33
+    compileSdk = 34
     defaultConfig {
         minSdk = 23
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

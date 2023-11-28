@@ -26,6 +26,7 @@ import com.ctrip.sqllin.driver.withTransaction
 
 internal class TransactionStatementsGroup(
     private val databaseConnection: DatabaseConnection,
+    private val enableSimpleSQLLog: Boolean,
 ) : ExecutableStatement, StatementContainer {
 
     private lateinit var statementList: StatementLinkedList<SingleStatement>
@@ -39,7 +40,8 @@ internal class TransactionStatementsGroup(
 
     override fun execute() = databaseConnection.withTransaction {
         statementList.forEach {
-            println("SQL String: ${it.sqlStr}")
+            if (enableSimpleSQLLog)
+                println("SQL String: ${it.sqlStr}")
             it.execute()
         }
     }

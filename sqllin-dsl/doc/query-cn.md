@@ -37,31 +37,30 @@ _GROUP BY_ 。示例代码如下所示：
 fun sample() {
     database {
         PersonTable { table ->
-             table SELECT WHERE(age LTE 5)
-             table SELECT ORDER_BY(age to DESC)
-             table SELECT LIMIT(3)
-             table SELECT GROUP_BY(name)
+            table SELECT WHERE(age LTE 5)
+            table SELECT ORDER_BY(age to DESC)
+            table SELECT ORDER_BY(age)
+            table SELECT LIMIT(3)
+            table SELECT GROUP_BY(name)
         }
     }
 }
 ```
-
-在 _ORDER BY_ 子句中，排序方式（`ASC` 或 `DESC`）必须被显式写出。
 
 ## 子句连接
 
 有时我们会一次使用多个子句。在 SQL 中，有一些子句必须跟在另一些子句之后，比如 _HAVING_ 跟在 _GROUP BY_ 后面。SQLlin
 确保你不会在子句的顺序上出错，子句的连接规则如下表所示：
 
-|Clause/Statement| Can Connect                      |
-|---|----------------------------------|
+|Clause/Statement| Connectable                  |
+|---|------------------------------|
 |SELECT| WHERE, ORDER BY, LIMIT, GROUP BY |
-|WHERE| LIMIT, ORDER BY, GROUP BY        |
-|GROUP BY| HAVING, ORDER BY                 |
-|HAVING| ORDER BY, LIMIT                  |
-|ORDER BY| LIMIT                            |
-|LIMIT| OFFSET                           |
-|OFFSET| /                                |
+|WHERE| LIMIT, ORDER BY, GROUP BY    |
+|GROUP BY| HAVING, ORDER BY             |
+|HAVING| ORDER BY, LIMIT              |
+|ORDER BY| LIMIT                        |
+|LIMIT| OFFSET                       |
+|OFFSET| /                            |
 
 一个带有多子句的 _SELECT_ 如下所示：
 

@@ -21,7 +21,8 @@ package com.ctrip.sqllin.driver
  * @author yaqiao
  */
 
-public interface CommonCursor {
+@OptIn(ExperimentalStdlibApi::class)
+public interface CommonCursor : AutoCloseable {
 
     public fun getInt(columnIndex: Int): Int
     public fun getLong(columnIndex: Int): Long
@@ -32,9 +33,14 @@ public interface CommonCursor {
 
     public fun getColumnIndex(columnName: String): Int
 
+    @Deprecated(
+        message = "Please use the new API: forEachRow",
+        replaceWith = ReplaceWith(expression = "forEachRow"),
+    )
     public fun forEachRows(block: (Int) -> Unit)
+    public fun forEachRow(block: (Int) -> Unit)
 
     public fun next(): Boolean
 
-    public fun close()
+    public override fun close()
 }

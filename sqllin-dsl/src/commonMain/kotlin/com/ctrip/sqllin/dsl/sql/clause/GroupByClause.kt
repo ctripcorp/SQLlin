@@ -25,15 +25,17 @@ import com.ctrip.sqllin.dsl.sql.statement.WhereSelectStatement
  * @author yaqiao
  */
 
-public class GroupByClause<T> internal constructor(private val columnNames: List<ClauseElement>) : SelectClause<T> {
+public class GroupByClause<T> internal constructor(private val columnNames: Iterable<ClauseElement>) : SelectClause<T> {
 
     override val clauseStr: String
         get() = buildString {
             append(" GROUP BY ")
-            columnNames.forEachIndexed { index, clauseElement ->
-                append(clauseElement.valueName)
-                if (index < columnNames.lastIndex)
-                    append(',')
+            val iterator = columnNames.iterator()
+            require(iterator.hasNext()) { "Please provider at least one 'BaseClauseElement' for 'GROUP BY' clause!!!" }
+            append(iterator.next().valueName)
+            while (iterator.hasNext()) {
+                append(',')
+                append(iterator.next().valueName)
             }
         }
 }
@@ -46,8 +48,7 @@ public infix fun <T> WhereSelectStatement<T>.GROUP_BY(element: ClauseElement): G
     }
 
 public infix fun <T> WhereSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement>): GroupBySelectStatement<T> {
-    val elementList = if (elements is List<ClauseElement>) elements else elements.toList()
-    val statement = appendToGroupBy(GroupByClause(elementList))
+    val statement = appendToGroupBy(GroupByClause(elements))
     container changeLastStatement statement
     return statement
 }
@@ -58,8 +59,7 @@ public infix fun <T> JoinSelectStatement<T>.GROUP_BY(element: ClauseElement): Gr
     }
 
 public infix fun <T> JoinSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement>): GroupBySelectStatement<T> {
-    val elementList = if (elements is List<ClauseElement>) elements else elements.toList()
-    val statement = appendToGroupBy(GroupByClause(elementList))
+    val statement = appendToGroupBy(GroupByClause(elements))
     container changeLastStatement statement
     return statement
 }

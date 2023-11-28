@@ -46,7 +46,13 @@ internal class AndroidCursor(private val cursor: Cursor) : CommonCursor {
 
     override fun getColumnIndex(columnName: String): Int = cursor.getColumnIndexOrThrow(columnName)
 
-    override fun forEachRows(block: (Int) -> Unit) {
+    @Deprecated(
+        message = "Please use the new API: forEachRow",
+        replaceWith = ReplaceWith(expression = "forEachRow"),
+    )
+    override fun forEachRows(block: (Int) -> Unit) = forEachRow(block)
+
+    override fun forEachRow(block: (Int) -> Unit) {
         if (!cursor.moveToFirst()) return
         var index = 0
         do block(index++)
