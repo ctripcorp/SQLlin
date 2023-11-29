@@ -19,6 +19,11 @@ package com.ctrip.sqllin.dsl
 import com.ctrip.sqllin.dsl.annotation.DBRow
 import kotlinx.serialization.Serializable
 
+/**
+ * Test whether the sqllin-processor could generate primitive type and String correctly
+ * @author yaqiao
+ */
+
 @DBRow
 @Serializable
 data class TestPrimitiveTypeForKSP(
