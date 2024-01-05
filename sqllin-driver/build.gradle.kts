@@ -81,7 +81,8 @@ kotlin {
         }
         val androidMain by getting {
             dependencies {
-                implementation("androidx.annotation:annotation:1.7.0")
+                val androidxAnnotationVersion: String by project
+                implementation("androidx.annotation:annotation:${androidxAnnotationVersion}")
             }
         }
         val androidInstrumentedTest by getting {
@@ -94,7 +95,7 @@ kotlin {
 
         val jvmMain by getting {
             dependencies {
-                implementation("org.xerial:sqlite-jdbc:3.43.0.0")
+                implementation("org.xerial:sqlite-jdbc:3.44.1.0")
             }
         }
     }
