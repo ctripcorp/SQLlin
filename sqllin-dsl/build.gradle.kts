@@ -88,12 +88,6 @@ kotlin {
                 implementation(kotlin("test"))
             }
         }
-        val androidMain by getting {
-            dependencies {
-                val androidxAnnotationVersion: String by project
-                implementation("androidx.annotation:annotation:${androidxAnnotationVersion}")
-            }
-        }
         val androidInstrumentedTest by getting {
             dependencies {
                 implementation("androidx.test:core:1.5.0")
