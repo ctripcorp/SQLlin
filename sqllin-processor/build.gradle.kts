@@ -41,7 +41,7 @@ publishing {
         artifactId = "sqllin-processor"
         setArtifacts(
             listOf(
-                "${layout.buildDirectory}/libs/sqllin-processor-$version.jar",
+                "$projectDir/build/libs/sqllin-processor-$version.jar",
                 javadocJar, sourceJar,
             )
         )
