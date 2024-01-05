@@ -2,6 +2,20 @@
 
 - Date format: YYYY-MM-dd
 
+## v1.2.4 / 2024-01-05
+
+### All
+
+* Update `Kotlin`'s version to `1.9.22`
+
+### sqllin-dsl
+
+* Update `kotlinx.serialization`'s version to `1.6.2`
+
+### sqllin-processor
+
+* Update `KSP`'s version to `1.9.22-1.0.16`
+
 ## v1.2.3 / 2023-11-28
 
 ### All
@@ -77,7 +91,7 @@ a runtime exception. Thanks for [@nbransby](https://github.com/nbransby).
 
 * Add the new JVM target
 * **Breaking change**: Remove the public property: `DatabaseConnection#closed`
-* The Android (<= 9) target supports to set the `journalMode` and `synchronousMode` now
+* The Android (< 9) target supports to set the `journalMode` and `synchronousMode` now
 
 ## v1.1.1 / 2023-08-12
 

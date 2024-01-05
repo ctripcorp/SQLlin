@@ -32,7 +32,8 @@ kotlin {
             kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
             dependencies {
                 implementation(project(":sqllin-dsl"))
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.5.1")
+                val serializationVersion: String by project
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:${serializationVersion}")
                 val coroutinesVersion: String by project
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
             }

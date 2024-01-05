@@ -77,7 +77,8 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 api(project(":sqllin-driver"))
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.5.1")
+                val serializationVersion: String by project
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:${serializationVersion}")
                 val coroutinesVersion: String by project
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
             }
@@ -89,7 +90,8 @@ kotlin {
         }
         val androidMain by getting {
             dependencies {
-                implementation("androidx.annotation:annotation:1.7.0")
+                val androidxAnnotationVersion: String by project
+                implementation("androidx.annotation:annotation:${androidxAnnotationVersion}")
             }
         }
         val androidInstrumentedTest by getting {
