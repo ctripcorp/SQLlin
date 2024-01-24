@@ -41,7 +41,7 @@ Since `1.2.0`, SQLlin started to support JVM target, and it's base on [sqlite-jd
 ## Basic usage
 
 I don't recommend you use _sqllin-driver_ in your application projects directly, but if you want to develop your own SQLite
-high-level API library, you can use it.
+high-level API library, you can use it as your underlying driver.
 
 ### Installation via Maven in Gradle
 
