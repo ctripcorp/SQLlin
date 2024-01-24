@@ -6,7 +6,7 @@
 所以我们需要 _sqllin-driver_ ，并且 _sqllin-dsl_ 要基于它。我们的目标是编写 Kotlin Multiplatform common
 source set 可用的通用 API，并且它们在不同的平台有不同的实现。
 
-在 Android 上，并没有太多的方法可供我们选择。如果我们使用 Android Framework SQLite JAVA
+在 Android 上，并没有太多的方法可供我们选择。如果我们使用 Android Framework SQLite Java
 API，事情将会变得非常简单，但是缺点是很多 SQLite 参数不能再 Android P 以下版本的系统上生效。如果我们自己编写
 JNI 代码去调用 SQLite C 函数，看起来可以解决这个问题，但是会遇到一个更大的问题：在版本高于 Android N
 的系统上，Google 不允许开发者在 NDK 中调用系统内置的 SQLite C 函数。如果我们坚定地选择这条路，我们必须自己将
@@ -30,7 +30,7 @@ Windows（mingwX86, mingwX64）。
 
 ## 基本用法
 
-我不建议您在应用程序工程中直接使用 _sqllin-driver_ ，但是如果你想开发自己的 SQLite 高阶 API 库，你可以使用它。
+我不建议你在应用程序工程中直接使用 _sqllin-driver_ ，但是如果你想开发自己的 SQLite 高阶 API 库，你可以选择使用它作为底层驱动。
 
 ### 在 Gradle 中通过 Maven 引入
 
