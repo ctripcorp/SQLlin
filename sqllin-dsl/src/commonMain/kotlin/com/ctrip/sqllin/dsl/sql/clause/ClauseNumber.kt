@@ -81,7 +81,7 @@ public class ClauseNumber(
                 append(symbol)
             } while (hasNext)
         }
-        return SelectCondition(sql)
+        return SelectCondition(sql, null)
     }
 
     internal infix fun between(range: LongRange): SelectCondition {
@@ -96,7 +96,7 @@ public class ClauseNumber(
             append(" AND ")
             append(range.last)
         }
-        return SelectCondition(sql)
+        return SelectCondition(sql, null)
     }
 
     private fun appendNumber(symbol: String, number: Number): SelectCondition {
@@ -111,7 +111,7 @@ public class ClauseNumber(
             append(' ')
             append(number)
         }
-        return SelectCondition(sql)
+        return SelectCondition(sql, null)
     }
 
     private fun appendNullableNumber(notNullSymbol: String, nullSymbol: String, number: Number?): SelectCondition {
@@ -126,7 +126,7 @@ public class ClauseNumber(
             append(' ')
             append(number ?: "NULL")
         }
-        return SelectCondition(sql)
+        return SelectCondition(sql, null)
     }
 
     private fun appendClauseNumber(symbol: String, clauseNumber: ClauseNumber): SelectCondition {
@@ -141,7 +141,7 @@ public class ClauseNumber(
             append('.')
             append(clauseNumber.valueName)
         }
-        return SelectCondition(sql)
+        return SelectCondition(sql, null)
     }
 
     override fun hashCode(): Int = valueName.hashCode() + table.tableName.hashCode()

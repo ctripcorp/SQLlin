@@ -41,7 +41,7 @@ internal object Select : Operation {
         connection: DatabaseConnection,
         container: StatementContainer,
     ): WhereSelectStatement<T> =
-        WhereSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container)
+        WhereSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, clause.selectCondition.parameters)
 
     fun <T> select(
         table: Table<T>,
@@ -51,7 +51,7 @@ internal object Select : Operation {
         connection: DatabaseConnection,
         container: StatementContainer,
     ): OrderBySelectStatement<T> =
-        OrderBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container)
+        OrderBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, mutableListOf())
 
     fun <T> select(
         table: Table<T>,
@@ -61,7 +61,7 @@ internal object Select : Operation {
         connection: DatabaseConnection,
         container: StatementContainer,
     ): LimitSelectStatement<T> =
-        LimitSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container)
+        LimitSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null)
 
     fun <T> select(
         table: Table<T>,
@@ -71,7 +71,7 @@ internal object Select : Operation {
         connection: DatabaseConnection,
         container: StatementContainer,
     ): GroupBySelectStatement<T> =
-        GroupBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container)
+        GroupBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null)
 
     fun <R> select(
         table: Table<*>,
@@ -81,7 +81,7 @@ internal object Select : Operation {
         connection: DatabaseConnection,
         container: StatementContainer,
     ) : JoinSelectStatement<R> =
-        JoinSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container)
+        JoinSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null)
 
     fun <R> select(
         table: Table<*>,
@@ -130,6 +130,6 @@ internal object Select : Operation {
             append(" FROM ")
             append(table.tableName)
         }
-        return FinalSelectStatement(sql, deserializer, connection, container)
+        return FinalSelectStatement(sql, deserializer, connection, container, null)
     }
 }

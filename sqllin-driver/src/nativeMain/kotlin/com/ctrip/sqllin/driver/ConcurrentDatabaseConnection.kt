@@ -30,19 +30,19 @@ internal class ConcurrentDatabaseConnection(
 
     private val accessLock = Lock()
 
-    override fun execSQL(sql: String, bindParams: Array<Any?>?) = accessLock.withLock {
+    override fun execSQL(sql: String, bindParams: Array<out Any?>?) = accessLock.withLock {
         delegateConnection.execSQL(sql, bindParams)
     }
 
-    override fun executeInsert(sql: String, bindParams: Array<Any?>?) = accessLock.withLock {
+    override fun executeInsert(sql: String, bindParams: Array<out Any?>?) = accessLock.withLock {
         delegateConnection.executeInsert(sql, bindParams)
     }
 
-    override fun executeUpdateDelete(sql: String, bindParams: Array<Any?>?) = accessLock.withLock {
+    override fun executeUpdateDelete(sql: String, bindParams: Array<out Any?>?) = accessLock.withLock {
         delegateConnection.executeUpdateDelete(sql, bindParams)
     }
 
-    override fun query(sql: String, bindParams: Array<String?>?): CommonCursor = accessLock.withLock {
+    override fun query(sql: String, bindParams: Array<out String?>?): CommonCursor = accessLock.withLock {
         delegateConnection.query(sql, bindParams)
     }
 

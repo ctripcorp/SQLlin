@@ -33,12 +33,13 @@ internal object Insert : Operation {
         get() = "INSERT INTO "
 
     fun <T> insert(table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>): SingleStatement {
+        val parameters = ArrayList<String>()
         val sql = buildString {
             append(sqlStr)
             append(table.tableName)
             append(' ')
-            append(encodeEntities2InsertValues(table.kSerializer(), entities))
+            append(encodeEntities2InsertValues(table.kSerializer(), entities, parameters))
         }
-        return InsertStatement(sql, connection)
+        return InsertStatement(sql, connection, parameters)
     }
 }

@@ -47,7 +47,6 @@ public sealed class JoinClause<R>(vararg tables: Table<*>) : BaseJoinClause<R>(*
 public infix fun <R> JoinStatementWithoutCondition<R>.ON(condition: SelectCondition): JoinSelectStatement<R> =
     convertToJoinSelectStatement(condition)
 
-@Suppress("NOTHING_TO_INLINE")
 public inline infix fun <R> JoinStatementWithoutCondition<R>.USING(clauseElement: ClauseElement): JoinSelectStatement<R> =
     USING(listOf(clauseElement))
 

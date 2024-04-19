@@ -14,7 +14,7 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-val sqllinVersion = "1.2.4"
+val sqllinVersion = "1.3.0"
 
 kotlin {
     // ......

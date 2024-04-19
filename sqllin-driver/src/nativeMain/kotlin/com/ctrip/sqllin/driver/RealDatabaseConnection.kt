@@ -37,7 +37,7 @@ internal class RealDatabaseConnection(
 
     private data class Transaction(val isSuccessful: Boolean)
 
-    override fun execSQL(sql: String, bindParams: Array<Any?>?) =
+    override fun execSQL(sql: String, bindParams: Array<out Any?>?) =
         if (bindParams == null) {
             database.rawExecSql(sql)
         } else {
@@ -49,7 +49,7 @@ internal class RealDatabaseConnection(
             }
         }
 
-    override fun executeInsert(sql: String, bindParams: Array<Any?>?) {
+    override fun executeInsert(sql: String, bindParams: Array<out Any?>?) {
         val statement = bindParamsToSQL(sql, bindParams)
         try {
             statement.executeInsert()
@@ -58,7 +58,7 @@ internal class RealDatabaseConnection(
         }
     }
 
-    override fun executeUpdateDelete(sql: String, bindParams: Array<Any?>?) {
+    override fun executeUpdateDelete(sql: String, bindParams: Array<out Any?>?) {
         val statement = bindParamsToSQL(sql, bindParams)
         try {
             statement.executeUpdateDelete()
@@ -67,7 +67,7 @@ internal class RealDatabaseConnection(
         }
     }
 
-    override fun query(sql: String, bindParams: Array<String?>?): CommonCursor {
+    override fun query(sql: String, bindParams: Array<out String?>?): CommonCursor {
         val statement = createStatement(sql)
         bindParams?.forEachIndexed { index, str ->
             str?.let {

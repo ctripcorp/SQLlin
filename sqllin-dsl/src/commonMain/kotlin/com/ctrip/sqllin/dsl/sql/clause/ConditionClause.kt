@@ -18,7 +18,7 @@ package com.ctrip.sqllin.dsl.sql.clause
 
 /**
  * Abstract clause that could link conditions, include 'WHERE' and 'HAVING'
- * @author yaquai
+ * @author yaqiao
  */
 
 public sealed class ConditionClause<T>(private val selectCondition: SelectCondition) : SelectClause<T> {

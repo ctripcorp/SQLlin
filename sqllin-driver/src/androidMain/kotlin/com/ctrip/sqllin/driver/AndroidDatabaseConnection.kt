@@ -25,17 +25,17 @@ import android.database.sqlite.SQLiteDatabase
 
 internal class AndroidDatabaseConnection(private val database: SQLiteDatabase) : DatabaseConnection {
 
-    override fun execSQL(sql: String, bindParams: Array<Any?>?) =
+    override fun execSQL(sql: String, bindParams: Array<out Any?>?) =
         if (bindParams == null)
             database.execSQL(sql)
         else
             database.execSQL(sql, bindParams)
 
-    override fun executeInsert(sql: String, bindParams: Array<Any?>?) = execSQL(sql, bindParams)
+    override fun executeInsert(sql: String, bindParams: Array<out Any?>?) = execSQL(sql, bindParams)
 
-    override fun executeUpdateDelete(sql: String, bindParams: Array<Any?>?) = execSQL(sql, bindParams)
+    override fun executeUpdateDelete(sql: String, bindParams: Array<out Any?>?) = execSQL(sql, bindParams)
 
-    override fun query(sql: String, bindParams: Array<String?>?): CommonCursor = AndroidCursor(database.rawQuery(sql, bindParams))
+    override fun query(sql: String, bindParams: Array<out String?>?): CommonCursor = AndroidCursor(database.rawQuery(sql, bindParams))
 
     override fun beginTransaction() = database.beginTransaction()
     override fun endTransaction() = database.endTransaction()

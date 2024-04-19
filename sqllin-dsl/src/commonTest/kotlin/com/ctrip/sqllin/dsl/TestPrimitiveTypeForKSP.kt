@@ -37,7 +37,7 @@ data class TestPrimitiveTypeForKSP(
     val testULong: ULong,
     val testUShort: UShort,
     val testUByte: UByte,
-    val testBoolean: Boolean,
-    val testChar: Char,
+    val testBoolean: Boolean?,
+    val testChar: Char?,
     val testString: String,
 )

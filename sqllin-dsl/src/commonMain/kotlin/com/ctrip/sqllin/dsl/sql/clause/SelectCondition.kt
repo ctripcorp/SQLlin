@@ -23,6 +23,7 @@ package com.ctrip.sqllin.dsl.sql.clause
 
 public class SelectCondition internal constructor(
     internal val conditionSQL: String,
+    internal val parameters: MutableList<String>?,
 ) {
 
     // Where condition 'OR' operator.
@@ -37,6 +38,15 @@ public class SelectCondition internal constructor(
             append(" $symbol ")
             append(next.conditionSQL)
         }
-        return SelectCondition(sql)
+        val combinedParameters = when {
+            parameters == null && next.parameters != null -> next.parameters
+            parameters != null && next.parameters == null -> parameters
+            parameters == null && next.parameters == null -> null
+            else -> {
+                parameters!!.addAll(next.parameters!!)
+                parameters
+            }
+        }
+        return SelectCondition(sql, combinedParameters)
     }
 }

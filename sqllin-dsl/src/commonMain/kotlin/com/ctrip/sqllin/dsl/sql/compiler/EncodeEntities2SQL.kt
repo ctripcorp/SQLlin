@@ -27,7 +27,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
  * @author yaqiao
  */
 
-internal fun <T> encodeEntities2InsertValues(serializer: SerializationStrategy<T>, values: Iterable<T>): String = buildString {
+internal fun <T> encodeEntities2InsertValues(serializer: SerializationStrategy<T>, values: Iterable<T>, parameters: MutableList<String>): String = buildString {
     append('(')
     appendDBColumnName(serializer.descriptor)
     append(')')
@@ -35,20 +35,13 @@ internal fun <T> encodeEntities2InsertValues(serializer: SerializationStrategy<T
     val iterator = values.iterator()
     do {
         val value = iterator.next()
-        val encoder = InsertValuesEncoder()
+        val encoder = InsertValuesEncoder(parameters)
         encoder.encodeSerializableValue(serializer, value)
         append(encoder.valuesSQL)
         val hasNext = iterator.hasNext()
         if (hasNext) append(',')
     } while (hasNext)
 }
-
-internal fun <T> encodeEntities2UpdateValues(serializer: SerializationStrategy<T>, values: Iterable<T>): List<String> =
-    values.asSequence().map {
-        UpdateValuesEncoder().apply {
-            encodeSerializableValue(serializer, it)
-        }.valuesSQL
-    }.toList()
 
 @OptIn(ExperimentalSerializationApi::class)
 internal infix fun StringBuilder.appendDBColumnName(descriptor: SerialDescriptor) {

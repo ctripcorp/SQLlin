@@ -32,7 +32,6 @@ internal class InnerJoinClause<R>(
 
 public fun <R> JOIN(vararg tables: Table<*>): JoinClause<R> = InnerJoinClause(*tables)
 
-@Suppress("NOTHING_TO_INLINE")
 public inline fun <R> INNER_JOIN(vararg tables: Table<*>): JoinClause<R> = JOIN(*tables)
 
 internal class NaturalInnerJoinClause<R>(
@@ -44,5 +43,4 @@ internal class NaturalInnerJoinClause<R>(
 
 public fun <R> NATURAL_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NaturalInnerJoinClause(*tables)
 
-@Suppress("NOTHING_TO_INLINE")
 public inline fun <R> NATURAL_INNER_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NATURAL_JOIN(*tables)

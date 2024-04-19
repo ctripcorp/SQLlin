@@ -46,7 +46,7 @@ public class JoinStatementWithoutCondition<R> internal constructor(
                 append(symbol)
             } while (hasNext)
         }
-        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container)
+        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, null)
         addSelectStatement(joinStatement)
         return joinStatement
     }
@@ -57,7 +57,7 @@ public class JoinStatementWithoutCondition<R> internal constructor(
             append(" ON ")
             append(condition.conditionSQL)
         }
-        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container)
+        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, condition.parameters)
         addSelectStatement(joinStatement)
         return joinStatement
     }

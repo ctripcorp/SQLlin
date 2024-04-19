@@ -21,7 +21,9 @@ package com.ctrip.sqllin.dsl.sql.compiler
  * @author yaqiao
  */
 
-internal class InsertValuesEncoder : AbstractValuesEncoder() {
+internal class InsertValuesEncoder(
+    override val parameters: MutableList<String>,
+) : AbstractValuesEncoder() {
 
     override val sqlStrBuilder = StringBuilder("(")
 

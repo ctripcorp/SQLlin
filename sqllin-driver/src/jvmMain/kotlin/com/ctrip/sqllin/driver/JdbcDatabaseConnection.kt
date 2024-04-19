@@ -29,25 +29,25 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 internal class JdbcDatabaseConnection(private val connection: Connection) : AbstractJdbcDatabaseConnection() {
 
-    override fun execSQL(sql: String, bindParams: Array<Any?>?) {
+    override fun execSQL(sql: String, bindParams: Array<out Any?>?) {
         bindParamsToSQL(sql, bindParams).use {
             it.execute()
         }
     }
 
-    override fun executeInsert(sql: String, bindParams: Array<Any?>?) {
+    override fun executeInsert(sql: String, bindParams: Array<out Any?>?) {
         executeUpdate(sql, bindParams)
     }
 
-    override fun executeUpdateDelete(sql: String, bindParams: Array<Any?>?) {
+    override fun executeUpdateDelete(sql: String, bindParams: Array<out Any?>?) {
         executeUpdate(sql, bindParams)
     }
 
-    private fun executeUpdate(sql: String, bindParams: Array<Any?>?): Int = bindParamsToSQL(sql, bindParams).use {
+    private fun executeUpdate(sql: String, bindParams: Array<out Any?>?): Int = bindParamsToSQL(sql, bindParams).use {
         it.executeUpdate()
     }
 
-    override fun query(sql: String, bindParams: Array<String?>?): CommonCursor {
+    override fun query(sql: String, bindParams: Array<out String?>?): CommonCursor {
         val statement = connection.prepareStatement(sql)
         bindParams?.forEachIndexed { index, str ->
             str?.let {

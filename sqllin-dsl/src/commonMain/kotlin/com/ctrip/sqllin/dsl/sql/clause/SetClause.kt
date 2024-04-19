@@ -25,7 +25,23 @@ public class SetClause<T> : Clause<T> {
 
     private val clauseBuilder = StringBuilder()
 
-    public fun append(propertyName: String, propertyValue: String?) {
+    internal var parameters: MutableList<String>? = null
+        private set
+
+    public fun appendString(propertyName: String, propertyValue: String?) {
+        clauseBuilder.append(propertyName)
+        if (propertyValue == null)
+            clauseBuilder.append("NULL,")
+        else {
+            clauseBuilder.append("?,")
+            val params = parameters ?: ArrayList<String>().also {
+                parameters = it
+            }
+            params.add(propertyValue)
+        }
+    }
+
+    public fun appendAny(propertyName: String, propertyValue: Any?) {
         clauseBuilder
             .append(propertyName)
             .append('=')
