@@ -95,7 +95,7 @@ kotlin {
 
         val jvmMain by getting {
             dependencies {
-                implementation("org.xerial:sqlite-jdbc:3.44.1.0")
+                implementation("org.xerial:sqlite-jdbc:3.45.3.0")
             }
         }
     }

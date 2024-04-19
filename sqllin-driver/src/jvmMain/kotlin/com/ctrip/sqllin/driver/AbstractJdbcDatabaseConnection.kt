@@ -29,7 +29,7 @@ internal abstract class AbstractJdbcDatabaseConnection : DatabaseConnection {
 
     abstract fun createStatement(sql: String): PreparedStatement
 
-    protected fun bindParamsToSQL(sql: String, bindParams: Array<Any?>?): PreparedStatement = createStatement(sql).apply {
+    protected fun bindParamsToSQL(sql: String, bindParams: Array<out Any?>?): PreparedStatement = createStatement(sql).apply {
         bindParams?.run {
             require(isNotEmpty()) { "Empty bindArgs" }
             forEachIndexed { index, any ->

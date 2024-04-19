@@ -54,12 +54,9 @@ public class ClauseString(
             append(valueName)
             append(' ')
             append(symbol)
-            append(' ')
-            append('\'')
-            append(regex)
-            append('\'')
+            append(" ?")
         }
-        return SelectCondition(sql)
+        return SelectCondition(sql, mutableListOf(regex))
     }
 
     private fun appendString(notNullSymbol: String, nullSymbol: String, str: String?): SelectCondition {
@@ -73,16 +70,12 @@ public class ClauseString(
             val isNull = str == null
             val symbol = if (isNull) nullSymbol else notNullSymbol
             append(symbol)
-            append(' ')
             if (str == null)
                 append(" NULL")
-            else {
-                append('\'')
-                append(str)
-                append('\'')
-            }
+            else
+                append(" ?")
         }
-        return SelectCondition(sql)
+        return SelectCondition(sql, if (str == null) null else mutableListOf(str))
     }
 
     private fun appendClauseString(symbol: String, clauseString: ClauseString): SelectCondition {
@@ -97,7 +90,7 @@ public class ClauseString(
             append('.')
             append(clauseString.valueName)
         }
-        return SelectCondition(sql)
+        return SelectCondition(sql, null)
     }
 
     override fun hashCode(): Int = valueName.hashCode() + table.tableName.hashCode()

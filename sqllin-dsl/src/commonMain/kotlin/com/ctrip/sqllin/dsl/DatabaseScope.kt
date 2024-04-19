@@ -124,7 +124,7 @@ public class DatabaseScope internal constructor(
      */
 
     public infix fun Table<*>.DELETE(x: X) {
-        val statement = Delete.deleteAllEntity(this, databaseConnection)
+        val statement = Delete.deleteAllEntities(this, databaseConnection)
         addStatement(statement)
     }
 

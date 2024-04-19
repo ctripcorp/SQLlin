@@ -37,14 +37,14 @@ internal object Delete : Operation {
             buildBaseDeleteStatement(table)
             append(whereClause.clauseStr)
         }
-        return UpdateDeleteStatement(sql, connection)
+        return UpdateDeleteStatement(sql, connection, whereClause.selectCondition.parameters)
     }
 
-    fun deleteAllEntity(table: Table<*>, connection: DatabaseConnection): SingleStatement {
+    fun deleteAllEntities(table: Table<*>, connection: DatabaseConnection): SingleStatement {
         val sql = buildString {
             buildBaseDeleteStatement(table)
         }
-        return UpdateDeleteStatement(sql, connection)
+        return UpdateDeleteStatement(sql, connection, null)
     }
 
     private fun StringBuilder.buildBaseDeleteStatement(table: Table<*>) {

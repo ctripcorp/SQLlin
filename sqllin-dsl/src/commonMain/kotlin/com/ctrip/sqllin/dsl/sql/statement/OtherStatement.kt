@@ -27,20 +27,23 @@ public class UpdateStatementWithoutWhereClause<T> internal constructor(
     preSQLStr: String,
     internal val statementContainer: StatementContainer,
     internal val connection: DatabaseConnection,
+    override val parameters: MutableList<String>?,
 ) : SingleStatement(preSQLStr) {
-    public override fun execute(): Unit = connection.executeUpdateDelete(sqlStr)
+    public override fun execute(): Unit = connection.executeUpdateDelete(sqlStr, params)
 }
 
 public class UpdateDeleteStatement internal constructor(
     sqlStr: String,
     private val connection: DatabaseConnection,
+    override val parameters: MutableList<String>?,
 ) : SingleStatement(sqlStr) {
-    public override fun execute(): Unit = connection.executeUpdateDelete(sqlStr)
+    public override fun execute(): Unit = connection.executeUpdateDelete(sqlStr, params)
 }
 
 public class InsertStatement internal constructor(
     sqlStr: String,
     private val connection: DatabaseConnection,
+    override val parameters: MutableList<String>,
 ) : SingleStatement(sqlStr) {
-    public override fun execute(): Unit = connection.executeInsert(sqlStr)
+    public override fun execute(): Unit = connection.executeInsert(sqlStr, params)
 }

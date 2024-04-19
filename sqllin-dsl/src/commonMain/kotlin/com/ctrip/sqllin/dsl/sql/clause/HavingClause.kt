@@ -24,7 +24,7 @@ import com.ctrip.sqllin.dsl.sql.statement.HavingSelectStatement
  * @author yaqiao
  */
 
-internal class HavingClause<T>(selectCondition: SelectCondition) : ConditionClause<T>(selectCondition) {
+internal class HavingClause<T>(val selectCondition: SelectCondition) : ConditionClause<T>(selectCondition) {
 
     override val clauseName: String = "HAVING"
 }

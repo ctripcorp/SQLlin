@@ -34,6 +34,7 @@ public sealed class SelectStatement<T>(
     internal val deserializer: DeserializationStrategy<T>,
     internal val connection: DatabaseConnection,
     internal val container: StatementContainer,
+    final override val parameters: MutableList<String>?,
 ) : SingleStatement(sqlStr) {
 
     @Volatile
@@ -43,7 +44,7 @@ public sealed class SelectStatement<T>(
     private var cursor: CommonCursor? = null
 
     final override fun execute() {
-        cursor = connection.query(sqlStr)
+        cursor = connection.query(sqlStr, params)
     }
 
     @OptIn(ExperimentalStdlibApi::class)
@@ -71,7 +72,7 @@ public sealed class SelectStatement<T>(
             append(" CROSS JOIN ")
             append(table.tableName)
         }
-        return FinalSelectStatement(sql, newDeserializer, connection, container)
+        return FinalSelectStatement(sql, newDeserializer, connection, container, parameters)
     }
 }
 
@@ -80,16 +81,17 @@ public class WhereSelectStatement<T> internal constructor(
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
     container: StatementContainer,
-) : SelectStatement<T>(sqlStr, deserializer, connection, container) {
+    parameters: MutableList<String>?,
+) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters) {
 
     internal infix fun appendToLimit(clause: LimitClause<T>): LimitSelectStatement<T> =
-        LimitSelectStatement(buildSQL(clause), deserializer, connection, container)
+        LimitSelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 
     internal infix fun appendToOrderBy(clause: OrderByClause<T>): OrderBySelectStatement<T> =
-        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container)
+        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 
     internal infix fun appendToGroupBy(clause: GroupByClause<T>): GroupBySelectStatement<T> =
-        GroupBySelectStatement(buildSQL(clause), deserializer, connection, container)
+        GroupBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 }
 
 public class JoinSelectStatement<T> internal constructor(
@@ -97,19 +99,27 @@ public class JoinSelectStatement<T> internal constructor(
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
     container: StatementContainer,
-) : SelectStatement<T>(sqlStr, deserializer, connection, container) {
+    parameters: MutableList<String>?,
+) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters) {
 
-    internal infix fun appendToWhere(clause: WhereClause<T>): WhereSelectStatement<T> =
-        WhereSelectStatement(buildSQL(clause), deserializer, connection, container)
+    internal infix fun appendToWhere(clause: WhereClause<T>): WhereSelectStatement<T> {
+        val clauseParams = clause.selectCondition.parameters
+        val params = parameters?.also {
+            clauseParams?.let { p ->
+                it.addAll(p)
+            }
+        } ?: clauseParams
+        return WhereSelectStatement(buildSQL(clause), deserializer, connection, container, params)
+    }
 
     internal infix fun appendToLimit(clause: LimitClause<T>): LimitSelectStatement<T> =
-        LimitSelectStatement(buildSQL(clause), deserializer, connection, container)
+        LimitSelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 
     internal infix fun appendToOrderBy(clause: OrderByClause<T>): OrderBySelectStatement<T> =
-        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container)
+        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 
     internal infix fun appendToGroupBy(clause: GroupByClause<T>): GroupBySelectStatement<T> =
-        GroupBySelectStatement(buildSQL(clause), deserializer, connection, container)
+        GroupBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 }
 
 public class GroupBySelectStatement<T> internal constructor(
@@ -117,13 +127,21 @@ public class GroupBySelectStatement<T> internal constructor(
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
     container: StatementContainer,
-) : SelectStatement<T>(sqlStr, deserializer, connection, container) {
+    parameters: MutableList<String>?,
+) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters) {
 
     internal infix fun appendToOrderBy(clause: OrderByClause<T>): OrderBySelectStatement<T> =
-        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container)
+        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 
-    internal infix fun appendToHaving(clause: HavingClause<T>): HavingSelectStatement<T> =
-        HavingSelectStatement(buildSQL(clause), deserializer, connection, container)
+    internal infix fun appendToHaving(clause: HavingClause<T>): HavingSelectStatement<T> {
+        val clauseParams = clause.selectCondition.parameters
+        val params = parameters?.also {
+            clauseParams?.let { p ->
+                it.addAll(p)
+            }
+        } ?: clauseParams
+        return HavingSelectStatement(buildSQL(clause), deserializer, connection, container, params)
+    }
 }
 
 public class HavingSelectStatement<T> internal constructor(
@@ -131,13 +149,14 @@ public class HavingSelectStatement<T> internal constructor(
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
     container: StatementContainer,
-) : SelectStatement<T>(sqlStr, deserializer, connection, container) {
+    parameters: MutableList<String>?,
+) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters) {
 
     internal infix fun appendToOrderBy(clause: OrderByClause<T>): OrderBySelectStatement<T> =
-        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container)
+        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 
     internal infix fun appendToLimit(clause: LimitClause<T>): LimitSelectStatement<T> =
-        LimitSelectStatement(buildSQL(clause), deserializer, connection, container)
+        LimitSelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 }
 
 public class OrderBySelectStatement<T> internal constructor(
@@ -145,10 +164,11 @@ public class OrderBySelectStatement<T> internal constructor(
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
     container: StatementContainer,
-) : SelectStatement<T>(sqlStr, deserializer, connection, container) {
+    parameters: MutableList<String>?,
+) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters) {
 
     internal infix fun appendToLimit(clause: LimitClause<T>): LimitSelectStatement<T> =
-        LimitSelectStatement(buildSQL(clause), deserializer, connection, container)
+        LimitSelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 }
 
 public class LimitSelectStatement<T> internal constructor(
@@ -156,10 +176,11 @@ public class LimitSelectStatement<T> internal constructor(
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
     container: StatementContainer,
-) : SelectStatement<T>(sqlStr, deserializer, connection, container) {
+    parameters: MutableList<String>?,
+) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters) {
 
     internal infix fun appendToFinal(clause: OffsetClause<T>): FinalSelectStatement<T> =
-        FinalSelectStatement(buildSQL(clause), deserializer, connection, container)
+        FinalSelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 }
 
 public class FinalSelectStatement<T> internal constructor(
@@ -167,4 +188,5 @@ public class FinalSelectStatement<T> internal constructor(
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
     container: StatementContainer,
-) : SelectStatement<T>(sqlStr, deserializer, connection, container)
+    parameters: MutableList<String>?,
+) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters)

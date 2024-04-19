@@ -33,6 +33,7 @@ internal abstract class AbstractValuesEncoder : AbstractEncoder() {
     final override val serializersModule: SerializersModule = EmptySerializersModule()
 
     protected abstract val sqlStrBuilder: StringBuilder
+    abstract val parameters: MutableList<String>
 
     protected abstract fun StringBuilder.appendTail(): StringBuilder
 
@@ -49,9 +50,7 @@ internal abstract class AbstractValuesEncoder : AbstractEncoder() {
         return true
     }
 
-    override fun encodeBoolean(value: Boolean) {
-        sqlStrBuilder.append(if (value) 1 else 0).appendTail()
-    }
+    override fun encodeBoolean(value: Boolean) = encodeByte(if (value) 1 else 0)
 
     override fun encodeByte(value: Byte) {
         sqlStrBuilder.append(value).appendTail()
@@ -69,20 +68,11 @@ internal abstract class AbstractValuesEncoder : AbstractEncoder() {
         sqlStrBuilder.append(value).appendTail()
     }
 
-    override fun encodeChar(value: Char) {
-        sqlStrBuilder
-            .append('\'')
-            .append(value)
-            .append('\'')
-            .appendTail()
-    }
+    override fun encodeChar(value: Char) = encodeString(value.toString())
 
     override fun encodeString(value: String) {
-        sqlStrBuilder
-            .append('\'')
-            .append(value)
-            .append('\'')
-            .appendTail()
+        sqlStrBuilder.append('?').appendTail()
+        parameters.add(value)
     }
 
     override fun encodeFloat(value: Float) {
@@ -93,7 +83,5 @@ internal abstract class AbstractValuesEncoder : AbstractEncoder() {
         sqlStrBuilder.append(value).appendTail()
     }
 
-    override fun encodeEnum(enumDescriptor: SerialDescriptor, index: Int) {
-        sqlStrBuilder.append(index).appendTail()
-    }
+    override fun encodeEnum(enumDescriptor: SerialDescriptor, index: Int) = encodeInt(index)
 }

@@ -95,7 +95,7 @@ class ClauseProcessor(
                     val nullableSymbol = if (isNotNull) "\n" else "?\n"
                     writer.write(nullableSymbol)
                     writer.write("        get() = ${getSetClauseGetterValue(property)}\n")
-                    writer.write("        set(value) = append($elementName, \"${getValueStr(property)}\")\n\n")
+                    writer.write("        set(value) = ${appendFunction(elementName, property)}\n\n")
                 }
                 writer.write("}")
             }
@@ -146,13 +146,11 @@ class ClauseProcessor(
         else -> null
     }
 
-    private fun getValueStr(property: KSPropertyDeclaration): String = when (
-        property.typeName
-    ) {
-        Char::class.qualifiedName,
-        String::class.qualifiedName -> "'\$value'"
-        Boolean::class.qualifiedName -> "\${if (value) 1 else 0}"
-        else -> "\$value"
+    private fun appendFunction(elementName: String, property: KSPropertyDeclaration): String = when (property.typeName) {
+        Char::class.qualifiedName -> "appendString($elementName, value?.toString())"
+        String::class.qualifiedName -> "appendString($elementName, value)"
+        Boolean::class.qualifiedName -> "appendAny($elementName, value?.let { if (it) 1 else 0 })"
+        else -> "appendAny($elementName, value)"
     }
 
     private inline val KSPropertyDeclaration.typeName

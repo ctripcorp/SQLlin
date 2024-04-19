@@ -35,6 +35,7 @@ internal class UnionSelectStatementGroup<T> : StatementContainer {
     internal fun unionStatements(isUnionAll: Boolean): FinalSelectStatement<T> {
         require(statementLinkedList?.hasNext() == true) { "Please write at least two 'select' statements on 'UNION' scope" }
         var firstStatement: SelectStatement<T>? = null
+        var parameters: MutableList<String>? = null
         val unionSqlStr = buildString {
             statementLinkedList!!.run {
                 val unionKeyWord = if (isUnionAll) " UNION ALL " else " UNION "
@@ -46,6 +47,11 @@ internal class UnionSelectStatementGroup<T> : StatementContainer {
                         firstStatement = next
                         if (!hasNext)
                             throw IllegalStateException("Please write at least two 'select' statements on 'UNION' scope")
+                    }
+                    if (parameters == null) {
+                        parameters = next.parameters
+                    } else next.parameters?.let {
+                        parameters!!.addAll(it)
                     }
                     if (hasNext)
                         append(unionKeyWord)
@@ -59,6 +65,7 @@ internal class UnionSelectStatementGroup<T> : StatementContainer {
                 deserializer = deserializer,
                 connection = connection,
                 container = container,
+                parameters,
             )
         }
     }

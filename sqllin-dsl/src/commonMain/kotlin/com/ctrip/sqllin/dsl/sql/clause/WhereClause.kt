@@ -26,7 +26,9 @@ import com.ctrip.sqllin.dsl.sql.statement.WhereSelectStatement
  * @author yaqiao
  */
 
-public class WhereClause<T> internal constructor(selectCondition: SelectCondition) : ConditionClause<T>(selectCondition) {
+public class WhereClause<T> internal constructor(
+    internal val selectCondition: SelectCondition,
+) : ConditionClause<T>(selectCondition) {
 
     override val clauseName: String = "WHERE"
 }
@@ -42,7 +44,7 @@ public infix fun <T> UpdateStatementWithoutWhereClause<T>.WHERE(condition: Selec
     val statement = UpdateDeleteStatement(buildString {
         append(sqlStr)
         append(WhereClause<T>(condition).clauseStr)
-    }, connection)
+    }, connection, condition.parameters)
     statementContainer changeLastStatement statement
     return statement.sqlStr
 }

@@ -23,4 +23,10 @@ package com.ctrip.sqllin.dsl.sql.statement
 
 public sealed class SingleStatement(
     public val sqlStr: String,
-) : ExecutableStatement
+) : ExecutableStatement {
+
+    internal abstract val parameters: MutableList<String>?
+
+    internal val params: Array<String>?
+        get() = parameters?.toTypedArray()
+}

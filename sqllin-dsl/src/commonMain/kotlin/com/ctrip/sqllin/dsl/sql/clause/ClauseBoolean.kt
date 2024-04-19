@@ -36,15 +36,13 @@ public class ClauseBoolean(
                 append('.')
             }
             append(valueName)
-            append(' ')
             if (bool)
-                append('>')
+                append(" > ")
             else
-                append("<=")
-            append(' ')
+                append(" <= ")
             append(0)
         }
-        return SelectCondition(sql)
+        return SelectCondition(sql, null)
     }
 
     override fun hashCode(): Int = valueName.hashCode() + table.tableName.hashCode()
