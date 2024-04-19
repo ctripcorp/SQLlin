@@ -12,7 +12,8 @@
 
 * Update `kotlinx.coroutines`'s version to `1.8.0`
 * Update `kotlinx.serialization`'s version to `1.6.3`
-* Modified the SQL statements' splicing method, that fixed the [issue#77](https://github.com/ctripcorp/SQLlin/issues/77) that users can't read/write special symbols as the values in SQL statements.
+* Modify the SQL statements' splicing method, that fixed the [issue#77](https://github.com/ctripcorp/SQLlin/issues/77) that users can't read/write special symbols as the values in SQL statements.
+* Performance optimization, use `ArrayDeque` to replace the LinkedList for SQL statements management (self-implemented)
 
 ### sqllin-driver
 

@@ -86,8 +86,8 @@ public class DatabaseScope internal constructor(
     }
 
     private fun <T> addSelectStatement(statement: SelectStatement<T>) {
-        if (unionSelectStatementGroupStack.isNotEmpty)
-            (unionSelectStatementGroupStack.top as UnionSelectStatementGroup<T>).addSelectStatement(statement)
+        if (unionSelectStatementGroupStack.isNotEmpty())
+            (unionSelectStatementGroupStack.last() as UnionSelectStatementGroup<T>).addSelectStatement(statement)
         else
             addStatement(statement)
     }
@@ -223,9 +223,9 @@ public class DatabaseScope internal constructor(
      * The 'UNION' clause of Select.
      */
 
-    private val unionSelectStatementGroupStack by lazy { Stack<UnionSelectStatementGroup<*>>() }
+    private val unionSelectStatementGroupStack by lazy { ArrayDeque<UnionSelectStatementGroup<*>>() }
 
-    private fun getSelectStatementGroup(): StatementContainer = unionSelectStatementGroupStack.top ?: transactionStatementsGroup ?: executiveEngine
+    private fun getSelectStatementGroup(): StatementContainer = unionSelectStatementGroupStack.lastOrNull() ?: transactionStatementsGroup ?: executiveEngine
 
     public inline fun <T> Table<T>.UNION(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
         beginUnion<T>()
@@ -252,16 +252,16 @@ public class DatabaseScope internal constructor(
     }
 
     public fun <T> beginUnion() {
-        unionSelectStatementGroupStack.push(UnionSelectStatementGroup<T>())
+        unionSelectStatementGroupStack.add(UnionSelectStatementGroup<T>())
     }
 
     public fun <T> createUnionSelectStatement(isUnionAll: Boolean): FinalSelectStatement<T> {
-        check(unionSelectStatementGroupStack.isNotEmpty) { "Please invoke the 'beginUnion' before you invoke this function!!!" }
-        return (unionSelectStatementGroupStack.top as UnionSelectStatementGroup<T>).unionStatements(isUnionAll)
+        check(unionSelectStatementGroupStack.isNotEmpty()) { "Please invoke the 'beginUnion' before you invoke this function!!!" }
+        return (unionSelectStatementGroupStack.last() as UnionSelectStatementGroup<T>).unionStatements(isUnionAll)
     }
 
     public fun <T> endUnion(selectStatement: SelectStatement<T>?) {
-        unionSelectStatementGroupStack.pop()
+        unionSelectStatementGroupStack.removeLast()
         selectStatement?.let { addSelectStatement(it) }
     }
 

@@ -25,25 +25,23 @@ internal class DatabaseExecuteEngine(
     private val enableSimpleSQLLog: Boolean,
 ) : StatementContainer {
 
-    private lateinit var statementsLinkedList: StatementLinkedList<ExecutableStatement>
+    private val statementList = ArrayDeque<ExecutableStatement>()
 
     override infix fun changeLastStatement(statement: SingleStatement) {
-        if (statementsLinkedList.lastStatement is UpdateStatementWithoutWhereClause<*>
-            || statementsLinkedList.lastStatement is SelectStatement<*>)
-            statementsLinkedList.resetLastStatement(statement)
-        else
+        if (statementList.lastOrNull() is UpdateStatementWithoutWhereClause<*>
+            || statementList.lastOrNull() is SelectStatement<*>) {
+            statementList.removeLast()
+            statementList.add(statement)
+        } else
             throw IllegalStateException("Current statement can't append clause.")
     }
 
     infix fun addStatement(statement: ExecutableStatement) {
-        if (::statementsLinkedList.isInitialized)
-            statementsLinkedList.addStatement(statement)
-        else
-            statementsLinkedList = StatementLinkedList(statement)
+        statementList.add(statement)
     }
 
     fun executeAllStatement() {
-        statementsLinkedList.forEach {
+        statementList.forEach {
             when (it) {
                 is SingleStatement -> {
                     if (enableSimpleSQLLog)
