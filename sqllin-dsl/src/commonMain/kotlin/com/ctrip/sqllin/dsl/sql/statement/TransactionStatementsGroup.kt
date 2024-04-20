@@ -38,7 +38,7 @@ internal class TransactionStatementsGroup(
     override fun execute() = databaseConnection.withTransaction {
         statementList.forEach {
             if (enableSimpleSQLLog)
-                println("SQL String: ${it.sqlStr}")
+                it.printlnSQL()
             it.execute()
         }
     }

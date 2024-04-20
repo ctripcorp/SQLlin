@@ -52,9 +52,8 @@ public class ClauseString(
                 append('.')
             }
             append(valueName)
-            append(' ')
             append(symbol)
-            append(" ?")
+            append('?')
         }
         return SelectCondition(sql, mutableListOf(regex))
     }
@@ -66,14 +65,13 @@ public class ClauseString(
                 append('.')
             }
             append(valueName)
-            append(' ')
             val isNull = str == null
             val symbol = if (isNull) nullSymbol else notNullSymbol
             append(symbol)
             if (str == null)
                 append(" NULL")
             else
-                append(" ?")
+                append('?')
         }
         return SelectCondition(sql, if (str == null) null else mutableListOf(str))
     }

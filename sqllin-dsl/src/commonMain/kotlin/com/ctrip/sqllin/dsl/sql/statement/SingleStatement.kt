@@ -29,4 +29,11 @@ public sealed class SingleStatement(
 
     internal val params: Array<String>?
         get() = parameters?.toTypedArray()
+
+    internal fun printlnSQL() {
+        print("SQL String: $sqlStr")
+        parameters?.let {
+            println("; Parameters: $it")
+        } ?: println()
+    }
 }

@@ -51,7 +51,7 @@ internal object Select : Operation {
         connection: DatabaseConnection,
         container: StatementContainer,
     ): OrderBySelectStatement<T> =
-        OrderBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, mutableListOf())
+        OrderBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null)
 
     fun <T> select(
         table: Table<T>,

@@ -45,7 +45,7 @@ internal class DatabaseExecuteEngine(
             when (it) {
                 is SingleStatement -> {
                     if (enableSimpleSQLLog)
-                        println("SQL String: ${it.sqlStr}")
+                        it.printlnSQL()
                     it.execute()
                 }
                 is TransactionStatementsGroup -> it.execute()

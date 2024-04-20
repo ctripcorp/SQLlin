@@ -106,9 +106,7 @@ public class ClauseNumber(
                 append('.')
             }
             append(valueName)
-            append(' ')
             append(symbol)
-            append(' ')
             append(number)
         }
         return SelectCondition(sql, null)
@@ -121,10 +119,14 @@ public class ClauseNumber(
                 append('.')
             }
             append(valueName)
-            append(' ')
-            append(if (number == null) nullSymbol else notNullSymbol)
-            append(' ')
-            append(number ?: "NULL")
+            if (number == null){
+                append(nullSymbol)
+                append(" NULL")
+
+            } else {
+                append(notNullSymbol)
+                append(number)
+            }
         }
         return SelectCondition(sql, null)
     }
@@ -134,9 +136,7 @@ public class ClauseNumber(
             append(table.tableName)
             append('.')
             append(valueName)
-            append(' ')
             append(symbol)
-            append(' ')
             append(clauseNumber.table.tableName)
             append('.')
             append(clauseNumber.valueName)

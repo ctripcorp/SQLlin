@@ -95,7 +95,7 @@ class ClauseProcessor(
                     val nullableSymbol = if (isNotNull) "\n" else "?\n"
                     writer.write(nullableSymbol)
                     writer.write("        get() = ${getSetClauseGetterValue(property)}\n")
-                    writer.write("        set(value) = ${appendFunction(elementName, property)}\n\n")
+                    writer.write("        set(value) = ${appendFunction(elementName, property, isNotNull)}\n\n")
                 }
                 writer.write("}")
             }
@@ -146,11 +146,23 @@ class ClauseProcessor(
         else -> null
     }
 
-    private fun appendFunction(elementName: String, property: KSPropertyDeclaration): String = when (property.typeName) {
-        Char::class.qualifiedName -> "appendString($elementName, value?.toString())"
+    private fun appendFunction(elementName: String, property: KSPropertyDeclaration, isNotNull: Boolean): String? = when (property.typeName) {
+        Int::class.qualifiedName,
+        Long::class.qualifiedName,
+        Short::class.qualifiedName,
+        Byte::class.qualifiedName,
+        Float::class.qualifiedName,
+        Double::class.qualifiedName,
+        UInt::class.qualifiedName,
+        ULong::class.qualifiedName,
+        UShort::class.qualifiedName,
+        UByte::class.qualifiedName, -> "appendAny($elementName, value)"
+
+        Char::class.qualifiedName -> "appendString($elementName, value${if (isNotNull) "" else "?"}.toString())"
         String::class.qualifiedName -> "appendString($elementName, value)"
-        Boolean::class.qualifiedName -> "appendAny($elementName, value?.let { if (it) 1 else 0 })"
-        else -> "appendAny($elementName, value)"
+
+        Boolean::class.qualifiedName -> "appendAny($elementName, value${if (isNotNull) "" else "?"}.let { if (it) 1 else 0 })"
+        else -> null
     }
 
     private inline val KSPropertyDeclaration.typeName

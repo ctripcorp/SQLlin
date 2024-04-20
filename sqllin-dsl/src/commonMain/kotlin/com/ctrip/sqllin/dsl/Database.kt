@@ -29,14 +29,14 @@ import kotlinx.coroutines.sync.withLock
 
 public class Database(
     configuration: DatabaseConfiguration,
-    private val enableSimpleSQLLog: Boolean = true,
+    private val enableSimpleSQLLog: Boolean = false,
 ) {
 
     public constructor(
         name: String,
         path: DatabasePath,
         version: Int,
-        enableSimpleSQLLog: Boolean = true,
+        enableSimpleSQLLog: Boolean = false,
     ) : this(
         DatabaseConfiguration(
             name = name,
