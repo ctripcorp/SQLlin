@@ -77,7 +77,7 @@ jobs:
           api-level: 34
           target: google_apis
           arch: x86_64
-          profile: pixel_7
+          profile: pixel_6
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
@@ -89,7 +89,7 @@ jobs:
           api-level: 34
           target: google_apis
           arch: x86_64
-          profile: pixel_7
+          profile: pixel_6
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
