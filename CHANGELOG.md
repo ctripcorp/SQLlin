@@ -2,7 +2,7 @@
 
 - Date format: YYYY-MM-dd
 
-## v1.3.0 / 2024-04-16
+## v1.3.0 / 2024-04-21
 
 ### All
 
@@ -13,7 +13,8 @@
 * Update `kotlinx.coroutines`'s version to `1.8.0`
 * Update `kotlinx.serialization`'s version to `1.6.3`
 * Modify the SQL statements' splicing method, that fixed the [issue#77](https://github.com/ctripcorp/SQLlin/issues/77) that users can't read/write special symbols as the values in SQL statements.
-* Performance optimization, use `ArrayDeque` to replace the LinkedList for SQL statements management (self-implemented)
+* Performance optimization, use `ArrayDeque` to replace the LinkedList for SQL statements management (self-implemented).
+* The parameter `enableSimpleSQLLog` of the `Database`'s constructors of is `false` by default.
 
 ### sqllin-driver
 

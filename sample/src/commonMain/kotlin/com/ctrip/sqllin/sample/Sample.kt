@@ -49,7 +49,8 @@ object Sample {
                 upgrade = { _, _, _ ->
                     // You must write SQL to String when the database is created or upgraded
                 }
-            )
+            ),
+            enableSimpleSQLLog = true,
         )
     }
 

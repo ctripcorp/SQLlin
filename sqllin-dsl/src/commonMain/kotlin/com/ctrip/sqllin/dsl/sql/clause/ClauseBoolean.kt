@@ -37,9 +37,9 @@ public class ClauseBoolean(
             }
             append(valueName)
             if (bool)
-                append(" > ")
+                append('>')
             else
-                append(" <= ")
+                append("<=")
             append(0)
         }
         return SelectCondition(sql, null)

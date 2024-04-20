@@ -49,7 +49,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         close()
     }
 
-    fun testInsert() = Database(getDefaultDBConfig()).databaseAutoClose { database ->
+    fun testInsert() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         val book = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         database {
             BookTable { bookTable ->
@@ -65,7 +65,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(book, statement?.getResults()?.firstOrNull())
     }
 
-    fun testDelete() = Database(getDefaultDBConfig()).databaseAutoClose { database ->
+    fun testDelete() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         val book1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
         var statement: SelectStatement<Book>? = null
@@ -92,7 +92,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(true, statement2!!.getResults().isEmpty())
     }
 
-    fun testUpdate() = Database(getDefaultDBConfig()).databaseAutoClose { database ->
+    fun testUpdate() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         val book1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
         var statement: SelectStatement<Book>? = null
@@ -126,7 +126,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(true, newResult!!.getResults().any { it == newBook2 })
     }
 
-    fun testSelectWhereClause() = Database(getDefaultDBConfig()).databaseAutoClose { database ->
+    fun testSelectWhereClause() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         val book0 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         val book1 = Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72)
         val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
@@ -149,7 +149,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(book1, statementOfWhere2?.getResults()?.firstOrNull())
     }
 
-    fun testSelectOrderByClause() = Database(getDefaultDBConfig()).databaseAutoClose { database ->
+    fun testSelectOrderByClause() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         val book0 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         val book1 = Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72)
         val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
@@ -209,7 +209,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    fun testSelectLimitAndOffsetClause() = Database(getDefaultDBConfig()).databaseAutoClose { database ->
+    fun testSelectLimitAndOffsetClause() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         val book0 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         val book1 = Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72)
         val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
@@ -229,7 +229,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(1, statementOfLimitAndOffset?.getResults()?.size)
     }
 
-    fun testGroupByAndHavingClause() = Database(getDefaultDBConfig()).databaseAutoClose { database ->
+    fun testGroupByAndHavingClause() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         val book0 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         val book1 = Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72)
         val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
@@ -261,7 +261,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals("Ken Kousen", resultOfGroupByAndHaving.first().author)
     }
 
-    fun testUnionSelect() = Database(getDefaultDBConfig()).databaseAutoClose { database ->
+    fun testUnionSelect() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         val book0 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         val book1 = Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72)
         val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
@@ -286,7 +286,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(2, statement!!.getResults().count { it == book3 })
     }
 
-    fun testFunction() = Database(getDefaultDBConfig()).databaseAutoClose { database ->
+    fun testFunction() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         val book0 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         val book1 = Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72)
         val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
@@ -326,7 +326,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(book0.author, selectStatement8?.getResults()?.first()?.author)
     }
 
-    fun testJoinClause() = Database(getDefaultDBConfig()).databaseAutoClose { database ->
+    fun testJoinClause() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         var crossJoinStatement: SelectStatement<CrossJoiner>? = null
         var innerJoinStatement: SelectStatement<Joiner>? = null
         var naturalInnerJoinStatement: SelectStatement<Joiner>? = null
@@ -372,7 +372,7 @@ class CommonBasicTest(private val path: DatabasePath) {
     fun testConcurrency() = runBlocking(Dispatchers.Default) {
         val book1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
-        val database = Database(getDefaultDBConfig())
+        val database = Database(getDefaultDBConfig(), true)
         launch {
             var statement: SelectStatement<Book>? = null
             database suspendedScope {

@@ -39,8 +39,8 @@ internal class CompleteOrderByClause<T>(private val column2WayMap: Map<ClauseEle
                     append(' ')
                     append(way.str)
                     val hasNext = iterator.hasNext()
-                    val symbol = if (hasNext) ',' else ' '
-                    append(symbol)
+                    if (hasNext)
+                        append(',')
                 } while (hasNext)
             }
         }
@@ -99,14 +99,12 @@ internal class SimpleOrderByClause<T>(private val columns: Iterable<ClauseElemen
                     append(',')
                     append(iterator.next().valueName)
                 }
-                append(' ')
             }
         }
 }
 public fun <T> ORDER_BY(vararg elements: ClauseElement): OrderByClause<T> =
     SimpleOrderByClause(elements.toList())
 
-@Suppress("NOTHING_TO_INLINE")
 public inline infix fun <T> WhereSelectStatement<T>.ORDER_BY(column: ClauseElement): OrderBySelectStatement<T> =
     ORDER_BY(listOf(column))
 
@@ -115,7 +113,6 @@ public infix fun <T> WhereSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseEl
         container changeLastStatement it
     }
 
-@Suppress("NOTHING_TO_INLINE")
 public inline infix fun <T> HavingSelectStatement<T>.ORDER_BY(column: ClauseElement): OrderBySelectStatement<T> =
     ORDER_BY(listOf(column))
 
@@ -124,7 +121,6 @@ public infix fun <T> HavingSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseE
         container changeLastStatement it
     }
 
-@Suppress("NOTHING_TO_INLINE")
 public inline infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column: ClauseElement): OrderBySelectStatement<T> =
     ORDER_BY(listOf(column))
 
@@ -133,7 +129,6 @@ public infix fun <T> GroupBySelectStatement<T>.ORDER_BY(columns: Iterable<Clause
         container changeLastStatement it
     }
 
-@Suppress("NOTHING_TO_INLINE")
 public inline infix fun <T> JoinSelectStatement<T>.ORDER_BY(column: ClauseElement): OrderBySelectStatement<T> =
     ORDER_BY(listOf(column))
 
