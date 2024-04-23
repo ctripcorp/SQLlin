@@ -40,6 +40,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         const val DATABASE_NAME = "BookStore.db"
         const val SQL_CREATE_BOOK = "create table book (id integer primary key autoincrement, name text, author text, pages integer, price real)"
         const val SQL_CREATE_CATEGORY = "create table category (id integer primary key autoincrement, name text, code integer)"
+        const val SQL_CREATE_NULL_TESTER = "create table NullTester (id integer primary key autoincrement, paramInt integer, paramString text, paramDouble real)"
     }
 
     private inline fun Database.databaseAutoClose(block: (Database) -> Unit) = try {
@@ -424,6 +425,30 @@ class CommonBasicTest(private val path: DatabasePath) {
                 assertEquals('0', testChar)
                 assertEquals("", testString)
             }
+        }
+    }
+
+    fun testNullInsertAndSelect() {
+        val config = DatabaseConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                it.execSQL(SQL_CREATE_NULL_TESTER)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            lateinit var selectStatement: SelectStatement<NullTester>
+            database {
+                NullTesterTable { table ->
+                    table INSERT listOf(
+                        NullTester(null, null, null),
+                        NullTester(8, "888", 8.8),
+                    )
+                    selectStatement = table SELECT X
+                }
+            }
+            assertEquals(2, selectStatement.getResults().size)
         }
     }
 

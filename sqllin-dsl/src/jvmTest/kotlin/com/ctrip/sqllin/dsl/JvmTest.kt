@@ -65,6 +65,9 @@ class JvmTest {
     @Test
     fun testPrimitiveTypeForKSP() = commonTest.testPrimitiveTypeForKSP()
 
+    @Test
+    fun testNullInsertAndSelect() = commonTest.testNullInsertAndSelect()
+
     @BeforeTest
     fun setUp() {
         deleteDatabase(path, CommonBasicTest.DATABASE_NAME)

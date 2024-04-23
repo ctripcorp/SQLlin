@@ -42,17 +42,25 @@ data class Category(
 
 @Serializable
 data class Joiner(
-    val name: String,
-    val author: String,
-    val price: Double,
-    val pages: Int,
-    val code: Int,
+    val name: String?,
+    val author: String?,
+    val price: Double?,
+    val pages: Int?,
+    val code: Int?,
 )
 
 @Serializable
 data class CrossJoiner(
-    val author: String,
-    val price: Double,
-    val pages: Int,
-    val code: Int,
+    val author: String?,
+    val price: Double?,
+    val pages: Int?,
+    val code: Int?,
+)
+
+@DBRow("NullTester")
+@Serializable
+data class NullTester(
+    val paramInt: Int?,
+    val paramString: String?,
+    val paramDouble: Double?,
 )
