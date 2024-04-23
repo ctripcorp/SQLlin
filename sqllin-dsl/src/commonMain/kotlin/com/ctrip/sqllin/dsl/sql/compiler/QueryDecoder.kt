@@ -37,6 +37,7 @@ internal class QueryDecoder(
 
     private var elementIndex = 0
     private var elementName = ""
+    private var elementNotNullMark = true
 
     override val serializersModule: SerializersModule = EmptySerializersModule()
 
@@ -45,6 +46,7 @@ internal class QueryDecoder(
             CompositeDecoder.DECODE_DONE
         else {
             elementName = descriptor.getElementName(elementIndex)
+            elementNotNullMark = !descriptor.getElementDescriptor(elementIndex).isNullable
             val resultIndex = elementIndex++
             if (cursorColumnIndex >= 0)
                 resultIndex
@@ -57,22 +59,25 @@ internal class QueryDecoder(
     private inline val cursorColumnIndex
         get() = cursor.getColumnIndex(elementName)
 
+    private inline val sqlNullException
+        get() = IllegalStateException("The value in database is null, please declare your property be nullable")
+
     private inline fun <T> deserialize(block: (Int) -> T): T = cursorColumnIndex.let {
         if (it >= 0) block(it) else throw SerializationException("The Cursor doesn't have this column")
     }
 
-    override fun decodeBoolean(): Boolean = deserialize { cursor.getInt(it) > 0 }
-    override fun decodeByte(): Byte = deserialize { cursor.getInt(it).toByte() }
-    override fun decodeShort(): Short = deserialize { cursor.getInt(it).toShort() }
-    override fun decodeInt(): Int = deserialize { cursor.getInt(it) }
-    override fun decodeLong(): Long = deserialize { cursor.getLong(it) }
-    override fun decodeChar(): Char = deserialize { cursor.getString(it)?.first() ?: '\u0000' }
-    override fun decodeString(): String = deserialize { cursor.getString(it) ?: "" }
-    override fun decodeFloat(): Float = deserialize { cursor.getFloat(it) }
-    override fun decodeDouble(): Double = deserialize { cursor.getDouble(it) }
-    override fun decodeEnum(enumDescriptor: SerialDescriptor): Int = deserialize { cursor.getInt(it) }
+    override fun decodeBoolean(): Boolean = deserialize { (cursor.getInt(it) ?: throw sqlNullException) > 0 }
+    override fun decodeByte(): Byte = deserialize { cursor.getInt(it)?.toByte() ?: throw sqlNullException }
+    override fun decodeShort(): Short = deserialize { cursor.getInt(it)?.toShort() ?: throw sqlNullException }
+    override fun decodeInt(): Int = deserialize { cursor.getInt(it) ?: throw sqlNullException }
+    override fun decodeLong(): Long = deserialize { cursor.getLong(it) ?: throw sqlNullException }
+    override fun decodeChar(): Char = deserialize { cursor.getString(it)?.first() ?: throw sqlNullException }
+    override fun decodeString(): String = deserialize { cursor.getString(it) ?: throw sqlNullException }
+    override fun decodeFloat(): Float = deserialize { cursor.getFloat(it) ?: throw sqlNullException }
+    override fun decodeDouble(): Double = deserialize { cursor.getDouble(it) ?: throw sqlNullException }
+    override fun decodeEnum(enumDescriptor: SerialDescriptor): Int = deserialize { cursor.getInt(it) ?: throw sqlNullException }
 
-    override fun decodeNotNullMark(): Boolean = cursorColumnIndex >= 0
+    override fun decodeNotNullMark(): Boolean = elementNotNullMark
 
     // override fun decodeCollectionSize(descriptor: SerialDescriptor): Int {}
 }

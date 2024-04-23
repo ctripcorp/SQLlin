@@ -40,6 +40,6 @@ internal object Insert : Operation {
             append(' ')
             append(encodeEntities2InsertValues(table.kSerializer(), entities, parameters))
         }
-        return InsertStatement(sql, connection, parameters)
+        return InsertStatement(sql, connection, parameters.takeIf { it.isNotEmpty() })
     }
 }

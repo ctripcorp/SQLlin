@@ -2,6 +2,13 @@
 
 - Date format: YYYY-MM-dd
 
+## v1.3.1 / 2024-04-xx
+
+### sqllin-dsl
+
+* Fix a crash when a data class doesn't contain any `String` element.
+* Fix the [issue#81](https://github.com/ctripcorp/SQLlin/issues/81) about insert and query null values
+
 ## v1.3.0 / 2024-04-21
 
 ### All

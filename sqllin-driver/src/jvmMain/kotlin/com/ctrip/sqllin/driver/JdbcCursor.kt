@@ -24,13 +24,17 @@ import java.sql.ResultSet
  */
 internal class JdbcCursor(private val resultSet: ResultSet) : CommonCursor {
 
-    override fun getInt(columnIndex: Int): Int = resultSet.getInt(columnIndex + 1)
+    override fun getInt(columnIndex: Int): Int? =
+        resultSet.getInt(columnIndex + 1).takeUnless { resultSet.wasNull() }
 
-    override fun getLong(columnIndex: Int): Long = resultSet.getLong(columnIndex + 1)
+    override fun getLong(columnIndex: Int): Long? =
+        resultSet.getLong(columnIndex + 1).takeUnless { resultSet.wasNull() }
 
-    override fun getFloat(columnIndex: Int): Float = resultSet.getFloat(columnIndex + 1)
+    override fun getFloat(columnIndex: Int): Float? =
+        resultSet.getFloat(columnIndex + 1).takeUnless { resultSet.wasNull() }
 
-    override fun getDouble(columnIndex: Int): Double = resultSet.getDouble(columnIndex + 1)
+    override fun getDouble(columnIndex: Int): Double? =
+        resultSet.getDouble(columnIndex + 1).takeUnless { resultSet.wasNull() }
 
     override fun getString(columnIndex: Int): String? = resultSet.getString(columnIndex + 1)
 

@@ -25,10 +25,33 @@ import android.database.Cursor
 
 internal class AndroidCursor(private val cursor: Cursor) : CommonCursor {
 
-    override fun getInt(columnIndex: Int): Int = cursor.getInt(columnIndex)
-    override fun getLong(columnIndex: Int): Long = cursor.getLong(columnIndex)
-    override fun getFloat(columnIndex: Int): Float = cursor.getFloat(columnIndex)
-    override fun getDouble(columnIndex: Int): Double = cursor.getDouble(columnIndex)
+    override fun getInt(columnIndex: Int): Int? = try {
+        cursor.getInt(columnIndex)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+
+    override fun getLong(columnIndex: Int): Long? = try {
+        cursor.getLong(columnIndex)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+
+    override fun getFloat(columnIndex: Int): Float? = try {
+        cursor.getFloat(columnIndex)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+
+    override fun getDouble(columnIndex: Int): Double? = try {
+        cursor.getDouble(columnIndex)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
 
     override fun getString(columnIndex: Int): String? = try {
         cursor.getString(columnIndex)

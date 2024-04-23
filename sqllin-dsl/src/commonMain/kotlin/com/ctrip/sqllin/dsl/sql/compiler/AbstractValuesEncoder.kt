@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.dsl.sql.compiler
 
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.modules.EmptySerializersModule
@@ -44,8 +45,7 @@ internal abstract class AbstractValuesEncoder : AbstractEncoder() {
         get() = sqlStrBuilder.toString()
 
     override fun encodeElement(descriptor: SerialDescriptor, index: Int): Boolean {
-        if (index == 0)
-            elementsCount = descriptor.elementsCount
+        elementsCount = descriptor.elementsCount
         elementsIndex = index
         return true
     }
@@ -81,6 +81,20 @@ internal abstract class AbstractValuesEncoder : AbstractEncoder() {
 
     override fun encodeDouble(value: Double) {
         sqlStrBuilder.append(value).appendTail()
+    }
+
+    override fun <T : Any> encodeNullableSerializableElement(
+        descriptor: SerialDescriptor,
+        index: Int,
+        serializer: SerializationStrategy<T>,
+        value: T?
+    ) {
+        if (value == null) {
+            elementsCount = descriptor.elementsCount
+            elementsIndex = index
+            sqlStrBuilder.append("NULL").appendTail()
+        } else
+            super.encodeNullableSerializableElement(descriptor, index, serializer, value)
     }
 
     override fun encodeEnum(enumDescriptor: SerialDescriptor, index: Int) = encodeInt(index)

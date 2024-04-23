@@ -24,10 +24,10 @@ package com.ctrip.sqllin.driver
 @OptIn(ExperimentalStdlibApi::class)
 public interface CommonCursor : AutoCloseable {
 
-    public fun getInt(columnIndex: Int): Int
-    public fun getLong(columnIndex: Int): Long
-    public fun getFloat(columnIndex: Int): Float
-    public fun getDouble(columnIndex: Int): Double
+    public fun getInt(columnIndex: Int): Int?
+    public fun getLong(columnIndex: Int): Long?
+    public fun getFloat(columnIndex: Int): Float?
+    public fun getDouble(columnIndex: Int): Double?
     public fun getString(columnIndex: Int): String?
     public fun getByteArray(columnIndex: Int): ByteArray?
 

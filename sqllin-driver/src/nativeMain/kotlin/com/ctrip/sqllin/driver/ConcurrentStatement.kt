@@ -30,19 +30,19 @@ internal class ConcurrentStatement(
     private val accessLock: Lock,
 ) : SQLiteStatement {
 
-    override fun columnGetLong(columnIndex: Int): Long = accessLock.withLock {
+    override fun columnGetLong(columnIndex: Int): Long? = accessLock.withLock {
         delegateStatement.columnGetLong(columnIndex)
     }
 
-    override fun columnGetDouble(columnIndex: Int): Double = accessLock.withLock {
+    override fun columnGetDouble(columnIndex: Int): Double? = accessLock.withLock {
         delegateStatement.columnGetDouble(columnIndex)
     }
 
-    override fun columnGetString(columnIndex: Int): String = accessLock.withLock {
+    override fun columnGetString(columnIndex: Int): String? = accessLock.withLock {
         delegateStatement.columnGetString(columnIndex)
     }
 
-    override fun columnGetBlob(columnIndex: Int): ByteArray = accessLock.withLock {
+    override fun columnGetBlob(columnIndex: Int): ByteArray? = accessLock.withLock {
         delegateStatement.columnGetBlob(columnIndex)
     }
 

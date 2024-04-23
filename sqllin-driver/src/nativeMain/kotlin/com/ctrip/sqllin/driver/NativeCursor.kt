@@ -25,17 +25,17 @@ internal class NativeCursor(
     private val statement: SQLiteStatement
 ) : CommonCursor {
 
-    override fun getInt(columnIndex: Int): Int = getLong(columnIndex).toInt()
+    override fun getInt(columnIndex: Int): Int? = getLong(columnIndex)?.toInt()
 
-    override fun getLong(columnIndex: Int): Long = statement.columnGetLong(columnIndex)
+    override fun getLong(columnIndex: Int): Long? = statement.columnGetLong(columnIndex)
 
-    override fun getFloat(columnIndex: Int): Float = getDouble(columnIndex).toFloat()
+    override fun getFloat(columnIndex: Int): Float? = getDouble(columnIndex)?.toFloat()
 
-    override fun getDouble(columnIndex: Int): Double = statement.columnGetDouble(columnIndex)
+    override fun getDouble(columnIndex: Int): Double? = statement.columnGetDouble(columnIndex)
 
-    override fun getString(columnIndex: Int): String = statement.columnGetString(columnIndex)
+    override fun getString(columnIndex: Int): String? = statement.columnGetString(columnIndex)
 
-    override fun getByteArray(columnIndex: Int): ByteArray = statement.columnGetBlob(columnIndex)
+    override fun getByteArray(columnIndex: Int): ByteArray? = statement.columnGetBlob(columnIndex)
 
     override fun getColumnIndex(columnName: String): Int = columnNames[columnName] ?: throw IllegalArgumentException("Col for $columnName not found")
 
