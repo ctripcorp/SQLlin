@@ -66,8 +66,8 @@ internal class NativeStatement(
 ) : SQLiteStatement {
 
     // Cursor methods
-    fun isNull(index: Int): Boolean =
-        sqlite3_column_type(cStatementPointer, index) == SQLITE_NULL
+    override fun isNull(columnIndex: Int): Boolean =
+        sqlite3_column_type(cStatementPointer, columnIndex) == SQLITE_NULL
 
     override fun columnGetLong(columnIndex: Int): Long =
         sqlite3_column_int64(cStatementPointer, columnIndex)
@@ -75,19 +75,19 @@ internal class NativeStatement(
     override fun columnGetDouble(columnIndex: Int): Double =
         sqlite3_column_double(cStatementPointer, columnIndex)
 
-    override fun columnGetString(columnIndex: Int): String =
+    override fun columnGetString(columnIndex: Int): String? =
         sqlite3_column_text(cStatementPointer, columnIndex)
             ?.reinterpret<ByteVar>()
             ?.let { bytesToString(it) }
-            ?: ""
 
-    override fun columnGetBlob(columnIndex: Int): ByteArray {
+    override fun columnGetBlob(columnIndex: Int): ByteArray? {
+        if (isNull(columnIndex))
+            return null
         val blobSize = sqlite3_column_bytes(cStatementPointer, columnIndex)
         return if (blobSize == 0)
             byteArrayOf()
         else
             sqlite3_column_blob(cStatementPointer, columnIndex)?.readBytes(blobSize)
-                ?: throw sqliteException("Byte array size/type issue col $columnIndex")
     }
 
     override fun columnCount(): Int = sqlite3_column_count(cStatementPointer)

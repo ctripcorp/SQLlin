@@ -33,14 +33,11 @@ public interface CommonCursor : AutoCloseable {
 
     public fun getColumnIndex(columnName: String): Int
 
-    @Deprecated(
-        message = "Please use the new API: forEachRow",
-        replaceWith = ReplaceWith(expression = "forEachRow"),
-    )
-    public fun forEachRows(block: (Int) -> Unit)
     public fun forEachRow(block: (Int) -> Unit)
 
     public fun next(): Boolean
+
+    public fun isNull(columnIndex: Int): Boolean
 
     public override fun close()
 }

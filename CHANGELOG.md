@@ -2,6 +2,20 @@
 
 - Date format: YYYY-MM-dd
 
+## v1.3.1 / 2024-04-24
+
+### sqllin-dsl
+
+* Fix a crash when a data class doesn't contain any `String` element.
+* Fix the [issue#81](https://github.com/ctripcorp/SQLlin/issues/81) about insert and query null values
+* Fix some wrongs about generation of SQL syntax
+
+### sqllin-driver
+
+* **Breaking change**: Remove the deprecated API `CommonCursor#forEachRows`
+* **Breaking change**: the `getInt`, `getLong`, `getFloat` and `getDouble` will throw an exception when the value is NULl in SQLite
+* Add a new public API: `CommonCursor#isNull`, for check if the value is NULL in SQLite
+
 ## v1.3.0 / 2024-04-21
 
 ### All

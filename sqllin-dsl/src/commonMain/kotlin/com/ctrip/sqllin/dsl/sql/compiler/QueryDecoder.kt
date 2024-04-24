@@ -37,6 +37,7 @@ internal class QueryDecoder(
 
     private var elementIndex = 0
     private var elementName = ""
+    private var elementNullable = false
 
     override val serializersModule: SerializersModule = EmptySerializersModule()
 
@@ -45,6 +46,7 @@ internal class QueryDecoder(
             CompositeDecoder.DECODE_DONE
         else {
             elementName = descriptor.getElementName(elementIndex)
+            elementNullable = descriptor.getElementDescriptor(elementIndex).isNullable
             val resultIndex = elementIndex++
             if (cursorColumnIndex >= 0)
                 resultIndex
@@ -72,7 +74,5 @@ internal class QueryDecoder(
     override fun decodeDouble(): Double = deserialize { cursor.getDouble(it) }
     override fun decodeEnum(enumDescriptor: SerialDescriptor): Int = deserialize { cursor.getInt(it) }
 
-    override fun decodeNotNullMark(): Boolean = cursorColumnIndex >= 0
-
-    // override fun decodeCollectionSize(descriptor: SerialDescriptor): Int {}
+    override fun decodeNotNullMark(): Boolean = !cursor.isNull(cursorColumnIndex) || !elementNullable
 }

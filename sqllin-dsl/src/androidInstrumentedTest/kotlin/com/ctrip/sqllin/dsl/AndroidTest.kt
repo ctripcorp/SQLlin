@@ -74,6 +74,9 @@ class AndroidTest {
     @Test
     fun testPrimitiveTypeForKSP() = commonTest.testPrimitiveTypeForKSP()
 
+    @Test
+    fun testNullValue() = commonTest.testNullValue()
+
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

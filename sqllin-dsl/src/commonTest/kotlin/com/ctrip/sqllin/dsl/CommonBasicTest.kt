@@ -24,7 +24,6 @@ import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.ASC
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.test.assertEquals
@@ -41,6 +40,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         const val DATABASE_NAME = "BookStore.db"
         const val SQL_CREATE_BOOK = "create table book (id integer primary key autoincrement, name text, author text, pages integer, price real)"
         const val SQL_CREATE_CATEGORY = "create table category (id integer primary key autoincrement, name text, code integer)"
+        const val SQL_CREATE_NULL_TESTER = "create table NullTester (id integer primary key autoincrement, paramInt integer, paramString text, paramDouble real)"
     }
 
     private inline fun Database.databaseAutoClose(block: (Database) -> Unit) = try {
@@ -369,43 +369,43 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(outerJoinStatementWithOn?.getResults()?.size, books.size)
     }
 
-    fun testConcurrency() = runBlocking(Dispatchers.Default) {
-        val book1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
-        val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
-        val database = Database(getDefaultDBConfig(), true)
-        launch {
-            var statement: SelectStatement<Book>? = null
-            database suspendedScope {
-                statement = BookTable { table ->
-                    table INSERT listOf(book1, book2)
-                    table SELECT X
-                }
-            }
-
+    fun testConcurrency() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
+        runBlocking(Dispatchers.Default) {
+            val book1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
+            val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
             launch {
-                val book1NewPrice = 18.96
-                val book2NewPrice = 21.95
-                val newBook1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = book1NewPrice)
-                val newBook2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = book2NewPrice)
-                var newResult: SelectStatement<Book>? = null
+                var statement: SelectStatement<Book>? = null
                 database suspendedScope {
-                    newResult = transaction {
-                        BookTable { table ->
-                            table UPDATE SET { price = book1NewPrice } WHERE (name EQ book1.name AND (price EQ book1.price))
-                            table UPDATE SET { price = book2NewPrice } WHERE (name EQ book2.name AND (price EQ book2.price))
-                            table SELECT X
-                        }
+                    statement = BookTable { table ->
+                        table INSERT listOf(book1, book2)
+                        table SELECT X
                     }
                 }
 
-                assertEquals(true, newResult!!.getResults().any { it == newBook1 })
-                assertEquals(true, newResult!!.getResults().any { it == newBook2 })
-            }
+                launch {
+                    val book1NewPrice = 18.96
+                    val book2NewPrice = 21.95
+                    val newBook1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = book1NewPrice)
+                    val newBook2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = book2NewPrice)
+                    var newResult: SelectStatement<Book>? = null
+                    database suspendedScope {
+                        newResult = transaction {
+                            BookTable { table ->
+                                table UPDATE SET { price = book1NewPrice } WHERE (name EQ book1.name AND (price EQ book1.price))
+                                table UPDATE SET { price = book2NewPrice } WHERE (name EQ book2.name AND (price EQ book2.price))
+                                table SELECT X
+                            }
+                        }
+                    }
 
-            assertEquals(true, statement!!.getResults().any { it == book1 })
-            assertEquals(true, statement!!.getResults().any { it == book2 })
+                    assertEquals(true, newResult!!.getResults().any { it == newBook1 })
+                    assertEquals(true, newResult!!.getResults().any { it == newBook2 })
+                }
+
+                assertEquals(true, statement!!.getResults().any { it == book1 })
+                assertEquals(true, statement!!.getResults().any { it == book2 })
+            }
         }
-        Unit
     }
 
     fun testPrimitiveTypeForKSP() {
@@ -425,6 +425,71 @@ class CommonBasicTest(private val path: DatabasePath) {
                 assertEquals('0', testChar)
                 assertEquals("", testString)
             }
+        }
+    }
+
+    fun testNullValue() {
+        val config = DatabaseConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                it.execSQL(SQL_CREATE_NULL_TESTER)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            lateinit var selectStatement: SelectStatement<NullTester>
+            // INSERT & SELECT
+            database {
+                NullTesterTable { table ->
+                    table INSERT listOf(
+                        NullTester(null, null, null),
+                        NullTester(8, "888", 8.8),
+                    )
+                    selectStatement = table SELECT X
+                }
+            }
+
+            selectStatement.getResults().forEachIndexed { i, tester ->
+                when (i) {
+                    0 -> {
+                        assertEquals(null, tester.paramInt)
+                        assertEquals(null, tester.paramString)
+                        assertEquals(null, tester.paramDouble)
+                    }
+                    1 -> {
+                        assertEquals(8, tester.paramInt)
+                        assertEquals("888", tester.paramString)
+                        assertEquals(8.8, tester.paramDouble)
+                    }
+                }
+            }
+
+            // UPDATE & SELECT
+            database {
+                NullTesterTable { table ->
+                    table UPDATE SET { paramString = null } WHERE (paramDouble EQ 8.8)
+                    selectStatement = table SELECT WHERE (paramInt NEQ null)
+                }
+            }
+            val result1 = selectStatement.getResults().first()
+            assertEquals(1, selectStatement.getResults().size)
+            assertEquals(8, result1.paramInt)
+            assertEquals(null, result1.paramString)
+            assertEquals(8.8, result1.paramDouble)
+
+            // DELETE & SELECT
+            database {
+                NullTesterTable { table ->
+                    table DELETE WHERE (paramInt EQ null OR (paramDouble EQ null))
+                    selectStatement = table SELECT X
+                }
+            }
+            val result2 = selectStatement.getResults().first()
+            assertEquals(1, selectStatement.getResults().size)
+            assertEquals(8, result2.paramInt)
+            assertEquals(null, result2.paramString)
+            assertEquals(8.8, result2.paramDouble)
         }
     }
 

@@ -25,10 +25,33 @@ import android.database.Cursor
 
 internal class AndroidCursor(private val cursor: Cursor) : CommonCursor {
 
-    override fun getInt(columnIndex: Int): Int = cursor.getInt(columnIndex)
-    override fun getLong(columnIndex: Int): Long = cursor.getLong(columnIndex)
-    override fun getFloat(columnIndex: Int): Float = cursor.getFloat(columnIndex)
-    override fun getDouble(columnIndex: Int): Double = cursor.getDouble(columnIndex)
+    override fun getInt(columnIndex: Int): Int = try {
+        cursor.getInt(columnIndex)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        throw SQLiteException("The value of column $columnIndex is NULL")
+    }
+
+    override fun getLong(columnIndex: Int): Long = try {
+        cursor.getLong(columnIndex)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        throw SQLiteException("The value of column $columnIndex is NULL")
+    }
+
+    override fun getFloat(columnIndex: Int): Float = try {
+        cursor.getFloat(columnIndex)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        throw SQLiteException("The value of column $columnIndex is NULL")
+    }
+
+    override fun getDouble(columnIndex: Int): Double = try {
+        cursor.getDouble(columnIndex)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        throw SQLiteException("The value of column $columnIndex is NULL")
+    }
 
     override fun getString(columnIndex: Int): String? = try {
         cursor.getString(columnIndex)
@@ -46,12 +69,6 @@ internal class AndroidCursor(private val cursor: Cursor) : CommonCursor {
 
     override fun getColumnIndex(columnName: String): Int = cursor.getColumnIndexOrThrow(columnName)
 
-    @Deprecated(
-        message = "Please use the new API: forEachRow",
-        replaceWith = ReplaceWith(expression = "forEachRow"),
-    )
-    override fun forEachRows(block: (Int) -> Unit) = forEachRow(block)
-
     override fun forEachRow(block: (Int) -> Unit) {
         if (!cursor.moveToFirst()) return
         var index = 0
@@ -60,6 +77,8 @@ internal class AndroidCursor(private val cursor: Cursor) : CommonCursor {
     }
 
     override fun next(): Boolean = cursor.moveToNext()
+
+    override fun isNull(columnIndex: Int): Boolean = cursor.isNull(columnIndex)
 
     override fun close() = cursor.close()
 }

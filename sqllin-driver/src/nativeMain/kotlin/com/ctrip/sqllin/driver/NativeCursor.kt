@@ -27,25 +27,27 @@ internal class NativeCursor(
 
     override fun getInt(columnIndex: Int): Int = getLong(columnIndex).toInt()
 
-    override fun getLong(columnIndex: Int): Long = statement.columnGetLong(columnIndex)
+    override fun getLong(columnIndex: Int): Long {
+        if (isNull(columnIndex))
+            throw SQLiteException("The value of column $columnIndex is NULL")
+        return statement.columnGetLong(columnIndex)
+    }
 
     override fun getFloat(columnIndex: Int): Float = getDouble(columnIndex).toFloat()
 
-    override fun getDouble(columnIndex: Int): Double = statement.columnGetDouble(columnIndex)
+    override fun getDouble(columnIndex: Int): Double {
+        if (isNull(columnIndex))
+            throw SQLiteException("The value of column $columnIndex is NULL")
+        return statement.columnGetDouble(columnIndex)
+    }
 
-    override fun getString(columnIndex: Int): String = statement.columnGetString(columnIndex)
+    override fun getString(columnIndex: Int): String? = statement.columnGetString(columnIndex)
 
-    override fun getByteArray(columnIndex: Int): ByteArray = statement.columnGetBlob(columnIndex)
+    override fun getByteArray(columnIndex: Int): ByteArray? = statement.columnGetBlob(columnIndex)
 
     override fun getColumnIndex(columnName: String): Int = columnNames[columnName] ?: throw IllegalArgumentException("Col for $columnName not found")
 
     override fun next(): Boolean = statement.step()
-
-    @Deprecated(
-        message = "Please use the new API: forEachRow",
-        replaceWith = ReplaceWith(expression = "forEachRow"),
-    )
-    override fun forEachRows(block: (Int) -> Unit) = forEachRow(block)
 
     override fun forEachRow(block: (Int) -> Unit) {
         var index = 0
@@ -54,6 +56,8 @@ internal class NativeCursor(
     }
 
     override fun close() = statement.finalizeStatement()
+
+    override fun isNull(columnIndex: Int): Boolean = statement.isNull(columnIndex)
 
     private val columnNames: Map<String, Int> by lazy {
         val count = statement.columnCount()

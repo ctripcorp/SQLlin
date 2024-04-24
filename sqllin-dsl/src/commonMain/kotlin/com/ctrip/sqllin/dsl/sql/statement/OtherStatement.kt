@@ -43,7 +43,7 @@ public class UpdateDeleteStatement internal constructor(
 public class InsertStatement internal constructor(
     sqlStr: String,
     private val connection: DatabaseConnection,
-    override val parameters: MutableList<String>,
+    override val parameters: MutableList<String>?,
 ) : SingleStatement(sqlStr) {
     public override fun execute(): Unit = connection.executeInsert(sqlStr, params)
 }

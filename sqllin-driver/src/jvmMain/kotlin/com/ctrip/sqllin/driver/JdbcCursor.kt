@@ -24,25 +24,39 @@ import java.sql.ResultSet
  */
 internal class JdbcCursor(private val resultSet: ResultSet) : CommonCursor {
 
-    override fun getInt(columnIndex: Int): Int = resultSet.getInt(columnIndex + 1)
+    override fun getInt(columnIndex: Int): Int {
+        val result = resultSet.getInt(columnIndex + 1)
+        if (resultSet.wasNull())
+            throw SQLiteException("The value of column $columnIndex is NULL")
+        return result
+    }
 
-    override fun getLong(columnIndex: Int): Long = resultSet.getLong(columnIndex + 1)
+    override fun getLong(columnIndex: Int): Long {
+        val result = resultSet.getLong(columnIndex + 1)
+        if (resultSet.wasNull())
+            throw SQLiteException("The value of column $columnIndex is NULL")
+        return result
+    }
 
-    override fun getFloat(columnIndex: Int): Float = resultSet.getFloat(columnIndex + 1)
+    override fun getFloat(columnIndex: Int): Float {
+        val result = resultSet.getFloat(columnIndex + 1)
+        if (resultSet.wasNull())
+            throw SQLiteException("The value of column $columnIndex is NULL")
+        return result
+    }
 
-    override fun getDouble(columnIndex: Int): Double = resultSet.getDouble(columnIndex + 1)
+    override fun getDouble(columnIndex: Int): Double {
+        val result = resultSet.getDouble(columnIndex + 1)
+        if (resultSet.wasNull())
+            throw SQLiteException("The value of column $columnIndex is NULL")
+        return result
+    }
 
     override fun getString(columnIndex: Int): String? = resultSet.getString(columnIndex + 1)
 
     override fun getByteArray(columnIndex: Int): ByteArray? = resultSet.getBytes(columnIndex + 1)
 
     override fun getColumnIndex(columnName: String): Int = resultSet.findColumn(columnName) - 1
-
-    @Deprecated(
-        message = "Please use the new API: forEachRow",
-        replaceWith = ReplaceWith(expression = "forEachRow"),
-    )
-    override fun forEachRows(block: (Int) -> Unit) = forEachRow(block)
 
     override fun forEachRow(block: (Int) -> Unit) {
         var index = 0
@@ -51,6 +65,11 @@ internal class JdbcCursor(private val resultSet: ResultSet) : CommonCursor {
     }
 
     override fun next(): Boolean = resultSet.next()
+
+    override fun isNull(columnIndex: Int): Boolean {
+        resultSet.getObject(columnIndex + 1)
+        return resultSet.wasNull()
+    }
 
     override fun close() {
         resultSet.close()

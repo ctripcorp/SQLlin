@@ -44,8 +44,7 @@ internal abstract class AbstractValuesEncoder : AbstractEncoder() {
         get() = sqlStrBuilder.toString()
 
     override fun encodeElement(descriptor: SerialDescriptor, index: Int): Boolean {
-        if (index == 0)
-            elementsCount = descriptor.elementsCount
+        elementsCount = descriptor.elementsCount
         elementsIndex = index
         return true
     }
@@ -81,6 +80,10 @@ internal abstract class AbstractValuesEncoder : AbstractEncoder() {
 
     override fun encodeDouble(value: Double) {
         sqlStrBuilder.append(value).appendTail()
+    }
+
+    override fun encodeNull() {
+        sqlStrBuilder.append("NULL").appendTail()
     }
 
     override fun encodeEnum(enumDescriptor: SerialDescriptor, index: Int) = encodeInt(index)

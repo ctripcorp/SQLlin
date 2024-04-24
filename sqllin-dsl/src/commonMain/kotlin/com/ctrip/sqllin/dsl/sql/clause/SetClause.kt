@@ -31,9 +31,9 @@ public class SetClause<T> : Clause<T> {
     public fun appendString(propertyName: String, propertyValue: String?) {
         clauseBuilder.append(propertyName)
         if (propertyValue == null)
-            clauseBuilder.append("NULL,")
+            clauseBuilder.append("=NULL,")
         else {
-            clauseBuilder.append("?,")
+            clauseBuilder.append("=?,")
             val params = parameters ?: ArrayList<String>().also {
                 parameters = it
             }
