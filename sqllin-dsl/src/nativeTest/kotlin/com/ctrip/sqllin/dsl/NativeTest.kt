@@ -69,7 +69,7 @@ class NativeTest {
     fun testPrimitiveTypeForKSP() = commonTest.testPrimitiveTypeForKSP()
 
     @Test
-    fun testNullInsertAndSelect() = commonTest.testNullInsertAndSelect()
+    fun testNullValue() = commonTest.testNullValue()
 
     @BeforeTest
     fun setUp() {
