@@ -91,7 +91,7 @@ databaseConnection.executeUpdateDelete(SQL.UPDATE, arrayOf(20, "Tom"))
 
 // SELECT
 val cursor: CommonCursor = databaseConnection.query(SQL.QUERY, arrayOf(20, "Tom"))
-cursor.forEachRows { index -> // Index of rows
+cursor.forEachRow { index -> // Index of rows
     val age: Int = cursor.getInt("age")
     val name: String = cursor.getString("name")
 }
