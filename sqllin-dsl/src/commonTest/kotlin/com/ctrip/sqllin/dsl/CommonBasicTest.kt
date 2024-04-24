@@ -24,6 +24,7 @@ import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.ASC
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.test.assertEquals
@@ -374,36 +375,32 @@ class CommonBasicTest(private val path: DatabasePath) {
             val book1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
             val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
             launch {
-                var statement: SelectStatement<Book>? = null
+                lateinit var statement: SelectStatement<Book>
                 database suspendedScope {
                     statement = BookTable { table ->
                         table INSERT listOf(book1, book2)
                         table SELECT X
                     }
                 }
-
-                launch {
-                    val book1NewPrice = 18.96
-                    val book2NewPrice = 21.95
-                    val newBook1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = book1NewPrice)
-                    val newBook2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = book2NewPrice)
-                    var newResult: SelectStatement<Book>? = null
-                    database suspendedScope {
-                        newResult = transaction {
-                            BookTable { table ->
-                                table UPDATE SET { price = book1NewPrice } WHERE (name EQ book1.name AND (price EQ book1.price))
-                                table UPDATE SET { price = book2NewPrice } WHERE (name EQ book2.name AND (price EQ book2.price))
-                                table SELECT X
-                            }
+                assertEquals(true, statement.getResults().any { it == book1 })
+                assertEquals(true, statement.getResults().any { it == book2 })
+            }
+            launch {
+                val book1NewPrice = 18.96
+                val book2NewPrice = 21.95
+                val newBook1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = book1NewPrice)
+                val newBook2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = book2NewPrice)
+                lateinit var statement: SelectStatement<Book>
+                database suspendedScope {
+                    statement = transaction {
+                        BookTable { table ->
+                            table INSERT listOf(newBook1, newBook2)
+                            table SELECT X
                         }
                     }
-
-                    assertEquals(true, newResult!!.getResults().any { it == newBook1 })
-                    assertEquals(true, newResult!!.getResults().any { it == newBook2 })
                 }
-
-                assertEquals(true, statement!!.getResults().any { it == book1 })
-                assertEquals(true, statement!!.getResults().any { it == book2 })
+                assertEquals(true, statement.getResults().any { it == newBook1 })
+                assertEquals(true, statement.getResults().any { it == newBook2 })
             }
         }
     }
@@ -441,12 +438,12 @@ class CommonBasicTest(private val path: DatabasePath) {
             lateinit var selectStatement: SelectStatement<NullTester>
             // INSERT & SELECT
             database {
-                NullTesterTable { table ->
+                selectStatement = NullTesterTable { table ->
                     table INSERT listOf(
                         NullTester(null, null, null),
                         NullTester(8, "888", 8.8),
                     )
-                    selectStatement = table SELECT X
+                    table SELECT X
                 }
             }
 
@@ -467,9 +464,9 @@ class CommonBasicTest(private val path: DatabasePath) {
 
             // UPDATE & SELECT
             database {
-                NullTesterTable { table ->
+                selectStatement = NullTesterTable { table ->
                     table UPDATE SET { paramString = null } WHERE (paramDouble EQ 8.8)
-                    selectStatement = table SELECT WHERE (paramInt NEQ null)
+                    table SELECT WHERE (paramInt NEQ null)
                 }
             }
             val result1 = selectStatement.getResults().first()
@@ -480,9 +477,9 @@ class CommonBasicTest(private val path: DatabasePath) {
 
             // DELETE & SELECT
             database {
-                NullTesterTable { table ->
+                selectStatement = NullTesterTable { table ->
                     table DELETE WHERE (paramInt EQ null OR (paramDouble EQ null))
-                    selectStatement = table SELECT X
+                    table SELECT X
                 }
             }
             val result2 = selectStatement.getResults().first()
