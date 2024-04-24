@@ -23,9 +23,11 @@ package com.ctrip.sqllin.driver
 
 internal interface SQLiteStatement {
 
-    fun columnGetLong(columnIndex: Int): Long?
+    fun isNull(columnIndex: Int): Boolean
 
-    fun columnGetDouble(columnIndex: Int): Double?
+    fun columnGetLong(columnIndex: Int): Long
+
+    fun columnGetDouble(columnIndex: Int): Double
 
     fun columnGetString(columnIndex: Int): String?
 

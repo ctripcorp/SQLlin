@@ -439,6 +439,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         )
         Database(config, true).databaseAutoClose { database ->
             lateinit var selectStatement: SelectStatement<NullTester>
+            // INSERT & SELECT
             database {
                 NullTesterTable { table ->
                     table INSERT listOf(
@@ -448,7 +449,47 @@ class CommonBasicTest(private val path: DatabasePath) {
                     selectStatement = table SELECT X
                 }
             }
-            assertEquals(2, selectStatement.getResults().size)
+
+            selectStatement.getResults().forEachIndexed { i, tester ->
+                when (i) {
+                    0 -> {
+                        assertEquals(null, tester.paramInt)
+                        assertEquals(null, tester.paramString)
+                        assertEquals(null, tester.paramDouble)
+                    }
+                    1 -> {
+                        assertEquals(8, tester.paramInt)
+                        assertEquals("888", tester.paramString)
+                        assertEquals(8.8, tester.paramDouble)
+                    }
+                }
+            }
+
+            // UPDATE & SELECT
+            database {
+                NullTesterTable { table ->
+                    table UPDATE SET { paramString = null } WHERE (paramDouble EQ 8.8)
+                    selectStatement = table SELECT WHERE (paramInt NEQ null)
+                }
+            }
+            val result1 = selectStatement.getResults().first()
+            assertEquals(1, selectStatement.getResults().size)
+            assertEquals(8, result1.paramInt)
+            assertEquals(null, result1.paramString)
+            assertEquals(8.8, result1.paramDouble)
+
+            // DELETE & SELECT
+            database {
+                NullTesterTable { table ->
+                    table DELETE WHERE (paramInt EQ null OR (paramDouble EQ null))
+                    selectStatement = table SELECT X
+                }
+            }
+            val result2 = selectStatement.getResults().first()
+            assertEquals(1, selectStatement.getResults().size)
+            assertEquals(8, result1.paramInt)
+            assertEquals(null, result1.paramString)
+            assertEquals(8.8, result1.paramDouble)
         }
     }
 

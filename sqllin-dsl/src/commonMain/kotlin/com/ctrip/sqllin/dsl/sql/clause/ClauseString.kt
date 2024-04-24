@@ -30,20 +30,20 @@ public class ClauseString(
 ) : ClauseElement(valueName, table, isFunction) {
 
     // Equals, ==
-    internal infix fun eq(str: String?): SelectCondition = appendString("=", "IS", str)
+    internal infix fun eq(str: String?): SelectCondition = appendString("=", " IS", str)
 
     // Equals, append another ClauseString
     internal infix fun eq(clauseString: ClauseString): SelectCondition = appendClauseString("=", clauseString)
 
     // Not equals to, !=
-    internal infix fun neq(str: String?): SelectCondition = appendString("!=", "IS NOT", str)
+    internal infix fun neq(str: String?): SelectCondition = appendString("!=", " IS NOT", str)
 
     // Not equal to, append another ClauseString
     internal infix fun neq(clauseString: ClauseString): SelectCondition = appendClauseString("!=", clauseString)
 
-    internal infix fun like(regex: String): SelectCondition = appendRegex("LIKE", regex)
+    internal infix fun like(regex: String): SelectCondition = appendRegex(" LIKE ", regex)
 
-    internal infix fun glob(regex: String): SelectCondition = appendRegex("GLOB", regex)
+    internal infix fun glob(regex: String): SelectCondition = appendRegex(" GLOB ", regex)
 
     private fun appendRegex(symbol: String, regex: String): SelectCondition {
         val sql = buildString {
@@ -66,12 +66,13 @@ public class ClauseString(
             }
             append(valueName)
             val isNull = str == null
-            val symbol = if (isNull) nullSymbol else notNullSymbol
-            append(symbol)
-            if (str == null)
+            if (isNull) {
+                append(nullSymbol)
                 append(" NULL")
-            else
+            } else {
+                append(notNullSymbol)
                 append('?')
+            }
         }
         return SelectCondition(sql, if (str == null) null else mutableListOf(str))
     }

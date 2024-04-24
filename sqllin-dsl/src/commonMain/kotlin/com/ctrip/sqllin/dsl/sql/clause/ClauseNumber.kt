@@ -42,13 +42,13 @@ public class ClauseNumber(
     internal infix fun lte(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber("<=", clauseNumber)
 
     // Equals, ==
-    internal infix fun eq(number: Number?): SelectCondition = appendNullableNumber("=", "IS", number)
+    internal infix fun eq(number: Number?): SelectCondition = appendNullableNumber("=", " IS", number)
 
     // Equals, append to ClauseNumber
     internal infix fun eq(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber("=", clauseNumber)
 
     // Not equals to, !=
-    internal infix fun neq(number: Number?): SelectCondition = appendNullableNumber("!=", "IS NOT", number)
+    internal infix fun neq(number: Number?): SelectCondition = appendNullableNumber("!=", " IS NOT", number)
 
     // Not equals to, append to ClauseNumber
     internal infix fun neq(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber("!=", clauseNumber)
