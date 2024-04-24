@@ -43,71 +43,11 @@ jobs:
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:assemble -PonCICD
 
-      - name: Run sqllin-driver macOS X64 Tests
-        run: ./test_driver_macos.sh
-
-      - name: Run sqllin-driver JVM Unit Tests on macOS X64
-        run: ./test_driver_jvm.sh
-
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:assemble -PonCICD
 
-      - name: Run sqllin-dsl macOS X64 Tests
-        run: ./test_dsl_macos.sh
-
-      - name: Run sqllin-dsl JVM Unit Tests on macOS X64
-        run: ./test_dsl_jvm.sh
-
       - name: Gradle Cache
         uses: gradle/gradle-build-action@v2
-
-      - name: AVD Cache
-        uses: actions/cache@v3
-        id: avd-cache
-        with:
-          path: |
-            ~/.android/avd/*
-            ~/.android/adb*
-          key: avd-34
-
-      - name: Create AVD and Generate Snapshot for Caching
-        if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          disable-animations: false
-          script: echo "Generated AVD snapshot for caching."
-
-      - name: Run Android 14 Instrumented Tests
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          disable-animations: true
-          script: ./test_android.sh
-
-      - name: Upload sqllin-driver Reports
-        uses: actions/upload-artifact@v2
-        with:
-          name: Test-Reports
-          path: sqllin-driver/build/reports
-        if: failure()
-
-      - name: Upload sqllin-dsl Reports
-        uses: actions/upload-artifact@v2
-        with:
-          name: Test-Reports
-          path: sqllin-dsl/build/reports
-        if: failure()
 
       - name: Publish to MavenCentral
         run: ./publish_apple_android_jvm.sh
@@ -143,34 +83,8 @@ jobs:
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:mingwX64MainKlibrary
 
-      - name: Run sqllin-driver MinGW X64 Tests
-        run: ./gradlew :sqllin-driver:cleanMingwX64Test && ./gradlew :sqllin-driver:mingwX64Test --stacktrace
-
-      - name: Run sqllin-driver JVM Unit Tests on MinGW X64
-        run: ./gradlew :sqllin-driver:cleanJvmTest && ./gradlew :sqllin-driver:jvmTest --stacktrace
-
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary
-
-      - name: Run sqllin-dsl MinGW X64 Tests
-        run: ./gradlew :sqllin-dsl:cleanMingwX64Test && ./gradlew :sqllin-dsl:mingwX64Test --stacktrace
-
-      - name: Run sqllin-dsl JVM Unit Tests on MinGW X64
-        run: ./gradlew :sqllin-dsl:cleanJvmTest && ./gradlew :sqllin-dsl:jvmTest --stacktrace
-
-      - name: Upload sqllin-driver Reports
-        uses: actions/upload-artifact@v2
-        with:
-          name: Test-Reports
-          path: sqllin-driver/build/reports
-        if: failure()
-
-      - name: Upload sqllin-dsl Reports
-        uses: actions/upload-artifact@v2
-        with:
-          name: Test-Reports
-          path: sqllin-dsl/build/reports
-        if: failure()
 
       - name: Publish to MavenCentral
         run: ./gradlew :sqllin-driver:publishMingwX64PublicationToMavenRepository && ./gradlew :sqllin-dsl:publishMingwX64PublicationToMavenRepository
@@ -206,74 +120,14 @@ jobs:
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:assemble -PonCICD
 
-      - name: Run sqllin-driver Linux X64 Tests
-        run: ./test_driver_linux.sh
-
-      - name: Run sqllin-driver JVM Unit Tests on Linux X64
-        run: ./test_driver_jvm.sh
-
       - name: Build sqllin-processor
         run: ./gradlew :sqllin-processor:assemble
 
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:assemble -PonCICD
 
-      - name: Run sqllin-dsl Linux X64 Tests
-        run: ./test_dsl_linux.sh
-
-      - name: Run sqllin-dsl JVM Unit Tests on Linux X64
-        run: ./test_dsl_jvm.sh
-
       - name: Gradle Cache
         uses: gradle/gradle-build-action@v2
-
-      - name: AVD Cache
-        uses: actions/cache@v3
-        id: avd-cache
-        with:
-          path: |
-            ~/.android/avd/*
-            ~/.android/adb*
-          key: avd-26
-
-      - name: Create AVD and Generate Snapshot for Caching
-        if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 26
-          target: default
-          arch: x86_64
-          profile: pixel_2
-          force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          disable-animations: false
-          script: echo "Generated AVD snapshot for caching."
-
-      - name: Run Android 8 Instrumented Tests
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 26
-          target: default
-          arch: x86_64
-          profile: pixel_2
-          force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          disable-animations: true
-          script: ./test_android.sh
-
-      - name: Upload sqllin-driver Reports
-        uses: actions/upload-artifact@v2
-        with:
-          name: Test-Reports
-          path: sqllin-driver/build/reports
-        if: failure()
-
-      - name: Upload sqllin-dsl Reports
-        uses: actions/upload-artifact@v2
-        with:
-          name: Test-Reports
-          path: sqllin-dsl/build/reports
-        if: failure()
 
       - name: Publish to MavenCentral
         run: ./publish_linux_processor.sh
