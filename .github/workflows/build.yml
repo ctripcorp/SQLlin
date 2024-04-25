@@ -75,6 +75,9 @@ jobs:
             ~/.android/adb*
           key: avd-34
 
+      - name: Restart adb Server
+        uses: adb kill-server && adb start-server
+
       - name: Create AVD and Generate Snapshot for Caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
@@ -236,6 +239,9 @@ jobs:
             ~/.android/avd/*
             ~/.android/adb*
           key: avd-26
+
+      - name: Restart adb Server
+        uses: adb kill-server && adb start-server
 
       - name: Create AVD and Generate Snapshot for Caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
