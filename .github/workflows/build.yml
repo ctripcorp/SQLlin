@@ -83,6 +83,7 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          emulator-build: 11698152
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
@@ -95,6 +96,7 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          emulator-build: 11698152
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
@@ -243,6 +245,7 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_2
+          emulator-build: 11698152
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
@@ -255,6 +258,7 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_2
+          emulator-build: 11698152
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true

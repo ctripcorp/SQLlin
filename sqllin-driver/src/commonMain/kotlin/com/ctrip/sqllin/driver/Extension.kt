@@ -93,7 +93,7 @@ internal fun DatabaseConnection.migrateIfNeeded(
 ) = withTransaction {
     val initialVersion = withQuery("PRAGMA user_version;") {
         it.next()
-        it.getInt(0) ?: 0
+        it.getInt(0)
     }
     if (initialVersion == 0) {
         create(this)
