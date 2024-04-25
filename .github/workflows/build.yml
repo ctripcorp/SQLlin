@@ -76,7 +76,7 @@ jobs:
           key: avd-34
 
       - name: Restart adb Server
-        uses: adb kill-server && adb start-server
+        run: adb kill-server && adb start-server
 
       - name: Create AVD and Generate Snapshot for Caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -241,7 +241,7 @@ jobs:
           key: avd-26
 
       - name: Restart adb Server
-        uses: adb kill-server && adb start-server
+        run: adb kill-server && adb start-server
 
       - name: Create AVD and Generate Snapshot for Caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
