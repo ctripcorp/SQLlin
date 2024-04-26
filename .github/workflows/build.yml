@@ -87,7 +87,7 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
-          script: echo "Generated AVD snapshot for caching."
+          script: adb kill-server && adb start-server && echo "Generated AVD snapshot for caching."
 
       - name: Run Android 14 Instrumented Tests
         uses: reactivecircus/android-emulator-runner@v2
@@ -249,7 +249,7 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
-          script: echo "Generated AVD snapshot for caching."
+          script: adb kill-server && adb start-server && echo "Generated AVD snapshot for caching."
 
       - name: Run Android 8 Instrumented Tests
         uses: reactivecircus/android-emulator-runner@v2
