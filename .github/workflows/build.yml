@@ -18,7 +18,7 @@ env:
 jobs:
 
   build-on-macos:
-    runs-on: macos-latest
+    runs-on: macos-13
     timeout-minutes: 60
 
     steps:
@@ -74,9 +74,6 @@ jobs:
             ~/.android/avd/*
             ~/.android/adb*
           key: avd-34
-
-      - name: Restart ADB Server
-        run: ./restart_adb_server.sh
 
       - name: Create AVD and Generate Snapshot for Caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -239,9 +236,6 @@ jobs:
             ~/.android/avd/*
             ~/.android/adb*
           key: avd-26
-
-      - name: Restart ADB Server
-        run: ./restart_adb_server.sh
 
       - name: Create AVD and Generate Snapshot for Caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
