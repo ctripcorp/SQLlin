@@ -18,7 +18,7 @@ env:
 jobs:
 
   build-on-macos:
-    runs-on: macos-latest
+    runs-on: macos-latest-x64
     timeout-minutes: 60
 
     steps:
