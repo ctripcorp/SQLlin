@@ -75,6 +75,9 @@ jobs:
             ~/.android/adb*
           key: avd-34
 
+      - name: Restart ADB Server
+        run: ./restart_adb_server.sh
+
       - name: Create AVD and Generate Snapshot for Caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
@@ -87,7 +90,7 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
-          script: adb kill-server && adb start-server && echo "Generated AVD snapshot for caching."
+          script: echo "Generated AVD snapshot for caching."
 
       - name: Run Android 14 Instrumented Tests
         uses: reactivecircus/android-emulator-runner@v2
@@ -237,6 +240,9 @@ jobs:
             ~/.android/adb*
           key: avd-26
 
+      - name: Restart ADB Server
+        run: ./restart_adb_server.sh
+
       - name: Create AVD and Generate Snapshot for Caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
@@ -249,7 +255,7 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
-          script: adb kill-server && adb start-server && echo "Generated AVD snapshot for caching."
+          script: echo "Generated AVD snapshot for caching."
 
       - name: Run Android 8 Instrumented Tests
         uses: reactivecircus/android-emulator-runner@v2
