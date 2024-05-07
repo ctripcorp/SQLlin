@@ -2,8 +2,8 @@
 
 中文版请见[这里](README_CN.md)
 
-SQLlin is a Kotlin Multiplatform SQLite library that based on DSL and KSP. You can write SQL statements with your Kotlin code and these can 
-be verified by Kotlin compiler. Sample just like be this:
+SQLlin is an ORM library for Kotlin Multiplatform that based on DSL and KSP. It uses SQLite under the hood. You can write SQL
+statements with your Kotlin code and these can be verified by Kotlin compiler. Sample just like be this:
 
 ```kotlin
 private val db by lazy { Database(name = "person.db", path = path, version = 1) }
@@ -44,10 +44,9 @@ The architecture design of SQLlin is shown in the figure:
 
 ![sqllin-architecture](sqllin-architecture.png)
 
-SQLlin has two major parts: _sqllin-dsl_ and _sqllin-driver_. The _sqllin-driver_ is a common multiplatform SQLite low-level
-API, most of the time it is not recommended to use it directly. The _sqllin-dsl_ is the SQL statements DSL implementation and based on _sqllin-driver_. 
-
-The _sqllin-processor_ uses KSP to process annotations and generate code for use with _sqllin-dsl_.
+SQLlin has 3 major parts: _sqllin-dsl_, _sqllin-driver_ and _sqllin-processor_. The _sqllin-driver_ is a set of common multiplatform SQLite low-level
+APIs, most of the time it is not recommended to use it directly. The _sqllin-dsl_ is DSL implementations for SQL statements, it based on
+_sqllin-driver_. The _sqllin-processor_ uses KSP to process annotations and generate code for using with _sqllin-dsl_.
 
 You can learn how to use _sqllin-dsl_ in these documentations:
 
@@ -58,13 +57,13 @@ You can learn how to use _sqllin-dsl_ in these documentations:
 - [SQL Functions](./sqllin-dsl/doc/sql-functions.md)
 - [Advanced Query](./sqllin-dsl/doc/advanced-query.md)
 
-I don't recommend use _sqllin-driver_ directly, but if you want to learn more about it, you can read:
+I don't recommend using _sqllin-driver_ directly, but if you want to learn more about it, you can read:
 
 - [The sqllin-driver Basic Design and Usage](./sqllin-driver/README.md)
 
 ## R8/ProGuard
 
-Due to _sqllin-dsl_'s deserialization based on [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization), R8/ProGuard configuration please refer to
+Due to _sqllin-dsl_'s deserialization based on [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization), the R8/ProGuard configuration please refer to
 [kotlinx.serialization#Android](https://github.com/Kotlin/kotlinx.serialization#Android).
 
 ## License
