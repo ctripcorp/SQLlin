@@ -1,7 +1,7 @@
 # SQLlin
 
-SQLlin 是一款基于 DSL 以及 Kotlin 符号处理器（KSP）的 Kotlin Multiplatform SQLite 框架。它使你可以在你的 Kotlin 代码中编写能够被 Kotlin 编译器校验的 SQL
-语句。示例如下：
+SQLlin 是一款基于 DSL 及 Kotlin 符号处理器（KSP）实现的 Kotlin Multiplatform ORM 框架，其底层使用 SQLite。你可以使用它在 Kotlin
+代码中编写能够被 Kotlin 编译器校验的 SQL 语句。示例如下：
 
 ```kotlin
 private val db by lazy { Database(name = "person.db", path = path, version = 1) }
@@ -41,10 +41,8 @@ SQLlin 的架构设计如下图所示：
 
 ![sqllin-architecture](sqllin-architecture.png)
 
-SQLlin 拥有两个主要部分：_sqllin-dsl_ 与 _sqllin-driver_。_sqllin-driver_ 是一套通用的多平台 SQLite 低阶 API，大多数情况下不推荐直接使用。
-_sqllin-dsl_ 是 SQL 语句的 DSL 实现并且它基于 _sqllin-driver_。
-
-_sqllin-processor_ 使用 KSP 处理注解并生成用于和 _sqllin-dsl_ 配合使用的代码。
+SQLlin 拥有三个主要部分：_sqllin-dsl_、_sqllin-driver_ 及 _sqllin-processor_。_sqllin-driver_ 是一套通用的多平台 SQLite 低阶 API，大多数情况下不推荐直接使用。
+_sqllin-dsl_ 是 SQL 语句的 DSL 实现并且它基于 _sqllin-driver_。_sqllin-processor_ 使用 KSP 处理注解并生成用于与 _sqllin-dsl_ 配合使用的代码。
 
 你可以在下列文档中学习如何使用 _sqllin-dsl_：
 

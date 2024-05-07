@@ -13,7 +13,7 @@
 ### sqllin-driver
 
 * **Breaking change**: Remove the deprecated API `CommonCursor#forEachRows`
-* **Breaking change**: the `getInt`, `getLong`, `getFloat` and `getDouble` will throw an exception when the value is NULl in SQLite
+* **Breaking change**: the `getInt`, `getLong`, `getFloat` and `getDouble` will throw an exception when the value is NULL in SQLite
 * Add a new public API: `CommonCursor#isNull`, for check if the value is NULL in SQLite
 
 ## v1.3.0 / 2024-04-21
@@ -186,7 +186,6 @@ a runtime exception. Thanks for [@nbransby](https://github.com/nbransby).
 ### All
 
 * Fix some bugs about unit tests
-
 
 ### sqllin-dsl
 
