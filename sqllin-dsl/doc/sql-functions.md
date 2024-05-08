@@ -3,7 +3,7 @@
 中文版请见[这里](sql-functions-cn.md)
 
 SQLite has many built-in functions. We usually would use them in two places: after _SELECT_ keyword
-or in conditions(used for _WHERE_ and _HAVING_).
+or in conditions (use for _WHERE_ and _HAVING_).
 
 Using functions in conditions like this:
 
@@ -27,7 +27,7 @@ a `ClauseElement` as the result. The functions supported by SQLlin are as follow
 The `count` function has a different point, it could receive `X` as parameter be used for representing `count(*)` in SQL, as shown in the
 example above.
 
-SQLlin only supports using functions in conditions now. We will consider supporting the use of functions after _SELECT_ keyword in
+SQLlin only supports using functions in conditions now. We will consider supporting using functions after the _SELECT_ keyword in
 future versions. Now, if you have similar demands, you can use
 [Kotlin Collections API](https://kotlinlang.org/docs/collection-aggregate.html) to handle query results:
 

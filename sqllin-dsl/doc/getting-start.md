@@ -6,7 +6,7 @@
 
 ## Installation via Maven with Gradle
 
-Add the _sqllin-dsl_, _sqllin-driver_ and _sqllin-processor_ dependencies into your `build.gradle.kts`: 
+Add the dependencies of _sqllin-dsl_, _sqllin-driver_ and _sqllin-processor_ into your `build.gradle.kts`: 
 
 ```kotlin
 plugins {
@@ -47,7 +47,7 @@ dependencies {
 }
 ```
 
-> Note: If you want to add dependiences of SQLlin into your Kotlin/Native exectable program project, sometimes you need to add the `linkerOpts`
+> Note: If you want to add dependencies of SQLlin into your Kotlin/Native executable program projects, sometimes you need to add the `linkerOpts`
 > of SQLite into your `build.gradle.kts` correctly. You can refer to [issue #48](https://github.com/ctripcorp/SQLlin/issues/48) to get more information.
 
 ## Creating the Database
@@ -61,7 +61,7 @@ val database = Database(name = "Person.db", path = getGlobalPath(), version = 1)
 ```
 
 The `DatabasePath` is the second parameter `path`'s type, it is represented differently on different platforms.
-In Android, you can get it through [`Context`](https://developer.android.com/reference/android/content/Context), and you can get it through string in native platforms.
+On Android, you can get it through [`Context`](https://developer.android.com/reference/android/content/Context), and you can get it through string on native platforms.
 For example, you can define a expect function in your common source set:
 
 ```kotlin
@@ -86,7 +86,7 @@ val applicationContext: Context
     }
 ```
 
-In your iOS source set(similar in other Apple platforms), you can implement it by:
+In your iOS source set (similar with other Apple platforms), you can implement it by:
 
 ```kotlin
 import com.ctrip.sqllin.driver.DatabasePath
@@ -100,7 +100,7 @@ actual fun getGlobalDatabasePath(): DatabasePath =
 
 ```
 
-You can config more SQLite arguments when you creating the `Database` instance:
+You can config more SQLite arguments when you create the `Database` instance:
 
 ```kotlin
 import com.ctrip.sqllin.driver.DatabaseConfiguration
@@ -127,10 +127,10 @@ val database = Database(
 ```
 
 Note, because of limitation by Android Framework, the `inMemory`, `busyTimeout`, `lookasideSlotSize`, `lookasideSlotCount` 
-only work on Android 9 and higher. And, because of [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)(SQLlin base on it on JVM) doesn't support
+only work on Android 9 and higher. And, because [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)(SQLlin is based on it on JVM) doesn't support
 `sqlite3_config()`, the `lookasideSlotSize` and `lookasideSlotCount` don't work on JVM target.
 
-Now, the operations that change database structure have not supported by DSL yet. So, you need to write these SQL statements by string
+Now, the operations that change database structure haven't been supported by DSL yet. So, you need to write these SQL statements by string
 as in `create` and `upgrade` parameters.
 
 Usually, you just need to create one `Database` instance in your component lifecycle. So, you need to close database manually when the lifecycle ended:
@@ -143,7 +143,7 @@ override fun onDestroy() {
 
 ## Defining Your database entity
 
-In _sqllin-dsl_, you can insert and query objects directly. So, you need to use the correct way to define your data class. For example:
+In _sqllin-dsl_, you can insert and query objects directly. So, you need to use the correct way to define your data classes. For example:
 
 ```kotlin
 import com.ctrip.sqllin.dsl.annotation.DBRow
@@ -157,14 +157,14 @@ data class Person(
 )
 ```
 
-Your database entity's property names should same with the database table's column names. The database entity cannot have properties with names different from all
-column names in the table. But the count of your database entity's properties can less than the count of columns.
+Your database entities' property names should be same with the database table's column names. The database entities cannot have properties with names different from all
+column names in the table. But the count of your database entities' properties can less than the count of columns.
 
 The `@DBRow`'s param `tableName` represents the table name in Database, please ensure pass
 the correct value. If you don't pass the parameter manually, _sqllin-processor_ will use the class
 name as table name, for example, `Person`'s default table name is "Person".
 
-In _sqllin-dsl_, objects serialization to SQL and deserialization from cursor depend on _kotlinx.serialization_. So, you also need to add the `@Serializable` onto your data class.
+In _sqllin-dsl_, objects are serialized to SQL and deserialized from cursor depend on _kotlinx.serialization_. So, you also need to add the `@Serializable` onto your data classes.
 
 ## Next Step
 

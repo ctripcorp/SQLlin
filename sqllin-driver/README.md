@@ -4,25 +4,24 @@
 
 ## Design
 
-Initially, we need a multiplatform available low-level Kotlin API to call SQLite. Because we think _sqllin-dsl_
-should be platform independent. So, we need the _sqllin-driver_, and _sqllin-dsl_ based on it. Our goal is
+Initially, we needed a multiplatform available low-level Kotlin APIs to call SQLite. Because we thought _sqllin-dsl_
+should be platform-independent. So, we needed _sqllin-driver_, and _sqllin-dsl_ on top of it. Our goal was
 writing the common APIs in Kotlin Multiplatform common source set and they have different implementations on
 different platforms.
 
-In Android, not many ways to choose from. If we use the Android Framework SQLite Java APIs, everything will be simple,
-but defect is many SQLite parameters cannot take effect on systems below Android P. If we writing JNI code
+On Android, there are no many ways to choose from. If we use Android Framework SQLite Java APIs, everything will be simple,
+but defect is many SQLite parameters cannot take effect on systems below Android P. If we write JNI code
 to call SQLite C functions by ourselves, above problem will be resolved, but this will lead to a bigger problem:
-In systems above Android N, Google doesn't allow developers call system built-in SQLite C functions in NDK. If
+On systems above Android N, Google doesn't allow developers call system built-in SQLite C functions in NDK. If
 we firmly choose this plan, we have to compile the SQLite source code into _sqllin-driver_, this will complicate
-our project. Finally, we still choose based on Android Framework Java API.
+our project. Finally, we still choose to use Android Framework Java API.
 
-In Native platforms, things look different. We can call SQLite C API directly, this is a most intuitive plan.
-The interoperability of Kotlin/Native with C is very perfect, but in Kotlin/Native you must use some APIs that
-very difficult to understanding to interop with C, like: `memScoped`, `CPointer`, `CPointerVarOf`, `toKString`, etc..
-So, at the beginning, I chose the [SQLiter](https://github.com/touchlab/SQLiter), that's a Kotlin/Native multiplatform
-library. If I use it, I can put the Kotlin-C interop translate to Kotlin language-internal calls. It is very
-convenient. [SQLiter](https://github.com/touchlab/SQLiter) also is the driver that
-[SQLDelight](https://github.com/cashapp/sqldelight) to call SQLite C library on native platforms. It is not only
+On Native platforms, things look different. We can call SQLite C APIs directly, this is a most intuitive plan.
+The interoperability of Kotlin/Native with C is perfect, but in Kotlin/Native you must use some APIs to interop with C
+that very difficult to understand, like: `memScoped`, `CPointer`, `CPointerVarOf`, `toKString`, etc..
+So, at the beginning, I chose the [SQLiter](https://github.com/touchlab/SQLiter), it is a Kotlin/Native multiplatform
+library. If I use it, I can put the Kotlin-C interop translate to Kotlin language-internal calling. It is very
+convenient. [SQLiter](https://github.com/touchlab/SQLiter) also is the driver of [SQLDelight](https://github.com/cashapp/sqldelight) calling SQLite C library on native platforms. It not only
 supports iOS, but also supports all the operating systems of Apple, Linux(x64) and Windows(mingwX86, mingwX64).
 
 But a few months later. I found using [SQLiter](https://github.com/touchlab/SQLiter) also has some disadvantages. For

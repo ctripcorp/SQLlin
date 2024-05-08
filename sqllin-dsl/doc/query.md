@@ -2,11 +2,11 @@
 
 中文版请见[这里](query-cn.md)
 
-The _SELECT_ statement is more complex than others, because _SELECT_ statement have more clauses.
+The _SELECT_ statements are more complex than others, because _SELECT_ statements have more clauses.
 
 ## Basic
 
-The simplest usage is query all data in the table:
+The simplest usage is querying all data in the table:
 
 ```kotlin
 fun sample() {
@@ -23,11 +23,11 @@ fun sample() {
 ```
 The `X` represents without any clause, we’ve seen it in _DELETE_ statements.
 
-The _SELECT_ statement has query results, this is another difference from other statements. So, you need to declare a variable that
-type is `SelectStatement<T>`. The generic parameter `T` is your database entity's type that you expect to deserialize. You should assign _SELECT_ statement you built to this variable.
+The _SELECT_ statement owns the querying results, this is another difference with other statements. So, you need to declare a variable that
+type is `SelectStatement<T>`. The generic parameter `T` is your database entity's type that you expect to deserialize. You should assign a _SELECT_ statement you built to this variable.
 
 Note, all statements will only be executed when the _DatabaseScope_ ends, we mentioned this in the [Modify Database and Transaction](modify-database-and-transaction.md).
-So, you must invoke the `getResults` function outside the `database { ... }` block, SQLlin will help you deserialize query results to objects that you expected.
+So, you must invoke the `getResults` function outside the `database { ... }` block, SQLlin will help you deserialize querying results to objects that you expected.
 
 ## Single Clause
 
