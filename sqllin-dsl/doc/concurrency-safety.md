@@ -6,14 +6,14 @@ unpredictable consequences. So, the best way is when you want to operate your
 database, create a `Database` object, and when you finish your operating, close it immediately.
 
 But, that's very inconvenient, we always have to create a database connection and
-close it frequently, that is a waste of resources. For example, if we are developing
-an Android app, and in a single page(Activity/Fragment), we hope we can keep a
-`Database` object, when we want to operate the database in background threads(or
+close it frequently, this is a waste of resources. For example, if we are developing
+an Android app, and in a single page (Activity/Fragment), we hope we can keep a
+`Database` object, when we want to operate the database in background threads (or
 coroutines), just use it, and, close it in certain lifecycle
-functions(`onDestroy`, `onStop`, etc..).
+functions (`onDestroy`, `onStop`, etc.).
 
-In that time, we should make sure the concurrency safety that we sharing the `Database`
-object between different threads(or coroutines). So, start with the version `1.2.2`, we can
+At that time, we should make sure the concurrency safety that we share the `Database`
+object between different threads (or coroutines). So, start with the version `1.2.2`, we can
 use the new API `Database#suspendedScope` to replace the usage of `database {}`. For
 example, if we have some old code:
 

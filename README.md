@@ -25,7 +25,7 @@ fun sample() {
     }
 }
 ```
-SQLlin is able to insert Kotlin objects into database directly, and could query Kotlin objects directly from database. The serialization
+SQLlin is able to insert Kotlin objects into database directly, and could query Kotlin objects from database directly. The serialization
 and deserialization ability based on [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization).
 
 SQLlin supports these platforms:
