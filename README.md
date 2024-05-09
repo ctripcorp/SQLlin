@@ -2,7 +2,7 @@
 
 中文版请见[这里](README_CN.md)
 
-SQLlin is an ORM library for Kotlin Multiplatform that based on DSL and KSP. It uses SQLite under the hood. You can write SQL
+SQLlin is an ORM library for Kotlin Multiplatform that is based on DSL and KSP. It uses SQLite under the hood. You can write SQL
 statements with your Kotlin code and these can be verified by Kotlin compiler. Sample just like be this:
 
 ```kotlin
@@ -26,7 +26,7 @@ fun sample() {
 }
 ```
 SQLlin is able to insert Kotlin objects into database directly, and could query Kotlin objects from database directly. The serialization
-and deserialization ability based on [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization).
+and deserialization ability is based on [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization).
 
 SQLlin supports these platforms:
 
@@ -45,7 +45,7 @@ The architecture design of SQLlin is shown in the figure:
 ![sqllin-architecture](sqllin-architecture.png)
 
 SQLlin has 3 major parts: _sqllin-dsl_, _sqllin-driver_ and _sqllin-processor_. The _sqllin-driver_ is a set of common multiplatform SQLite low-level
-APIs, most of the time it is not recommended to use it directly. The _sqllin-dsl_ is DSL implementations for SQL statements, it based on
+APIs, most of the time it is not recommended to use it directly. The _sqllin-dsl_ is DSL implementations for SQL statements, it is based on
 _sqllin-driver_. The _sqllin-processor_ uses KSP to process annotations and generate code for using with _sqllin-dsl_.
 
 You can learn how to use _sqllin-dsl_ in these documentations:
@@ -63,7 +63,7 @@ I don't recommend using _sqllin-driver_ directly, but if you want to learn more 
 
 ## R8/ProGuard
 
-Due to _sqllin-dsl_'s deserialization based on [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization), the R8/ProGuard configuration please refer to
+Due to _sqllin-dsl_'s serialization and deserialization are based on [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization), the R8/ProGuard configuration please refer to
 [kotlinx.serialization#Android](https://github.com/Kotlin/kotlinx.serialization#Android).
 
 ## License
