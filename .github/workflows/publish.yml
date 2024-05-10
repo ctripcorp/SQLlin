@@ -18,22 +18,22 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Validate Gradle Wrapper
-        uses: gradle/wrapper-validation-action@v1
+        uses: gradle/wrapper-validation-action@v3
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: 17
 
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Cache Build Tooling
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
@@ -47,7 +47,7 @@ jobs:
         run: ./gradlew :sqllin-dsl:assemble -PonCICD
 
       - name: Gradle Cache
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Publish to MavenCentral
         run: ./publish_apple_android_jvm.sh
@@ -58,22 +58,22 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Validate Gradle Wrapper
-        uses: gradle/wrapper-validation-action@v1
+        uses: gradle/wrapper-validation-action@v3
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: 17
 
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Cache Build Tooling
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
@@ -95,22 +95,22 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Validate Gradle Wrapper
-        uses: gradle/wrapper-validation-action@v1
+        uses: gradle/wrapper-validation-action@v3
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: 17
 
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Cache Build Tooling
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
@@ -127,7 +127,7 @@ jobs:
         run: ./gradlew :sqllin-dsl:assemble -PonCICD
 
       - name: Gradle Cache
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Publish to MavenCentral
         run: ./publish_linux_processor.sh
