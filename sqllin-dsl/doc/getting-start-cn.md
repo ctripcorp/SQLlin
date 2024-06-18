@@ -154,7 +154,7 @@ data class Person(
 将会使用类名作为表名，比如 `Person` 类的默认表名是"Person"。
 
 在 _sqllin-dsl_ 中，对象序列化为 SQL 语句，或者从游标中反序列化依赖 _kotlinx.serialization_，所以你需要在你的 data class
-上添加 `@Serializable` 注解。
+上添加 `@Serializable` 注解。因此，如果你想在序列化或反序列化以及 `Table` 类生成的时候忽略某些属性，你可以给你的属性添加 `kotlinx.serialization.Transient` 注解。
 
 ## 接下来
 
