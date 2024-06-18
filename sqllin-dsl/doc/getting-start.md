@@ -164,7 +164,8 @@ The `@DBRow`'s param `tableName` represents the table name in Database, please e
 the correct value. If you don't pass the parameter manually, _sqllin-processor_ will use the class
 name as table name, for example, `Person`'s default table name is "Person".
 
-In _sqllin-dsl_, objects are serialized to SQL and deserialized from cursor depend on _kotlinx.serialization_. So, you also need to add the `@Serializable` onto your data classes.
+In _sqllin-dsl_, objects are serialized to SQL and deserialized from cursor depend on _kotlinx.serialization_. So, you also need to add the `@Serializable` onto your data classes. Therefore, if
+you want to ignore some properties when serialization or deserialization and `Table` classes generation, you can annotate your properties with `kotlinx.serialization.Transient`.
 
 ## Next Step
 

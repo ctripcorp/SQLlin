@@ -18,6 +18,7 @@ package com.ctrip.sqllin.dsl
 
 import com.ctrip.sqllin.dsl.annotation.DBRow
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 /**
  * Test whether the sqllin-processor could generate primitive type and String correctly
@@ -40,4 +41,5 @@ data class TestPrimitiveTypeForKSP(
     val testBoolean: Boolean?,
     val testChar: Char?,
     val testString: String,
+    @Transient val testTransient: Int = 0,
 )

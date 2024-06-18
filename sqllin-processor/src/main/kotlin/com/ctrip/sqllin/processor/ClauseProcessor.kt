@@ -16,6 +16,7 @@
 
 package com.ctrip.sqllin.processor
 
+import com.google.devtools.ksp.getClassDeclarationByName
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
@@ -36,6 +37,7 @@ class ClauseProcessor(
     private companion object {
         const val ANNOTATION_DATABASE_ROW_NAME = "com.ctrip.sqllin.dsl.annotation.DBRow"
         const val ANNOTATION_SERIALIZABLE = "kotlinx.serialization.Serializable"
+        const val ANNOTATION_TRANSIENT = "kotlinx.serialization.Transient"
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -44,7 +46,7 @@ class ClauseProcessor(
         val invalidateDBRowClasses = allDBRowClasses.filter { !it.validate() }.toList()
 
         val validateDBRowClasses = allDBRowClasses.filter { it.validate() } as Sequence<KSClassDeclaration>
-        val serializableType = resolver.getClassDeclarationByName(resolver.getKSNameFromString(ANNOTATION_SERIALIZABLE))!!.asStarProjectedType()
+        val serializableType = resolver.getClassDeclarationByName(ANNOTATION_SERIALIZABLE)!!.asStarProjectedType()
 
         for (classDeclaration in validateDBRowClasses) {
 
@@ -80,7 +82,10 @@ class ClauseProcessor(
                 writer.write("    override fun kSerializer() = $className.serializer()\n\n")
 
                 writer.write("    inline operator fun <R> invoke(block: $objectName.(table: $objectName) -> R): R = this.block(this)\n\n")
-                classDeclaration.getAllProperties().forEachIndexed { index, property ->
+                val transientName = resolver.getClassDeclarationByName(ANNOTATION_TRANSIENT)!!.asStarProjectedType()
+                classDeclaration.getAllProperties().filter { classDeclaration ->
+                    !classDeclaration.annotations.any { ksAnnotation -> ksAnnotation.annotationType.resolve().isAssignableFrom(transientName) }
+                }.forEachIndexed { index, property ->
                     val clauseElementTypeName = getClauseElementTypeStr(property) ?: return@forEachIndexed
                     val propertyName = property.simpleName.asString()
                     val elementName = "$className.serializer().descriptor.getElementName($index)"

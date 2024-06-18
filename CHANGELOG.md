@@ -2,6 +2,20 @@
 
 - Date format: YYYY-MM-dd
 
+## v1.3.2 / 2024-06-18
+
+### All
+
+* Update `Kotlin`'s version to `1.9.24`
+
+### sqllin-dsl
+
+* Now, you can annotate properties with `kotlinx.serialization.transmint` in your data classes to ignore these properties when serialization or deserialization and `Table` classes generation.
+
+### sqllin-processor
+
+* Update `KSP`'s version to `1.9.24-1.0.20`
+
 ## v1.3.1 / 2024-04-24
 
 ### sqllin-dsl
