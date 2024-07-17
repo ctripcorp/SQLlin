@@ -4,9 +4,9 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import org.jetbrains.kotlin.konan.target.HostManager
 
 plugins {
-    kotlin("multiplatform")
-    id("com.android.library")
-    id("maven-publish")
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.maven.publish)
     signing
 }
 
@@ -75,27 +75,25 @@ kotlin {
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))
-                val coroutinesVersion: String by project
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
+                implementation(libs.kotlinx.coroutines)
             }
         }
         val androidMain by getting {
             dependencies {
-                val androidxAnnotationVersion: String by project
-                implementation("androidx.annotation:annotation:${androidxAnnotationVersion}")
+                implementation(libs.androidx.annotation)
             }
         }
         val androidInstrumentedTest by getting {
             dependencies {
-                implementation("androidx.test:core:1.5.0")
-                implementation("androidx.test:runner:1.5.2")
-                implementation("androidx.test:rules:1.5.0")
+                implementation(libs.androidx.test.core)
+                implementation(libs.androidx.test.runner)
+                implementation(libs.androidx.test.rules)
             }
         }
 
         val jvmMain by getting {
             dependencies {
-                implementation("org.xerial:sqlite-jdbc:3.45.3.0")
+                implementation(libs.sqlite.jdbc)
             }
         }
     }

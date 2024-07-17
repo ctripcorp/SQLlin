@@ -4,11 +4,11 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import org.jetbrains.kotlin.konan.target.HostManager
 
 plugins {
-    kotlin("multiplatform")
-    kotlin("plugin.serialization")
-    id("com.google.devtools.ksp")
-    id("com.android.library")
-    id("maven-publish")
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.kotlinx.serialization)
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.maven.publish)
     signing
 }
 
@@ -77,10 +77,8 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 api(project(":sqllin-driver"))
-                val serializationVersion: String by project
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:${serializationVersion}")
-                val coroutinesVersion: String by project
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
+                implementation(libs.kotlinx.serialization)
+                implementation(libs.kotlinx.coroutines)
             }
         }
         val commonTest by getting {
@@ -90,9 +88,9 @@ kotlin {
         }
         val androidInstrumentedTest by getting {
             dependencies {
-                implementation("androidx.test:core:1.5.0")
-                implementation("androidx.test:runner:1.5.2")
-                implementation("androidx.test:rules:1.5.0")
+                implementation(libs.androidx.test.core)
+                implementation(libs.androidx.test.runner)
+                implementation(libs.androidx.test.rules)
             }
         }
     }
