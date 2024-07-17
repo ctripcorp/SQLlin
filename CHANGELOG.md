@@ -7,7 +7,7 @@
 ### sqllin-dsl
 
 * Update `kotlinx.coroutines`'s version to `1.8.1`
-* Update `kotlinx.serialization`'s version to `1.7.1`
+<!--* Update `kotlinx.serialization`'s version to `1.7.1`-->
 
 ### sqllin-driver
 

@@ -3,12 +3,11 @@
 kotlin = "1.9.24"
 agp = "8.2.2"
 ksp = "1.9.24-1.0.20"
-serialization = "1.7.1"
+serialization = "1.6.3"
 coroutines = "1.8.1"
 androidx-annotation = "1.8.0"
 androidx-test = "1.6.1"
 sqlite-jdbc = "3.46.0.0"
-
 
 [libraries]
 
