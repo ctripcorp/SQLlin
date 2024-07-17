@@ -1,10 +1,10 @@
+rootProject.name = "SQLlin"
+include(":sqllin-driver")
+include(":sqllin-dsl")
+include(":sqllin-processor")
+include(":sample")
+
 pluginManagement {
-    val kspVersion: String by settings
-    val kotlinVersion: String by settings
-    plugins {
-        id("com.google.devtools.ksp") version kspVersion apply false
-        kotlin("plugin.serialization") version kotlinVersion
-    }
     repositories {
         google()
         gradlePluginPortal()
@@ -12,8 +12,10 @@ pluginManagement {
     }
 }
 
-rootProject.name = "SQLlin"
-include(":sqllin-driver")
-include(":sqllin-dsl")
-include(":sqllin-processor")
-include(":sample")
+dependencyResolutionManagement {
+    @Suppress("UnstableApiUsage")
+    repositories {
+        google()
+        mavenCentral()
+    }
+}

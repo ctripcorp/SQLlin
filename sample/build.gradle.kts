@@ -1,10 +1,10 @@
 import org.jetbrains.kotlin.gradle.dsl.KotlinCompile
 
 plugins {
-    kotlin("multiplatform")
-    kotlin("plugin.serialization")
-    id("com.android.library")
-    id("com.google.devtools.ksp")
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.kotlinx.serialization)
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.ksp)
 }
 
 version = "1.0"
@@ -32,10 +32,8 @@ kotlin {
             kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
             dependencies {
                 implementation(project(":sqllin-dsl"))
-                val serializationVersion: String by project
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:${serializationVersion}")
-                val coroutinesVersion: String by project
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
+                implementation(libs.kotlinx.serialization)
+                implementation(libs.kotlinx.coroutines)
             }
         }
     }

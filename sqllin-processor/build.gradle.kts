@@ -1,6 +1,6 @@
 plugins {
-    kotlin("jvm")
-    id("maven-publish")
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.maven.publish)
     signing
 }
 
@@ -20,8 +20,7 @@ java {
 }
 
 dependencies {
-    val kspVersion: String by project
-    implementation("com.google.devtools.ksp:symbol-processing-api:$kspVersion")
+    implementation(libs.ksp)
 }
 
 val NEXUS_USERNAME: String by project
