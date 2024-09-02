@@ -1,4 +1,6 @@
-import org.jetbrains.kotlin.gradle.dsl.KotlinCompile
+import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -9,20 +11,21 @@ plugins {
 
 version = "1.0"
 
+@OptIn(ExperimentalKotlinGradlePluginApi::class)
 kotlin {
     androidTarget {
         publishLibraryVariants("release")
     }
     jvm {
-        compilations.all {
-            kotlinOptions {
-                jvmTarget = "11"
-            }
-        }
+        compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
     }
     iosX64()
     iosArm64()
     iosSimulatorArm64()
+
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
     
     sourceSets {
         all {
@@ -55,15 +58,11 @@ dependencies {
     add("kspCommonMainMetadata", project(":sqllin-processor"))
 }
 
-afterEvaluate {  // WORKAROUND: both register() and named() fail – https://github.com/gradle/gradle/issues/9331
+afterEvaluate { // WORKAROUND: both register() and named() fail – https://github.com/gradle/gradle/issues/9331
     tasks {
-        withType<KotlinCompile<*>> {
+        withType<KotlinCompilationTask<*>> {
             if (name != "kspCommonMainKotlinMetadata")
                 dependsOn("kspCommonMainKotlinMetadata")
         }
     }
-}
-
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    compilerOptions.freeCompilerArgs.add("-Xexpect-actual-classes")
 }

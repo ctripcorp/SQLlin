@@ -35,7 +35,7 @@ jobs:
           java-version: 17
     
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Cache Build Tooling
         uses: actions/cache@v4
@@ -63,9 +63,6 @@ jobs:
       - name: Run sqllin-dsl JVM Unit Tests on macOS X64
         run: ./test_dsl_jvm.sh
 
-      - name: Gradle Cache
-        uses: gradle/actions/setup-gradle@v3
-
       - name: AVD Cache
         uses: actions/cache@v4
         id: avd-cache
@@ -83,7 +80,7 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
-          emulator-build: 11698152
+          emulator-build: 12265550
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
@@ -96,7 +93,7 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
-          emulator-build: 11698152
+          emulator-build: 12265550
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
@@ -134,7 +131,7 @@ jobs:
           java-version: 17
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Cache Build Tooling
         uses: actions/cache@v4
@@ -194,7 +191,7 @@ jobs:
           java-version: 17
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Cache Build Tooling
         uses: actions/cache@v4
@@ -225,9 +222,6 @@ jobs:
       - name: Run sqllin-dsl JVM Unit Tests on Linux X64
         run: ./test_dsl_jvm.sh
 
-      - name: Gradle Cache
-        uses: gradle/actions/setup-gradle@v3
-
       - name: AVD Cache
         uses: actions/cache@v4
         id: avd-cache
@@ -245,7 +239,7 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_2
-          emulator-build: 11698152
+          emulator-build: 12265550
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
@@ -258,7 +252,7 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_2
-          emulator-build: 11698152
+          emulator-build: 12265550
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true

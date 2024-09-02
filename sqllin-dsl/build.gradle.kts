@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetTree
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import org.jetbrains.kotlin.konan.target.HostManager
@@ -18,20 +19,16 @@ val VERSION: String by project
 group = GROUP
 version = VERSION
 
+@OptIn(ExperimentalKotlinGradlePluginApi::class)
 kotlin {
     explicitApi()
     androidTarget {
         publishLibraryVariants("release")
-        @OptIn(ExperimentalKotlinGradlePluginApi::class)
         instrumentedTestVariant.sourceSetTree.set(KotlinSourceSetTree.test)
     }
 
     jvm {
-        compilations.all {
-            kotlinOptions {
-                jvmTarget = "11"
-            }
-        }
+        compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
     }
 
     listOf(
@@ -60,12 +57,8 @@ kotlin {
         it.setupNativeConfig()
     }
 
-    targets.configureEach {
-        compilations.configureEach {
-            compilerOptions.configure {
-                freeCompilerArgs.add("-Xexpect-actual-classes")
-            }
-        }
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
     }
     
     sourceSets {
@@ -137,7 +130,7 @@ fun KotlinNativeTarget.setupNativeConfig() {
 }
 
 dependencies {
-    val sourceSet = listOf(
+    val sourceSets = listOf(
         "kspAndroidAndroidTest",
 
         "kspJvmTest",
@@ -162,7 +155,7 @@ dependencies {
 
         "kspMingwX64Test",
     )
-    sourceSet.forEach {
+    sourceSets.forEach {
         add(it, project(":sqllin-processor"))
     }
 }

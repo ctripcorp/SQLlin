@@ -14,3 +14,4 @@ local.properties
 /sqllin-processor/build
 /sample/build
 *.podspec
+.kotlin
