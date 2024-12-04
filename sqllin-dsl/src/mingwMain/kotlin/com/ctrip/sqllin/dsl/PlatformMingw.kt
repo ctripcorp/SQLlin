@@ -16,18 +16,17 @@
 
 package com.ctrip.sqllin.dsl
 
-import kotlinx.cinterop.UnsafeNumber
-import platform.Foundation.NSDocumentDirectory
-import platform.Foundation.NSSearchPathForDirectoriesInDomains
-import platform.Foundation.NSUserDomainMask
+import kotlinx.cinterop.*
+import platform.posix._wgetcwd
 
 /**
- * Apple platform-related functions
+ * Windows platform-related functions
+ * The doc of _getcwd: https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/getcwd-wgetcwd?view=msvc-170
  * @author yaqiao
  */
 
-@OptIn(UnsafeNumber::class)
-actual fun getPlatformStringPath(): String =
-    (NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, true).firstOrNull() as? String ?: "")
+@OptIn(ExperimentalForeignApi::class)
+internal actual fun getPlatformStringPath(): String =
+    _wgetcwd(null, 0)?.toKString() ?: throw IllegalStateException("Get database path wrong")
 
-actual val pathSeparator: Char = '/'
+// actual val pathSeparator: Char = '\\'

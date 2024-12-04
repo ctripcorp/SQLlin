@@ -16,17 +16,18 @@
 
 package com.ctrip.sqllin.dsl
 
+import kotlinx.cinterop.UnsafeNumber
+import platform.Foundation.NSDocumentDirectory
+import platform.Foundation.NSSearchPathForDirectoriesInDomains
+import platform.Foundation.NSUserDomainMask
+
 /**
- * Some platform-related functions
+ * Apple platform-related functions
  * @author yaqiao
  */
 
-/**
- * Get the DatabasePath
- */
-expect fun getPlatformStringPath(): String
+@OptIn(UnsafeNumber::class)
+internal actual fun getPlatformStringPath(): String =
+    (NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, true).firstOrNull() as? String ?: "")
 
-/**
- * Get the file path separator, '\' in Windows, '/' in others
- */
-expect val pathSeparator: Char
+// actual val pathSeparator: Char = '/'
