@@ -1,4 +1,6 @@
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetTree
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import org.jetbrains.kotlin.konan.target.HostManager
@@ -18,20 +20,16 @@ val VERSION: String by project
 group = GROUP
 version = VERSION
 
+@OptIn(ExperimentalKotlinGradlePluginApi::class)
 kotlin {
     explicitApi()
     androidTarget {
         publishLibraryVariants("release")
-        @OptIn(ExperimentalKotlinGradlePluginApi::class)
         instrumentedTestVariant.sourceSetTree.set(KotlinSourceSetTree.test)
     }
 
     jvm {
-        compilations.all {
-            kotlinOptions {
-                jvmTarget = "11"
-            }
-        }
+        compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
     }
 
     listOf(
@@ -60,12 +58,8 @@ kotlin {
         it.setupNativeConfig()
     }
 
-    targets.configureEach {
-        compilations.configureEach {
-            compilerOptions.configure {
-                freeCompilerArgs.add("-Xexpect-actual-classes")
-            }
-        }
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
     }
     
     sourceSets {
@@ -74,27 +68,85 @@ kotlin {
                 optIn("kotlin.RequiresOptIn")
             }
         }
-        val commonMain by getting {
-            dependencies {
-                api(project(":sqllin-driver"))
-                implementation(libs.kotlinx.serialization)
-                implementation(libs.kotlinx.coroutines)
-            }
+        commonMain.dependencies {
+            api(project(":sqllin-driver"))
+            implementation(libs.kotlinx.serialization)
+            implementation(libs.kotlinx.coroutines)
         }
-        val commonTest by getting {
-            dependencies {
-                implementation(kotlin("test"))
-            }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
         }
-        val androidInstrumentedTest by getting {
+        androidInstrumentedTest {
+            setCommonTestDir()
             dependencies {
                 implementation(libs.androidx.test.core)
                 implementation(libs.androidx.test.runner)
                 implementation(libs.androidx.test.rules)
             }
         }
+        jvmTest {
+            setCommonTestDir()
+        }
+
+        iosX64Test {
+            setNativeTestDir()
+        }
+        iosArm64Test {
+            setNativeTestDir()
+        }
+        iosSimulatorArm64Test {
+            setNativeTestDir()
+        }
+
+
+        macosX64Test {
+            setNativeTestDir()
+        }
+        macosArm64Test {
+            setNativeTestDir()
+        }
+
+        watchosX64Test {
+            setNativeTestDir()
+        }
+        watchosArm32Test {
+            setNativeTestDir()
+        }
+        watchosArm64Test {
+            setNativeTestDir()
+        }
+        watchosDeviceArm64Test {
+            setNativeTestDir()
+        }
+        watchosSimulatorArm64Test {
+            setNativeTestDir()
+        }
+
+        tvosX64Test {
+            setNativeTestDir()
+        }
+        tvosArm64Test {
+            setNativeTestDir()
+        }
+        tvosSimulatorArm64Test {
+            setNativeTestDir()
+        }
+
+        linuxX64Test {
+            setNativeTestDir()
+        }
+        linuxArm64Test {
+            setNativeTestDir()
+        }
+
+        mingwX64Test {
+            setNativeTestDir()
+        }
     }
 }
+
+fun KotlinSourceSet.setCommonTestDir(vararg path: String) = kotlin.srcDirs("src/commonTestCode/kotlin", path)
+fun KotlinSourceSet.setNativeTestDir() = setCommonTestDir("src/nativeTestCode/kotlin")
 
 gradle.taskGraph.whenReady {
     if (!project.hasProperty("onCICD"))
@@ -113,14 +165,14 @@ gradle.taskGraph.whenReady {
 
 android {
     namespace = "com.ctrip.sqllin.dsl"
-    compileSdk = 34
+    compileSdk = 35
     defaultConfig {
         minSdk = 23
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 
@@ -137,7 +189,7 @@ fun KotlinNativeTarget.setupNativeConfig() {
 }
 
 dependencies {
-    val sourceSet = listOf(
+    val sourceSets = listOf(
         "kspAndroidAndroidTest",
 
         "kspJvmTest",
@@ -152,6 +204,7 @@ dependencies {
         "kspWatchosX64Test",
         "kspWatchosArm32Test",
         "kspWatchosArm64Test",
+        "kspWatchosDeviceArm64Test",
         "kspWatchosSimulatorArm64Test",
 
         "kspTvosX64Test",
@@ -159,10 +212,11 @@ dependencies {
         "kspTvosSimulatorArm64Test",
 
         "kspLinuxX64Test",
+        "kspLinuxArm64Test",
 
         "kspMingwX64Test",
     )
-    sourceSet.forEach {
+    sourceSets.forEach {
         add(it, project(":sqllin-processor"))
     }
 }

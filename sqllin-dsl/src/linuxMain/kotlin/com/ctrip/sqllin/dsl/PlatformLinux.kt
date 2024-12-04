@@ -16,17 +16,17 @@
 
 package com.ctrip.sqllin.dsl
 
-import kotlinx.cinterop.*
-import platform.posix._wgetcwd
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.toKString
+import platform.posix.getcwd
 
 /**
- * Windows platform-related functions
- * The doc of _getcwd: https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/getcwd-wgetcwd?view=msvc-170
+ * Linux platform-related functions
  * @author yaqiao
  */
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun getPlatformStringPath(): String =
-    _wgetcwd(null, 0)?.toKString() ?: throw IllegalStateException("Get database path wrong")
+internal actual fun getPlatformStringPath(): String =
+    getcwd(null, 0u)?.toKString() ?: throw IllegalStateException("The temp path created error")
 
-actual val pathSeparator: Char = '\\'
+// actual val pathSeparator: Char = '/'

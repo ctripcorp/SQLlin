@@ -51,7 +51,7 @@ class ClauseProcessor(
         for (classDeclaration in validateDBRowClasses) {
 
             if (classDeclaration.annotations.all { !it.annotationType.resolve().isAssignableFrom(serializableType) })
-                continue // Don't handle the class that don't annotated 'Serializable'
+                continue // Don't handle the classes that didn't be annotated 'Serializable'
 
             val className = classDeclaration.simpleName.asString()
             val packageName = classDeclaration.packageName.asString()

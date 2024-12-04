@@ -1,13 +1,14 @@
 [versions]
 
-kotlin = "1.9.24"
-agp = "8.2.2"
-ksp = "1.9.24-1.0.20"
-serialization = "1.6.3"
-coroutines = "1.8.1"
-androidx-annotation = "1.8.0"
+kotlin = "2.1.0"
+agp = "8.7.3"
+ksp = "2.1.0-1.0.29"
+serialization = "1.7.3"
+coroutines = "1.9.0"
+androidx-annotation = "1.9.1"
 androidx-test = "1.6.1"
-sqlite-jdbc = "3.46.0.0"
+androidx-test-runner = "1.6.2"
+sqlite-jdbc = "3.47.1.0"
 
 [libraries]
 
@@ -18,12 +19,10 @@ kotlinx-coroutines = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutin
 
 androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "androidx-annotation" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidx-test" }
-androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidx-test" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidx-test-runner" }
 androidx-test-rules = { group = "androidx.test", name = "rules", version.ref = "androidx-test" }
 
 sqlite-jdbc = { group = "org.xerial", name = "sqlite-jdbc", version.ref = "sqlite-jdbc" }
-
-
 
 [plugins]
 

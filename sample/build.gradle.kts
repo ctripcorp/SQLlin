@@ -1,4 +1,5 @@
-import org.jetbrains.kotlin.gradle.dsl.KotlinCompile
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -14,21 +15,21 @@ kotlin {
         publishLibraryVariants("release")
     }
     jvm {
-        compilations.all {
-            kotlinOptions {
-                jvmTarget = "11"
-            }
-        }
+        compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
     }
     iosX64()
     iosArm64()
     iosSimulatorArm64()
+
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
     
     sourceSets {
         all {
             languageSettings.optIn("kotlin.RequiresOptIn")
         }
-        val commonMain by getting {
+        commonMain {
             kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
             dependencies {
                 implementation(project(":sqllin-dsl"))
@@ -41,13 +42,13 @@ kotlin {
 
 android {
     namespace = "com.ctrip.sqllin.sample"
-    compileSdk = 34
+    compileSdk = 35
     defaultConfig {
         minSdk = 23
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 
@@ -55,15 +56,11 @@ dependencies {
     add("kspCommonMainMetadata", project(":sqllin-processor"))
 }
 
-afterEvaluate {  // WORKAROUND: both register() and named() fail – https://github.com/gradle/gradle/issues/9331
+afterEvaluate { // WORKAROUND: both register() and named() fail – https://github.com/gradle/gradle/issues/9331
     tasks {
-        withType<KotlinCompile<*>> {
+        withType<KotlinCompilationTask<*>> {
             if (name != "kspCommonMainKotlinMetadata")
                 dependsOn("kspCommonMainKotlinMetadata")
         }
     }
-}
-
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    compilerOptions.freeCompilerArgs.add("-Xexpect-actual-classes")
 }

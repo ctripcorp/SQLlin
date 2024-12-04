@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetTree
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import org.jetbrains.kotlin.konan.target.HostManager
@@ -16,20 +17,16 @@ val VERSION: String by project
 group = GROUP
 version = VERSION
 
+@OptIn(ExperimentalKotlinGradlePluginApi::class)
 kotlin {
     explicitApi()
     androidTarget {
         publishLibraryVariants("release")
-        @OptIn(ExperimentalKotlinGradlePluginApi::class)
         instrumentedTestVariant.sourceSetTree.set(KotlinSourceSetTree.test)
     }
 
     jvm {
-        compilations.all {
-            kotlinOptions {
-                jvmTarget = "11"
-            }
-        }
+        compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
     }
 
     listOf(
@@ -58,12 +55,8 @@ kotlin {
         it.setupNativeConfig()
     }
 
-    targets.configureEach {
-        compilations.configureEach {
-            compilerOptions.configure {
-                freeCompilerArgs.add("-Xexpect-actual-classes")
-            }
-        }
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
     }
     
     sourceSets {
@@ -72,29 +65,20 @@ kotlin {
                 optIn("kotlin.RequiresOptIn")
             }
         }
-        val commonTest by getting {
-            dependencies {
-                implementation(kotlin("test"))
-                implementation(libs.kotlinx.coroutines)
-            }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines)
         }
-        val androidMain by getting {
-            dependencies {
-                implementation(libs.androidx.annotation)
-            }
+        androidMain.dependencies {
+            implementation(libs.androidx.annotation)
         }
-        val androidInstrumentedTest by getting {
-            dependencies {
-                implementation(libs.androidx.test.core)
-                implementation(libs.androidx.test.runner)
-                implementation(libs.androidx.test.rules)
-            }
+        androidInstrumentedTest.dependencies {
+            implementation(libs.androidx.test.core)
+            implementation(libs.androidx.test.runner)
+            implementation(libs.androidx.test.rules)
         }
-
-        val jvmMain by getting {
-            dependencies {
-                implementation(libs.sqlite.jdbc)
-            }
+        jvmMain.dependencies {
+            implementation(libs.sqlite.jdbc)
         }
     }
 }
@@ -116,14 +100,14 @@ gradle.taskGraph.whenReady {
 
 android {
     namespace = "com.ctrip.sqllin.driver"
-    compileSdk = 34
+    compileSdk = 35
     defaultConfig {
         minSdk = 23
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 
