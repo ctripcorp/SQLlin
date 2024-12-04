@@ -65,29 +65,20 @@ kotlin {
                 optIn("kotlin.RequiresOptIn")
             }
         }
-        val commonTest by getting {
-            dependencies {
-                implementation(kotlin("test"))
-                implementation(libs.kotlinx.coroutines)
-            }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines)
         }
-        val androidMain by getting {
-            dependencies {
-                implementation(libs.androidx.annotation)
-            }
+        androidMain.dependencies {
+            implementation(libs.androidx.annotation)
         }
-        val androidInstrumentedTest by getting {
-            dependencies {
-                implementation(libs.androidx.test.core)
-                implementation(libs.androidx.test.runner)
-                implementation(libs.androidx.test.rules)
-            }
+        androidInstrumentedTest.dependencies {
+            implementation(libs.androidx.test.core)
+            implementation(libs.androidx.test.runner)
+            implementation(libs.androidx.test.rules)
         }
-
-        val jvmMain by getting {
-            dependencies {
-                implementation(libs.sqlite.jdbc)
-            }
+        jvmMain.dependencies {
+            implementation(libs.sqlite.jdbc)
         }
     }
 }
@@ -109,14 +100,14 @@ gradle.taskGraph.whenReady {
 
 android {
     namespace = "com.ctrip.sqllin.driver"
-    compileSdk = 34
+    compileSdk = 35
     defaultConfig {
         minSdk = 23
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 

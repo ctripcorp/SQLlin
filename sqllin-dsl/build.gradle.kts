@@ -1,5 +1,6 @@
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetTree
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import org.jetbrains.kotlin.konan.target.HostManager
@@ -67,27 +68,85 @@ kotlin {
                 optIn("kotlin.RequiresOptIn")
             }
         }
-        val commonMain by getting {
-            dependencies {
-                api(project(":sqllin-driver"))
-                implementation(libs.kotlinx.serialization)
-                implementation(libs.kotlinx.coroutines)
-            }
+        commonMain.dependencies {
+            api(project(":sqllin-driver"))
+            implementation(libs.kotlinx.serialization)
+            implementation(libs.kotlinx.coroutines)
         }
-        val commonTest by getting {
-            dependencies {
-                implementation(kotlin("test"))
-            }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
         }
-        val androidInstrumentedTest by getting {
+        androidInstrumentedTest {
+            setCommonTestDir()
             dependencies {
                 implementation(libs.androidx.test.core)
                 implementation(libs.androidx.test.runner)
                 implementation(libs.androidx.test.rules)
             }
         }
+        jvmTest {
+            setCommonTestDir()
+        }
+
+        iosX64Test {
+            setNativeTestDir()
+        }
+        iosArm64Test {
+            setNativeTestDir()
+        }
+        iosSimulatorArm64Test {
+            setNativeTestDir()
+        }
+
+
+        macosX64Test {
+            setNativeTestDir()
+        }
+        macosArm64Test {
+            setNativeTestDir()
+        }
+
+        watchosX64Test {
+            setNativeTestDir()
+        }
+        watchosArm32Test {
+            setNativeTestDir()
+        }
+        watchosArm64Test {
+            setNativeTestDir()
+        }
+        watchosDeviceArm64Test {
+            setNativeTestDir()
+        }
+        watchosSimulatorArm64Test {
+            setNativeTestDir()
+        }
+
+        tvosX64Test {
+            setNativeTestDir()
+        }
+        tvosArm64Test {
+            setNativeTestDir()
+        }
+        tvosSimulatorArm64Test {
+            setNativeTestDir()
+        }
+
+        linuxX64Test {
+            setNativeTestDir()
+        }
+        linuxArm64Test {
+            setNativeTestDir()
+        }
+
+        mingwX64Test {
+            setNativeTestDir()
+        }
     }
 }
+
+fun KotlinSourceSet.setCommonTestDir(vararg path: String) = kotlin.srcDirs("src/commonTestCode/kotlin", path)
+fun KotlinSourceSet.setNativeTestDir() = setCommonTestDir("src/nativeTestCode/kotlin")
 
 gradle.taskGraph.whenReady {
     if (!project.hasProperty("onCICD"))
@@ -106,14 +165,14 @@ gradle.taskGraph.whenReady {
 
 android {
     namespace = "com.ctrip.sqllin.dsl"
-    compileSdk = 34
+    compileSdk = 35
     defaultConfig {
         minSdk = 23
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 
@@ -145,6 +204,7 @@ dependencies {
         "kspWatchosX64Test",
         "kspWatchosArm32Test",
         "kspWatchosArm64Test",
+        "kspWatchosDeviceArm64Test",
         "kspWatchosSimulatorArm64Test",
 
         "kspTvosX64Test",
@@ -152,6 +212,7 @@ dependencies {
         "kspTvosSimulatorArm64Test",
 
         "kspLinuxX64Test",
+        "kspLinuxArm64Test",
 
         "kspMingwX64Test",
     )

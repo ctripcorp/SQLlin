@@ -2,24 +2,24 @@
 
 - Date format: YYYY-MM-dd
 
-## v1.4.0 / 2024-09-02
+## v1.4.0 / 2024-12-04
 
 ### All
 
-* Update `Kotlin`'s version to `2.0.20`
+* Update `Kotlin`'s version to `2.1.00`
 
 ### sqllin-dsl
 
-* Update `kotlinx.coroutines`'s version to `1.8.1`
-* Update `kotlinx.serialization`'s version to `1.7.2`
+* Update `kotlinx.coroutines`'s version to `1.9.0`
+* Update `kotlinx.serialization`'s version to `1.7.3`
 
 ### sqllin-driver
 
-* Update the `sqlite-jdbc`'s version to `3.46.1.0`
+* Update the `sqlite-jdbc`'s version to `3.47.1.0`
 
 ### sqllin-processor
 
-* Update `KSP`'s version to `2.0.20-1.0.24`
+* Update `KSP`'s version to `2.1.0-1.0.29`
 
 ## v1.3.2 / 2024-06-18
 

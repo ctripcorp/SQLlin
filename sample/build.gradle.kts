@@ -1,4 +1,3 @@
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
@@ -11,7 +10,6 @@ plugins {
 
 version = "1.0"
 
-@OptIn(ExperimentalKotlinGradlePluginApi::class)
 kotlin {
     androidTarget {
         publishLibraryVariants("release")
@@ -31,7 +29,7 @@ kotlin {
         all {
             languageSettings.optIn("kotlin.RequiresOptIn")
         }
-        val commonMain by getting {
+        commonMain {
             kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
             dependencies {
                 implementation(project(":sqllin-dsl"))
@@ -44,13 +42,13 @@ kotlin {
 
 android {
     namespace = "com.ctrip.sqllin.sample"
-    compileSdk = 34
+    compileSdk = 35
     defaultConfig {
         minSdk = 23
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 
