@@ -29,4 +29,4 @@ import platform.posix._wgetcwd
 internal actual fun getPlatformStringPath(): String =
     _wgetcwd(null, 0)?.toKString() ?: throw IllegalStateException("Get database path wrong")
 
-// actual val pathSeparator: Char = '\\'
+internal actual val pathSeparator: Char = '\\'
