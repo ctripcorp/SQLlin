@@ -6,7 +6,7 @@
 
 ### All
 
-* Update `Kotlin`'s version to `2.1.00`
+* Update `Kotlin`'s version to `2.1.0`
 
 ### sqllin-dsl
 

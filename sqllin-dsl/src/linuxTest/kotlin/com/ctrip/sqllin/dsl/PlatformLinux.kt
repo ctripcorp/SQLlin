@@ -16,17 +16,17 @@
 
 package com.ctrip.sqllin.dsl
 
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.toKString
+import platform.posix.getcwd
+
 /**
- * Some platform-related functions
+ * Linux platform-related functions
  * @author yaqiao
  */
 
-/**
- * Get the DatabasePath
- */
-internal expect fun getPlatformStringPath(): String
+@OptIn(ExperimentalForeignApi::class)
+internal actual fun getPlatformStringPath(): String =
+    getcwd(null, 0u)?.toKString() ?: throw IllegalStateException("The temp path created error")
 
-/**
- * Get the file path separator, '\' in Windows, '/' in others
- */
-// expect val pathSeparator: Char
+internal actual val pathSeparator: Char = '/'

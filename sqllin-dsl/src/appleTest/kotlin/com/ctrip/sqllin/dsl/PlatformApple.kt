@@ -30,4 +30,4 @@ import platform.Foundation.NSUserDomainMask
 internal actual fun getPlatformStringPath(): String =
     (NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, true).firstOrNull() as? String ?: "")
 
-// actual val pathSeparator: Char = '/'
+internal actual val pathSeparator: Char = '/'
