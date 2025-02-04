@@ -16,6 +16,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.statement.JoinSelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.JoinStatementWithoutCondition
@@ -44,11 +45,14 @@ public sealed class NaturalJoinClause<R>(vararg tables: Table<*>) : BaseJoinClau
 
 public sealed class JoinClause<R>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables)
 
+@StatementDslMaker
 public infix fun <R> JoinStatementWithoutCondition<R>.ON(condition: SelectCondition): JoinSelectStatement<R> =
     convertToJoinSelectStatement(condition)
 
+@StatementDslMaker
 public inline infix fun <R> JoinStatementWithoutCondition<R>.USING(clauseElement: ClauseElement): JoinSelectStatement<R> =
     USING(listOf(clauseElement))
 
+@StatementDslMaker
 public infix fun <R> JoinStatementWithoutCondition<R>.USING(clauseElements: Iterable<ClauseElement>): JoinSelectStatement<R> =
     convertToJoinSelectStatement(clauseElements)

@@ -16,6 +16,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.Table
 
 /**
@@ -30,8 +31,10 @@ internal class InnerJoinClause<R>(
     override val clauseName: String = " JOIN "
 }
 
+@StatementDslMaker
 public fun <R> JOIN(vararg tables: Table<*>): JoinClause<R> = InnerJoinClause(*tables)
 
+@StatementDslMaker
 public inline fun <R> INNER_JOIN(vararg tables: Table<*>): JoinClause<R> = JOIN(*tables)
 
 internal class NaturalInnerJoinClause<R>(
@@ -41,6 +44,8 @@ internal class NaturalInnerJoinClause<R>(
     override val clauseName: String = " NATURAL JOIN "
 }
 
+@StatementDslMaker
 public fun <R> NATURAL_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NaturalInnerJoinClause(*tables)
 
+@StatementDslMaker
 public inline fun <R> NATURAL_INNER_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NATURAL_JOIN(*tables)

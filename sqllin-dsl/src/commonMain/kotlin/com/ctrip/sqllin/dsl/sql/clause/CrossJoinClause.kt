@@ -16,6 +16,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.Table
 
 /**
@@ -27,4 +28,5 @@ internal class CrossJoinClause<R>(vararg tables: Table<*>) : NaturalJoinClause<R
     override val clauseName: String = " CROSS JOIN "
 }
 
+@StatementDslMaker
 public fun <R> CROSS_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = CrossJoinClause(*tables)

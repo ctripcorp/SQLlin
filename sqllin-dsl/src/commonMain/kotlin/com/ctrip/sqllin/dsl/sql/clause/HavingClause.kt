@@ -16,6 +16,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.statement.GroupBySelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.HavingSelectStatement
 
@@ -29,6 +30,7 @@ internal class HavingClause<T>(val selectCondition: SelectCondition) : Condition
     override val clauseName: String = "HAVING"
 }
 
+@StatementDslMaker
 public infix fun <T> GroupBySelectStatement<T>.HAVING(condition: SelectCondition): HavingSelectStatement<T> =
     appendToHaving(HavingClause(condition)).also {
         container changeLastStatement it

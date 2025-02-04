@@ -16,6 +16,8 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
+
 /**
  * Present the single prediction in set clause
  * @author yaqiao
@@ -55,4 +57,5 @@ public class SetClause<T> : Clause<T> {
     }.toString()
 }
 
+@StatementDslMaker
 public inline fun <T> SET(block: SetClause<T>.() -> Unit): SetClause<T> = SetClause<T>().apply(block)
