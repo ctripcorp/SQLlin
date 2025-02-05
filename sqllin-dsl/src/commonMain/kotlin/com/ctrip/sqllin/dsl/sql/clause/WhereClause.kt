@@ -16,6 +16,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.statement.JoinSelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.UpdateDeleteStatement
 import com.ctrip.sqllin.dsl.sql.statement.UpdateStatementWithoutWhereClause
@@ -33,13 +34,16 @@ public class WhereClause<T> internal constructor(
     override val clauseName: String = "WHERE"
 }
 
+@StatementDslMaker
 public fun <T> WHERE(condition: SelectCondition): WhereClause<T> = WhereClause(condition)
 
+@StatementDslMaker
 public infix fun <T> JoinSelectStatement<T>.WHERE(condition: SelectCondition): WhereSelectStatement<T> =
     appendToWhere(WhereClause(condition)).also {
         container changeLastStatement it
     }
 
+@StatementDslMaker
 public infix fun <T> UpdateStatementWithoutWhereClause<T>.WHERE(condition: SelectCondition): String {
     val statement = UpdateDeleteStatement(buildString {
         append(sqlStr)

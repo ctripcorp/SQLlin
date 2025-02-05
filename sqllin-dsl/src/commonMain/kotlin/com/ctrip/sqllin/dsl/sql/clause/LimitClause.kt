@@ -16,6 +16,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.statement.*
 
 /**
@@ -30,23 +31,28 @@ public class LimitClause<T> internal constructor(
         get() = " LIMIT $count"
 }
 
+@StatementDslMaker
 public fun <T> LIMIT(count: Int): LimitClause<T> = LimitClause(count)
 
+@StatementDslMaker
 public infix fun <T> WhereSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
         container changeLastStatement it
     }
 
+@StatementDslMaker
 public infix fun <T> OrderBySelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
         container changeLastStatement it
     }
 
+@StatementDslMaker
 public infix fun <T> HavingSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
         container changeLastStatement it
     }
 
+@StatementDslMaker
 public infix fun <T> JoinSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
         container changeLastStatement it
@@ -63,6 +69,7 @@ public class OffsetClause<T> internal constructor(
         get() = " OFFSET $rowNo"
 }
 
+@StatementDslMaker
 public infix fun <T> LimitSelectStatement<T>.OFFSET(rowNo: Int): FinalSelectStatement<T> =
     appendToFinal(OffsetClause(rowNo)).also {
         container changeLastStatement it

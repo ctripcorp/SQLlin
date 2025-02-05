@@ -69,14 +69,13 @@ class ClauseProcessor(
             OutputStreamWriter(outputStream).use { writer ->
                 writer.write("package $packageName\n\n")
 
+                writer.write("import com.ctrip.sqllin.dsl.annotation.ColumnNameDslMaker\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseBoolean\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseNumber\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseString\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.SetClause\n")
-                writer.write("import com.ctrip.sqllin.dsl.sql.Table\n")
-                writer.write("import kotlinx.serialization.ExperimentalSerializationApi\n\n")
+                writer.write("import com.ctrip.sqllin.dsl.sql.Table\n\n")
 
-                writer.write("@OptIn(ExperimentalSerializationApi::class)\n")
                 writer.write("object $objectName : Table<$className>(\"$tableName\") {\n\n")
 
                 writer.write("    override fun kSerializer() = $className.serializer()\n\n")
@@ -91,10 +90,12 @@ class ClauseProcessor(
                     val elementName = "$className.serializer().descriptor.getElementName($index)"
 
                     // Write 'SelectClause' code.
+                    writer.write("    @ColumnNameDslMaker\n")
                     writer.write("    val $propertyName\n")
                     writer.write("        get() = $clauseElementTypeName($elementName, this, false)\n\n")
 
                     // Write 'SetClause' code.
+                    writer.write("    @ColumnNameDslMaker\n")
                     val isNotNull = property.type.resolve().nullability == Nullability.NOT_NULL
                     writer.write("    var SetClause<$className>.$propertyName: ${property.typeName}")
                     val nullableSymbol = if (isNotNull) "\n" else "?\n"

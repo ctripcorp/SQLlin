@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Ctrip.com.
+ * Copyright (C) 2025 Ctrip.com.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,21 @@
  * limitations under the License.
  */
 
-package com.ctrip.sqllin.dsl.sql
-
-import com.ctrip.sqllin.dsl.annotation.KeyWordDslMaker
+package com.ctrip.sqllin.dsl.annotation
 
 /**
- * Express "*" in SQL
+ * Dsl maker annotations
  * @author yaqiao
  */
 
-@KeyWordDslMaker
-public expect object X
+@DslMarker
+public annotation class StatementDslMaker
+
+@DslMarker
+public annotation class KeyWordDslMaker
+
+@DslMarker
+public annotation class FunctionDslMaker
+
+@DslMarker
+public annotation class ColumnNameDslMaker

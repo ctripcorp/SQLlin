@@ -16,6 +16,8 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.KeyWordDslMaker
+import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.statement.*
 
 /**
@@ -47,40 +49,52 @@ internal class CompleteOrderByClause<T>(private val column2WayMap: Map<ClauseEle
 }
 
 public enum class OrderByWay(internal val str: String) {
+    @KeyWordDslMaker
     ASC("ASC"),
+
+    @KeyWordDslMaker
     DESC("DESC")
 }
 
+@StatementDslMaker
 public fun <T> ORDER_BY(vararg column2Ways: Pair<ClauseElement, OrderByWay>): OrderByClause<T> =
     CompleteOrderByClause(mapOf(*column2Ways))
 
+@StatementDslMaker
 public inline infix fun <T> WhereSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     ORDER_BY(mapOf(column2Way))
 
+@StatementDslMaker
 public infix fun <T> WhereSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
         container changeLastStatement it
     }
 
+@StatementDslMaker
 public inline infix fun <T> HavingSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     ORDER_BY(mapOf(column2Way))
 
+@StatementDslMaker
 public infix fun <T> HavingSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
         container changeLastStatement it
     }
 
+@StatementDslMaker
 public inline infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     ORDER_BY(mapOf(column2Way))
 
+@StatementDslMaker
 public infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
         container changeLastStatement it
     }
 
+@StatementDslMaker
 public inline infix fun <T> JoinSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     ORDER_BY(mapOf(column2Way))
 
+@StatementDslMaker
 public infix fun <T> JoinSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement, OrderByWay>): OrderBySelectStatement<T> =
     appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
         container changeLastStatement it
@@ -102,36 +116,46 @@ internal class SimpleOrderByClause<T>(private val columns: Iterable<ClauseElemen
             }
         }
 }
+
+@StatementDslMaker
 public fun <T> ORDER_BY(vararg elements: ClauseElement): OrderByClause<T> =
     SimpleOrderByClause(elements.toList())
 
+@StatementDslMaker
 public inline infix fun <T> WhereSelectStatement<T>.ORDER_BY(column: ClauseElement): OrderBySelectStatement<T> =
     ORDER_BY(listOf(column))
 
+@StatementDslMaker
 public infix fun <T> WhereSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement>): OrderBySelectStatement<T> =
     appendToOrderBy(SimpleOrderByClause(columns)).also {
         container changeLastStatement it
     }
 
+@StatementDslMaker
 public inline infix fun <T> HavingSelectStatement<T>.ORDER_BY(column: ClauseElement): OrderBySelectStatement<T> =
     ORDER_BY(listOf(column))
 
+@StatementDslMaker
 public infix fun <T> HavingSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement>): OrderBySelectStatement<T> =
     appendToOrderBy(SimpleOrderByClause(columns)).also {
         container changeLastStatement it
     }
 
+@StatementDslMaker
 public inline infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column: ClauseElement): OrderBySelectStatement<T> =
     ORDER_BY(listOf(column))
 
+@StatementDslMaker
 public infix fun <T> GroupBySelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement>): OrderBySelectStatement<T> =
     appendToOrderBy(SimpleOrderByClause(columns)).also {
         container changeLastStatement it
     }
 
+@StatementDslMaker
 public inline infix fun <T> JoinSelectStatement<T>.ORDER_BY(column: ClauseElement): OrderBySelectStatement<T> =
     ORDER_BY(listOf(column))
 
+@StatementDslMaker
 public infix fun <T> JoinSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement>): OrderBySelectStatement<T> =
     appendToOrderBy(SimpleOrderByClause(columns)).also {
         container changeLastStatement it

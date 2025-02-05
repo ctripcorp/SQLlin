@@ -2,6 +2,26 @@
 
 - Date format: YYYY-MM-dd
 
+## v1.4.1 / 2025-02-04
+
+### All
+
+* Update `Kotlin`'s version to `2.1.10`
+
+### sqllin-dsl
+
+* Update `kotlinx.coroutines`'s version to `1.10.1`
+* Update `kotlinx.serialization`'s version to `1.8.0`
+* Add some DslMaker annotations, make the DSL apis be more readable
+
+### sqllin-driver
+
+* Update the `sqlite-jdbc`'s version to `3.48.0.0`
+
+### sqllin-processor
+
+* Update `KSP`'s version to `2.1.10-1.0.29`
+
 ## v1.4.0 / 2024-12-04
 
 ### All
