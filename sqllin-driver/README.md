@@ -35,7 +35,7 @@ _sqllin-driver_ use the _New Native Driver_.
 Whatever, [SQLiter](https://github.com/touchlab/SQLiter) still is a good project. I referred to a lot of designs and code
 details from it and use them in _New Native Driver_ in _sqllin-driver_ .
 
-Since `1.2.0`, SQLlin started to support JVM target, and it's base on [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc).
+Since `1.2.0`, SQLlin started to support JVM target, and it's based on [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc).
 
 ## Basic usage
 

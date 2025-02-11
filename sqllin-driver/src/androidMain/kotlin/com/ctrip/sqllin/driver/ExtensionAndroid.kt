@@ -34,9 +34,9 @@ public fun Context.toDatabasePath(): DatabasePath = AndroidDatabasePath(this)
 internal value class AndroidDatabasePath(val context: Context) : DatabasePath
 
 public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && config.inMemory)
-        return AndroidDatabaseConnection(createInMemory(config.toAndroidOpenParams()))
     val isEqualsOrHigherThanAndroidP = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+    if (isEqualsOrHigherThanAndroidP && config.inMemory)
+        return AndroidDatabaseConnection(createInMemory(config.toAndroidOpenParams()))
     val helper = if (isEqualsOrHigherThanAndroidP)
         AndroidDBHelper(config)
     else
