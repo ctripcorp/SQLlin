@@ -16,7 +16,6 @@
 
 package com.ctrip.sqllin.driver
 
-import java.lang.IllegalStateException
 import java.sql.Connection
 
 import java.sql.PreparedStatement
