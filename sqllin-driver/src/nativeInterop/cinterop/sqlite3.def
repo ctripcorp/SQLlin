@@ -3,7 +3,6 @@ headers = sqlite3.h
 headerFilter = sqlite3*.h
 
 linkerOpts.linux = -lpthread -ldl
-linkerOpts.mingw = -lpthread
 
 noStringConversion = sqlite3_prepare_v2 sqlite3_prepare_v3
 

@@ -1,6 +1,12 @@
 # SQLlin Change Log
 
 - Date format: YYYY-MM-dd
+- 
+## v1.4.2 / 2025-xx-xx
+
+### sqllin-driver
+
+* Update the `sqlite-jdbc`'s version to `3.49.0.0`
 
 ## v1.4.1 / 2025-02-04
 
