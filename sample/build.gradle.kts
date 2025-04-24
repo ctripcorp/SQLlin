@@ -11,6 +11,7 @@ plugins {
 version = "1.0"
 
 kotlin {
+    jvmToolchain(21)
     androidTarget {
         publishLibraryVariants("release")
     }
@@ -47,12 +48,12 @@ android {
         minSdk = 23
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_21
+        isCoreLibraryDesugaringEnabled = true
     }
 }
 
 dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
     add("kspCommonMainMetadata", project(":sqllin-processor"))
 }
 
