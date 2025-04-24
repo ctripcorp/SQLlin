@@ -19,7 +19,7 @@
 
 ### sqllin-processor
 
-* Update `KSP`'s version to `2.1.20-1.0.32`
+* Update `KSP`'s version to `2.1.20-2.0.0`
 
 ## v1.4.1 / 2025-02-04
 
