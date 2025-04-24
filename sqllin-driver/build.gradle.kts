@@ -20,6 +20,7 @@ version = VERSION
 @OptIn(ExperimentalKotlinGradlePluginApi::class)
 kotlin {
     explicitApi()
+    jvmToolchain(21)
     androidTarget {
         publishLibraryVariants("release")
         instrumentedTestVariant.sourceSetTree.set(KotlinSourceSetTree.test)
@@ -106,8 +107,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_21
+        isCoreLibraryDesugaringEnabled = true
     }
 }
 
@@ -123,6 +123,10 @@ fun KotlinNativeTarget.setupNativeConfig() {
             else -> listOf("-lsqlite3")
         }
     }
+}
+
+dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 }
 
 val javadocJar: TaskProvider<Jar> by tasks.registering(Jar::class) {

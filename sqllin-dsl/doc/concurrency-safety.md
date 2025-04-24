@@ -1,19 +1,19 @@
 # Concurrency Safety
 
 Before the version `1.2.2`, _sqllin-dsl_ can't ensure the concurrency safety. If
-you want to share a `Database` object between different threads, that would lead to
+you want to share a `Database` instance between different threads, that would lead to
 unpredictable consequences. So, the best way is when you want to operate your
-database, create a `Database` object, and when you finish your operating, close it immediately.
+database, create a `Database` instance, and when you finish your operating, close it immediately.
 
 But, that's very inconvenient, we always have to create a database connection and
 close it frequently, this is a waste of resources. For example, if we are developing
 an Android app, and in a single page (Activity/Fragment), we hope we can keep a
-`Database` object, when we want to operate the database in background threads (or
+`Database` instance, when we want to operate the database in background threads (or
 coroutines), just use it, and, close it in certain lifecycle
 functions (`onDestroy`, `onStop`, etc.).
 
 At that time, we should make sure the concurrency safety that we share the `Database`
-object between different threads (or coroutines). So, start with the version `1.2.2`, we can
+instance between different threads (or coroutines). So, start with the version `1.2.2`, we can
 use the new API `Database#suspendedScope` to replace the usage of `database {}`. For
 example, if we have some old code:
 
@@ -49,7 +49,7 @@ fun sample() {
 ```
 
 The `suspendedScope` is a suspend function. Inside the `suspendedScope`, the all operations are
-atomic. That means: If you share the same `Database` object between two coroutines, it can ensure the
+atomic. That means: If you share the same `Database` instance between two coroutines, it can ensure the
 `suspendedScope` executing later will wait for the one executing earlier to finish.
 
 ## Next Step

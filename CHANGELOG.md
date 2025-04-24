@@ -1,12 +1,25 @@
 # SQLlin Change Log
 
 - Date format: YYYY-MM-dd
-- 
-## v1.4.2 / 2025-xx-xx
+
+## v1.4.2 / 2025-04-23
+
+### All
+
+* Update `Kotlin`'s version to `2.1.20`
+
+### sqllin-dsl
+
+* Update `kotlinx.coroutines`'s version to `1.10.2`
+* Update `kotlinx.serialization`'s version to `1.8.1`
 
 ### sqllin-driver
 
-* Update the `sqlite-jdbc`'s version to `3.49.0.0`
+* Update the `sqlite-jdbc`'s version to `3.49.1.0`
+
+### sqllin-processor
+
+* Update `KSP`'s version to `2.1.20-1.0.32`
 
 ## v1.4.1 / 2025-02-04
 

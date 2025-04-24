@@ -1,14 +1,15 @@
 [versions]
 
-kotlin = "2.1.10"
-agp = "8.7.3"
-ksp = "2.1.10-1.0.29"
-serialization = "1.8.0"
-coroutines = "1.10.1"
+kotlin = "2.1.20"
+agp = "8.9.2"
+ksp = "2.1.20-1.0.32"
+serialization = "1.8.1"
+coroutines = "1.10.2"
 androidx-annotation = "1.9.1"
 androidx-test = "1.6.1"
 androidx-test-runner = "1.6.2"
-sqlite-jdbc = "3.49.0.0"
+sqlite-jdbc = "3.49.1.0"
+desugar-jdk-libs = "2.1.5"
 
 [libraries]
 
@@ -23,6 +24,8 @@ androidx-test-runner = { group = "androidx.test", name = "runner", version.ref =
 androidx-test-rules = { group = "androidx.test", name = "rules", version.ref = "androidx-test" }
 
 sqlite-jdbc = { group = "org.xerial", name = "sqlite-jdbc", version.ref = "sqlite-jdbc" }
+
+desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugar-jdk-libs" }
 
 [plugins]
 
