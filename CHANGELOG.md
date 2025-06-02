@@ -2,6 +2,16 @@
 
 - Date format: YYYY-MM-dd
 
+## v1.4.3 / 2025-06-02
+
+### All
+
+* Update `Kotlin`'s version to `2.1.21`
+
+### sqllin-processor
+
+* Update `KSP`'s version to `2.1.21-2.0.1`
+
 ## v1.4.2 / 2025-04-23
 
 ### All
