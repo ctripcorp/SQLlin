@@ -12,6 +12,7 @@ local.properties
 /sqllin-driver/build
 /sqllin-dsl/build
 /sqllin-processor/build
+/sqllin-dsl-test/build
 /sample/build
 *.podspec
 .kotlin

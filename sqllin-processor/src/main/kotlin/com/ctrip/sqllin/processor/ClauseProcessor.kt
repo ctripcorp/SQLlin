@@ -58,7 +58,7 @@ class ClauseProcessor(
             val objectName = "${className}Table"
             val tableName = classDeclaration.annotations.find {
                 it.annotationType.resolve().declaration.qualifiedName?.asString() == ANNOTATION_DATABASE_ROW_NAME
-            }?.arguments?.first()?.value?.takeIf { (it as? String)?.isNotBlank() == true } ?: className
+            }?.arguments?.firstOrNull()?.value?.takeIf { (it as? String)?.isNotBlank() == true } ?: className
 
             val outputStream = environment.codeGenerator.createNewFile(
                 dependencies = classDeclaration.containingFile?.let { Dependencies(true, it) } ?: Dependencies(true),

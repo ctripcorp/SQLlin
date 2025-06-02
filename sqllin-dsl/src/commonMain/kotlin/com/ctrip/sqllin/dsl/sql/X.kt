@@ -24,4 +24,4 @@ import com.ctrip.sqllin.dsl.annotation.KeyWordDslMaker
  */
 
 @KeyWordDslMaker
-public expect object X
+public object X
