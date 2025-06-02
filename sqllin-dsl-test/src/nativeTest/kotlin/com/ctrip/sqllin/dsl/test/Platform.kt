@@ -14,14 +14,19 @@
  * limitations under the License.
  */
 
-package com.ctrip.sqllin.dsl.sql
-
-import com.ctrip.sqllin.dsl.annotation.KeyWordDslMaker
+package com.ctrip.sqllin.dsl.test
 
 /**
- * Express "*" in SQL
+ * Some platform-related functions
  * @author yaqiao
  */
 
-@KeyWordDslMaker
-public object X
+/**
+ * Get the DatabasePath
+ */
+internal expect fun getPlatformStringPath(): String
+
+/**
+ * Get the file path separator, '\' in Windows, '/' in others
+ */
+internal expect val pathSeparator: Char

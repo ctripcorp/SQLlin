@@ -70,7 +70,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-34
+          key: avd-35
 
       - name: Create AVD and Generate Snapshot for Caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -154,10 +154,10 @@ jobs:
         run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary
 
       - name: Run sqllin-dsl MinGW X64 Tests
-        run: ./gradlew :sqllin-dsl:cleanMingwX64Test && ./gradlew :sqllin-dsl:mingwX64Test --stacktrace
+        run: ./gradlew :sqllin-dsl-test:cleanMingwX64Test && ./gradlew :sqllin-dsl-test:mingwX64Test --stacktrace
 
       - name: Run sqllin-dsl JVM Unit Tests on MinGW X64
-        run: ./gradlew :sqllin-dsl:cleanJvmTest && ./gradlew :sqllin-dsl:jvmTest --stacktrace
+        run: ./gradlew :sqllin-dsl-test:cleanJvmTest && ./gradlew :sqllin-dsl-test:jvmTest --stacktrace
 
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v4

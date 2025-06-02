@@ -14,14 +14,20 @@
  * limitations under the License.
  */
 
-package com.ctrip.sqllin.dsl.sql
+package com.ctrip.sqllin.dsl.test
 
-import com.ctrip.sqllin.dsl.annotation.KeyWordDslMaker
+import kotlinx.cinterop.UnsafeNumber
+import platform.Foundation.NSDocumentDirectory
+import platform.Foundation.NSSearchPathForDirectoriesInDomains
+import platform.Foundation.NSUserDomainMask
 
 /**
- * Express "*" in SQL
+ * Apple platform-related functions
  * @author yaqiao
  */
 
-@KeyWordDslMaker
-public object X
+@OptIn(UnsafeNumber::class)
+internal actual fun getPlatformStringPath(): String =
+    (NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, true).firstOrNull() as? String ?: "")
+
+internal actual val pathSeparator: Char = '/'
