@@ -17,7 +17,7 @@ version = "1.0"
 
 @OptIn(ExperimentalKotlinGradlePluginApi::class)
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(libs.versions.jvm.toolchain.get().toInt())
     androidTarget {
         publishLibraryVariants("release")
         instrumentedTestVariant.sourceSetTree.set(KotlinSourceSetTree.test)
@@ -54,7 +54,7 @@ kotlin {
     }
 
     compilerOptions {
-        freeCompilerArgs.add("-Xexpect-actual-classes")
+        freeCompilerArgs.addAll("-Xexpect-actual-classes", "-Xcontext-parameters", "-Xnested-type-aliases")
     }
     
     sourceSets {
@@ -84,9 +84,9 @@ kotlin {
 
 android {
     namespace = "com.ctrip.sqllin.dsl.test"
-    compileSdk = 35
+    compileSdk = libs.versions.android.sdk.compile.get().toInt()
     defaultConfig {
-        minSdk = 23
+        minSdk = libs.versions.android.sdk.min.get().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {

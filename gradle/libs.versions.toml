@@ -1,15 +1,19 @@
 [versions]
 
-kotlin = "2.1.21"
-agp = "8.9.3"
-ksp = "2.1.21-2.0.1"
-serialization = "1.8.1"
+kotlin = "2.2.0"
+agp = "8.10.1"
+ksp = "2.2.0-2.0.2"
+serialization = "1.9.0"
 coroutines = "1.10.2"
 androidx-annotation = "1.9.1"
 androidx-test = "1.6.1"
 androidx-test-runner = "1.6.2"
-sqlite-jdbc = "3.49.1.0"
+sqlite-jdbc = "3.50.2.0"
 desugar-jdk-libs = "2.1.5"
+jvm-toolchain = "21"
+android-sdk-compile = "36"
+android-sdk-min = "23"
+vanniktech-maven-publish = "0.33.0"
 
 [libraries]
 
@@ -34,4 +38,4 @@ kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlinx-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
-maven-publish = { id = "maven-publish" }
+vanniktech-maven-publish = { id = "com.vanniktech.maven.publish",  version.ref = "vanniktech-maven-publish" }

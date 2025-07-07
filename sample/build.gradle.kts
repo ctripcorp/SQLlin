@@ -11,7 +11,7 @@ plugins {
 version = "1.0"
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(libs.versions.jvm.toolchain.get().toInt())
     androidTarget {
         publishLibraryVariants("release")
     }
@@ -23,7 +23,7 @@ kotlin {
     iosSimulatorArm64()
 
     compilerOptions {
-        freeCompilerArgs.add("-Xexpect-actual-classes")
+        freeCompilerArgs.addAll("-Xexpect-actual-classes", "-Xcontext-parameters", "-Xnested-type-aliases")
     }
     
     sourceSets {
@@ -43,9 +43,9 @@ kotlin {
 
 android {
     namespace = "com.ctrip.sqllin.sample"
-    compileSdk = 35
+    compileSdk = libs.versions.android.sdk.compile.get().toInt()
     defaultConfig {
-        minSdk = 23
+        minSdk = libs.versions.android.sdk.min.get().toInt()
     }
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
