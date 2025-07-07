@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
 
 env:
-  ORG_GRADLE_PROJECT_NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-  ORG_GRADLE_PROJECT_NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-  ORG_GRADLE_PROJECT_SIGNING_KEY_ID: ${{ secrets.SIGNING_KEY_ID }}
-  ORG_GRADLE_PROJECT_SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-  ORG_GRADLE_PROJECT_SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+  ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+  ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+  ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+  ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.SIGNING_KEY_ID }}
+  ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
 
 jobs:
 
@@ -84,7 +84,7 @@ jobs:
         run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary
 
       - name: Publish to MavenCentral
-        run: ./gradlew :sqllin-driver:publishMingwX64PublicationToMavenRepository && ./gradlew :sqllin-dsl:publishMingwX64PublicationToMavenRepository
+        run: ./gradlew :sqllin-driver:publishMingwX64PublicationToMavenCentralRepository && ./gradlew :sqllin-dsl:publishMingwX64PublicationToMavenCentralRepository
 
   build-on-linux:
     runs-on: ubuntu-latest

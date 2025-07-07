@@ -7,20 +7,19 @@ import org.jetbrains.kotlin.konan.target.HostManager
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.library)
-    alias(libs.plugins.maven.publish)
-    signing
+    alias(libs.plugins.vanniktech.maven.publish)
 }
 
-val GROUP: String by project
+val GROUP_ID: String by project
 val VERSION: String by project
 
-group = GROUP
+group = GROUP_ID
 version = VERSION
 
 @OptIn(ExperimentalKotlinGradlePluginApi::class)
 kotlin {
     explicitApi()
-    jvmToolchain(21)
+    jvmToolchain(libs.versions.jvm.toolchain.get().toInt())
     androidTarget {
         publishLibraryVariants("release")
         instrumentedTestVariant.sourceSetTree.set(KotlinSourceSetTree.test)
@@ -57,7 +56,7 @@ kotlin {
     }
 
     compilerOptions {
-        freeCompilerArgs.add("-Xexpect-actual-classes")
+        freeCompilerArgs.addAll("-Xexpect-actual-classes", "-Xcontext-parameters", "-Xnested-type-aliases")
     }
     
     sourceSets {
@@ -101,9 +100,9 @@ gradle.taskGraph.whenReady {
 
 android {
     namespace = "com.ctrip.sqllin.driver"
-    compileSdk = 35
+    compileSdk = libs.versions.android.sdk.compile.get().toInt()
     defaultConfig {
-        minSdk = 23
+        minSdk = libs.versions.android.sdk.min.get().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
@@ -129,66 +128,45 @@ dependencies {
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 }
 
-val javadocJar: TaskProvider<Jar> by tasks.registering(Jar::class) {
-    archiveClassifier.set("javadoc")
-}
+mavenPublishing {
+    publishToMavenCentral()
+    signAllPublications()
 
-publishing {
-    publications.withType<MavenPublication> {
-        artifact(javadocJar)
-        with(pom) {
-            name.set(artifactId)
-            description.set("Low-level API for SQLite on Kotlin Multiplatform")
-            val githubURL: String by project
+    val artifactId = "sqllin-driver"
+    coordinates(
+        groupId = GROUP_ID,
+        artifactId = artifactId,
+        version = VERSION,
+    )
+
+    pom {
+        name.set(artifactId)
+        description.set("Low-level API for SQLite on Kotlin Multiplatform")
+        val githubURL: String by project
+        url.set(githubURL)
+        licenses {
+            license {
+                val licenseName: String by project
+                name.set(licenseName)
+                val licenseURL: String by project
+                url.set(licenseURL)
+            }
+        }
+        developers {
+            developer {
+                val developerID: String by project
+                id.set(developerID)
+                val developerName: String by project
+                name.set(developerName)
+                val developerEmail: String by project
+                email.set(developerEmail)
+            }
+        }
+        scm {
             url.set(githubURL)
-            licenses {
-                license {
-                    val licenseName: String by project
-                    name.set(licenseName)
-                    val licenseURL: String by project
-                    url.set(licenseURL)
-                }
-            }
-            developers {
-                developer {
-                    val developerID: String by project
-                    id.set(developerID)
-                    val developerName: String by project
-                    name.set(developerName)
-                    val developerEmail: String by project
-                    email.set(developerEmail)
-                }
-            }
-            scm {
-                url.set(githubURL)
-                val scmURL: String by project
-                connection.set(scmURL)
-                developerConnection.set(scmURL)
-            }
+            val scmURL: String by project
+            connection.set(scmURL)
+            developerConnection.set(scmURL)
         }
     }
-    repositories {
-        maven {
-            credentials {
-                val NEXUS_USERNAME: String by project
-                val NEXUS_PASSWORD: String by project
-                username = NEXUS_USERNAME
-                password = NEXUS_PASSWORD
-            }
-            val mavenRepositoryURL: String by project
-            url = uri(mavenRepositoryURL)
-        }
-    }
-    signing {
-        val SIGNING_KEY_ID: String by project
-        val SIGNING_KEY: String by project
-        val SIGNING_PASSWORD: String by project
-        useInMemoryPgpKeys(SIGNING_KEY_ID, SIGNING_KEY, SIGNING_PASSWORD)
-        sign(publishing.publications)
-    }
-}
-
-// TODO: remove after https://youtrack.jetbrains.com/issue/KT-46466 is fixed
-project.tasks.withType(AbstractPublishToMaven::class.java).configureEach {
-    dependsOn(project.tasks.withType(Sign::class.java))
 }
