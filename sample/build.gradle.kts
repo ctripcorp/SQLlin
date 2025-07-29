@@ -35,7 +35,7 @@ kotlin {
             dependencies {
                 implementation(project(":sqllin-dsl"))
                 implementation(libs.kotlinx.serialization)
-                implementation(libs.kotlinx.coroutines)
+                implementation(libs.kotlinx.coroutines.core)
             }
         }
     }

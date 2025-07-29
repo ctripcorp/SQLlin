@@ -47,6 +47,9 @@ class JvmTest {
     fun testJoinClause() = commonTest.testJoinClause()
 
     @Test
+    fun testConcurrency() = commonTest.testConcurrency()
+
+    @Test
     fun testPrimitiveTypeForKSP() = commonTest.testPrimitiveTypeForKSP()
 
     @Test

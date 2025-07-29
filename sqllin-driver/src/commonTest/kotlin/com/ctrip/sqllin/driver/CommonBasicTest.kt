@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.driver
 
 import kotlinx.coroutines.*
+import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
 
 /**
@@ -194,7 +195,7 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
-    fun testConcurrency() = runBlocking {
+    fun testConcurrency() = runTest {
         val readWriteConfig = getDefaultDBConfig(false)
         openDatabase(readWriteConfig) {
             launch(newSingleThreadContext("test0")) {

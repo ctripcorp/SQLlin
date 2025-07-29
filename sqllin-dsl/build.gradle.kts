@@ -61,7 +61,7 @@ kotlin {
         commonMain.dependencies {
             api(project(":sqllin-driver"))
             implementation(libs.kotlinx.serialization)
-            implementation(libs.kotlinx.coroutines)
+            implementation(libs.kotlinx.coroutines.core)
         }
     }
 }
