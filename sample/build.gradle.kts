@@ -47,13 +47,9 @@ android {
     defaultConfig {
         minSdk = libs.versions.android.sdk.min.get().toInt()
     }
-    compileOptions {
-        isCoreLibraryDesugaringEnabled = true
-    }
 }
 
 dependencies {
-    coreLibraryDesugaring(libs.desugar.jdk.libs)
     add("kspCommonMainMetadata", project(":sqllin-processor"))
 }
 

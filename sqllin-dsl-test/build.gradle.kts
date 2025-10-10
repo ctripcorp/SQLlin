@@ -90,9 +90,6 @@ android {
         minSdk = libs.versions.android.sdk.min.get().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-    compileOptions {
-        isCoreLibraryDesugaringEnabled = true
-    }
 }
 
 fun KotlinNativeTarget.setupNativeConfig() {
@@ -108,7 +105,6 @@ fun KotlinNativeTarget.setupNativeConfig() {
 }
 
 dependencies {
-    coreLibraryDesugaring(libs.desugar.jdk.libs)
     add("kspCommonMainMetadata", project(":sqllin-processor"))
 }
 
