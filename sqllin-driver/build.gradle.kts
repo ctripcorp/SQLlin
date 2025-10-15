@@ -67,7 +67,8 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
-            implementation(libs.kotlinx.coroutines)
+            implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.kotlinx.coroutines.test)
         }
         androidMain.dependencies {
             implementation(libs.androidx.annotation)
@@ -105,9 +106,6 @@ android {
         minSdk = libs.versions.android.sdk.min.get().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-    compileOptions {
-        isCoreLibraryDesugaringEnabled = true
-    }
 }
 
 fun KotlinNativeTarget.setupNativeConfig() {
@@ -122,10 +120,6 @@ fun KotlinNativeTarget.setupNativeConfig() {
             else -> listOf("-lsqlite3")
         }
     }
-}
-
-dependencies {
-    coreLibraryDesugaring(libs.desugar.jdk.libs)
 }
 
 mavenPublishing {

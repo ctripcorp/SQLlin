@@ -2,6 +2,21 @@
 
 - Date format: YYYY-MM-dd
 
+## 2.0.0 / 2025-10-xx
+
+### All
+
+* Update `Kotlin`'s version to `2.2.20`
+* Remove the Desuger configuration
+
+### sqllin-driver
+
+* Update the `sqlite-jdbc`'s version to `3.50.3.0`
+
+### sqllin-processor
+
+* Update `KSP`'s version to `2.2.20-2.0.4`
+
 ## 1.4.4 / 2025-07-07
 
 ### All

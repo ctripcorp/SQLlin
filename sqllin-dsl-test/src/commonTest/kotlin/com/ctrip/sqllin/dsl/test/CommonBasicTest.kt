@@ -24,9 +24,11 @@ import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.ASC
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 
@@ -77,7 +79,7 @@ class CommonBasicTest(private val path: DatabasePath) {
             }
         }
         assertEquals(true, statement!!.getResults().any { it == book1 })
-        assertEquals(true, statement!!.getResults().any { it == book2 })
+        assertEquals(true, statement.getResults().any { it == book2 })
 
         var statement1: SelectStatement<Book>? = null
         var statement2: SelectStatement<Book>? = null
@@ -105,7 +107,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
 
         assertEquals(true, statement!!.getResults().any { it == book1 })
-        assertEquals(true, statement!!.getResults().any { it == book2 })
+        assertEquals(true, statement.getResults().any { it == book2 })
 
         val book1NewPrice = 18.96
         val book2NewPrice = 21.95
@@ -124,7 +126,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
 
         assertEquals(true, newResult!!.getResults().any { it == newBook1 })
-        assertEquals(true, newResult!!.getResults().any { it == newBook2 })
+        assertEquals(true, newResult.getResults().any { it == newBook2 })
     }
 
     fun testSelectWhereClause() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
@@ -281,10 +283,10 @@ class CommonBasicTest(private val path: DatabasePath) {
             }
         }
         assertEquals(7, statement!!.getResults().size)
-        assertEquals(2, statement!!.getResults().count { it == book0 })
-        assertEquals(2, statement!!.getResults().count { it == book1 })
-        assertEquals(1, statement!!.getResults().count { it == book2 })
-        assertEquals(2, statement!!.getResults().count { it == book3 })
+        assertEquals(2, statement.getResults().count { it == book0 })
+        assertEquals(2, statement.getResults().count { it == book1 })
+        assertEquals(1, statement.getResults().count { it == book2 })
+        assertEquals(2, statement.getResults().count { it == book3 })
     }
 
     fun testFunction() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
@@ -370,11 +372,12 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(outerJoinStatementWithOn?.getResults()?.size, books.size)
     }
 
+    @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
     fun testConcurrency() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
-        runBlocking(Dispatchers.Default) {
+        runTest {
             val book1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
             val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
-            launch {
+            launch(newSingleThreadContext("test0")) {
                 lateinit var statement: SelectStatement<Book>
                 database suspendedScope {
                     statement = BookTable { table ->
@@ -385,7 +388,7 @@ class CommonBasicTest(private val path: DatabasePath) {
                 assertEquals(true, statement.getResults().any { it == book1 })
                 assertEquals(true, statement.getResults().any { it == book2 })
             }
-            launch {
+            launch(newSingleThreadContext("test1")) {
                 val book1NewPrice = 18.96
                 val book2NewPrice = 21.95
                 val newBook1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = book1NewPrice)
@@ -407,7 +410,7 @@ class CommonBasicTest(private val path: DatabasePath) {
 
     fun testPrimitiveTypeForKSP() {
         TestPrimitiveTypeForKSPTable {
-            SET<TestPrimitiveTypeForKSP> {
+            SET {
                 assertEquals(0, testInt)
                 assertEquals(0L, testLong)
                 assertEquals(0, testShort)

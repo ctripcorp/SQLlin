@@ -66,11 +66,12 @@ kotlin {
             dependencies {
                 implementation(project(":sqllin-dsl"))
                 implementation(libs.kotlinx.serialization)
-                implementation(libs.kotlinx.coroutines)
+                implementation(libs.kotlinx.coroutines.core)
             }
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
         }
         androidInstrumentedTest {
             dependencies {
@@ -89,9 +90,6 @@ android {
         minSdk = libs.versions.android.sdk.min.get().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-    compileOptions {
-        isCoreLibraryDesugaringEnabled = true
-    }
 }
 
 fun KotlinNativeTarget.setupNativeConfig() {
@@ -107,7 +105,6 @@ fun KotlinNativeTarget.setupNativeConfig() {
 }
 
 dependencies {
-    coreLibraryDesugaring(libs.desugar.jdk.libs)
     add("kspCommonMainMetadata", project(":sqllin-processor"))
 }
 

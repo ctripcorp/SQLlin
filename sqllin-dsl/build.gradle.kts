@@ -61,7 +61,7 @@ kotlin {
         commonMain.dependencies {
             api(project(":sqllin-driver"))
             implementation(libs.kotlinx.serialization)
-            implementation(libs.kotlinx.coroutines)
+            implementation(libs.kotlinx.coroutines.core)
         }
     }
 }
@@ -87,13 +87,6 @@ android {
     defaultConfig {
         minSdk = libs.versions.android.sdk.min.get().toInt()
     }
-    compileOptions {
-        isCoreLibraryDesugaringEnabled = true
-    }
-}
-
-dependencies {
-    coreLibraryDesugaring(libs.desugar.jdk.libs)
 }
 
 mavenPublishing {
