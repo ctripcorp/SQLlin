@@ -18,7 +18,7 @@ package com.ctrip.sqllin.dsl.annotation
 
 /**
  * Dsl maker annotations
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 @DslMarker

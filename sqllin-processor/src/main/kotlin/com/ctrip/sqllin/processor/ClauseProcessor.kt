@@ -149,6 +149,7 @@ class ClauseProcessor(
                 // Write the override instance for property `primaryKeyInfo`.
                 if (primaryKeyName == null && compositePrimaryKeys.isEmpty()) {
                     writer.write("    override val primaryKeyInfo = null\n\n")
+                    writer.write("}\n")
                     return@use
                 }
                 writer.write("    override val primaryKeyInfo = PrimaryKeyInfo(\n")

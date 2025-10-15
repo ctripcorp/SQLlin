@@ -53,7 +53,7 @@ internal object Create : Operation {
                     startsWith(FullNameCache.DOUBLE) -> " DOUBLE"
                     startsWith(FullNameCache.BOOLEAN) -> " BOOLEAN"
                     startsWith(FullNameCache.CHAR) -> " CHAR(1)"
-                    startsWith(FullNameCache.STRING) -> " STRING"
+                    startsWith(FullNameCache.STRING) -> " TEXT"
                     startsWith(FullNameCache.BYTE_ARRAY) -> " BLOB"
                     else -> throw IllegalStateException("Hasn't support the type '$this' yet")
                 }

@@ -33,50 +33,29 @@ internal fun <T> encodeEntities2InsertValues(
 ) = with(builder) {
     val isInsertId = table.primaryKeyInfo?.run {
         !isRowId || isInsertWithId
-    } ?: false
+    } ?: true
     val serializer = table.kSerializer()
     append('(')
     val primaryKeyIndex = appendDBColumnName(serializer.descriptor, table.primaryKeyInfo?.primaryKeyName, isInsertId)
+    if (primaryKeyIndex >= 0)
+        parameters.removeAt(primaryKeyIndex)
     append(')')
     append(" values ")
     val iterator = values.iterator()
-    if (isInsertId) {
-        fun appendNext() {
-            val value = iterator.next()
-            val encoder = InsertValuesEncoder(parameters)
-            encoder.encodeSerializableValue(serializer, value)
-            append(encoder.valuesSQL)
-        }
-        if (iterator.hasNext()) {
-            appendNext()
-        } else {
-            return@with
-        }
-        while (iterator.hasNext()) {
-            append(',')
-            appendNext()
-        }
+    fun appendNext() {
+        val value = iterator.next()
+        val encoder = InsertValuesEncoder(parameters)
+        encoder.encodeSerializableValue(serializer, value)
+        append(encoder.valuesSQL)
+    }
+    if (iterator.hasNext()) {
+        appendNext()
     } else {
-        var index = 0
-        fun appendNextWithoutPrimaryKey() {
-            val value = iterator.next()
-            if (index != primaryKeyIndex) {
-                val encoder = InsertValuesEncoder(parameters)
-                encoder.encodeSerializableValue(serializer, value)
-                append(encoder.valuesSQL)
-            }
-        }
-        if (iterator.hasNext()) {
-            appendNextWithoutPrimaryKey()
-            index++
-        } else {
-            return@with
-        }
-        while (iterator.hasNext()) {
-            append(',')
-            appendNextWithoutPrimaryKey()
-            index++
-        }
+        return@with
+    }
+    while (iterator.hasNext()) {
+        append(',')
+        appendNext()
     }
 }
 
@@ -88,7 +67,7 @@ internal fun StringBuilder.appendDBColumnName(
     appendDBColumnName(descriptor)
     -1
 } else {
-    var index = 0
+    var index = -1
     if (descriptor.elementsCount > 0) {
         val elementName = descriptor.getElementName(0)
         if (elementName != primaryKeyName)
@@ -98,7 +77,7 @@ internal fun StringBuilder.appendDBColumnName(
     }
     for (i in 1 ..< descriptor.elementsCount) {
         append(',')
-        val elementName = descriptor.getElementName(9)
+        val elementName = descriptor.getElementName(i)
         if (elementName != primaryKeyName)
             append(elementName)
         else

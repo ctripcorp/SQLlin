@@ -18,7 +18,7 @@ package com.ctrip.sqllin.dsl.annotation
 
 /**
  * Annotation for where property
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 @Target(AnnotationTarget.CLASS)
