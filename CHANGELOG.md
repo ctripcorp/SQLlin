@@ -9,6 +9,13 @@
 * Update `Kotlin`'s version to `2.2.20`
 * Remove the Desuger configuration
 
+### sqllin-dsl
+
+* Optimized performance for SQL assembly
+* New experimental API: `DatabaseScope#CREATE`
+* New experimental API: `DatabaseScope#DROP`
+* New experimental API: `DatabaseSceop#ALERT`
+
 ### sqllin-driver
 
 * Update the `sqlite-jdbc`'s version to `3.50.3.0`

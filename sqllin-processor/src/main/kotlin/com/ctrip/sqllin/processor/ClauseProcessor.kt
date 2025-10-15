@@ -27,7 +27,7 @@ import java.io.OutputStreamWriter
 
 /**
  * Generate the clause properties for data classes that present the database entity
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 class ClauseProcessor(
@@ -36,8 +36,15 @@ class ClauseProcessor(
 
     private companion object {
         const val ANNOTATION_DATABASE_ROW_NAME = "com.ctrip.sqllin.dsl.annotation.DBRow"
+        const val ANNOTATION_PRIMARY_KEY = "com.ctrip.sqllin.dsl.annotation.PrimaryKey"
+        const val ANNOTATION_COMPOSITE_PRIMARY_KEY = "com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey"
         const val ANNOTATION_SERIALIZABLE = "kotlinx.serialization.Serializable"
         const val ANNOTATION_TRANSIENT = "kotlinx.serialization.Transient"
+
+        const val PROMPT_CANT_ADD_BOTH_ANNOTATION = "You can't add both @PrimaryKey and @CompositePrimaryKey to the same property."
+        const val PROMPT_PRIMARY_KEY_MUST_NOT_NULL = "The primary key must be not-null."
+        const val PROMPT_PRIMARY_KEY_TYPE = """The primary key's type must be Long when you set the the parameter "isAutoincrement = true" in annotation PrimaryKey."""
+        const val PROMPT_PRIMARY_KEY_USE_COUNT = "You only could use PrimaryKey to annotate one property in a class."
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -74,6 +81,7 @@ class ClauseProcessor(
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseNumber\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseString\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.SetClause\n")
+                writer.write("import com.ctrip.sqllin.dsl.sql.PrimaryKeyInfo\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.Table\n\n")
 
                 writer.write("object $objectName : Table<$className>(\"$tableName\") {\n\n")
@@ -82,12 +90,43 @@ class ClauseProcessor(
 
                 writer.write("    inline operator fun <R> invoke(block: $objectName.(table: $objectName) -> R): R = this.block(this)\n\n")
                 val transientName = resolver.getClassDeclarationByName(ANNOTATION_TRANSIENT)!!.asStarProjectedType()
+                val primaryKeyAnnotationName = resolver.getClassDeclarationByName(ANNOTATION_PRIMARY_KEY)!!.asStarProjectedType()
+                val compositePrimaryKeyName = resolver.getClassDeclarationByName(ANNOTATION_COMPOSITE_PRIMARY_KEY)!!.asStarProjectedType()
+
+                var primaryKeyName: String? = null
+                var isAutomaticIncrement = false
+                var isRowId = false
+                val compositePrimaryKeys = ArrayList<String>()
+                var isContainsPrimaryKey = false
+
                 classDeclaration.getAllProperties().filter { classDeclaration ->
                     !classDeclaration.annotations.any { ksAnnotation -> ksAnnotation.annotationType.resolve().isAssignableFrom(transientName) }
                 }.forEachIndexed { index, property ->
                     val clauseElementTypeName = getClauseElementTypeStr(property) ?: return@forEachIndexed
                     val propertyName = property.simpleName.asString()
                     val elementName = "$className.serializer().descriptor.getElementName($index)"
+                    val isNotNull = property.type.resolve().nullability == Nullability.NOT_NULL
+
+                    // Collect the information of the primary key(s).
+                    val annotations = property.annotations.map { it.annotationType.resolve() }
+                    val isPrimaryKey = annotations.any { it.isAssignableFrom(primaryKeyAnnotationName) }
+                    val isLong = property.typeName == Long::class.qualifiedName
+                    if (isPrimaryKey) {
+                        check(!annotations.any { it.isAssignableFrom(compositePrimaryKeyName) }) { PROMPT_CANT_ADD_BOTH_ANNOTATION }
+                        check(!isNotNull) { PROMPT_PRIMARY_KEY_MUST_NOT_NULL }
+                        check(!isContainsPrimaryKey) { PROMPT_PRIMARY_KEY_USE_COUNT }
+                        isContainsPrimaryKey = true
+                        primaryKeyName = propertyName
+                        isAutomaticIncrement = property.annotations.find {
+                            it.annotationType.resolve().declaration.qualifiedName?.asString() == ANNOTATION_PRIMARY_KEY
+                        }?.arguments?.firstOrNull()?.value as? Boolean ?: false
+                        if (isAutomaticIncrement)
+                            check(isLong) { PROMPT_PRIMARY_KEY_TYPE }
+                        isRowId = isLong
+                    } else if (annotations.any { it.isAssignableFrom(compositePrimaryKeyName) }) {
+                        check(isNotNull) { PROMPT_PRIMARY_KEY_MUST_NOT_NULL }
+                        compositePrimaryKeys.add(propertyName)
+                    }
 
                     // Write 'SelectClause' code.
                     writer.write("    @ColumnNameDslMaker\n")
@@ -96,14 +135,41 @@ class ClauseProcessor(
 
                     // Write 'SetClause' code.
                     writer.write("    @ColumnNameDslMaker\n")
-                    val isNotNull = property.type.resolve().nullability == Nullability.NOT_NULL
                     writer.write("    var SetClause<$className>.$propertyName: ${property.typeName}")
-                    val nullableSymbol = if (isNotNull) "\n" else "?\n"
+                    val nullableSymbol = when {
+                        isRowId -> "?\n"
+                        isNotNull -> "\n"
+                        else -> "?\n"
+                    }
                     writer.write(nullableSymbol)
                     writer.write("        get() = ${getSetClauseGetterValue(property)}\n")
                     writer.write("        set(value) = ${appendFunction(elementName, property, isNotNull)}\n\n")
                 }
-                writer.write("}")
+
+                // Write the override instance for property `primaryKeyInfo`.
+                if (primaryKeyName == null && compositePrimaryKeys.isEmpty()) {
+                    writer.write("    override val primaryKeyInfo = null\n\n")
+                    return@use
+                }
+                writer.write("    override val primaryKeyInfo = PrimaryKeyInfo(\n")
+                if (primaryKeyName == null) {
+                    writer.write("        primaryKeyName = null,\n")
+                } else {
+                    writer.write("        primaryKeyName = \"$primaryKeyName\",\n")
+                }
+                writer.write("        isAutomaticIncrement = $isAutomaticIncrement,\n")
+                writer.write("        isRowId = $isRowId,\n")
+                if (compositePrimaryKeys.isEmpty()) {
+                    writer.write("        compositePrimaryKeys = null,\n")
+                } else {
+                    writer.write("        compositePrimaryKeys = listOf(\n")
+                    compositePrimaryKeys.forEach {
+                        writer.write("        $it,\n")
+                    }
+                    writer.write("    )\n")
+                }
+                writer.write("    )\n\n")
+                writer.write("}\n")
             }
         }
         return invalidateDBRowClasses

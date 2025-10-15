@@ -16,9 +16,10 @@
 
 package com.ctrip.sqllin.sample
 
-import com.ctrip.sqllin.driver.DatabaseConfiguration
+import com.ctrip.sqllin.dsl.DSLDBConfiguration
 import com.ctrip.sqllin.dsl.Database
 import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
@@ -30,34 +31,33 @@ import kotlinx.serialization.Serializable
 
 /**
  * Sample
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 object Sample {
 
     private val db by lazy {
         Database(
-            DatabaseConfiguration(
+            DSLDBConfiguration(
                 name = "Person.db",
                 path = databasePath,
                 version = 1,
                 create = {
-                    // You must write SQL to String when the database is created or upgraded
-                    it.execSQL("CREATE TABLE person (id INTEGER PRIMARY KEY AUTOINCREMENT, age INTEGER, name TEXT);")
-                    it.execSQL("CREATE TABLE transcript (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, math INTEGER NOT NULL, english INTEGER NOT NULL);")
+                    PersonTable {
+                        CREATE()
+                    }
+                    this CREATE TranscriptTable
                 },
-                upgrade = { _, _, _ ->
-                    // You must write SQL to String when the database is created or upgraded
-                }
+                upgrade = { _, _ -> }
             ),
             enableSimpleSQLLog = true,
         )
     }
 
     fun sample() {
-        val tom = Person(age = 4, name = "Tom")
-        val jerry = Person(age = 3, name = "Jerry")
-        val jack = Person(age = 8, name = "Jack")
+        val tom = Person(id = 0, age = 4, name = "Tom")
+        val jerry = Person(id = 1, age = 3, name = "Jerry")
+        val jack = Person(id = 2, age = 8, name = "Jack")
 
         lateinit var selectStatement: SelectStatement<Person>
         db {
@@ -113,6 +113,7 @@ object Sample {
 @DBRow("person")
 @Serializable
 data class Person(
+    @PrimaryKey val id: Long?,
     val age: Int?,
     val name: String?,
 )
@@ -120,6 +121,7 @@ data class Person(
 @DBRow("transcript")
 @Serializable
 data class Transcript(
+    @PrimaryKey val id: Long?,
     val name: String?,
     val math: Int,
     val english: Int,

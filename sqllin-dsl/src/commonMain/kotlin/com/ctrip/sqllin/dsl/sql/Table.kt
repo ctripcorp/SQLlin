@@ -20,11 +20,13 @@ import kotlinx.serialization.KSerializer
 
 /**
  * SQL table
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 public abstract class Table<T>(
     internal val tableName: String,
 ) {
     public abstract fun kSerializer(): KSerializer<T>
+
+    public abstract val primaryKeyInfo: PrimaryKeyInfo?
 }

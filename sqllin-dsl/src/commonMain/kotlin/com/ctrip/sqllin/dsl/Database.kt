@@ -16,37 +16,19 @@
 
 package com.ctrip.sqllin.dsl
 
-import com.ctrip.sqllin.driver.DatabaseConfiguration
-import com.ctrip.sqllin.driver.DatabasePath
-import com.ctrip.sqllin.driver.openDatabase
+import com.ctrip.sqllin.driver.DatabaseConnection
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
  * Database object
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
-public class Database(
-    configuration: DatabaseConfiguration,
+public class Database internal constructor(
+    private val databaseConnection: DatabaseConnection,
     private val enableSimpleSQLLog: Boolean = false,
 ) {
-
-    public constructor(
-        name: String,
-        path: DatabasePath,
-        version: Int,
-        enableSimpleSQLLog: Boolean = false,
-    ) : this(
-        DatabaseConfiguration(
-            name = name,
-            path = path,
-            version = version,
-        ),
-        enableSimpleSQLLog,
-    )
-
-    private val databaseConnection = openDatabase(configuration)
 
     /**
      * Close the database connection.

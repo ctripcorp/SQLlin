@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Ctrip.com.
+ * Copyright (C) 2025 Ctrip.com.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
-package com.ctrip.sqllin.dsl.annotation
+package com.ctrip.sqllin.dsl.sql
 
 /**
- * Annotation for where property
- * @author yaqiao
+ * Describe the information of primary key(s)
+ * @author Yuang Qiao
  */
 
-@Target(AnnotationTarget.CLASS)
-@Retention(AnnotationRetention.BINARY)
-public annotation class DBRow(val tableName: String = "")
+public class PrimaryKeyInfo(
+    internal val primaryKeyName: String?,
+    internal val isAutomaticIncrement: Boolean,
+    internal val isRowId: Boolean,
+    internal val compositePrimaryKeys: List<String>?,
+)

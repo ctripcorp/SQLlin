@@ -22,13 +22,21 @@ package com.ctrip.sqllin.dsl.annotation
  */
 
 @DslMarker
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.BINARY)
 public annotation class StatementDslMaker
 
 @DslMarker
+@Target(AnnotationTarget.CLASS, AnnotationTarget.PROPERTY)
+@Retention(AnnotationRetention.BINARY)
 public annotation class KeyWordDslMaker
 
 @DslMarker
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.BINARY)
 public annotation class FunctionDslMaker
 
 @DslMarker
+@Target(AnnotationTarget.PROPERTY)
+@Retention(AnnotationRetention.BINARY)
 public annotation class ColumnNameDslMaker

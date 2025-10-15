@@ -18,10 +18,9 @@ package com.ctrip.sqllin.driver
 
 /**
  * SQLite Cursor common abstract
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
-@OptIn(ExperimentalStdlibApi::class)
 public interface CommonCursor : AutoCloseable {
 
     public fun getInt(columnIndex: Int): Int
