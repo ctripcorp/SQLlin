@@ -23,15 +23,28 @@ import com.ctrip.sqllin.dsl.sql.clause.WhereClause
 import com.ctrip.sqllin.dsl.sql.statement.UpdateDeleteStatement
 
 /**
- * SQL delete
- * @author yaqiao
+ * DELETE operation builder.
+ *
+ * Constructs DELETE statements with optional WHERE clauses. Supports both targeted deletion
+ * (with WHERE) and bulk deletion (all rows).
+ *
+ * @author Yuang Qiao
  */
-
 internal object Delete : Operation {
 
     override val sqlStr: String
         get() = "DELETE FROM "
 
+    /**
+     * Builds a DELETE statement with WHERE clause.
+     *
+     * Generates SQL in the format: `DELETE FROM table WHERE condition`
+     *
+     * @param table Table to delete from
+     * @param connection Database connection for execution
+     * @param whereClause WHERE condition specifying which rows to delete
+     * @return Final DELETE statement ready for execution
+     */
     fun <T> delete(table: Table<*>, connection: DatabaseConnection, whereClause: WhereClause<T>): SingleStatement {
         val sql = buildString {
             buildBaseDeleteStatement(table)
@@ -40,6 +53,15 @@ internal object Delete : Operation {
         return UpdateDeleteStatement(sql, connection, whereClause.selectCondition.parameters)
     }
 
+    /**
+     * Builds a DELETE statement without WHERE clause (deletes all rows).
+     *
+     * Generates SQL in the format: `DELETE FROM table`
+     *
+     * @param table Table to delete all rows from
+     * @param connection Database connection for execution
+     * @return Final DELETE statement ready for execution
+     */
     fun deleteAllEntities(table: Table<*>, connection: DatabaseConnection): SingleStatement {
         val sql = buildString {
             buildBaseDeleteStatement(table)

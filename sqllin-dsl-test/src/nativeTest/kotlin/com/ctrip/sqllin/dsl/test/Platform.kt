@@ -18,7 +18,7 @@ package com.ctrip.sqllin.dsl.test
 
 /**
  * Some platform-related functions
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 /**

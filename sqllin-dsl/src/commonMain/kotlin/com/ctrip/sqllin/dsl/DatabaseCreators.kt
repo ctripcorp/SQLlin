@@ -21,15 +21,34 @@ import com.ctrip.sqllin.driver.DatabasePath
 import com.ctrip.sqllin.driver.openDatabase
 
 /**
- * Factory functions for Database
+ * Factory functions for creating [Database] instances.
+ *
  * @author Yuang Qiao
  */
 
+/**
+ * Creates a database from a driver-level configuration.
+ *
+ * @param configuration The database configuration
+ * @param enableSimpleSQLLog Whether to enable simple SQL logging for debugging
+ * @return A new database instance
+ */
 public fun Database(
     configuration: DatabaseConfiguration,
     enableSimpleSQLLog: Boolean = false,
 ): Database = Database(openDatabase(configuration), enableSimpleSQLLog)
 
+/**
+ * Creates a database with basic configuration parameters.
+ *
+ * Uses default settings for other configuration options.
+ *
+ * @param name The database filename
+ * @param path The database directory path
+ * @param version The database schema version
+ * @param enableSimpleSQLLog Whether to enable simple SQL logging for debugging
+ * @return A new database instance
+ */
 public fun Database(
     name: String,
     path: DatabasePath,
@@ -44,6 +63,16 @@ public fun Database(
     enableSimpleSQLLog
 )
 
+/**
+ * Creates a database from a DSL-level configuration.
+ *
+ * Allows using [DatabaseScope] in create and upgrade callbacks instead of
+ * raw [com.ctrip.sqllin.driver.DatabaseConnection].
+ *
+ * @param dsldbConfiguration The DSL database configuration
+ * @param enableSimpleSQLLog Whether to enable simple SQL logging for debugging
+ * @return A new database instance
+ */
 public fun Database(
     dsldbConfiguration: DSLDBConfiguration,
     enableSimpleSQLLog: Boolean = false,

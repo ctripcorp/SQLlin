@@ -26,14 +26,28 @@ import com.google.devtools.ksp.validate
 import java.io.OutputStreamWriter
 
 /**
- * Generate the clause properties for data classes that present the database entity
+ * KSP symbol processor that generates table objects for database entities.
+ *
+ * For each data class annotated with [@DBRow][com.ctrip.sqllin.dsl.annotation.DBRow]
+ * and [@Serializable][kotlinx.serialization.Serializable], this processor generates
+ * a companion `Table` object (named `{ClassName}Table`) with:
+ *
+ * - Type-safe column property accessors for SELECT clauses
+ * - Mutable properties for UPDATE SET clauses
+ * - Primary key metadata extraction from [@PrimaryKey][com.ctrip.sqllin.dsl.annotation.PrimaryKey]
+ *   and [@CompositePrimaryKey][com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey] annotations
+ *
+ * The generated code provides compile-time safety for SQL DSL operations.
+ *
  * @author Yuang Qiao
  */
-
 class ClauseProcessor(
     private val environment: SymbolProcessorEnvironment,
 ) : SymbolProcessor {
 
+    /**
+     * Annotation names and validation messages used during processing.
+     */
     private companion object {
         const val ANNOTATION_DATABASE_ROW_NAME = "com.ctrip.sqllin.dsl.annotation.DBRow"
         const val ANNOTATION_PRIMARY_KEY = "com.ctrip.sqllin.dsl.annotation.PrimaryKey"
@@ -47,6 +61,12 @@ class ClauseProcessor(
         const val PROMPT_PRIMARY_KEY_USE_COUNT = "You only could use PrimaryKey to annotate one property in a class."
     }
 
+    /**
+     * Processes all [@DBRow][com.ctrip.sqllin.dsl.annotation.DBRow] annotated classes
+     * and generates corresponding table objects.
+     *
+     * @return List of symbols that couldn't be processed (due to validation failures)
+     */
     @Suppress("UNCHECKED_CAST")
     override fun process(resolver: Resolver): List<KSAnnotated> {
         val allDBRowClasses = resolver.getSymbolsWithAnnotation(ANNOTATION_DATABASE_ROW_NAME)
@@ -176,6 +196,11 @@ class ClauseProcessor(
         return invalidateDBRowClasses
     }
 
+    /**
+     * Maps a property's Kotlin type to the corresponding clause element type name.
+     *
+     * @return The clause type name (ClauseNumber, ClauseString, ClauseBoolean), or null if unsupported
+     */
     private fun getClauseElementTypeStr(property: KSPropertyDeclaration): String? = when (
         property.typeName
     ) {
@@ -198,6 +223,11 @@ class ClauseProcessor(
         else -> null
     }
 
+    /**
+     * Generates the default getter value for SetClause properties based on type.
+     *
+     * @return The default value string for the property type, or null if unsupported
+     */
     private fun getSetClauseGetterValue(property: KSPropertyDeclaration): String? = when (
         property.typeName
     ) {
@@ -219,6 +249,14 @@ class ClauseProcessor(
         else -> null
     }
 
+    /**
+     * Generates the appropriate append function call for SetClause setters.
+     *
+     * @param elementName The serialized element name
+     * @param property The property declaration
+     * @param isNotNull Whether the property is non-nullable
+     * @return The append function call string, or null if unsupported type
+     */
     private fun appendFunction(elementName: String, property: KSPropertyDeclaration, isNotNull: Boolean): String? = when (property.typeName) {
         Int::class.qualifiedName,
         Long::class.qualifiedName,
@@ -238,6 +276,9 @@ class ClauseProcessor(
         else -> null
     }
 
+    /**
+     * Extension property that resolves a property's fully qualified type name.
+     */
     private inline val KSPropertyDeclaration.typeName
         get() = type.resolve().declaration.qualifiedName?.asString()
 }

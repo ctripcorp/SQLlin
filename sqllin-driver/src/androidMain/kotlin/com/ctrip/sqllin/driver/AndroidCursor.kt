@@ -19,10 +19,10 @@ package com.ctrip.sqllin.driver
 import android.database.Cursor
 
 /**
- * SQLite Cursor Android actual
- * @author yaqiao
+ * Android implementation of [CommonCursor] backed by Android's Cursor.
+ *
+ * @author Yuang Qiao
  */
-
 internal class AndroidCursor(private val cursor: Cursor) : CommonCursor {
 
     override fun getInt(columnIndex: Int): Int = try {

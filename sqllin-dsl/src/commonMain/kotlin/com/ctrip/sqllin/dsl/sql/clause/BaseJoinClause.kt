@@ -22,10 +22,16 @@ import com.ctrip.sqllin.dsl.sql.statement.JoinSelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.JoinStatementWithoutCondition
 
 /**
- * SQL abstract "JOIN" clause
- * @author yaqiao
+ * Base class for JOIN clauses in SELECT statements.
+ *
+ * Generates SQL for joining multiple tables. Different JOIN types (INNER, LEFT OUTER, CROSS,
+ * NATURAL) extend this class with their specific SQL keywords.
+ *
+ * @param R The result entity type after JOIN
+ * @param tables Tables to join
+ *
+ * @author Yuang Qiao
  */
-
 public sealed class BaseJoinClause<R>(private vararg val tables: Table<*>) : SelectClause<R> {
 
     internal abstract val clauseName: String
@@ -41,8 +47,22 @@ public sealed class BaseJoinClause<R>(private vararg val tables: Table<*>) : Sel
         }
 }
 
+/**
+ * NATURAL JOIN clause - automatically matches columns with the same name.
+ *
+ * Does not require ON or USING condition.
+ *
+ * @param R The result entity type after JOIN
+ */
 public sealed class NaturalJoinClause<R>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables)
 
+/**
+ * JOIN clause that requires an ON or USING condition.
+ *
+ * Returns [JoinStatementWithoutCondition] which must be completed with ON or USING.
+ *
+ * @param R The result entity type after JOIN
+ */
 public sealed class JoinClause<R>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables)
 
 @StatementDslMaker

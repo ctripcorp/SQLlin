@@ -21,14 +21,22 @@ import java.sql.PreparedStatement
 import java.sql.Types
 
 /**
- * The super class for DatabaseConnection on JVM
- * @author yaqiao
+ * Base class for JDBC-based database connections on JVM platforms.
+ *
+ * Handles parameter binding for PreparedStatements with support for various data types.
+ *
+ * @author Yuang Qiao
  */
-
 internal abstract class AbstractJdbcDatabaseConnection : DatabaseConnection {
 
+    /**
+     * Creates a PreparedStatement for the given SQL.
+     */
     abstract fun createStatement(sql: String): PreparedStatement
 
+    /**
+     * Binds parameters to a PreparedStatement, supporting common Kotlin/Java types.
+     */
     protected fun bindParamsToSQL(sql: String, bindParams: Array<out Any?>?): PreparedStatement = createStatement(sql).apply {
         bindParams?.run {
             require(isNotEmpty()) { "Empty bindArgs" }

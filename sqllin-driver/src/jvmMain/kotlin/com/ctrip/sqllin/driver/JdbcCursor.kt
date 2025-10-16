@@ -19,8 +19,9 @@ package com.ctrip.sqllin.driver
 import java.sql.ResultSet
 
 /**
- * SQLite Cursor JDBC actual
- * @author yaqiao
+ * JDBC implementation of [CommonCursor] backed by a ResultSet.
+ *
+ * @author Yuang Qiao
  */
 internal class JdbcCursor(private val resultSet: ResultSet) : CommonCursor {
 

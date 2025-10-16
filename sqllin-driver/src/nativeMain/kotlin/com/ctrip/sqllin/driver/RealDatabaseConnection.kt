@@ -23,10 +23,12 @@ import kotlin.concurrent.AtomicInt
 import kotlin.concurrent.AtomicReference
 
 /**
- * Database manager Native actual
- * @author yaqiao
+ * Native implementation of [DatabaseConnection] using C interop with SQLite.
+ *
+ * Provides direct access to SQLite C API on native platforms with transaction support.
+ *
+ * @author Yuang Qiao
  */
-
 internal class RealDatabaseConnection(
     private val database: NativeDatabase
 ) : NativeDatabaseConnection() {

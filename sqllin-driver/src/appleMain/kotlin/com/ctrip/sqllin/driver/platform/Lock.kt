@@ -19,11 +19,10 @@ package com.ctrip.sqllin.driver.platform
 import platform.Foundation.NSRecursiveLock
 
 /**
- * A simple lock implementation in Apple platforms.
- * Implementations of this class should be re-entrant.
- * @author yaqiao
+ * Apple platform lock implementation using NSRecursiveLock.
+ *
+ * @author Yuang Qiao
  */
-
 internal actual class Lock actual constructor() {
 
     private val nsRecursiveLock = NSRecursiveLock()

@@ -20,10 +20,17 @@ import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.driver.withTransaction
 
 /**
- * The group of some statements those them in same transaction
- * @author yaqiao
+ * Container for statements executed within a single database transaction.
+ *
+ * Collects all SQL statements written inside a transaction DSL scope and executes them
+ * atomically. If any statement fails, the entire transaction rolls back. Supports progressive
+ * clause building on UPDATE and SELECT statements.
+ *
+ * @property databaseConnection Connection for executing the transactional operations
+ * @property enableSimpleSQLLog Whether to log each statement's SQL before execution
+ *
+ * @author Yuang Qiao
  */
-
 internal class TransactionStatementsGroup(
     private val databaseConnection: DatabaseConnection,
     private val enableSimpleSQLLog: Boolean,

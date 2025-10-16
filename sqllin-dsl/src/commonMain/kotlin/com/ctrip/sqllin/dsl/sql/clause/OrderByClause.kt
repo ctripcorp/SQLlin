@@ -21,10 +21,18 @@ import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.statement.*
 
 /**
- * SQL 'order by' clause by select statement
- * @author yaqiao
+ * ORDER BY clause for sorting SELECT query results.
+ *
+ * Generates SQL in the format: ` ORDER BY column1 ASC, column2 DESC, ...`
+ *
+ * Supports two modes:
+ * - Explicit direction: `ORDER_BY(user.name to ASC, user.age to DESC)`
+ * - Default ascending: `ORDER_BY(user.name, user.age)`
+ *
+ * @param T The entity type this clause operates on
+ *
+ * @author Yuang Qiao
  */
-
 public sealed interface OrderByClause<T> : SelectClause<T>
 
 internal class CompleteOrderByClause<T>(private val column2WayMap: Map<ClauseElement, OrderByWay>) : OrderByClause<T> {

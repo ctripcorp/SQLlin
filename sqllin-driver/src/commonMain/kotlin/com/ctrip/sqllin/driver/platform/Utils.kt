@@ -17,8 +17,6 @@
 package com.ctrip.sqllin.driver.platform
 
 /**
- * The tools with platform-specific implementation
- * @author yaqiao
+ * Platform file path separator character.
  */
-
 internal expect val separatorChar: Char

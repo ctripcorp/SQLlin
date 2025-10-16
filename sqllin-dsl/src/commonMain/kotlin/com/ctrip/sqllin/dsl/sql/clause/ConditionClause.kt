@@ -19,10 +19,21 @@ package com.ctrip.sqllin.dsl.sql.clause
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 
 /**
- * Abstract clause that could link conditions, include 'WHERE' and 'HAVING'
- * @author yaqiao
+ * Base class for condition-based clauses (WHERE, HAVING).
+ *
+ * Wraps a [SelectCondition] and provides the clause name. Generates SQL in the format:
+ * ` CLAUSE_NAME condition`
+ *
+ * This file also provides uppercase DSL operators for building conditions:
+ * - Numeric: LT, LTE, EQ, NEQ, GT, GTE, IN, BETWEEN
+ * - String: EQ, NEQ, LIKE, GLOB
+ * - Boolean: IS
+ * - Logic: AND, OR
+ *
+ * @param T The entity type this clause operates on
+ *
+ * @author Yuang Qiao
  */
-
 public sealed class ConditionClause<T>(private val selectCondition: SelectCondition) : SelectClause<T> {
 
     internal abstract val clauseName: String

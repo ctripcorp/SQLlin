@@ -19,10 +19,22 @@ package com.ctrip.sqllin.dsl.sql.clause
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 
 /**
- * Present the single prediction in set clause
- * @author yaqiao
+ * SET clause for UPDATE statements.
+ *
+ * Builds column assignments in the format: `column1 = ?, column2 = ?, ...`
+ *
+ * Used in UPDATE operations to specify new values:
+ * ```kotlin
+ * UPDATE(user) SET {
+ *     it.name = "John"
+ *     it.age = 30
+ * } WHERE (user.id EQ 42)
+ * ```
+ *
+ * @param T The entity type being updated
+ *
+ * @author Yuang Qiao
  */
-
 public class SetClause<T> : Clause<T> {
 
     private val clauseBuilder = StringBuilder()

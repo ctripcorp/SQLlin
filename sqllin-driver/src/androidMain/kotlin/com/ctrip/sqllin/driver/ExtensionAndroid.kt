@@ -24,12 +24,13 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 
 /**
- * SQLite extension Android
- * @author yaqiao
+ * Converts an Android Context to a [DatabasePath].
  */
-
 public fun Context.toDatabasePath(): DatabasePath = AndroidDatabasePath(this)
 
+/**
+ * Android-specific [DatabasePath] implementation wrapping a Context.
+ */
 @JvmInline
 internal value class AndroidDatabasePath(val context: Context) : DatabasePath
 
@@ -53,6 +54,9 @@ public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnectio
     return connection
 }
 
+/**
+ * SQLiteOpenHelper for Android versions below P (API level 28).
+ */
 private class OldAndroidDBHelper(
     private val config: DatabaseConfiguration,
 ) : SQLiteOpenHelper((config.path as AndroidDatabasePath).context, config.name, null, config.version) {
@@ -64,6 +68,9 @@ private class OldAndroidDBHelper(
         config.upgrade(AndroidDatabaseConnection(db), oldVersion, newVersion)
 }
 
+/**
+ * SQLiteOpenHelper for Android P (API level 28) and above with OpenParams support.
+ */
 @RequiresApi(Build.VERSION_CODES.P)
 private class AndroidDBHelper(
     private val config: DatabaseConfiguration,
@@ -76,6 +83,9 @@ private class AndroidDBHelper(
         config.upgrade(AndroidDatabaseConnection(db), oldVersion, newVersion)
 }
 
+/**
+ * Converts [DatabaseConfiguration] to Android's OpenParams for API level 28+.
+ */
 @RequiresApi(Build.VERSION_CODES.P)
 @Suppress("DEPRECATION")
 private fun DatabaseConfiguration.toAndroidOpenParams(): OpenParams = OpenParams

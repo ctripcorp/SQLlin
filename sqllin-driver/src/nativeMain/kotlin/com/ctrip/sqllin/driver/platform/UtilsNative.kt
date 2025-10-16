@@ -21,9 +21,7 @@ import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
 
 /**
- * The tools with platform-specific implementation
- * @author yaqiao
+ * Converts C byte pointer to Kotlin String.
  */
-
 @OptIn(ExperimentalForeignApi::class)
 internal expect fun bytesToString(bv: CPointer<ByteVar>): String

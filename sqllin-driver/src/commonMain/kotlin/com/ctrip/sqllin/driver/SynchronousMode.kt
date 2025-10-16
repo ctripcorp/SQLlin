@@ -17,10 +17,17 @@
 package com.ctrip.sqllin.driver
 
 /**
- * SQLite synchronous mode
- * @author yaqiao
+ * SQLite synchronous modes controlling disk write behavior.
+ *
+ * Determines how aggressively SQLite flushes data to disk.
+ *
+ * @property OFF No syncing - fastest but risks database corruption on power loss
+ * @property NORMAL Sync at critical moments - good balance of safety and performance
+ * @property FULL Sync after each transaction - safest but slower
+ * @property EXTRA Most paranoid mode with additional syncing
+ *
+ * @author Yuang Qiao
  */
-
 public enum class SynchronousMode(internal val value: Int) {
     OFF(0), NORMAL(1), FULL(2), EXTRA(3);
 }

@@ -23,10 +23,8 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 /**
- * SQLite extension JDBC
- * @author yaqiao
+ * Converts a String path to a [DatabasePath] for JVM platforms.
  */
-
 public fun String.toDatabasePath(): DatabasePath = StringDatabasePath(this)
 
 private typealias JdbcJournalMode = SQLiteConfig.JournalMode

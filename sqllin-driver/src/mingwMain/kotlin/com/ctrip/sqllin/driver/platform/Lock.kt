@@ -33,11 +33,10 @@ import platform.posix.pthread_mutexattr_settype
 import platform.posix.pthread_mutexattr_tVar
 
 /**
- * A simple lock implementation in MinGW.
- * Implementations of this class should be re-entrant.
- * @author yaqiao
+ * MinGW/Windows platform lock implementation using pthread recursive mutex.
+ *
+ * @author Yuang Qiao
  */
-
 @OptIn(ExperimentalForeignApi::class)
 internal actual class Lock actual constructor() {
 

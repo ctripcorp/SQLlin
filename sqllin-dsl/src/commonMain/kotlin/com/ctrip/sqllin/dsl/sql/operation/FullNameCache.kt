@@ -17,10 +17,21 @@
 package com.ctrip.sqllin.dsl.sql.operation
 
 /**
- * Cache for primitive types' qualified name
+ * Cached qualified names for Kotlin types used in SQLite type mapping.
+ *
+ * Provides pre-computed fully qualified names for performance during CREATE TABLE generation.
+ * These names are matched against kotlinx.serialization descriptor serial names to determine
+ * the appropriate SQLite column type.
+ *
+ * Used by [Create.buildSQL] to map Kotlin types to SQLite types:
+ * - Integer types → TINYINT, SMALLINT, INT, BIGINT, INTEGER
+ * - Floating-point types → FLOAT, DOUBLE
+ * - Boolean → BOOLEAN
+ * - Character/String → CHAR(1), TEXT
+ * - ByteArray → BLOB
+ *
  * @author Yuang Qiao
  */
-
 internal object FullNameCache {
 
     val BYTE = Byte::class.qualifiedName!!

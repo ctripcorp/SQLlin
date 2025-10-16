@@ -34,7 +34,7 @@ import kotlin.test.assertNotEquals
 
 /**
  * The sqllin-dsl common test
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 class CommonBasicTest(private val path: DatabasePath) {

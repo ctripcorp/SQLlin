@@ -22,10 +22,8 @@ import com.ctrip.sqllin.driver.platform.withLock
 import platform.posix.remove
 
 /**
- * SQLite extension Native
- * @author yaqiao
+ * Converts a String path to a [DatabasePath] for native platforms.
  */
-
 public fun String.toDatabasePath(): DatabasePath = StringDatabasePath(this)
 
 private val connectionCreationLock = Lock()

@@ -17,10 +17,12 @@
 package com.ctrip.sqllin.driver
 
 /**
- * SQLite native statement abstract APIs
- * @author yaqiao
+ * Interface for native SQLite prepared statements.
+ *
+ * Provides low-level access to statement execution, parameter binding, and result retrieval.
+ *
+ * @author Yuang Qiao
  */
-
 internal interface SQLiteStatement {
 
     fun isNull(columnIndex: Int): Boolean

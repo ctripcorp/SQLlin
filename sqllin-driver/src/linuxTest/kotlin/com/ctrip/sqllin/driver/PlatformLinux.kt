@@ -22,7 +22,7 @@ import platform.posix.getcwd
 
 /**
  * Linux platform-related functions
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 @OptIn(ExperimentalForeignApi::class)

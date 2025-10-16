@@ -20,10 +20,12 @@ import com.ctrip.sqllin.driver.platform.Lock
 import com.ctrip.sqllin.driver.platform.withLock
 
 /**
- * The concurrent database connection, use platform-related lock to ensure thread-safe
- * @author yaqiao
+ * Thread-safe wrapper for [NativeDatabaseConnection] using platform-specific locks.
+ *
+ * Delegates all operations to the underlying connection while ensuring thread safety.
+ *
+ * @author Yuang Qiao
  */
-
 internal class ConcurrentDatabaseConnection(
     private val delegateConnection: NativeDatabaseConnection
 ) : NativeDatabaseConnection() {

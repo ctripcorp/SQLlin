@@ -20,13 +20,32 @@ import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.Table
 
 /**
- * SQL "CROSS JOIN" clause
- * @author yaqiao
+ * CROSS JOIN clause - returns the Cartesian product of two tables.
+ *
+ * Generates SQL: ` CROSS JOIN table`
+ * Does not require ON or USING condition.
+ * Returns every combination of rows from both tables.
+ *
+ * **Warning**: Result size = (left rows) × (right rows). Use with caution on large tables.
+ *
+ * @param R The result entity type after JOIN
+ *
+ * @author Yuang Qiao
  */
-
 internal class CrossJoinClause<R>(vararg tables: Table<*>) : NaturalJoinClause<R>(*tables) {
     override val clauseName: String = " CROSS JOIN "
 }
 
+/**
+ * Creates a CROSS JOIN clause (no ON/USING needed).
+ *
+ * Usage:
+ * ```kotlin
+ * SELECT(color) CROSS_JOIN (size)
+ * // Returns all color-size combinations
+ * ```
+ *
+ * **Warning**: Returns (left rows) × (right rows) results.
+ */
 @StatementDslMaker
 public fun <R> CROSS_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = CrossJoinClause(*tables)

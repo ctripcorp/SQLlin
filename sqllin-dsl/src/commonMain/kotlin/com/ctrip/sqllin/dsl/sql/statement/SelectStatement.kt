@@ -25,10 +25,23 @@ import kotlinx.serialization.DeserializationStrategy
 import kotlin.concurrent.Volatile
 
 /**
- * Select statement
+ * Base class for SELECT statements with progressive clause building.
+ *
+ * Represents a SELECT query that can be executed to retrieve and deserialize entities from the database.
+ * The class hierarchy enforces SQL clause ordering at compile time - each subclass accepts only valid
+ * subsequent clauses (e.g., WHERE can be followed by GROUP BY, ORDER BY, or LIMIT).
+ *
+ * Results are lazily evaluated and cached after [execute] is called. Use [getResults] to retrieve
+ * the deserialized entities.
+ *
+ * @param T The entity type returned by this query
+ * @property deserializer kotlinx.serialization strategy for decoding cursor rows to entities
+ * @property connection Database connection for executing the query
+ * @property container Statement container for managing this statement in the DSL scope
+ * @property parameters Parameterized query values (strings only), or null if none
+ *
  * @author Yuang Qiao
  */
-
 public sealed class SelectStatement<T>(
     sqlStr: String,
     internal val deserializer: DeserializationStrategy<T>,
@@ -47,6 +60,14 @@ public sealed class SelectStatement<T>(
         cursor = connection.query(sqlStr, params)
     }
 
+    /**
+     * Retrieves the query results as a list of deserialized entities.
+     *
+     * Results are lazily computed on first call and cached for subsequent calls.
+     * Throws [IllegalStateException] if called before [execute].
+     *
+     * @return List of entities matching the query
+     */
     public fun getResults(): List<T> = result ?: cursor?.use {
         val decoder = QueryDecoder(it)
         result = buildList {
@@ -75,6 +96,16 @@ public sealed class SelectStatement<T>(
     }
 }
 
+/**
+ * SELECT statement with WHERE clause applied.
+ *
+ * Can be followed by:
+ * - GROUP BY
+ * - ORDER BY
+ * - LIMIT
+ *
+ * @author Yuang Qiao
+ */
 public class WhereSelectStatement<T> internal constructor(
     sqlStr: String,
     deserializer: DeserializationStrategy<T>,
@@ -93,6 +124,17 @@ public class WhereSelectStatement<T> internal constructor(
         GroupBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 }
 
+/**
+ * SELECT statement with JOIN clause applied.
+ *
+ * Can be followed by:
+ * - WHERE
+ * - GROUP BY
+ * - ORDER BY
+ * - LIMIT
+ *
+ * @author Yuang Qiao
+ */
 public class JoinSelectStatement<T> internal constructor(
     sqlStr: String,
     deserializer: DeserializationStrategy<T>,
@@ -121,6 +163,15 @@ public class JoinSelectStatement<T> internal constructor(
         GroupBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 }
 
+/**
+ * SELECT statement with GROUP BY clause applied.
+ *
+ * Can be followed by:
+ * - HAVING
+ * - ORDER BY
+ *
+ * @author Yuang Qiao
+ */
 public class GroupBySelectStatement<T> internal constructor(
     sqlStr: String,
     deserializer: DeserializationStrategy<T>,
@@ -143,6 +194,15 @@ public class GroupBySelectStatement<T> internal constructor(
     }
 }
 
+/**
+ * SELECT statement with HAVING clause applied.
+ *
+ * Can be followed by:
+ * - ORDER BY
+ * - LIMIT
+ *
+ * @author Yuang Qiao
+ */
 public class HavingSelectStatement<T> internal constructor(
     sqlStr: String,
     deserializer: DeserializationStrategy<T>,
@@ -158,6 +218,14 @@ public class HavingSelectStatement<T> internal constructor(
         LimitSelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 }
 
+/**
+ * SELECT statement with ORDER BY clause applied.
+ *
+ * Can be followed by:
+ * - LIMIT
+ *
+ * @author Yuang Qiao
+ */
 public class OrderBySelectStatement<T> internal constructor(
     sqlStr: String,
     deserializer: DeserializationStrategy<T>,
@@ -170,6 +238,14 @@ public class OrderBySelectStatement<T> internal constructor(
         LimitSelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 }
 
+/**
+ * SELECT statement with LIMIT clause applied.
+ *
+ * Can be followed by:
+ * - OFFSET
+ *
+ * @author Yuang Qiao
+ */
 public class LimitSelectStatement<T> internal constructor(
     sqlStr: String,
     deserializer: DeserializationStrategy<T>,
@@ -182,6 +258,14 @@ public class LimitSelectStatement<T> internal constructor(
         FinalSelectStatement(buildSQL(clause), deserializer, connection, container, parameters)
 }
 
+/**
+ * Final SELECT statement with all clauses applied.
+ *
+ * This is the terminal state in the SELECT statement hierarchy - no further clauses can be added.
+ * The statement is ready for execution.
+ *
+ * @author Yuang Qiao
+ */
 public class FinalSelectStatement<T> internal constructor(
     sqlStr: String,
     deserializer: DeserializationStrategy<T>,

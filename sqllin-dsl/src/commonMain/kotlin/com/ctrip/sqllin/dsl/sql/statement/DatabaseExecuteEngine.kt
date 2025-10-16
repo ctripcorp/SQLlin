@@ -17,10 +17,16 @@
 package com.ctrip.sqllin.dsl.sql.statement
 
 /**
- * Collect and execute all SQL statement in 'database {}' block
- * @author yaqiao
+ * Execution engine for top-level database DSL operations.
+ *
+ * Collects all statements created within a `Database` scope and executes them when the scope
+ * exits. Handles both individual statements and transaction groups. Supports progressive clause
+ * building by allowing UPDATE and SELECT statements to be replaced with refined versions.
+ *
+ * @property enableSimpleSQLLog Whether to print SQL and parameters before execution
+ *
+ * @author Yuang Qiao
  */
-
 internal class DatabaseExecuteEngine(
     private val enableSimpleSQLLog: Boolean,
 ) : StatementContainer {

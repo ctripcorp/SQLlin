@@ -22,12 +22,13 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.toKStringFromUtf8
 
 /**
- * The tools with Windows implementation
- * @author yaqiao
+ * Converts C byte pointer to String using toKStringFromUtf8 on Windows (MinGW).
  */
-
 @OptIn(ExperimentalForeignApi::class)
 internal actual fun bytesToString(bv: CPointer<ByteVar>): String = bv.toKStringFromUtf8()
 
+/**
+ * Windows file path separator (backslash).
+ */
 internal actual inline val separatorChar: Char
     get() = '\\'

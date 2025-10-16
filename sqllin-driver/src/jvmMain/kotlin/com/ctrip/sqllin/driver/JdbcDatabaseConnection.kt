@@ -22,10 +22,12 @@ import java.sql.PreparedStatement
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Database connection JDBC actual
- * @author yaqiao
+ * JDBC implementation of [DatabaseConnection] for JVM platforms.
+ *
+ * Uses java.sql.Connection for database operations.
+ *
+ * @author Yuang Qiao
  */
-
 internal class JdbcDatabaseConnection(private val connection: Connection) : AbstractJdbcDatabaseConnection() {
 
     override fun execSQL(sql: String, bindParams: Array<out Any?>?) {

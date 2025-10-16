@@ -17,9 +17,7 @@
 package com.ctrip.sqllin.driver.platform
 
 /**
- * The tools with JVM implementation
- * @author yaqiao
+ * JVM file path separator (platform-dependent: backslash on Windows, forward slash elsewhere).
  */
-
 internal actual val separatorChar: Char =
     if (System.getProperty("os.name").lowercase().contains("windows")) '\\' else '/'

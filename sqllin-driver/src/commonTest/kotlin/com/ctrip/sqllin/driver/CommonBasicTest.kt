@@ -22,7 +22,7 @@ import kotlin.test.assertEquals
 
 /**
  * The sqllin-driver common basic test.
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 class CommonBasicTest(private val path: DatabasePath) {

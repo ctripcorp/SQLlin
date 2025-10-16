@@ -17,23 +17,72 @@
 package com.ctrip.sqllin.driver
 
 /**
- * Database manager common expect
- * @author yaqiao
+ * Platform-agnostic interface for SQLite database connections.
+ *
+ * Provides a common API for executing SQL statements and managing transactions
+ * across all supported platforms.
+ *
+ * @author Yuang Qiao
  */
-
 public interface DatabaseConnection {
 
+    /**
+     * Executes a SQL statement that doesn't return data.
+     *
+     * @param sql The SQL statement to execute
+     * @param bindParams Optional parameters to bind to the statement
+     */
     public fun execSQL(sql: String, bindParams: Array<out Any?>? = null)
+
+    /**
+     * Executes an INSERT statement.
+     *
+     * @param sql The INSERT statement
+     * @param bindParams Optional parameters to bind to the statement
+     */
     public fun executeInsert(sql: String, bindParams: Array<out Any?>? = null)
+
+    /**
+     * Executes an UPDATE or DELETE statement.
+     *
+     * @param sql The UPDATE or DELETE statement
+     * @param bindParams Optional parameters to bind to the statement
+     */
     public fun executeUpdateDelete(sql: String, bindParams: Array<out Any?>? = null)
 
+    /**
+     * Executes a SELECT query and returns a cursor.
+     *
+     * @param sql The SELECT statement
+     * @param bindParams Optional string parameters to bind to the query
+     * @return A cursor for iterating over query results
+     */
     public fun query(sql: String, bindParams: Array<out String?>? = null): CommonCursor
 
+    /**
+     * Begins a database transaction.
+     */
     public fun beginTransaction()
+
+    /**
+     * Marks the current transaction as successful.
+     *
+     * Must be called before [endTransaction] to commit changes.
+     */
     public fun setTransactionSuccessful()
+
+    /**
+     * Ends the current transaction, committing if marked successful.
+     */
     public fun endTransaction()
 
+    /**
+     * Closes the database connection and releases resources.
+     */
     public fun close()
 
+    /**
+     * Whether this connection is closed.
+     */
     public val isClosed: Boolean
 }

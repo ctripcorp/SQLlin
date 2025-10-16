@@ -8,7 +8,7 @@ import kotlin.test.Test
 
 /**
  * Native unit test
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 class JvmTest {

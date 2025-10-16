@@ -17,10 +17,10 @@
 package com.ctrip.sqllin.driver
 
 /**
- * SQLite Cursor Native actual
- * @author yaqiao
+ * Native implementation of [CommonCursor] backed by a [SQLiteStatement].
+ *
+ * @author Yuang Qiao
  */
-
 internal class NativeCursor(
     private val statement: SQLiteStatement
 ) : CommonCursor {

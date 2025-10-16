@@ -17,16 +17,26 @@
 package com.ctrip.sqllin.dsl.sql.compiler
 
 /**
- * Encode the object to INSERT SQL statement
- * @author yaqiao
+ * Encoder for generating VALUES clauses in INSERT statements.
+ *
+ * Produces SQL in the format: `(value1, value2, ..., valueN)`
+ *
+ * Each entity is encoded into a parenthesized tuple of values, with commas separating
+ * elements within the tuple.
+ *
+ * Example output: `(123, 'Alice', 25)` or `(?, ?, ?)` with parameters `["Alice"]`
+ *
+ * @author Yuang Qiao
  */
-
 internal class InsertValuesEncoder(
     override val parameters: MutableList<String>,
 ) : AbstractValuesEncoder() {
 
     override val sqlStrBuilder = StringBuilder("(")
 
+    /**
+     * Appends comma between values or closing parenthesis after the last value.
+     */
     override fun StringBuilder.appendTail(): StringBuilder  {
         val symbol = if (elementsIndex < elementsCount - 1)
             ','

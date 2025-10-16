@@ -23,7 +23,7 @@ import platform.Foundation.NSUserDomainMask
 
 /**
  * Apple platform-related functions
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 @OptIn(UnsafeNumber::class)

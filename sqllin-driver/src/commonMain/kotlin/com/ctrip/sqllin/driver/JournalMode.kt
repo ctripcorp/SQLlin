@@ -17,11 +17,14 @@
 package com.ctrip.sqllin.driver
 
 /**
- * SQLite journal mode
- * @author yaqiao
+ * SQLite journal modes for transaction management.
+ *
+ * @property DELETE Rollback journal delete mode - deletes the journal file after each transaction
+ * @property WAL Write-ahead logging - more concurrent, better performance for most use cases
+ *
+ * @author Yuang Qiao
  */
-
 public enum class JournalMode {
-    DELETE, // Write-ahead logging
-    WAL; // Rollback journal delete Mode
+    DELETE,
+    WAL;
 }
