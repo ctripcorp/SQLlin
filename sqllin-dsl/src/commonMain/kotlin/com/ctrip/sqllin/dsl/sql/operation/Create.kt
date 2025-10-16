@@ -21,18 +21,50 @@ import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.statement.CreateStatement
 
 /**
- * SQL create
+ * CREATE TABLE operation builder.
+ *
+ * Constructs CREATE TABLE statements by inspecting entity serialization descriptors and
+ * generating appropriate SQLite column definitions with type mappings, nullability constraints,
+ * and primary key declarations.
+ *
  * @author Yuang Qiao
  */
-
 internal object Create : Operation {
 
     override val sqlStr: String
         get() = "CREATE TABLE "
 
+    /**
+     * Builds a CREATE TABLE statement for the given table definition.
+     *
+     * @param table Table definition containing entity metadata
+     * @param connection Database connection for execution
+     * @return CREATE statement ready for execution
+     */
     fun <T> create(table: Table<T>, connection: DatabaseConnection): CreateStatement =
         CreateStatement(buildSQL(table), connection)
 
+    /**
+     * Generates the CREATE TABLE SQL by inspecting entity properties.
+     *
+     * Maps Kotlin types to SQLite types:
+     * - Byte/UByte → TINYINT
+     * - Short/UShort → SMALLINT
+     * - Int/UInt → INT
+     * - Long → INTEGER (for primary keys with AUTOINCREMENT) or BIGINT
+     * - ULong → BIGINT
+     * - Float → FLOAT
+     * - Double → DOUBLE
+     * - Boolean → BOOLEAN
+     * - Char → CHAR(1)
+     * - String → TEXT
+     * - ByteArray → BLOB
+     *
+     * Handles:
+     * - Nullable properties (omit NOT NULL constraint)
+     * - Single primary keys (PRIMARY KEY, optionally AUTOINCREMENT)
+     * - Composite primary keys (PRIMARY KEY clause at end)
+     */
     private fun <T> buildSQL(table: Table<T>): String = buildString {
         append(sqlStr)
         append(table.tableName)

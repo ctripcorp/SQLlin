@@ -17,8 +17,18 @@
 package com.ctrip.sqllin.dsl.sql.clause
 
 /**
- * Abstract clause, include 'where', 'update set' and more
- * @author yaqiao
+ * Base interface for SQL clauses used in DSL operations.
+ *
+ * Marker interface for all clause types (WHERE, SET, ORDER BY, GROUP BY, HAVING, LIMIT, JOIN, etc.).
+ * Clauses are type-parameterized to ensure they operate on the correct entity type.
+ *
+ * Implementations include:
+ * - [SelectClause]: Clauses for SELECT statements (WHERE, ORDER BY, LIMIT, GROUP BY, HAVING, JOIN)
+ * - [SetClause]: SET clause for UPDATE statements
+ * - [ConditionClause]: Condition clauses for WHERE/HAVING
+ *
+ * @param T The entity type this clause operates on
+ *
+ * @author Yuang Qiao
  */
-
 public sealed interface Clause<T>

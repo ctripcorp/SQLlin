@@ -17,10 +17,17 @@
 package com.ctrip.sqllin.dsl.annotation
 
 /**
- * Annotation for where property
+ * Marks a data class as a SQLite table representation.
+ *
+ * This annotation is processed by sqllin-processor at compile time to generate
+ * a class that represents a SQLite table. The annotated data class properties
+ * are mapped to table columns.
+ *
+ * @property tableName The name of the SQLite table. If not specified or empty,
+ * the name of the annotated class will be used as the table name.
+ *
  * @author Yuang Qiao
  */
-
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
 public annotation class DBRow(val tableName: String = "")

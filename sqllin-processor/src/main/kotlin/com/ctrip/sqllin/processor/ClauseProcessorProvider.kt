@@ -21,10 +21,13 @@ import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.processing.SymbolProcessorProvider
 
 /**
- * This module's entry point
- * @author yaqiao
+ * KSP (Kotlin Symbol Processing) provider for [ClauseProcessor].
+ *
+ * This is the entry point for the sqllin-processor KSP plugin, which generates
+ * table objects with type-safe column accessors for data classes annotated with [@DBRow][com.ctrip.sqllin.dsl.annotation.DBRow].
+ *
+ * @author Yuang Qiao
  */
-
 class ClauseProcessorProvider : SymbolProcessorProvider {
 
     override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor =

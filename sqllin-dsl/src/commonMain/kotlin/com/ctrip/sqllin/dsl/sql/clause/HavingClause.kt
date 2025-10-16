@@ -21,10 +21,21 @@ import com.ctrip.sqllin.dsl.sql.statement.GroupBySelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.HavingSelectStatement
 
 /**
- * SQL 'HAVING' clause by select statement
- * @author yaqiao
+ * HAVING clause for filtering grouped rows in SELECT queries.
+ *
+ * Similar to WHERE but operates on aggregated data after GROUP BY. Generates SQL in the format:
+ * ` HAVING condition`
+ *
+ * Used to filter groups based on aggregate function results:
+ * ```kotlin
+ * SELECT(user) GROUP_BY (user.department) HAVING (COUNT(user.id) GT 5)
+ * // Returns only departments with more than 5 users
+ * ```
+ *
+ * @param T The entity type this clause operates on
+ *
+ * @author Yuang Qiao
  */
-
 internal class HavingClause<T>(val selectCondition: SelectCondition) : ConditionClause<T>(selectCondition) {
 
     override val clauseName: String = "HAVING"

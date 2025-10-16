@@ -22,10 +22,26 @@ import com.ctrip.sqllin.driver.JournalMode
 import com.ctrip.sqllin.driver.SynchronousMode
 
 /**
- * DSL database configuration
+ * DSL-level database configuration with [DatabaseScope] callbacks.
+ *
+ * Similar to [DatabaseConfiguration] but allows create and upgrade callbacks
+ * to use the type-safe SQL DSL instead of raw [com.ctrip.sqllin.driver.DatabaseConnection] operations.
+ *
+ * @property name The database filename
+ * @property path The database directory path
+ * @property version The database schema version
+ * @property isReadOnly Whether to open in read-only mode. Default: false
+ * @property inMemory Whether to create an in-memory database. Default: false
+ * @property journalMode The SQLite journal mode. Default: [JournalMode.WAL]
+ * @property synchronousMode The SQLite synchronous mode. Default: [SynchronousMode.NORMAL]
+ * @property busyTimeout Timeout in milliseconds for lock waits. Default: 5000ms
+ * @property lookasideSlotSize Size of lookaside memory slots. Default: 0
+ * @property lookasideSlotCount Number of lookaside memory slots. Default: 0
+ * @property create Callback invoked when creating a new database, executed within a [DatabaseScope]
+ * @property upgrade Callback invoked when upgrading the schema, executed within a [DatabaseScope]
+ *
  * @author Yuang Qiao
  */
-
 public data class DSLDBConfiguration(
     val name: String,
     val path: DatabasePath,
@@ -40,6 +56,9 @@ public data class DSLDBConfiguration(
     val create: DatabaseScope.() -> Unit = {},
     val upgrade: DatabaseScope.(oldVersion: Int, newVersion: Int) -> Unit = { _, _ -> },
 ) {
+    /**
+     * Converts to driver-level configuration, wrapping DSL callbacks.
+     */
     internal infix fun convertToDatabaseConfiguration(enableSimpleSQLLog: Boolean): DatabaseConfiguration = DatabaseConfiguration(
         name,
         path,

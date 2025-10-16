@@ -22,7 +22,7 @@ import platform.posix._wgetcwd
 /**
  * Windows platform-related functions
  * The doc of _getcwd: https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/getcwd-wgetcwd?view=msvc-170
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 @OptIn(ExperimentalForeignApi::class)

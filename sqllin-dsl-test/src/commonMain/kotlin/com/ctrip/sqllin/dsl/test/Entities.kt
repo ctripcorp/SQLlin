@@ -21,7 +21,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * Book entity
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 @DBRow("book")

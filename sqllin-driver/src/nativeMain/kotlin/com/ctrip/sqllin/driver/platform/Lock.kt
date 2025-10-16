@@ -17,18 +17,39 @@
 package com.ctrip.sqllin.driver.platform
 
 /**
- * A simple lock abstract.
- * Implementations of this class should be re-entrant.
- * @author yaqiao
+ * Platform-specific reentrant lock interface.
+ *
+ * Implementations must support reentrant locking.
+ *
+ * @author Yuang Qiao
  */
 internal expect class Lock() {
+    /**
+     * Acquires the lock.
+     */
     fun lock()
+
+    /**
+     * Releases the lock.
+     */
     fun unlock()
+
+    /**
+     * Attempts to acquire the lock without blocking.
+     *
+     * @return `true` if the lock was acquired, `false` otherwise
+     */
     fun tryLock(): Boolean
 
+    /**
+     * Closes and releases any resources associated with this lock.
+     */
     fun close()
 }
 
+/**
+ * Executes a block while holding the lock.
+ */
 internal inline fun <T> Lock.withLock(block: () -> T): T {
     lock()
     try {

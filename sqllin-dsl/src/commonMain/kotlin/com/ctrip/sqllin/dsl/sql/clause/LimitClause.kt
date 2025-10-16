@@ -20,10 +20,19 @@ import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.statement.*
 
 /**
- * SQL 'LIMIT' clause by select statement
- * @author yaqiao
+ * LIMIT clause for restricting the number of rows returned by a SELECT query.
+ *
+ * Generates SQL in the format: ` LIMIT count`
+ *
+ * Often combined with OFFSET for pagination:
+ * ```kotlin
+ * SELECT(user) ORDER_BY (user.id to ASC) LIMIT 10 OFFSET 20  // Skip 20, take 10
+ * ```
+ *
+ * @param T The entity type this clause operates on
+ *
+ * @author Yuang Qiao
  */
-
 public class LimitClause<T> internal constructor(
     private val count: Int,
 ) : SelectClause<T> {
@@ -31,6 +40,9 @@ public class LimitClause<T> internal constructor(
         get() = " LIMIT $count"
 }
 
+/**
+ * Creates a LIMIT clause to restrict result count.
+ */
 @StatementDslMaker
 public fun <T> LIMIT(count: Int): LimitClause<T> = LimitClause(count)
 
@@ -59,9 +71,19 @@ public infix fun <T> JoinSelectStatement<T>.LIMIT(count: Int): LimitSelectStatem
     }
 
 /**
- * SQL 'OFFSET' clause by select statement
+ * OFFSET clause for skipping rows in a SELECT query (pagination).
+ *
+ * Generates SQL in the format: ` OFFSET rowNo`
+ *
+ * Must follow a LIMIT clause. Used for pagination:
+ * ```kotlin
+ * SELECT(user) LIMIT 10 OFFSET 20  // Skip first 20 rows, return next 10
+ * ```
+ *
+ * @param T The entity type this clause operates on
+ *
+ * @author Yuang Qiao
  */
-
 public class OffsetClause<T> internal constructor(
     private val rowNo: Int,
 ) : SelectClause<T> {

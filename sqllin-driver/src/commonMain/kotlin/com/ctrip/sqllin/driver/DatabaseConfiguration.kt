@@ -17,10 +17,23 @@
 package com.ctrip.sqllin.driver
 
 /**
- * Database configuration params in sqllin-driver
- * @author yaqiao
+ * Configuration parameters for opening a SQLite database connection.
+ *
+ * @property name The database filename
+ * @property path The database directory path (platform-specific implementation)
+ * @property version The database schema version number
+ * @property isReadOnly Whether to open the database in read-only mode. Default: false
+ * @property inMemory Whether to create an in-memory database. Default: false
+ * @property journalMode The SQLite journal mode. Default: [JournalMode.WAL]
+ * @property synchronousMode The SQLite synchronous mode. Default: [SynchronousMode.NORMAL]
+ * @property busyTimeout Timeout in milliseconds for database lock waits. Default: 5000ms
+ * @property lookasideSlotSize Size of each lookaside memory slot. Default: 0 (use SQLite default)
+ * @property lookasideSlotCount Number of lookaside memory slots. Default: 0 (use SQLite default)
+ * @property create Callback invoked when creating a new database
+ * @property upgrade Callback invoked when upgrading the database schema
+ *
+ * @author Yuang Qiao
  */
-
 public data class DatabaseConfiguration(
     val name: String,
     val path: DatabasePath,

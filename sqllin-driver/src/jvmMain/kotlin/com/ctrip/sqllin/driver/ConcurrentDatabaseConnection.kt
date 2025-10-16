@@ -20,10 +20,12 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 /**
- * The concurrent database connection, use ReentrantLock to ensure thread-safe
- * @author yaqiao
+ * Thread-safe wrapper for [DatabaseConnection] using ReentrantLock.
+ *
+ * Delegates all operations to the underlying connection while ensuring thread safety.
+ *
+ * @author Yuang Qiao
  */
-
 internal class ConcurrentDatabaseConnection(private val delegateConnection: DatabaseConnection) : DatabaseConnection {
 
     private val accessLock = ReentrantLock()

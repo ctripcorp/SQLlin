@@ -23,15 +23,30 @@ import com.ctrip.sqllin.dsl.sql.clause.SetClause
 import com.ctrip.sqllin.dsl.sql.statement.UpdateStatementWithoutWhereClause
 
 /**
- * SQL update
- * @author yaqiao
+ * UPDATE operation builder.
+ *
+ * Constructs UPDATE statements by combining table information with SET clauses. Returns an
+ * intermediate statement that can either execute immediately (update all rows) or be refined
+ * with a WHERE clause (update filtered rows).
+ *
+ * @author Yuang Qiao
  */
-
 internal object Update : Operation {
 
     override val sqlStr: String
         get() = "UPDATE "
 
+    /**
+     * Builds an UPDATE statement with SET clause.
+     *
+     * Generates SQL in the format: `UPDATE table SET column1 = ?, column2 = ?, ...`
+     *
+     * @param table Table definition
+     * @param connection Database connection for execution
+     * @param container Statement container for DSL scope management
+     * @param clause SET clause with column assignments
+     * @return Statement that can either execute or be refined with WHERE
+     */
     fun <T> update(
         table: Table<T>,
         connection: DatabaseConnection,

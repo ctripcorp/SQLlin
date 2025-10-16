@@ -35,19 +35,43 @@ import kotlin.concurrent.Volatile
 import kotlin.jvm.JvmName
 
 /**
- * The database scope, it's used to restrict the scope that write DSL SQL statements
+ * Scope for executing type-safe SQL DSL statements.
+ *
+ * DatabaseScope provides extension functions on [Table] objects that enable SQL operations
+ * using Kotlin DSL syntax. All SQL statements written within this scope are collected and
+ * executed in batch when the scope exits.
+ *
+ * Supported operations:
+ * - **INSERT**: Add entities to tables
+ * - **UPDATE**: Modify existing records with SET and WHERE clauses
+ * - **DELETE**: Remove records with WHERE clauses
+ * - **SELECT**: Query records with WHERE, ORDER BY, LIMIT, GROUP BY, JOIN, and UNION
+ * - **CREATE**: Create tables from data class definitions
+ *
+ * Transaction support:
+ * - Use [transaction] to execute multiple statements atomically
+ * - Transactions can be nested and are automatically committed or rolled back
+ *
+ * Example:
+ * ```kotlin
+ * database {
+ *     transaction {
+ *         PersonTable INSERT person
+ *         PersonTable UPDATE SET { name = "Alice" } WHERE (age GTE 18)
+ *     }
+ *     val adults = PersonTable SELECT WHERE(age GTE 18) LIMIT 10
+ * }
+ * ```
+ *
  * @author Yuang Qiao
  */
-
 @Suppress("UNCHECKED_CAST")
 public class DatabaseScope internal constructor(
     private val databaseConnection: DatabaseConnection,
     private val enableSimpleSQLLog: Boolean,
 ) {
 
-    /**
-     * Transaction.
-     */
+    // ========== Transaction Management ==========
 
     @Volatile
     private var transactionStatementsGroup: TransactionStatementsGroup? = null
@@ -55,6 +79,11 @@ public class DatabaseScope internal constructor(
     private inline val isInTransaction
         get() = transactionStatementsGroup != null
 
+    /**
+     * Begins a new transaction.
+     *
+     * @return `true` if transaction started successfully, `false` if already in a transaction
+     */
     public fun beginTransaction(): Boolean {
         if (isInTransaction)
             return false
@@ -63,10 +92,25 @@ public class DatabaseScope internal constructor(
         return true
     }
 
+    /**
+     * Ends the current transaction.
+     *
+     * The transaction will be committed or rolled back based on whether
+     * [endTransaction] was called.
+     */
     public fun endTransaction() {
         transactionStatementsGroup = null
     }
 
+    /**
+     * Executes a block of SQL statements as a single transaction.
+     *
+     * If the block completes successfully, the transaction is committed.
+     * If an exception is thrown, the transaction is rolled back.
+     *
+     * @param block The block of SQL statements to execute
+     * @return The result of the block
+     */
     public inline fun <T> transaction(block: DatabaseScope.() -> T): T {
         beginTransaction()
         try {
@@ -76,9 +120,7 @@ public class DatabaseScope internal constructor(
         }
     }
 
-    /**
-     * SQL execute.
-     */
+    // ========== Statement Execution Management ==========
 
     private val executiveEngine = DatabaseExecuteEngine(enableSimpleSQLLog)
 
@@ -98,21 +140,74 @@ public class DatabaseScope internal constructor(
 
     internal fun executeAllStatements() = executiveEngine.executeAllStatement()
 
-    /**
-     * Insert.
-     */
+    // ========== INSERT Operations ==========
 
+    /**
+     * Inserts multiple entities into the table, allowing the database to auto-generate primary keys.
+     *
+     * For entities with `Long?` primary keys annotated with [@PrimaryKey][com.ctrip.sqllin.dsl.annotation.PrimaryKey],
+     * set the ID property to `null` to let SQLite automatically generate the ID. If you need to insert
+     * entities with pre-defined IDs (e.g., during data migration), use [INSERT_WITH_ID] instead.
+     *
+     * Example:
+     * ```kotlin
+     * val person = Person(id = null, name = "Alice", age = 25) // ID will be auto-generated
+     * PersonTable INSERT listOf(person1, person2)
+     * ```
+     *
+     * @see INSERT_WITH_ID for inserting with pre-defined primary key values
+     */
     @StatementDslMaker
     public infix fun <T> Table<T>.INSERT(entities: Iterable<T>) {
         val statement = Insert.insert(this, databaseConnection, entities)
         addStatement(statement)
     }
 
+    /**
+     * Inserts a single entity into the table, allowing the database to auto-generate the primary key.
+     *
+     * For entities with `Long?` primary keys annotated with [@PrimaryKey][com.ctrip.sqllin.dsl.annotation.PrimaryKey],
+     * set the ID property to `null` to let SQLite automatically generate the ID.
+     *
+     * Example:
+     * ```kotlin
+     * val person = Person(id = null, name = "Alice", age = 25) // ID will be auto-generated
+     * PersonTable INSERT person
+     * ```
+     *
+     * @see INSERT_WITH_ID for inserting with a pre-defined primary key value
+     */
     @StatementDslMaker
     public infix fun <T> Table<T>.INSERT(entity: T): Unit =
         INSERT(listOf(entity))
 
-
+    /**
+     * Inserts multiple entities with pre-defined primary key values (advanced API).
+     *
+     * **⚠️ This is an advanced API for special use cases like data migration or testing.**
+     * Use this function when you need to manually specify the primary key ID instead of letting
+     * the database auto-generate it. For normal inserts where the database should generate IDs
+     * automatically, use [INSERT] instead.
+     *
+     * This function is particularly useful for:
+     * - Data migration from another database where you need to preserve existing IDs
+     * - Testing scenarios where you need predictable, specific ID values
+     * - Restoring backup data with original IDs
+     *
+     * Example:
+     * ```kotlin
+     * @OptIn(AdvancedInsertAPI::class)
+     * fun migrateData() {
+     *     val person = Person(id = 12345L, name = "Alice", age = 25) // Use specific ID
+     *     PersonTable INSERT_WITH_ID listOf(person1, person2)
+     * }
+     * ```
+     *
+     * **Important**: This function requires explicit opt-in via `@OptIn(AdvancedInsertAPI::class)`
+     * to acknowledge that you understand the implications of manually specifying primary keys.
+     *
+     * @see INSERT for standard inserts with auto-generated IDs
+     */
     @AdvancedInsertAPI
     @StatementDslMaker
     public infix fun <T> Table<T>.INSERT_WITH_ID(entities: Iterable<T>) {
@@ -120,15 +215,42 @@ public class DatabaseScope internal constructor(
         addStatement(statement)
     }
 
+    /**
+     * Inserts a single entity with a pre-defined primary key value (advanced API).
+     *
+     * **⚠️ This is an advanced API for special use cases like data migration or testing.**
+     * Use this function when you need to manually specify the primary key ID. For normal inserts,
+     * use [INSERT] instead.
+     *
+     * Example:
+     * ```kotlin
+     * @OptIn(AdvancedInsertAPI::class)
+     * fun migrateData() {
+     *     val person = Person(id = 12345L, name = "Alice", age = 25) // Use specific ID
+     *     PersonTable INSERT_WITH_ID person
+     * }
+     * ```
+     *
+     * @see INSERT for standard inserts with auto-generated IDs
+     * @see INSERT_WITH_ID for batch inserts with pre-defined IDs
+     */
     @AdvancedInsertAPI
     @StatementDslMaker
     public infix fun <T> Table<T>.INSERT_WITH_ID(entity: T): Unit =
         INSERT_WITH_ID(listOf(entity))
 
-    /**
-     * Update.
-     */
+    // ========== UPDATE Operations ==========
 
+    /**
+     * Updates records in the table with SET clause.
+     *
+     * Can be followed by WHERE to target specific records.
+     *
+     * Example:
+     * ```kotlin
+     * PersonTable UPDATE SET { name = "Alice" } WHERE (age GTE 18)
+     * ```
+     */
     @StatementDslMaker
     public infix fun <T> Table<T>.UPDATE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
         transactionStatementsGroup?.let {
@@ -139,34 +261,53 @@ public class DatabaseScope internal constructor(
             executiveEngine addStatement it
         }
 
-    /**
-     * Delete.
-     */
+    // ========== DELETE Operations ==========
 
+    /**
+     * Deletes all records from the table.
+     *
+     * Example:
+     * ```kotlin
+     * PersonTable DELETE X
+     * ```
+     */
     @StatementDslMaker
     public infix fun Table<*>.DELETE(x: X) {
         val statement = Delete.deleteAllEntities(this, databaseConnection)
         addStatement(statement)
     }
 
+    /**
+     * Deletes records matching the WHERE clause.
+     *
+     * Example:
+     * ```kotlin
+     * PersonTable DELETE WHERE(age LT 18)
+     * ```
+     */
     @StatementDslMaker
     public infix fun <T> Table<T>.DELETE(clause: WhereClause<T>) {
         val statement = Delete.delete(this, databaseConnection, clause)
         addStatement(statement)
     }
 
-    /**
-     * Select.
-     */
+    // ========== SELECT Operations ==========
 
     /**
-     * Select with no any clause.
+     * Selects all records from the table.
+     *
+     * Example:
+     * ```kotlin
+     * val people = PersonTable SELECT X
+     * ```
      */
-
     @StatementDslMaker
     public inline infix fun <reified T> Table<T>.SELECT(x: X): FinalSelectStatement<T> =
         select(kSerializer(), false)
 
+    /**
+     * Selects distinct records from the table.
+     */
     @StatementDslMaker
     public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(x: X): FinalSelectStatement<T> =
         select(kSerializer(), true)
@@ -179,9 +320,15 @@ public class DatabaseScope internal constructor(
     }
 
     /**
-     * Receive the 'WHERE' clause.
+     * Selects records matching the WHERE clause.
+     *
+     * Can be followed by ORDER BY, LIMIT, etc.
+     *
+     * Example:
+     * ```kotlin
+     * val adults = PersonTable SELECT WHERE(age GTE 18)
+     * ```
      */
-
     @StatementDslMaker
     public inline infix fun <reified T> Table<T>.SELECT(clause: WhereClause<T>): WhereSelectStatement<T> =
         select(kSerializer(), clause, false)
@@ -198,9 +345,13 @@ public class DatabaseScope internal constructor(
     }
 
     /**
-     * Receive the 'ORDER BY' clause.
+     * Selects records with ORDER BY clause.
+     *
+     * Example:
+     * ```kotlin
+     * val sorted = PersonTable SELECT ORDER_BY(age.DESC())
+     * ```
      */
-
     @StatementDslMaker
     public inline infix fun <reified T> Table<T>.SELECT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
         select(kSerializer(), clause, false)
@@ -217,9 +368,13 @@ public class DatabaseScope internal constructor(
     }
 
     /**
-     * Receive the 'LIMIT' clause.
+     * Selects a limited number of records.
+     *
+     * Example:
+     * ```kotlin
+     * val first10 = PersonTable SELECT LIMIT(0, 10)
+     * ```
      */
-
     @StatementDslMaker
     public inline infix fun <reified T> Table<T>.SELECT(clause: LimitClause<T>): LimitSelectStatement<T> =
         select(kSerializer(), clause, false)
@@ -236,9 +391,13 @@ public class DatabaseScope internal constructor(
     }
 
     /**
-     * Receive the 'GROUP BY' clause.
+     * Selects records with GROUP BY clause.
+     *
+     * Example:
+     * ```kotlin
+     * val grouped = PersonTable SELECT GROUP_BY(age)
+     * ```
      */
-
     @StatementDslMaker
     public inline infix fun <reified T> Table<T>.SELECT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
         select(kSerializer(), clause, false)
@@ -254,16 +413,28 @@ public class DatabaseScope internal constructor(
         return statement
     }
 
+    /**
+     * Gets the KSerializer for the reified type parameter.
+     */
     public inline fun <reified T> getKSerializer(): KSerializer<T> = EmptySerializersModule().serializer()
 
-    /**
-     * The 'UNION' clause of Select.
-     */
+    // ========== UNION Operations ==========
 
     private val unionSelectStatementGroupStack by lazy { ArrayDeque<UnionSelectStatementGroup<*>>() }
 
     private fun getSelectStatementGroup(): StatementContainer = unionSelectStatementGroupStack.lastOrNull() ?: transactionStatementsGroup ?: executiveEngine
 
+    /**
+     * Combines multiple SELECT statements with UNION (removes duplicates).
+     *
+     * Example:
+     * ```kotlin
+     * val combined = PersonTable.UNION {
+     *     it SELECT WHERE(age LT 18)
+     *     it SELECT WHERE(age GTE 65)
+     * }
+     * ```
+     */
     public inline fun <T> Table<T>.UNION(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
         beginUnion<T>()
         var selectStatement: SelectStatement<T>? = null
@@ -276,6 +447,9 @@ public class DatabaseScope internal constructor(
         }
     }
 
+    /**
+     * Combines multiple SELECT statements with UNION ALL (keeps duplicates).
+     */
     @StatementDslMaker
     public inline fun <T> Table<T>.UNION_ALL(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
         beginUnion<T>()
@@ -289,24 +463,39 @@ public class DatabaseScope internal constructor(
         }
     }
 
+    /**
+     * Begins a UNION statement group (for advanced usage).
+     */
     public fun <T> beginUnion() {
         unionSelectStatementGroupStack.add(UnionSelectStatementGroup<T>())
     }
 
+    /**
+     * Creates the final UNION select statement from accumulated SELECT statements.
+     */
     public fun <T> createUnionSelectStatement(isUnionAll: Boolean): FinalSelectStatement<T> {
         check(unionSelectStatementGroupStack.isNotEmpty()) { "Please invoke the 'beginUnion' before you invoke this function!!!" }
         return (unionSelectStatementGroupStack.last() as UnionSelectStatementGroup<T>).unionStatements(isUnionAll)
     }
 
+    /**
+     * Ends the UNION statement group and adds the final statement.
+     */
     public fun <T> endUnion(selectStatement: SelectStatement<T>?) {
         unionSelectStatementGroupStack.removeLast()
         selectStatement?.let { addSelectStatement(it) }
     }
 
-    /**
-     * Receive the 'JOIN' clause.
-     */
+    // ========== JOIN Operations ==========
 
+    /**
+     * Selects with JOIN clause (requires ON condition).
+     *
+     * Example:
+     * ```kotlin
+     * val joined = PersonTable SELECT INNER_JOIN(AddressTable) ON ...
+     * ```
+     */
     @StatementDslMaker
     public inline infix fun <T, reified R> Table<T>.SELECT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
         select(getKSerializer(), clause, false)
@@ -321,9 +510,13 @@ public class DatabaseScope internal constructor(
     }
 
     /**
-     * Receive the natural join clause(includes 'NATURAL LEFT OUTER JOIN' and 'NATURAL INNER JOIN').
+     * Selects with NATURAL JOIN (joins on columns with same names).
+     *
+     * Example:
+     * ```kotlin
+     * val joined = PersonTable SELECT NATURAL_INNER_JOIN(AddressTable)
+     * ```
      */
-
     @StatementDslMaker
     public inline infix fun <T, reified R> Table<T>.SELECT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
         select(getKSerializer(), clause, false)
@@ -339,8 +532,17 @@ public class DatabaseScope internal constructor(
         return statement
     }
 
+    // ========== CREATE Operations ==========
+
     /**
-     * CREATE
+     * Creates a table from its Table definition.
+     *
+     * Example:
+     * ```kotlin
+     * CREATE(PersonTable)
+     * // or
+     * PersonTable.CREATE()
+     * ```
      */
     @StatementDslMaker
     public infix fun <T> CREATE(table: Table<T>) {
@@ -348,6 +550,9 @@ public class DatabaseScope internal constructor(
         addStatement(statement)
     }
 
+    /**
+     * Creates this table from its definition (extension function variant).
+     */
     @StatementDslMaker
     @JvmName("create")
     public fun <T> Table<T>.CREATE(): Unit = CREATE(this)

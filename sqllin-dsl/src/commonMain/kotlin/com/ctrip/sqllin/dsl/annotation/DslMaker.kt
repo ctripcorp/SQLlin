@@ -17,25 +17,49 @@
 package com.ctrip.sqllin.dsl.annotation
 
 /**
- * Dsl maker annotations
+ * DSL marker for SQL statement functions to prevent implicit receiver nesting.
+ *
+ * Applied to top-level SQL statement functions (SELECT, INSERT, UPDATE, DELETE).
+ *
  * @author Yuang Qiao
  */
-
 @DslMarker
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.BINARY)
-public annotation class StatementDslMaker
+internal annotation class StatementDslMaker
 
+/**
+ * DSL marker for SQL keyword classes and properties to prevent implicit receiver nesting.
+ *
+ * Applied to SQL keyword constructs (WHERE, ORDER BY, etc.) and their properties.
+ *
+ * @author Yuang Qiao
+ */
 @DslMarker
 @Target(AnnotationTarget.CLASS, AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.BINARY)
-public annotation class KeyWordDslMaker
+internal annotation class KeyWordDslMaker
 
+/**
+ * DSL marker for SQL function builders to prevent implicit receiver nesting.
+ *
+ * Applied to SQL function builder functions (aggregate functions, etc.).
+ *
+ * @author Yuang Qiao
+ */
 @DslMarker
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.BINARY)
-public annotation class FunctionDslMaker
+internal annotation class FunctionDslMaker
 
+/**
+ * DSL marker for generated column name properties.
+ *
+ * This annotation is applied by sqllin-processor to generated table column properties.
+ * **Do not use this annotation manually** - it is intended for code generation only.
+ *
+ * @author Yuang Qiao
+ */
 @DslMarker
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.BINARY)

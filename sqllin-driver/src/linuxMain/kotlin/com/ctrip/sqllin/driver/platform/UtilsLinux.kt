@@ -22,12 +22,13 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.toKString
 
 /**
- * The tools with Linux implementation
- * @author yaqiao
+ * Converts C byte pointer to String using toKString on Linux.
  */
-
 @OptIn(ExperimentalForeignApi::class)
 internal actual fun bytesToString(bv: CPointer<ByteVar>): String = bv.toKString()
 
+/**
+ * Linux file path separator (forward slash).
+ */
 internal actual inline val separatorChar: Char
     get() = '/'

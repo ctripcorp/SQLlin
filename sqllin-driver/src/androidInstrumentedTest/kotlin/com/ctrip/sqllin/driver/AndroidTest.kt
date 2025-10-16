@@ -26,7 +26,7 @@ import org.junit.runner.RunWith
 
 /**
  * Android instrumented test
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 @RunWith(AndroidJUnit4ClassRunner::class)

@@ -20,10 +20,29 @@ import com.ctrip.sqllin.dsl.sql.Table
 import kotlinx.serialization.descriptors.SerialDescriptor
 
 /**
- * Some function that used for encode entities to SQL
+ * Utility functions for encoding entity objects to SQL statements.
+ *
  * @author Yuang Qiao
  */
 
+/**
+ * Encodes a collection of entities into an INSERT statement's VALUES clause.
+ *
+ * Generates SQL in the format:
+ * ```
+ * (column1, column2, ...) VALUES (?, ?, ...), (?, ?, ...), ...
+ * ```
+ *
+ * Handles primary key logic:
+ * - For auto-increment `Long?` primary keys, omits the ID column unless [isInsertWithId] is true
+ * - For user-provided primary keys or composite keys, includes all columns
+ *
+ * @param table The table definition containing serialization and primary key metadata
+ * @param builder StringBuilder to append the SQL to
+ * @param values The entities to insert
+ * @param parameters Mutable list to collect parameterized query values
+ * @param isInsertWithId Whether to include the primary key column for rowid-backed keys
+ */
 internal fun <T> encodeEntities2InsertValues(
     table: Table<T>,
     builder: StringBuilder,
@@ -59,6 +78,14 @@ internal fun <T> encodeEntities2InsertValues(
     }
 }
 
+/**
+ * Appends database column names to the StringBuilder, optionally excluding a primary key.
+ *
+ * @param descriptor The serialization descriptor containing column/element names
+ * @param primaryKeyName The name of the primary key column to potentially exclude
+ * @param isInsertId Whether to include the primary key column
+ * @return The index of the excluded primary key column, or -1 if all columns were included
+ */
 internal fun StringBuilder.appendDBColumnName(
     descriptor: SerialDescriptor,
     primaryKeyName: String?,
@@ -86,6 +113,9 @@ internal fun StringBuilder.appendDBColumnName(
     index
 }
 
+/**
+ * Appends all database column names from the descriptor as a comma-separated list.
+ */
 internal infix fun StringBuilder.appendDBColumnName(descriptor: SerialDescriptor) {
     if (descriptor.elementsCount > 0)
         append(descriptor.getElementName(0))

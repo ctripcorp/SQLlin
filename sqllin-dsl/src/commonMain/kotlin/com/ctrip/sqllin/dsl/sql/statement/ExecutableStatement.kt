@@ -17,10 +17,23 @@
 package com.ctrip.sqllin.dsl.sql.statement
 
 /**
- * Abstract SQL statement that could execute
- * @author yaqiao
+ * Base interface for SQL statements that can be executed against the database.
+ *
+ * Implementations include:
+ * - [SingleStatement]: Individual SQL operations (INSERT, UPDATE, DELETE, CREATE, SELECT)
+ * - [TransactionStatementsGroup]: Multiple statements wrapped in a transaction
+ *
+ * Statements are collected during DSL building and executed when the [com.ctrip.sqllin.dsl.DatabaseScope]
+ * exits.
+ *
+ * @author Yuang Qiao
  */
-
 public sealed interface ExecutableStatement {
+    /**
+     * Executes this statement against the database.
+     *
+     * For single statements, this runs the SQL directly.
+     * For statement groups, this executes all contained statements in order.
+     */
     public fun execute()
 }

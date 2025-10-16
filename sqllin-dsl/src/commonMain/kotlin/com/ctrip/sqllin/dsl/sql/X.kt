@@ -19,9 +19,22 @@ package com.ctrip.sqllin.dsl.sql
 import com.ctrip.sqllin.dsl.annotation.KeyWordDslMaker
 
 /**
- * Express "*" in SQL
- * @author yaqiao
+ * Represents the wildcard `*` in SQL statements.
+ *
+ * Used in DSL operations where SQL requires a wildcard or universal selector:
+ * - `SELECT *`: Select all columns from a table
+ * - `DELETE *`: Delete all records from a table
+ *
+ * Example:
+ * ```kotlin
+ * // SELECT * FROM PersonTable
+ * val allPeople = PersonTable SELECT X
+ *
+ * // DELETE FROM PersonTable
+ * PersonTable DELETE X
+ * ```
+ *
+ * @author Yuang Qiao
  */
-
 @KeyWordDslMaker
 public object X

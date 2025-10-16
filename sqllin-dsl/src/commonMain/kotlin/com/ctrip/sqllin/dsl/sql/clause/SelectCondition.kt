@@ -17,19 +17,39 @@
 package com.ctrip.sqllin.dsl.sql.clause
 
 /**
- * Present the single condition in where clause
- * @author yaqiao
+ * Represents a condition expression used in WHERE or HAVING clauses.
+ *
+ * Encapsulates a single condition (e.g., `id = ?`, `age > 18`) along with its parameterized
+ * values. Supports combining conditions with AND/OR operators to build complex predicates.
+ *
+ * Conditions are built by comparison operations on [ClauseElement] instances:
+ * ```kotlin
+ * userTable.id EQ 42  // Creates: SelectCondition("id = ?", ["42"])
+ * userTable.age GT 18 // Creates: SelectCondition("age > ?", ["18"])
+ * ```
+ *
+ * @property conditionSQL The SQL condition expression (may contain ? placeholders)
+ * @property parameters Parameterized query values (strings only), or null if none
+ *
+ * @author Yuang Qiao
  */
-
 public class SelectCondition internal constructor(
     internal val conditionSQL: String,
     internal val parameters: MutableList<String>?,
 ) {
 
-    // Where condition 'OR' operator.
+    /**
+     * Combines this condition with another using OR.
+     *
+     * Creates: `(condition1) OR (condition2)`
+     */
     internal infix fun or(next: SelectCondition): SelectCondition = append("OR", next)
 
-    // Where condition 'AND' operator.
+    /**
+     * Combines this condition with another using AND.
+     *
+     * Creates: `(condition1) AND (condition2)`
+     */
     internal infix fun and(next: SelectCondition): SelectCondition = append("AND", next)
 
     private fun append(symbol: String, next: SelectCondition): SelectCondition {

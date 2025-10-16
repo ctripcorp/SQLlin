@@ -22,10 +22,20 @@ import com.ctrip.sqllin.dsl.sql.clause.SelectCondition
 import kotlinx.serialization.DeserializationStrategy
 
 /**
- * SQL 'JOIN' statement, but need add 'ON' or 'USING' statement
- * @author yaqiao
+ * Intermediate JOIN statement requiring an ON or USING condition.
+ *
+ * Represents a JOIN operation that has been initiated but not yet completed. In SQL, a JOIN
+ * must specify how tables relate through either:
+ * - USING clause: Lists common column names to join on
+ * - ON clause: Specifies a join condition expression
+ *
+ * This class enforces the requirement at compile time by not extending [SelectStatement].
+ * It converts to [JoinSelectStatement] only after a condition is added.
+ *
+ * @param R The result entity type after JOIN
+ *
+ * @author Yuang Qiao
  */
-
 public class JoinStatementWithoutCondition<R> internal constructor(
     private val sqlStr: String,
     private val deserializer: DeserializationStrategy<R>,
@@ -33,6 +43,15 @@ public class JoinStatementWithoutCondition<R> internal constructor(
     private val container: StatementContainer,
     private val addSelectStatement: (SelectStatement<R>) -> Unit
 ) {
+    /**
+     * Completes the JOIN by adding a USING clause.
+     *
+     * Generates SQL in the format: `JOIN table USING (column1, column2, ...)`.
+     * The USING clause specifies columns that exist in both tables with the same name.
+     *
+     * @param clauseElements Column elements to join on (must not be empty)
+     * @return Completed JOIN statement that can accept further clauses
+     */
     internal infix fun convertToJoinSelectStatement(clauseElements: Iterable<ClauseElement>): JoinSelectStatement<R> {
         val iterator = clauseElements.iterator()
         require(iterator.hasNext()) { "Param 'clauseElements' must not be empty!!!" }
@@ -51,6 +70,15 @@ public class JoinStatementWithoutCondition<R> internal constructor(
         return joinStatement
     }
 
+    /**
+     * Completes the JOIN by adding an ON clause.
+     *
+     * Generates SQL in the format: `JOIN table ON condition`.
+     * The ON clause specifies an arbitrary boolean expression for joining tables.
+     *
+     * @param condition Join condition (e.g., table1.id = table2.foreign_id)
+     * @return Completed JOIN statement that can accept further clauses
+     */
     internal infix fun convertToJoinSelectStatement(condition: SelectCondition): JoinSelectStatement<R> {
         val sql = buildString {
             append(sqlStr)

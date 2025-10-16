@@ -24,14 +24,19 @@ import com.ctrip.sqllin.sqlite3.*
 import kotlinx.cinterop.*
 
 /**
- * The native database wrapper for `sqlite3`, interop with SQLite C APIs directly
- * @author yaqiao
+ * Native wrapper for sqlite3 database handle.
+ *
+ * Provides direct C interop with SQLite3 APIs for database operations on native platforms.
+ *
+ * @author Yuang Qiao
  */
-
 @OptIn(ExperimentalForeignApi::class)
 internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite3>) {
 
     companion object {
+        /**
+         * Opens a native SQLite database with the given configuration.
+         */
         fun openNativeDatabase(configuration: DatabaseConfiguration, realPath: String): NativeDatabase {
             val sqliteFlags = SQLITE_OPEN_READWRITE or SQLITE_OPEN_CREATE or SQLITE_OPEN_URI
 
@@ -75,6 +80,9 @@ internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite
         }
     }
 
+    /**
+     * Prepares a SQL statement for execution.
+     */
     fun prepareStatement(sqlString: String): NativeStatement {
         val cStatement = memScoped {
             val statementPtr = alloc<CPointerVar<sqlite3_stmt>>()
@@ -91,6 +99,9 @@ internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite
         return NativeStatement(this, cStatement)
     }
 
+    /**
+     * Executes SQL directly without parameter binding.
+     */
     fun rawExecSql(sqlString: String) {
         val err = sqlite3_exec(dbPointer, sqlString, null, null, null)
         if (err != SQLITE_OK) {
@@ -99,9 +110,15 @@ internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite
         }
     }
 
+    /**
+     * Whether the database is actually opened in read-only mode.
+     */
     val isActualReadOnly: Boolean
         get() = sqlite3_db_readonly(dbPointer, null) != 0
 
+    /**
+     * Closes the database connection.
+     */
     fun close(){
         val err = sqlite3_close_v2(dbPointer)
         if (err != SQLITE_OK) {

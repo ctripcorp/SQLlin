@@ -23,15 +23,32 @@ import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.compiler.encodeEntities2InsertValues
 
 /**
- * SQL insert
+ * INSERT operation builder.
+ *
+ * Constructs INSERT statements by encoding entity objects into SQL VALUES clauses with
+ * parameterized queries. Supports both auto-generated primary keys and user-provided keys.
+ *
  * @author Yuang Qiao
  */
-
 internal object Insert : Operation {
 
     override val sqlStr: String
         get() = "INSERT INTO "
 
+    /**
+     * Builds an INSERT statement for the given entities.
+     *
+     * Generates SQL in the format:
+     * ```
+     * INSERT INTO table_name (column1, column2, ...) VALUES (?, ?, ...), (?, ?, ...), ...
+     * ```
+     *
+     * @param table Table definition containing serialization metadata
+     * @param connection Database connection for execution
+     * @param entities Entities to insert
+     * @param isInsertWithId Whether to include the primary key column for auto-increment keys
+     * @return INSERT statement ready for execution
+     */
     fun <T> insert(table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>, isInsertWithId: Boolean = false): SingleStatement {
         val parameters = ArrayList<String>()
         val sql = buildString {

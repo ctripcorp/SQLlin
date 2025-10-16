@@ -20,18 +20,35 @@ import com.ctrip.sqllin.driver.platform.separatorChar
 import kotlin.jvm.JvmInline
 
 /**
- * SQLite extension function
- * @author yaqiao
- */
-
-/**
- * Abstract database path, it is 'Context' in Android, and 'String' in native targets.
- * DO NOT implementation 'DatabasePath' by yourself!!!
+ * Platform-agnostic database path representation.
+ *
+ * On Android, this is implemented as `Context`.
+ * On native and JVM targets, this is implemented as `String`.
+ *
+ * **Do not implement this interface manually** - use platform-specific factory functions instead.
+ *
+ * @author Yuang Qiao
  */
 public interface DatabasePath
 
+/**
+ * Opens a SQLite database connection with the given configuration.
+ *
+ * Platform-specific implementation for database opening.
+ *
+ * @param config The database configuration
+ * @return A database connection
+ * @throws SQLiteException if the database cannot be opened
+ */
 public expect fun openDatabase(config: DatabaseConfiguration): DatabaseConnection
 
+/**
+ * Opens a database connection, executes a block, and automatically closes the connection.
+ *
+ * @param config The database configuration
+ * @param block The block to execute with the connection
+ * @return The result of the block
+ */
 public inline fun <T> openDatabase(config: DatabaseConfiguration, block: (DatabaseConnection) -> T): T {
     val connection = openDatabase(config)
     try {
@@ -41,6 +58,15 @@ public inline fun <T> openDatabase(config: DatabaseConfiguration, block: (Databa
     }
 }
 
+/**
+ * Executes a block within a database transaction.
+ *
+ * The transaction is committed if the block completes successfully,
+ * or rolled back if an exception is thrown.
+ *
+ * @param block The block to execute within the transaction
+ * @return The result of the block
+ */
 public inline fun <T> DatabaseConnection.withTransaction(block: (DatabaseConnection) -> T): T {
     beginTransaction()
     try {
@@ -52,6 +78,14 @@ public inline fun <T> DatabaseConnection.withTransaction(block: (DatabaseConnect
     }
 }
 
+/**
+ * Executes a query and automatically closes the cursor after the block completes.
+ *
+ * @param sql The SELECT statement
+ * @param bindParams Optional parameters to bind to the query
+ * @param block The block to execute with the cursor
+ * @return The result of the block
+ */
 public inline fun <T> DatabaseConnection.withQuery(
     sql: String,
     bindParams: Array<String?>? = null,
@@ -65,8 +99,18 @@ public inline fun <T> DatabaseConnection.withQuery(
     }
 }
 
+/**
+ * Deletes a database file.
+ *
+ * @param path The database directory path
+ * @param name The database filename
+ * @return `true` if the database was deleted successfully, `false` otherwise
+ */
 public expect fun deleteDatabase(path: DatabasePath, name: String): Boolean
 
+/**
+ * Updates the database's synchronous mode if different from current.
+ */
 internal infix fun DatabaseConnection.updateSynchronousMode(mode: SynchronousMode) {
     val currentJournalMode = withQuery("PRAGMA synchronous;") {
         it.next()
@@ -76,6 +120,9 @@ internal infix fun DatabaseConnection.updateSynchronousMode(mode: SynchronousMod
         execSQL("PRAGMA synchronous=${mode.value};")
 }
 
+/**
+ * Updates the database's journal mode if different from current.
+ */
 internal infix fun DatabaseConnection.updateJournalMode(mode: JournalMode) {
     val currentJournalMode = withQuery("PRAGMA journal_mode;") {
         it.next()
@@ -85,6 +132,11 @@ internal infix fun DatabaseConnection.updateJournalMode(mode: JournalMode) {
         withQuery("PRAGMA journal_mode=${mode.name};") {}
 }
 
+/**
+ * Handles database creation and schema upgrades based on version.
+ *
+ * Automatically manages the PRAGMA user_version to track schema versions.
+ */
 internal fun DatabaseConnection.migrateIfNeeded(
     create: (DatabaseConnection) -> Unit,
     upgrade: (DatabaseConnection, Int, Int) -> Unit,
@@ -108,6 +160,9 @@ internal fun DatabaseConnection.migrateIfNeeded(
     }
 }
 
+/**
+ * Resolves the database path for disk or in-memory mode.
+ */
 internal fun DatabaseConfiguration.diskOrMemoryPath(): String =
     if (inMemory) {
         if (name.isBlank())
@@ -119,6 +174,9 @@ internal fun DatabaseConfiguration.diskOrMemoryPath(): String =
         getDatabaseFullPath((path as StringDatabasePath).pathString, name)
     }
 
+/**
+ * Constructs the full database file path from directory and filename.
+ */
 internal fun getDatabaseFullPath(dirPath: String, name: String): String {
     val param = when {
         dirPath.isEmpty() -> name

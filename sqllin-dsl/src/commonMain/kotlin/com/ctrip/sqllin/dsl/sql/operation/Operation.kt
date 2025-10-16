@@ -17,10 +17,22 @@
 package com.ctrip.sqllin.dsl.sql.operation
 
 /**
- * SQL operation: SELECT, UPDATE, DELETE, INSERT
- * @author yaqiao
+ * Base interface for SQL operations in the DSL.
+ *
+ * Marker interface for operation builders (SELECT, UPDATE, DELETE, INSERT, CREATE) that construct
+ * SQL strings. Each operation implementation accumulates clauses and generates the final SQL.
+ *
+ * Implementations:
+ * - [SelectBuilder]: SELECT queries
+ * - [UpdateBuilder]: UPDATE statements
+ * - [DeleteBuilder]: DELETE statements
+ * - [InsertBuilder]: INSERT statements
+ * - [CreateBuilder]: CREATE TABLE statements
+ *
+ * @property sqlStr The accumulated SQL string built by this operation
+ *
+ * @author Yuang Qiao
  */
-
 internal interface Operation {
     val sqlStr: String
 }

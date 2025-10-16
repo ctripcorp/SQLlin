@@ -19,30 +19,51 @@ package com.ctrip.sqllin.dsl.sql.clause
 import com.ctrip.sqllin.dsl.sql.Table
 
 /**
- * Clause String
- * @author yaqiao
+ * Wrapper for String column/function references in SQL clauses.
+ *
+ * Provides comparison and pattern matching operators for string values. Supports comparisons
+ * against literal strings or other string columns/functions.
+ *
+ * Available operators:
+ * - `eq`: Equals (=) - handles null with IS NULL
+ * - `neq`: Not equals (!=) - handles null with IS NOT NULL
+ * - `like`: LIKE pattern matching (case-insensitive, supports % and _ wildcards)
+ * - `glob`: GLOB pattern matching (case-sensitive, supports * and ? wildcards)
+ *
+ * @author Yuang Qiao
  */
-
 public class ClauseString(
     valueName: String,
     table: Table<*>,
     isFunction: Boolean,
 ) : ClauseElement(valueName, table, isFunction) {
 
-    // Equals, ==
+    /** Equals (=), or IS NULL if value is null */
     internal infix fun eq(str: String?): SelectCondition = appendString("=", " IS", str)
 
-    // Equals, append another ClauseString
+    /** Equals (=) - compare against another column/function */
     internal infix fun eq(clauseString: ClauseString): SelectCondition = appendClauseString("=", clauseString)
 
-    // Not equals to, !=
+    /** Not equals (!=), or IS NOT NULL if value is null */
     internal infix fun neq(str: String?): SelectCondition = appendString("!=", " IS NOT", str)
 
-    // Not equal to, append another ClauseString
+    /** Not equals (!=) - compare against another column/function */
     internal infix fun neq(clauseString: ClauseString): SelectCondition = appendClauseString("!=", clauseString)
 
+    /**
+     * LIKE operator - case-insensitive pattern matching.
+     *
+     * Wildcards: `%` (any characters), `_` (single character)
+     * Example: `"John%"` matches "John", "Johnson", etc.
+     */
     internal infix fun like(regex: String): SelectCondition = appendRegex(" LIKE ", regex)
 
+    /**
+     * GLOB operator - case-sensitive pattern matching.
+     *
+     * Wildcards: `*` (any characters), `?` (single character)
+     * Example: `"John*"` matches "John", "Johnson", etc. (case-sensitive)
+     */
     internal infix fun glob(regex: String): SelectCondition = appendRegex(" GLOB ", regex)
 
     private fun appendRegex(symbol: String, regex: String): SelectCondition {

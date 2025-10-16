@@ -17,8 +17,10 @@
 package com.ctrip.sqllin.driver
 
 /**
- * The exceptions about SQLite, they include the native SQLite result codes and error message
+ * Exception thrown when SQLite operations fail.
+ *
+ * Contains native SQLite result codes and error messages.
+ *
  * @author Yuang Qiao
  */
-
 public open class SQLiteException(message: String) : Exception(message)

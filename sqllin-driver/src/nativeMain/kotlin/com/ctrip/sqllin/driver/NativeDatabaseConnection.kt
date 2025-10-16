@@ -17,14 +17,22 @@
 package com.ctrip.sqllin.driver
 
 /**
- * The super class for DatabaseConnection on native platforms
- * @author yaqiao
+ * Base class for native platform database connections.
+ *
+ * Handles parameter binding for SQLiteStatement with support for Kotlin native types.
+ *
+ * @author Yuang Qiao
  */
-
 internal abstract class NativeDatabaseConnection : DatabaseConnection {
 
+    /**
+     * Creates a SQLiteStatement for the given SQL.
+     */
     abstract fun createStatement(sql: String): SQLiteStatement
 
+    /**
+     * Binds parameters to a SQLiteStatement, supporting common Kotlin types.
+     */
     protected fun bindParamsToSQL(sql: String, bindParams: Array<out Any?>?): SQLiteStatement = createStatement(sql).apply {
         bindParams?.run {
             require(isNotEmpty()) { "Empty bindArgs" }

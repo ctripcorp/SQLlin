@@ -55,10 +55,12 @@ import kotlinx.cinterop.*
 import platform.posix.usleep
 
 /**
- * The native statement wrapper for `sqlite3_stmt`, interop with SQLite C APIs directly
- * @author yaqiao
+ * Native wrapper for sqlite3_stmt prepared statement handle.
+ *
+ * Provides direct C interop with SQLite3 statement APIs for query execution and parameter binding.
+ *
+ * @author Yuang Qiao
  */
-
 @OptIn(ExperimentalForeignApi::class)
 internal class NativeStatement(
     private val database: NativeDatabase,

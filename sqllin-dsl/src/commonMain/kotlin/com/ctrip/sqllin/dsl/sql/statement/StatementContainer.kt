@@ -17,11 +17,25 @@
 package com.ctrip.sqllin.dsl.sql.statement
 
 /**
- * The container that used for store statement
- * @author yaqiao
+ * Container for managing and modifying SQL statements.
+ *
+ * Used by statement builders (e.g., UPDATE, JOIN) to replace or update the last statement
+ * in a collection when DSL operations refine or extend it. For example, when an UPDATE
+ * statement adds a WHERE clause, it replaces the initial UPDATE statement.
+ *
+ * Implementations:
+ * - [DatabaseExecuteEngine]: Executes standalone statements
+ * - [TransactionStatementsGroup]: Groups statements within a transaction
+ * - [UnionSelectStatementGroup]: Accumulates SELECT statements for UNION operations
+ *
+ * @author Yuang Qiao
  */
-
 internal fun interface StatementContainer {
 
+    /**
+     * Replaces the most recently added statement with a modified version.
+     *
+     * Used when DSL operations progressively build up a statement (e.g., adding WHERE to UPDATE).
+     */
     infix fun changeLastStatement(statement: SingleStatement)
 }

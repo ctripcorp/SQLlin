@@ -17,10 +17,25 @@
 package com.ctrip.sqllin.dsl.sql.clause
 
 /**
- * The SQL clause that could used for 'select' statement
- * @author yaqiao
+ * Base interface for clauses used in SELECT statements.
+ *
+ * Represents SQL clauses that can be appended to SELECT queries to filter, order, group,
+ * limit, or join data. Each implementation provides its SQL string representation.
+ *
+ * Implementations:
+ * - [WhereClause]: WHERE condition filtering
+ * - [OrderByClause]: ORDER BY sorting
+ * - [LimitClause]: LIMIT row count restriction
+ * - [OffsetClause]: OFFSET row skipping
+ * - [GroupByClause]: GROUP BY aggregation grouping
+ * - [HavingClause]: HAVING condition for grouped data
+ * - [JoinClause], [InnerJoinClause], [LeftOuterJoinClause], [CrossJoinClause], [NaturalJoinClause]: JOIN operations
+ *
+ * @param T The entity type this clause operates on
+ * @property clauseStr The SQL string representation (e.g., " WHERE id = ?", " ORDER BY name ASC")
+ *
+ * @author Yuang Qiao
  */
-
 public sealed interface SelectClause<T> : Clause<T> {
     public val clauseStr: String
 }

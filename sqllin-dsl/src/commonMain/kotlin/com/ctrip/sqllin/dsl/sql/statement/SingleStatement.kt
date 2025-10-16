@@ -17,19 +17,38 @@
 package com.ctrip.sqllin.dsl.sql.statement
 
 /**
- * Abstract Single executable statement
- * @author yaqiao
+ * Base class for individual SQL statements.
+ *
+ * Represents a single SQL operation (INSERT, UPDATE, DELETE, CREATE, or SELECT) that can be
+ * executed against the database. Statements maintain their SQL string and optional parameters
+ * for parameterized queries.
+ *
+ * Subclasses include specific statement types defined in the [com.ctrip.sqllin.dsl.sql.operation] package.
+ *
+ * @property sqlStr The complete SQL string for this statement
+ *
+ * @author Yuang Qiao
  */
-
 public sealed class SingleStatement(
     public val sqlStr: String,
 ) : ExecutableStatement {
 
+    /**
+     * Parameters for parameterized query placeholders (strings only).
+     *
+     * `null` if the statement has no parameters.
+     */
     internal abstract val parameters: MutableList<String>?
 
+    /**
+     * Parameters converted to array format for driver execution.
+     */
     internal val params: Array<String>?
         get() = parameters?.toTypedArray()
 
+    /**
+     * Logs the SQL string and parameters for debugging.
+     */
     internal fun printlnSQL() {
         print("SQL String: $sqlStr")
         parameters?.let {

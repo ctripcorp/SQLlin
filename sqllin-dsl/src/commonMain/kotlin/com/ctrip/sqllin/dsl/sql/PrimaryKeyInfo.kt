@@ -17,10 +17,37 @@
 package com.ctrip.sqllin.dsl.sql
 
 /**
- * Describe the information of primary key(s)
+ * Metadata describing a table's primary key configuration.
+ *
+ * This class captures information extracted from [@PrimaryKey][com.ctrip.sqllin.dsl.annotation.PrimaryKey]
+ * and [@CompositePrimaryKey][com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey] annotations
+ * during code generation. It enables the DSL to properly handle INSERT and UPDATE operations
+ * with respect to primary key constraints.
+ *
+ * **Single Primary Key:**
+ * When a table has a single primary key column (marked with `@PrimaryKey`):
+ * - [primaryKeyName] contains the column name
+ * - [compositePrimaryKeys] is `null`
+ * - [isRowId] is `true` if the key is a `Long?` type (maps to SQLite's INTEGER PRIMARY KEY/rowid)
+ * - [isAutomaticIncrement] is `true` if `@PrimaryKey(isAutoincrement = true)` was specified
+ *
+ * **Composite Primary Key:**
+ * When a table has multiple primary key columns (marked with `@CompositePrimaryKey`):
+ * - [primaryKeyName] is `null`
+ * - [compositePrimaryKeys] contains the list of column names forming the composite key
+ * - [isRowId] is `false` (composite keys cannot use rowid alias)
+ * - [isAutomaticIncrement] is `false` (composite keys cannot auto-increment)
+ *
+ * **No Primary Key:**
+ * When a table has no primary key annotations, [Table.primaryKeyInfo] is `null`.
+ *
+ * @property primaryKeyName The name of the single primary key column, or `null` for composite keys
+ * @property isAutomaticIncrement Whether the primary key uses SQLite's AUTOINCREMENT keyword
+ * @property isRowId Whether the primary key is a `Long?` type that maps to SQLite's rowid
+ * @property compositePrimaryKeys List of column names forming a composite primary key, or `null` for single keys
+ *
  * @author Yuang Qiao
  */
-
 public class PrimaryKeyInfo(
     internal val primaryKeyName: String?,
     internal val isAutomaticIncrement: Boolean,

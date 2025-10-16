@@ -17,10 +17,16 @@
 package com.ctrip.sqllin.dsl.sql.statement
 
 /**
- * Used for compose multi select statement that use the 'UNION' clause
- * @author yaqiao
+ * Container for building UNION queries from multiple SELECT statements.
+ *
+ * Accumulates SELECT statements written inside a UNION DSL scope and combines them
+ * with UNION or UNION ALL operators. Supports progressive clause building on individual
+ * SELECT statements before they are unioned.
+ *
+ * @param T The entity type returned by all SELECT statements (must be compatible)
+ *
+ * @author Yuang Qiao
  */
-
 internal class UnionSelectStatementGroup<T> : StatementContainer {
 
     private val statementList = ArrayDeque<SelectStatement<T>>()
@@ -29,6 +35,15 @@ internal class UnionSelectStatementGroup<T> : StatementContainer {
         statementList.add(selectStatement)
     }
 
+    /**
+     * Combines all accumulated SELECT statements into a single UNION query.
+     *
+     * Merges parameters from all statements and joins their SQL with UNION or UNION ALL operators.
+     * Requires at least two SELECT statements.
+     *
+     * @param isUnionAll If true, uses UNION ALL (includes duplicates); otherwise uses UNION (distinct rows)
+     * @return Final SELECT statement representing the complete UNION query
+     */
     internal fun unionStatements(isUnionAll: Boolean): FinalSelectStatement<T> {
         require(statementList.isNotEmpty()) { "Please write at least two 'select' statements on 'UNION' scope" }
         var parameters: MutableList<String>? = null

@@ -24,12 +24,13 @@ import platform.Foundation.NSString
 import platform.Foundation.create
 
 /**
- * The tools with Apple platforms implementation
- * @author yaqiao
+ * Converts C byte pointer to String using NSString on Apple platforms.
  */
-
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 internal actual fun bytesToString(bv: CPointer<ByteVar>): String = NSString.create(uTF8String = bv).toString()
 
+/**
+ * Apple platform file path separator (forward slash).
+ */
 internal actual inline val separatorChar: Char
     get() = '/'

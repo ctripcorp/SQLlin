@@ -19,51 +19,70 @@ package com.ctrip.sqllin.dsl.sql.clause
 import com.ctrip.sqllin.dsl.sql.Table
 
 /**
- * The 'WHERE' and 'HAVING' clause properties
- * @author yaqiao
+ * Wrapper for numeric column/function references in SQL clauses.
+ *
+ * Provides comparison and set operators for numeric values (Byte, Short, Int, Long, Float, Double).
+ * Supports comparisons against literal numbers or other numeric columns/functions.
+ *
+ * Available operators:
+ * - `lt`: Less than (<)
+ * - `lte`: Less than or equal (<=)
+ * - `eq`: Equals (=) - handles null with IS NULL
+ * - `neq`: Not equals (!=) - handles null with IS NOT NULL
+ * - `gt`: Greater than (>)
+ * - `gte`: Greater than or equal (>=)
+ * - `inIterable`: IN (value1, value2, ...)
+ * - `between`: BETWEEN start AND end
+ *
+ * @author Yuang Qiao
  */
-
 public class ClauseNumber(
     valueName: String,
     table: Table<*>,
     isFunction: Boolean,
 ) : ClauseElement(valueName, table, isFunction) {
 
-    // Less than, <
+    /** Less than (<) */
     internal infix fun lt(number: Number): SelectCondition = appendNumber("<", number)
 
-    // Less than, append to ClauseNumber
+    /** Less than (<) - compare against another column/function */
     internal infix fun lt(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber("<", clauseNumber)
 
-    // Less than or equals to, <=
+    /** Less than or equal (<=) */
     internal infix fun lte(number: Number): SelectCondition = appendNumber("<=", number)
 
-    // Less than or equal to, append to ClauseNumber
+    /** Less than or equal (<=) - compare against another column/function */
     internal infix fun lte(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber("<=", clauseNumber)
 
-    // Equals, ==
+    /** Equals (=), or IS NULL if value is null */
     internal infix fun eq(number: Number?): SelectCondition = appendNullableNumber("=", " IS", number)
 
-    // Equals, append to ClauseNumber
+    /** Equals (=) - compare against another column/function */
     internal infix fun eq(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber("=", clauseNumber)
 
-    // Not equals to, !=
+    /** Not equals (!=), or IS NOT NULL if value is null */
     internal infix fun neq(number: Number?): SelectCondition = appendNullableNumber("!=", " IS NOT", number)
 
-    // Not equals to, append to ClauseNumber
+    /** Not equals (!=) - compare against another column/function */
     internal infix fun neq(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber("!=", clauseNumber)
 
-    // Greater than, >
+    /** Greater than (>) */
     internal infix fun gt(number: Number): SelectCondition = appendNumber(">", number)
 
-    // Greater, append to ClauseNumber
+    /** Greater than (>) - compare against another column/function */
     internal infix fun gt(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber(">", clauseNumber)
 
-    // Greater or equals to, >=
+    /** Greater than or equal (>=) */
     internal infix fun gte(number: Number): SelectCondition = appendNumber(">=", number)
 
+    /** Greater than or equal (>=) - compare against another column/function */
     internal infix fun gte(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber(">=", clauseNumber)
 
+    /**
+     * IN operator - checks if value is in the given set.
+     *
+     * Generates: `column IN (1, 2, 3, ...)`
+     */
     internal infix fun inIterable(numbers: Iterable<Number>): SelectCondition {
         val iterator = numbers.iterator()
         require(iterator.hasNext()) { "Param 'numbers' must not be empty!!!" }
@@ -84,6 +103,11 @@ public class ClauseNumber(
         return SelectCondition(sql, null)
     }
 
+    /**
+     * BETWEEN operator - checks if value is within a range (inclusive).
+     *
+     * Generates: `column BETWEEN start AND end`
+     */
     internal infix fun between(range: LongRange): SelectCondition {
         val sql = buildString {
             if (!isFunction) {

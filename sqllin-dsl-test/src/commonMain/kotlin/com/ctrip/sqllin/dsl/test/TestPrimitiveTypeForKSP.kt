@@ -22,7 +22,7 @@ import kotlinx.serialization.Transient
 
 /**
  * Test whether the sqllin-processor could generate primitive type and String correctly
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 @DBRow

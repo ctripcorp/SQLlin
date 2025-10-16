@@ -20,7 +20,8 @@ import com.ctrip.sqllin.driver.SQLiteResultCode.Companion.INVALID_CODE
 import com.ctrip.sqllin.driver.cinterop.SQLiteErrorType
 
 /**
- * The result codes in SQLite
+ * SQLite exception with native result code information.
+ *
  * @author Yuang Qiao
  */
 public class SQLiteResultCode(message: String, resultCode: Int) : SQLiteException(
@@ -35,6 +36,9 @@ public class SQLiteResultCode(message: String, resultCode: Int) : SQLiteExceptio
     }
 }
 
+/**
+ * Creates a SQLiteException with optional error code.
+ */
 internal fun sqliteException(message: String, errorCode: Int = INVALID_CODE): SQLiteException =
     if (errorCode == INVALID_CODE)
         SQLiteException(message)

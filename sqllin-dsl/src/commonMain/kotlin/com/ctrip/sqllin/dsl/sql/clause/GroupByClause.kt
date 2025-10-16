@@ -22,10 +22,19 @@ import com.ctrip.sqllin.dsl.sql.statement.JoinSelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.WhereSelectStatement
 
 /**
- * SQL 'GROUP BY' clause by select statement
- * @author yaqiao
+ * GROUP BY clause for grouping rows in SELECT queries with aggregate functions.
+ *
+ * Generates SQL in the format: ` GROUP BY column1, column2, ...`
+ *
+ * Used with aggregate functions (COUNT, SUM, AVG, etc.) to group results:
+ * ```kotlin
+ * SELECT(user) GROUP_BY (user.department) HAVING (COUNT(user.id) GT 5)
+ * ```
+ *
+ * @param T The entity type this clause operates on
+ *
+ * @author Yuang Qiao
  */
-
 public class GroupByClause<T> internal constructor(private val columnNames: Iterable<ClauseElement>) : SelectClause<T> {
 
     override val clauseStr: String
@@ -41,6 +50,9 @@ public class GroupByClause<T> internal constructor(private val columnNames: Iter
         }
 }
 
+/**
+ * Creates a GROUP BY clause for aggregating rows.
+ */
 @StatementDslMaker
 public fun <T> GROUP_BY(vararg elements: ClauseElement): GroupByClause<T> = GroupByClause(elements.toList())
 

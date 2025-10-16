@@ -19,10 +19,10 @@ package com.ctrip.sqllin.driver
 import android.database.sqlite.SQLiteDatabase
 
 /**
- * Database connection Android actual
- * @author yaqiao
+ * Android implementation of [DatabaseConnection] using Android's SQLiteDatabase.
+ *
+ * @author Yuang Qiao
  */
-
 internal class AndroidDatabaseConnection(private val database: SQLiteDatabase) : DatabaseConnection {
 
     override fun execSQL(sql: String, bindParams: Array<out Any?>?) =

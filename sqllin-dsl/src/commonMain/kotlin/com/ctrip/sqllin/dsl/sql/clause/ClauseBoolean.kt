@@ -19,16 +19,27 @@ package com.ctrip.sqllin.dsl.sql.clause
 import com.ctrip.sqllin.dsl.sql.Table
 
 /**
- * Clause Boolean, will be converted to number in SQL statement
- * @author yaqiao
+ * Wrapper for Boolean column/function references in SQL clauses.
+ *
+ * Provides comparison operators for Boolean values. Since SQLite stores booleans as integers
+ * (0 for false, 1 for true), comparisons are translated to numeric expressions:
+ * - `column IS true` → `column > 0`
+ * - `column IS false` → `column <= 0`
+ *
+ * @author Yuang Qiao
  */
-
 public class ClauseBoolean(
     valueName: String,
     table: Table<*>,
     isFunction: Boolean,
 ) : ClauseElement(valueName, table, isFunction) {
 
+    /**
+     * Creates a condition comparing this Boolean column/function to a value.
+     *
+     * @param bool The Boolean value to compare against
+     * @return Condition expression (e.g., `column > 0` for true, `column <= 0` for false)
+     */
     internal infix fun _is(bool: Boolean): SelectCondition {
         val sql = buildString {
             if (!isFunction) {

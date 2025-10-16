@@ -18,7 +18,7 @@ package com.ctrip.sqllin.driver
 
 /**
  * SQL statement that used for unit test.
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 object SQL {

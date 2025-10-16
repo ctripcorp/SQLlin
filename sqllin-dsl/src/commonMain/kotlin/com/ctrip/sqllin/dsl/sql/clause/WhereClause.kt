@@ -23,10 +23,14 @@ import com.ctrip.sqllin.dsl.sql.statement.UpdateStatementWithoutWhereClause
 import com.ctrip.sqllin.dsl.sql.statement.WhereSelectStatement
 
 /**
- * SQL "WHERE" clause
- * @author yaqiao
+ * WHERE clause for filtering rows in SELECT statements or targeting rows in UPDATE/DELETE statements.
+ *
+ * Wraps a [SelectCondition] and generates SQL in the format: ` WHERE condition`
+ *
+ * @param T The entity type this clause operates on
+ *
+ * @author Yuang Qiao
  */
-
 public class WhereClause<T> internal constructor(
     internal val selectCondition: SelectCondition,
 ) : ConditionClause<T>(selectCondition) {
@@ -34,6 +38,16 @@ public class WhereClause<T> internal constructor(
     override val clauseName: String = "WHERE"
 }
 
+/**
+ * Creates a WHERE clause for use in DSL operations.
+ *
+ * Usage:
+ * ```kotlin
+ * SELECT(user) WHERE (user.id EQ 42)
+ * UPDATE(user) SET { it.name = "John" } WHERE (user.id EQ 42)
+ * DELETE(user) WHERE (user.age GT 18)
+ * ```
+ */
 @StatementDslMaker
 public fun <T> WHERE(condition: SelectCondition): WhereClause<T> = WhereClause(condition)
 

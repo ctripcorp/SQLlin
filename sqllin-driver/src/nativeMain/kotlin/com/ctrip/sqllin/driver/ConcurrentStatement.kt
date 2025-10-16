@@ -20,11 +20,12 @@ import com.ctrip.sqllin.driver.platform.Lock
 import com.ctrip.sqllin.driver.platform.withLock
 
 /**
- * The concurrent statement, use platform-related lock to ensure thread-safe,
- * the lock come from the ConcurrentDatabaseConnection
- * @author yaqiao
+ * Thread-safe wrapper for [SQLiteStatement] using platform-specific locks.
+ *
+ * Ensures thread safety by delegating all operations through the provided lock.
+ *
+ * @author Yuang Qiao
  */
-
 internal class ConcurrentStatement(
     private val delegateStatement: SQLiteStatement,
     private val accessLock: Lock,

@@ -17,9 +17,7 @@
 package com.ctrip.sqllin.driver.platform
 
 /**
- * The tools with Android implementation
- * @author yaqiao
+ * Android file path separator (forward slash).
  */
-
 internal actual inline val separatorChar: Char
     get() = '/'

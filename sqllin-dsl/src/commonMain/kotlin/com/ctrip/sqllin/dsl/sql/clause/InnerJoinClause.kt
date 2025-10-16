@@ -20,10 +20,15 @@ import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.Table
 
 /**
- * SQL "INNER JOIN" clause
- * @author yaqiao
+ * INNER JOIN clause - returns rows where there's a match in both tables.
+ *
+ * Generates SQL: ` JOIN table`
+ * Requires ON or USING condition.
+ *
+ * @param R The result entity type after JOIN
+ *
+ * @author Yuang Qiao
  */
-
 internal class InnerJoinClause<R>(
     vararg tables: Table<*>,
 ) : JoinClause<R>(*tables) {
@@ -31,12 +36,34 @@ internal class InnerJoinClause<R>(
     override val clauseName: String = " JOIN "
 }
 
+/**
+ * Creates an INNER JOIN clause (requires ON or USING).
+ *
+ * Usage:
+ * ```kotlin
+ * SELECT(user) JOIN (order) ON (user.id EQ order.userId)
+ * SELECT(user) JOIN (order) USING (user.id)
+ * ```
+ */
 @StatementDslMaker
 public fun <R> JOIN(vararg tables: Table<*>): JoinClause<R> = InnerJoinClause(*tables)
 
+/**
+ * Alias for [JOIN] - creates an INNER JOIN clause.
+ */
 @StatementDslMaker
 public inline fun <R> INNER_JOIN(vararg tables: Table<*>): JoinClause<R> = JOIN(*tables)
 
+/**
+ * NATURAL INNER JOIN - automatically joins on columns with matching names.
+ *
+ * Generates SQL: ` NATURAL JOIN table`
+ * Does not require ON or USING.
+ *
+ * @param R The result entity type after JOIN
+ *
+ * @author Yuang Qiao
+ */
 internal class NaturalInnerJoinClause<R>(
     vararg tables: Table<*>,
 ) : NaturalJoinClause<R>(*tables) {
@@ -44,8 +71,19 @@ internal class NaturalInnerJoinClause<R>(
     override val clauseName: String = " NATURAL JOIN "
 }
 
+/**
+ * Creates a NATURAL JOIN clause (no ON/USING needed).
+ *
+ * Usage:
+ * ```kotlin
+ * SELECT(user) NATURAL_JOIN (profile)  // Joins on matching column names
+ * ```
+ */
 @StatementDslMaker
 public fun <R> NATURAL_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NaturalInnerJoinClause(*tables)
 
+/**
+ * Alias for [NATURAL_JOIN].
+ */
 @StatementDslMaker
 public inline fun <R> NATURAL_INNER_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NATURAL_JOIN(*tables)
