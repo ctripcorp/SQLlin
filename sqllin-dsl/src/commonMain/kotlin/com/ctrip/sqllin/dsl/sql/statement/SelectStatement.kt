@@ -26,7 +26,7 @@ import kotlin.concurrent.Volatile
 
 /**
  * Select statement
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 public sealed class SelectStatement<T>(
@@ -47,7 +47,6 @@ public sealed class SelectStatement<T>(
         cursor = connection.query(sqlStr, params)
     }
 
-    @OptIn(ExperimentalStdlibApi::class)
     public fun getResults(): List<T> = result ?: cursor?.use {
         val decoder = QueryDecoder(it)
         result = buildList {

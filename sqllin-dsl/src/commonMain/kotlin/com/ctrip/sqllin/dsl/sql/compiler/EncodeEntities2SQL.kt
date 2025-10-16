@@ -14,40 +14,83 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalSerializationApi::class)
-
 package com.ctrip.sqllin.dsl.sql.compiler
 
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.SerializationStrategy
+import com.ctrip.sqllin.dsl.sql.Table
 import kotlinx.serialization.descriptors.SerialDescriptor
 
 /**
  * Some function that used for encode entities to SQL
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
-internal fun <T> encodeEntities2InsertValues(serializer: SerializationStrategy<T>, values: Iterable<T>, parameters: MutableList<String>): String = buildString {
+internal fun <T> encodeEntities2InsertValues(
+    table: Table<T>,
+    builder: StringBuilder,
+    values: Iterable<T>,
+    parameters: MutableList<String>,
+    isInsertWithId: Boolean,
+) = with(builder) {
+    val isInsertId = table.primaryKeyInfo?.run {
+        !isRowId || isInsertWithId
+    } ?: true
+    val serializer = table.kSerializer()
     append('(')
-    appendDBColumnName(serializer.descriptor)
+    val primaryKeyIndex = appendDBColumnName(serializer.descriptor, table.primaryKeyInfo?.primaryKeyName, isInsertId)
+    if (primaryKeyIndex >= 0)
+        parameters.removeAt(primaryKeyIndex)
     append(')')
     append(" values ")
     val iterator = values.iterator()
-    do {
+    fun appendNext() {
         val value = iterator.next()
         val encoder = InsertValuesEncoder(parameters)
         encoder.encodeSerializableValue(serializer, value)
         append(encoder.valuesSQL)
-        val hasNext = iterator.hasNext()
-        if (hasNext) append(',')
-    } while (hasNext)
+    }
+    if (iterator.hasNext()) {
+        appendNext()
+    } else {
+        return@with
+    }
+    while (iterator.hasNext()) {
+        append(',')
+        appendNext()
+    }
 }
 
-@OptIn(ExperimentalSerializationApi::class)
+internal fun StringBuilder.appendDBColumnName(
+    descriptor: SerialDescriptor,
+    primaryKeyName: String?,
+    isInsertId: Boolean,
+): Int = if (isInsertId) {
+    appendDBColumnName(descriptor)
+    -1
+} else {
+    var index = -1
+    if (descriptor.elementsCount > 0) {
+        val elementName = descriptor.getElementName(0)
+        if (elementName != primaryKeyName)
+            append(elementName)
+        else
+            index = 0
+    }
+    for (i in 1 ..< descriptor.elementsCount) {
+        append(',')
+        val elementName = descriptor.getElementName(i)
+        if (elementName != primaryKeyName)
+            append(elementName)
+        else
+            index = i
+    }
+    index
+}
+
 internal infix fun StringBuilder.appendDBColumnName(descriptor: SerialDescriptor) {
-    for (i in 0 ..< descriptor.elementsCount) {
-        if (i != 0)
-            append(',')
+    if (descriptor.elementsCount > 0)
+        append(descriptor.getElementName(0))
+    for (i in 1 ..< descriptor.elementsCount) {
+        append(',')
         append(descriptor.getElementName(i))
     }
 }

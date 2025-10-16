@@ -17,10 +17,12 @@
 package com.ctrip.sqllin.dsl
 
 import com.ctrip.sqllin.driver.DatabaseConnection
+import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.clause.*
+import com.ctrip.sqllin.dsl.sql.operation.Create
 import com.ctrip.sqllin.dsl.sql.operation.Delete
 import com.ctrip.sqllin.dsl.sql.operation.Insert
 import com.ctrip.sqllin.dsl.sql.operation.Select
@@ -30,10 +32,11 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.serializer
 import kotlin.concurrent.Volatile
+import kotlin.jvm.JvmName
 
 /**
  * The database scope, it's used to restrict the scope that write DSL SQL statements
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 @Suppress("UNCHECKED_CAST")
@@ -109,6 +112,19 @@ public class DatabaseScope internal constructor(
     public infix fun <T> Table<T>.INSERT(entity: T): Unit =
         INSERT(listOf(entity))
 
+
+    @AdvancedInsertAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_WITH_ID(entities: Iterable<T>) {
+        val statement = Insert.insert(this, databaseConnection, entities, true)
+        addStatement(statement)
+    }
+
+    @AdvancedInsertAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_WITH_ID(entity: T): Unit =
+        INSERT_WITH_ID(listOf(entity))
+
     /**
      * Update.
      */
@@ -155,7 +171,6 @@ public class DatabaseScope internal constructor(
     public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(x: X): FinalSelectStatement<T> =
         select(kSerializer(), true)
 
-    @StatementDslMaker
     public fun <T> Table<T>.select(serializer: KSerializer<T>, isDistinct: Boolean): FinalSelectStatement<T> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, isDistinct, serializer, databaseConnection, container)
@@ -323,4 +338,17 @@ public class DatabaseScope internal constructor(
         addSelectStatement(statement)
         return statement
     }
+
+    /**
+     * CREATE
+     */
+    @StatementDslMaker
+    public infix fun <T> CREATE(table: Table<T>) {
+        val statement = Create.create(table, databaseConnection)
+        addStatement(statement)
+    }
+
+    @StatementDslMaker
+    @JvmName("create")
+    public fun <T> Table<T>.CREATE(): Unit = CREATE(this)
 }

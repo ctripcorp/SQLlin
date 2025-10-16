@@ -16,8 +16,8 @@
 
 package com.ctrip.sqllin.dsl.test
 
-import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.DatabasePath
+import com.ctrip.sqllin.dsl.DSLDBConfiguration
 import com.ctrip.sqllin.dsl.Database
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.clause.*
@@ -41,9 +41,6 @@ class CommonBasicTest(private val path: DatabasePath) {
 
     companion object {
         const val DATABASE_NAME = "BookStore.db"
-        const val SQL_CREATE_BOOK = "create table book (id integer primary key autoincrement, name text, author text, pages integer, price real)"
-        const val SQL_CREATE_CATEGORY = "create table category (id integer primary key autoincrement, name text, code integer)"
-        const val SQL_CREATE_NULL_TESTER = "create table NullTester (id integer primary key autoincrement, paramInt integer, paramString text, paramDouble real)"
     }
 
     private inline fun Database.databaseAutoClose(block: (Database) -> Unit) = try {
@@ -429,12 +426,12 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     fun testNullValue() {
-        val config = DatabaseConfiguration(
+        val config = DSLDBConfiguration(
             name = DATABASE_NAME,
             path = path,
             version = 1,
             create = {
-                it.execSQL(SQL_CREATE_NULL_TESTER)
+                CREATE(NullTesterTable)
             }
         )
         Database(config, true).databaseAutoClose { database ->
@@ -493,14 +490,14 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    private fun getDefaultDBConfig(): DatabaseConfiguration =
-        DatabaseConfiguration(
+    private fun getDefaultDBConfig(): DSLDBConfiguration =
+        DSLDBConfiguration (
             name = DATABASE_NAME,
             path = path,
             version = 1,
             create = {
-                it.execSQL(SQL_CREATE_BOOK)
-                it.execSQL(SQL_CREATE_CATEGORY)
+                CREATE(BookTable)
+                CREATE(CategoryTable)
             }
         )
 }

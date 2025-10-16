@@ -20,7 +20,7 @@ import com.ctrip.sqllin.driver.DatabaseConnection
 
 /**
  * Update statement without 'WHERE' clause, that could execute or link 'WHERE' clause
- * @author yaqiao
+ * @author Yuang Qiao
  */
 
 public class UpdateStatementWithoutWhereClause<T> internal constructor(
@@ -46,4 +46,12 @@ public class InsertStatement internal constructor(
     override val parameters: MutableList<String>?,
 ) : SingleStatement(sqlStr) {
     public override fun execute(): Unit = connection.executeInsert(sqlStr, params)
+}
+
+public class CreateStatement internal constructor(
+    sqlStr: String,
+    private val connection: DatabaseConnection,
+) : SingleStatement(sqlStr) {
+    override fun execute(): Unit = connection.execSQL(sqlStr, params)
+    override val parameters: MutableList<String>? = null
 }
