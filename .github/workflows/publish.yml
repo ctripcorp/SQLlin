@@ -13,7 +13,7 @@ env:
 jobs:
 
   build-on-macos:
-    runs-on: macos-13
+    runs-on: macos-15-intel
     timeout-minutes: 60
 
     steps:
@@ -32,13 +32,13 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Cache Build Tooling
+      - name: Cache Kotlin/Native
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.konan
-          key: ${{ runner.os }}-gradle-${{ hashFiles('*.gradle.kts') }}
+          path: ~/.konan
+          key: ${{ runner.os }}-konan-${{ hashFiles('**/*.gradle.kts') }}
+          restore-keys: |
+            ${{ runner.os }}-konan-
 
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:assemble -PonCICD
@@ -69,13 +69,13 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Cache Build Tooling
+      - name: Cache Kotlin/Native
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.konan
-          key: ${{ runner.os }}-gradle-${{ hashFiles('*.gradle.kts') }}
+          path: ~/.konan
+          key: ${{ runner.os }}-konan-${{ hashFiles('**/*.gradle.kts') }}
+          restore-keys: |
+            ${{ runner.os }}-konan-
 
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:mingwX64MainKlibrary
@@ -106,13 +106,13 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Cache Build Tooling
+      - name: Cache Kotlin/Native
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.konan
-          key: ${{ runner.os }}-gradle-${{ hashFiles('*.gradle.kts') }}
+          path: ~/.konan
+          key: ${{ runner.os }}-konan-${{ hashFiles('**/*.gradle.kts') }}
+          restore-keys: |
+            ${{ runner.os }}-konan-
 
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:assemble -PonCICD
