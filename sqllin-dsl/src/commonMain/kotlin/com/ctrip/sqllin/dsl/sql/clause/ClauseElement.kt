@@ -28,6 +28,7 @@ import com.ctrip.sqllin.dsl.sql.Table
  * - [ClauseBoolean]: Boolean column/function references with comparison operators
  * - [ClauseNumber]: Numeric column/function references with arithmetic and comparison operators
  * - [ClauseString]: String column/function references with text comparison operators
+ * - [ClauseBlob]: BLOB (ByteArray) column/function references with comparison operators
  *
  * Used in:
  * - WHERE/HAVING conditions

@@ -18,7 +18,6 @@ package com.ctrip.sqllin.dsl.sql.statement
 
 import com.ctrip.sqllin.driver.CommonCursor
 import com.ctrip.sqllin.driver.DatabaseConnection
-import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.compiler.QueryDecoder
 import kotlinx.serialization.DeserializationStrategy
@@ -38,7 +37,7 @@ import kotlin.concurrent.Volatile
  * @property deserializer kotlinx.serialization strategy for decoding cursor rows to entities
  * @property connection Database connection for executing the query
  * @property container Statement container for managing this statement in the DSL scope
- * @property parameters Parameterized query values (strings only), or null if none
+ * @property parameters Parameterized query values, or null if none
  *
  * @author Yuang Qiao
  */
@@ -47,7 +46,7 @@ public sealed class SelectStatement<T>(
     internal val deserializer: DeserializationStrategy<T>,
     internal val connection: DatabaseConnection,
     internal val container: StatementContainer,
-    final override val parameters: MutableList<String>?,
+    final override val parameters: MutableList<Any?>?,
 ) : SingleStatement(sqlStr) {
 
     @Volatile
@@ -82,18 +81,6 @@ public sealed class SelectStatement<T>(
         append(sqlStr)
         append(clause.clauseStr)
     }
-
-    internal fun <R, S> crossJoin(
-        table: Table<R>,
-        newDeserializer: DeserializationStrategy<S>,
-    ): FinalSelectStatement<S> {
-        val sql = buildString {
-            append(sqlStr)
-            append(" CROSS JOIN ")
-            append(table.tableName)
-        }
-        return FinalSelectStatement(sql, newDeserializer, connection, container, parameters)
-    }
 }
 
 /**
@@ -111,7 +98,7 @@ public class WhereSelectStatement<T> internal constructor(
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
     container: StatementContainer,
-    parameters: MutableList<String>?,
+    parameters: MutableList<Any?>?,
 ) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters) {
 
     internal infix fun appendToLimit(clause: LimitClause<T>): LimitSelectStatement<T> =
@@ -140,7 +127,7 @@ public class JoinSelectStatement<T> internal constructor(
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
     container: StatementContainer,
-    parameters: MutableList<String>?,
+    parameters: MutableList<Any?>?,
 ) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters) {
 
     internal infix fun appendToWhere(clause: WhereClause<T>): WhereSelectStatement<T> {
@@ -177,7 +164,7 @@ public class GroupBySelectStatement<T> internal constructor(
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
     container: StatementContainer,
-    parameters: MutableList<String>?,
+    parameters: MutableList<Any?>?,
 ) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters) {
 
     internal infix fun appendToOrderBy(clause: OrderByClause<T>): OrderBySelectStatement<T> =
@@ -208,7 +195,7 @@ public class HavingSelectStatement<T> internal constructor(
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
     container: StatementContainer,
-    parameters: MutableList<String>?,
+    parameters: MutableList<Any?>?,
 ) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters) {
 
     internal infix fun appendToOrderBy(clause: OrderByClause<T>): OrderBySelectStatement<T> =
@@ -231,7 +218,7 @@ public class OrderBySelectStatement<T> internal constructor(
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
     container: StatementContainer,
-    parameters: MutableList<String>?,
+    parameters: MutableList<Any?>?,
 ) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters) {
 
     internal infix fun appendToLimit(clause: LimitClause<T>): LimitSelectStatement<T> =
@@ -251,7 +238,7 @@ public class LimitSelectStatement<T> internal constructor(
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
     container: StatementContainer,
-    parameters: MutableList<String>?,
+    parameters: MutableList<Any?>?,
 ) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters) {
 
     internal infix fun appendToFinal(clause: OffsetClause<T>): FinalSelectStatement<T> =
@@ -271,5 +258,5 @@ public class FinalSelectStatement<T> internal constructor(
     deserializer: DeserializationStrategy<T>,
     connection: DatabaseConnection,
     container: StatementContainer,
-    parameters: MutableList<String>?,
+    parameters: MutableList<Any?>?,
 ) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters)

@@ -54,10 +54,10 @@ public interface DatabaseConnection {
      * Executes a SELECT query and returns a cursor.
      *
      * @param sql The SELECT statement
-     * @param bindParams Optional string parameters to bind to the query
+     * @param bindParams Optional parameters to bind to the query
      * @return A cursor for iterating over query results
      */
-    public fun query(sql: String, bindParams: Array<out String?>? = null): CommonCursor
+    public fun query(sql: String, bindParams: Array<out Any?>? = null): CommonCursor
 
     /**
      * Begins a database transaction.

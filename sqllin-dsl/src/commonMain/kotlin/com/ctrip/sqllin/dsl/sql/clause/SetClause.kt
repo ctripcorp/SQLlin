@@ -21,13 +21,18 @@ import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 /**
  * SET clause for UPDATE statements.
  *
- * Builds column assignments in the format: `column1 = ?, column2 = ?, ...`
+ * Builds column assignments using parameterized binding for all values.
+ * Format: `column1 = ?, column2 = ?, ...`
+ *
+ * All values (including null) are passed as parameters to ensure type safety and
+ * prevent SQL injection across all platforms.
  *
  * Used in UPDATE operations to specify new values:
  * ```kotlin
  * UPDATE(user) SET {
- *     it.name = "John"
- *     it.age = 30
+ *     it.name = "John"      // Generates: name = ? with parameter "John"
+ *     it.age = 30           // Generates: age = ? with parameter 30
+ *     it.avatar = byteArray // Generates: avatar = ? with parameter byteArray
  * } WHERE (user.id EQ 42)
  * ```
  *
@@ -39,30 +44,37 @@ public class SetClause<T> : Clause<T> {
 
     private val clauseBuilder = StringBuilder()
 
-    internal var parameters: MutableList<String>? = null
+    /**
+     * List of parameter values to bind to the SQL statement.
+     *
+     * Null until first property assignment. Contains values in order of appearance.
+     * Supports any type: String, Number, Boolean, ByteArray, null, etc.
+     */
+    internal var parameters: MutableList<Any?>? = null
         private set
 
-    public fun appendString(propertyName: String, propertyValue: String?) {
-        clauseBuilder.append(propertyName)
-        if (propertyValue == null)
-            clauseBuilder.append("=NULL,")
-        else {
-            clauseBuilder.append("=?,")
-            val params = parameters ?: ArrayList<String>().also {
-                parameters = it
-            }
-            params.add(propertyValue)
-        }
-    }
-
+    /**
+     * Appends a column assignment to the SET clause using parameterized binding.
+     *
+     * Generates: `propertyName = ?` and adds the value to parameters list.
+     *
+     * @param propertyName The column name to update
+     * @param propertyValue The new value (any type including null)
+     */
     public fun appendAny(propertyName: String, propertyValue: Any?) {
-        clauseBuilder
-            .append(propertyName)
-            .append('=')
-            .append(propertyValue ?: "NULL")
-            .append(',')
+        clauseBuilder.append(propertyName)
+        clauseBuilder.append("=?,")
+        val params = parameters ?: ArrayList<Any?>().also {
+            parameters = it
+        }
+        params.add(propertyValue)
     }
 
+    /**
+     * Finalizes the SET clause by removing trailing comma.
+     *
+     * @return The complete SET clause SQL string
+     */
     internal fun finalize(): String = clauseBuilder.apply {
         if (this[lastIndex] == ',')
             deleteAt(lastIndex)

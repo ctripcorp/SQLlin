@@ -69,15 +69,8 @@ internal class RealDatabaseConnection(
         }
     }
 
-    override fun query(sql: String, bindParams: Array<out String?>?): CommonCursor {
-        val statement = createStatement(sql)
-        bindParams?.forEachIndexed { index, str ->
-            str?.let {
-                statement.bindString(index + 1, it)
-            }
-        }
-        return statement.query()
-    }
+    override fun query(sql: String, bindParams: Array<out Any?>?): CommonCursor =
+        bindParamsToSQL(sql, bindParams).query()
 
     override fun beginTransaction() = transactionLock.withLock {
         database.rawExecSql("BEGIN;")

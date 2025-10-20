@@ -51,7 +51,7 @@ public class ClauseBoolean(
                 append('>')
             else
                 append("<=")
-            append(0)
+            append('0')
         }
         return SelectCondition(sql, null)
     }

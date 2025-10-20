@@ -35,7 +35,12 @@ internal class AndroidDatabaseConnection(private val database: SQLiteDatabase) :
 
     override fun executeUpdateDelete(sql: String, bindParams: Array<out Any?>?) = execSQL(sql, bindParams)
 
-    override fun query(sql: String, bindParams: Array<out String?>?): CommonCursor = AndroidCursor(database.rawQuery(sql, bindParams))
+    override fun query(sql: String, bindParams: Array<out Any?>?): CommonCursor {
+        val realParams = bindParams?.let { origin ->
+            Array(origin.size) { i -> origin[i]?.toString() }
+        }
+        return AndroidCursor(database.rawQuery(sql, realParams))
+    }
 
     override fun beginTransaction() = database.beginTransaction()
     override fun endTransaction() = database.endTransaction()

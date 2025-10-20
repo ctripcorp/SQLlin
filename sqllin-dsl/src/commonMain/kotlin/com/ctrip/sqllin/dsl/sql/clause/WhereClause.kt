@@ -57,12 +57,37 @@ public infix fun <T> JoinSelectStatement<T>.WHERE(condition: SelectCondition): W
         container changeLastStatement it
     }
 
+/**
+ * Attaches a WHERE clause to an UPDATE statement and merges parameters.
+ *
+ * Combines parameters from both the SET clause and WHERE condition, preserving order:
+ * SET parameters first, then WHERE parameters.
+ *
+ * Example:
+ * ```kotlin
+ * UPDATE(user) SET { it.name = "John" } WHERE (user.id EQ 42)
+ * // Generates: UPDATE user SET name = ? WHERE id = ?
+ * // Parameters: ["John", 42]
+ * ```
+ *
+ * @param condition The WHERE condition with its parameters
+ * @return The complete UPDATE statement SQL string
+ */
 @StatementDslMaker
 public infix fun <T> UpdateStatementWithoutWhereClause<T>.WHERE(condition: SelectCondition): String {
+    val params = when {
+        parameters == null && condition.parameters != null -> condition.parameters
+        parameters != null && condition.parameters == null -> parameters
+        parameters == null && condition.parameters == null -> null
+        else -> {
+            parameters!!.addAll(condition.parameters!!)
+            parameters
+        }
+    }
     val statement = UpdateDeleteStatement(buildString {
         append(sqlStr)
         append(WhereClause<T>(condition).clauseStr)
-    }, connection, condition.parameters)
+    }, connection, params)
     statementContainer changeLastStatement statement
     return statement.sqlStr
 }
