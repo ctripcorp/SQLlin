@@ -43,15 +43,17 @@ internal class CompleteOrderByClause<T>(private val column2WayMap: Map<ClauseEle
             return buildString {
                 append(" ORDER BY ")
                 val iterator = column2WayMap.entries.iterator()
-                do {
+                fun appendNext() {
                     val (element, way) = iterator.next()
                     append(element.valueName)
                     append(' ')
                     append(way.str)
-                    val hasNext = iterator.hasNext()
-                    if (hasNext)
-                        append(',')
-                } while (hasNext)
+                }
+                appendNext()
+                while (iterator.hasNext()) {
+                    append(',')
+                    appendNext()
+                }
             }
         }
 }

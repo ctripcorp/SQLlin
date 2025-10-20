@@ -57,13 +57,12 @@ public class JoinStatementWithoutCondition<R> internal constructor(
         require(iterator.hasNext()) { "Param 'clauseElements' must not be empty!!!" }
         val sql = buildString {
             append(sqlStr)
-            append(" USING (")
-            do {
-                append(iterator.next().valueName)
-                val hasNext = iterator.hasNext()
-                val symbol = if (hasNext) ',' else ')'
-                append(symbol)
-            } while (hasNext)
+            clauseElements.joinTo(
+                buffer = this,
+                separator = ",",
+                prefix = " USING (",
+                postfix = ")",
+            )
         }
         val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, null)
         addSelectStatement(joinStatement)
