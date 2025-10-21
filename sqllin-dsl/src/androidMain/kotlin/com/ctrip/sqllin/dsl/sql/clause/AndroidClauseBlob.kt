@@ -62,25 +62,12 @@ internal class AndroidClauseBlob(
             } else {
                 append(notNullSymbol)
                 append("X'")
-                blob toHexString this
+                append(blob.toHexString(HexFormat.UpperCase))
                 append('\'')
             }
         }
         return SelectCondition(sql, null)
     }
-
-    /**
-     * Converts ByteArray to uppercase hexadecimal string.
-     *
-     * Each byte is formatted as a two-digit hex value (00-FF).
-     *
-     * @param builder The StringBuilder to append hex characters to
-     */
-    private infix fun ByteArray.toHexString(builder: StringBuilder) = joinTo(
-        buffer = builder,
-        separator = "",
-        transform = { "%02X".format(it) }
-    )
 }
 
 /**

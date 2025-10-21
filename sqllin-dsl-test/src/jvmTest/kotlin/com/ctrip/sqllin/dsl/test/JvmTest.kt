@@ -76,6 +76,21 @@ class JvmTest {
     @Test
     fun testUpdateAndDeleteWithPrimaryKey() = commonTest.testUpdateAndDeleteWithPrimaryKey()
 
+    @Test
+    fun testByteArrayInsert() = commonTest.testByteArrayInsert()
+
+    @Test
+    fun testByteArraySelect() = commonTest.testByteArraySelect()
+
+    @Test
+    fun testByteArrayUpdate() = commonTest.testByteArrayUpdate()
+
+    @Test
+    fun testByteArrayDelete() = commonTest.testByteArrayDelete()
+
+    @Test
+    fun testByteArrayMultipleOperations() = commonTest.testByteArrayMultipleOperations()
+
     @BeforeTest
     fun setUp() {
         deleteDatabase(path, CommonBasicTest.DATABASE_NAME)

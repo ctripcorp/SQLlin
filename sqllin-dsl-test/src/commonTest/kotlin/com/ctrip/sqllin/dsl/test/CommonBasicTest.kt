@@ -668,6 +668,200 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    fun testByteArrayInsert() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            val file1 = FileData(
+                id = null,
+                fileName = "test.bin",
+                content = byteArrayOf(0x01, 0x02, 0x03, 0xFF.toByte()),
+                metadata = "Binary test file"
+            )
+            val file2 = FileData(
+                id = null,
+                fileName = "empty.dat",
+                content = byteArrayOf(),
+                metadata = "Empty file"
+            )
+            val file3 = FileData(
+                id = null,
+                fileName = "large.bin",
+                content = ByteArray(256) { it.toByte() },
+                metadata = "Large file with all byte values"
+            )
+
+            lateinit var selectStatement: SelectStatement<FileData>
+            database {
+                FileDataTable { table ->
+                    table INSERT listOf(file1, file2, file3)
+                    selectStatement = table SELECT X
+                }
+            }
+
+            val results = selectStatement.getResults()
+            assertEquals(3, results.size)
+
+            // Verify first file
+            assertEquals("test.bin", results[0].fileName)
+            assertEquals(true, results[0].content.contentEquals(byteArrayOf(0x01, 0x02, 0x03, 0xFF.toByte())))
+            assertEquals("Binary test file", results[0].metadata)
+
+            // Verify empty file
+            assertEquals("empty.dat", results[1].fileName)
+            assertEquals(true, results[1].content.contentEquals(byteArrayOf()))
+            assertEquals("Empty file", results[1].metadata)
+
+            // Verify large file
+            assertEquals("large.bin", results[2].fileName)
+            assertEquals(256, results[2].content.size)
+            assertEquals(true, results[2].content.contentEquals(ByteArray(256) { it.toByte() }))
+        }
+    }
+
+    fun testByteArraySelect() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            val file = FileData(
+                id = null,
+                fileName = "select_test.bin",
+                content = byteArrayOf(0xDE.toByte(), 0xAD.toByte(), 0xBE.toByte(), 0xEF.toByte()),
+                metadata = "SELECT test"
+            )
+
+            database {
+                FileDataTable { table ->
+                    table INSERT file
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<FileData>
+            database {
+                FileDataTable { table ->
+                    selectStatement = table SELECT WHERE (fileName EQ "select_test.bin")
+                }
+            }
+
+            val results = selectStatement.getResults()
+            assertEquals(1, results.size)
+            assertEquals("select_test.bin", results.first().fileName)
+            assertEquals(true, results.first().content.contentEquals(byteArrayOf(0xDE.toByte(), 0xAD.toByte(), 0xBE.toByte(), 0xEF.toByte())))
+        }
+    }
+
+    fun testByteArrayUpdate() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            val originalFile = FileData(
+                id = null,
+                fileName = "update_test.bin",
+                content = byteArrayOf(0x00, 0x01, 0x02),
+                metadata = "Original"
+            )
+
+            database {
+                FileDataTable { table ->
+                    table INSERT originalFile
+                }
+            }
+
+            val newContent = byteArrayOf(0xFF.toByte(), 0xFE.toByte(), 0xFD.toByte())
+            lateinit var selectStatement: SelectStatement<FileData>
+            database {
+                FileDataTable { table ->
+                    table UPDATE SET {
+                        content = newContent
+                        metadata = "Updated"
+                    } WHERE (fileName EQ "update_test.bin")
+                    selectStatement = table SELECT WHERE (fileName EQ "update_test.bin")
+                }
+            }
+
+            val updatedFile = selectStatement.getResults().first()
+            assertEquals("update_test.bin", updatedFile.fileName)
+            assertEquals(true, updatedFile.content.contentEquals(newContent))
+            assertEquals("Updated", updatedFile.metadata)
+        }
+    }
+
+    fun testByteArrayDelete() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            val file1 = FileData(
+                id = null,
+                fileName = "delete_test1.bin",
+                content = byteArrayOf(0x01, 0x02),
+                metadata = "To delete"
+            )
+            val file2 = FileData(
+                id = null,
+                fileName = "delete_test2.bin",
+                content = byteArrayOf(0x03, 0x04),
+                metadata = "To keep"
+            )
+
+            database {
+                FileDataTable { table ->
+                    table INSERT listOf(file1, file2)
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<FileData>
+            database {
+                FileDataTable { table ->
+                    table DELETE WHERE (fileName EQ "delete_test1.bin")
+                    selectStatement = table SELECT X
+                }
+            }
+
+            val results = selectStatement.getResults()
+            assertEquals(1, results.size)
+            assertEquals("delete_test2.bin", results.first().fileName)
+        }
+    }
+
+    fun testByteArrayMultipleOperations() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            // Test multiple INSERT, UPDATE, SELECT operations
+            val file1 = FileData(
+                id = null,
+                fileName = "multi1.bin",
+                content = byteArrayOf(0xAA.toByte(), 0xBB.toByte()),
+                metadata = "First"
+            )
+            val file2 = FileData(
+                id = null,
+                fileName = "multi2.bin",
+                content = byteArrayOf(0xCC.toByte(), 0xDD.toByte()),
+                metadata = "Second"
+            )
+
+            // Insert
+            database {
+                FileDataTable { table ->
+                    table INSERT listOf(file1, file2)
+                }
+            }
+
+            // Update first file
+            val newContent = byteArrayOf(0x11, 0x22, 0x33)
+            database {
+                FileDataTable { table ->
+                    table UPDATE SET {
+                        content = newContent
+                    } WHERE (fileName EQ "multi1.bin")
+                }
+            }
+
+            // Select and verify
+            lateinit var selectStatement: SelectStatement<FileData>
+            database {
+                FileDataTable { table ->
+                    selectStatement = table SELECT WHERE (fileName EQ "multi1.bin")
+                }
+            }
+
+            val updatedFile = selectStatement.getResults().first()
+            assertEquals(true, updatedFile.content.contentEquals(newContent))
+            assertEquals("First", updatedFile.metadata)
+        }
+    }
+
     private fun getDefaultDBConfig(): DatabaseConfiguration =
         DatabaseConfiguration(
             name = DATABASE_NAME,
@@ -691,6 +885,7 @@ class CommonBasicTest(private val path: DatabasePath) {
                 CREATE(ProductTable)
                 CREATE(StudentWithAutoincrementTable)
                 CREATE(EnrollmentTable)
+                CREATE(FileDataTable)
             }
         )
 }

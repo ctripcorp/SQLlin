@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.dsl.sql.compiler
 
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.AbstractEncoder
 import kotlinx.serialization.modules.EmptySerializersModule
@@ -106,4 +107,16 @@ internal class InsertValuesEncoder(
      * Encodes enum as its ordinal integer value parameter.
      */
     override fun encodeEnum(enumDescriptor: SerialDescriptor, index: Int) = appendAny(index)
+
+    /**
+     * Handles inline values (including ByteArray).
+     *
+     * ByteArray is treated as an inline value in kotlinx.serialization, so we need to extract
+     * the actual ByteArray value and append it as a parameter.
+     */
+    override fun <T> encodeSerializableValue(serializer: SerializationStrategy<T>, value: T) =
+        if (value is ByteArray)
+            appendAny(value)
+        else
+            super.encodeSerializableValue(serializer, value)
 }

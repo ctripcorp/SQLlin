@@ -82,6 +82,21 @@ class AndroidTest {
     @Test
     fun testUpdateAndDeleteWithPrimaryKey() = commonTest.testUpdateAndDeleteWithPrimaryKey()
 
+    @Test
+    fun testByteArrayInsert() = commonTest.testByteArrayInsert()
+
+    @Test
+    fun testByteArraySelect() = commonTest.testByteArraySelect()
+
+    @Test
+    fun testByteArrayUpdate() = commonTest.testByteArrayUpdate()
+
+    @Test
+    fun testByteArrayDelete() = commonTest.testByteArrayDelete()
+
+    @Test
+    fun testByteArrayMultipleOperations() = commonTest.testByteArrayMultipleOperations()
+
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

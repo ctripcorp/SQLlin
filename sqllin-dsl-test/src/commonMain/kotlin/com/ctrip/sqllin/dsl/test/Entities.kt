@@ -98,3 +98,35 @@ data class Enrollment(
     @CompositePrimaryKey val courseId: Long,
     val semester: String,
 )
+
+@DBRow("file_data")
+@Serializable
+data class FileData(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    val fileName: String,
+    val content: ByteArray,
+    val metadata: String,
+) {
+    // ByteArray doesn't implement equals/hashCode properly for data class
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+
+        other as FileData
+
+        if (id != other.id) return false
+        if (fileName != other.fileName) return false
+        if (!content.contentEquals(other.content)) return false
+        if (metadata != other.metadata) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = id?.hashCode() ?: 0
+        result = 31 * result + fileName.hashCode()
+        result = 31 * result + content.contentHashCode()
+        result = 31 * result + metadata.hashCode()
+        return result
+    }
+}
