@@ -12,6 +12,7 @@
 ### sqllin-dsl
 
 * Optimized performance for SQL assembly
+* New API for creating Database: `DSLDBConfiguration`
 * New experimental API: `DatabaseScope#CREATE`
 * New experimental API: `DatabaseScope#DROP`
 * New experimental API: `DatabaseSceop#ALERT`

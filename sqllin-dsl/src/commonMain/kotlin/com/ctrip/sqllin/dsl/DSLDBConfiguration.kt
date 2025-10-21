@@ -20,6 +20,7 @@ import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.DatabasePath
 import com.ctrip.sqllin.driver.JournalMode
 import com.ctrip.sqllin.driver.SynchronousMode
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 
 /**
  * DSL-level database configuration with [DatabaseScope] callbacks.
@@ -42,6 +43,7 @@ import com.ctrip.sqllin.driver.SynchronousMode
  *
  * @author Yuang Qiao
  */
+@ExperimentalDSLDatabaseAPI
 public data class DSLDBConfiguration(
     val name: String,
     val path: DatabasePath,
