@@ -26,16 +26,17 @@ package com.ctrip.sqllin.dsl.sql.clause
  * ```kotlin
  * userTable.id EQ 42  // Creates: SelectCondition("id = ?", ["42"])
  * userTable.age GT 18 // Creates: SelectCondition("age > ?", ["18"])
+ * userTable.image EQ byteArray // Creates: SelectCondition("image = ?", [byteArray])
  * ```
  *
  * @property conditionSQL The SQL condition expression (may contain ? placeholders)
- * @property parameters Parameterized query values (strings only), or null if none
+ * @property parameters Parameterized query values (String, ByteArray, etc.), or null if none
  *
  * @author Yuang Qiao
  */
 public class SelectCondition internal constructor(
     internal val conditionSQL: String,
-    internal val parameters: MutableList<String>?,
+    internal val parameters: MutableList<Any?>?,
 ) {
 
     /**

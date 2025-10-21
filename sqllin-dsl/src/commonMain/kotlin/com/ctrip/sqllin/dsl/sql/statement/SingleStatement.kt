@@ -34,16 +34,17 @@ public sealed class SingleStatement(
 ) : ExecutableStatement {
 
     /**
-     * Parameters for parameterized query placeholders (strings only).
+     * Parameters for parameterized query placeholders.
      *
+     * Supports multiple types (String, ByteArray, numeric types, etc.).
      * `null` if the statement has no parameters.
      */
-    internal abstract val parameters: MutableList<String>?
+    internal abstract val parameters: MutableList<Any?>?
 
     /**
      * Parameters converted to array format for driver execution.
      */
-    internal val params: Array<String>?
+    internal val params: Array<Any?>?
         get() = parameters?.toTypedArray()
 
     /**

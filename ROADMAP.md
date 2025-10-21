@@ -4,7 +4,8 @@
 
 * Support the key word REFERENCE
 * Support JOIN sub-query
-* Fix the bug of storing ByteArray in DSL
+* Support Enum type
+* Support typealias for primitive types
 
 ## Medium Priority
 

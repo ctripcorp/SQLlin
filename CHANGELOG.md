@@ -15,6 +15,7 @@
 * New experimental API: `DatabaseScope#CREATE`
 * New experimental API: `DatabaseScope#DROP`
 * New experimental API: `DatabaseSceop#ALERT`
+* Support using ByteArray in DSL, that represents BLOB in SQLite
 
 ### sqllin-driver
 

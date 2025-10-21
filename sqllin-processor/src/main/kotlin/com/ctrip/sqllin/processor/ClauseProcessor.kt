@@ -97,9 +97,11 @@ class ClauseProcessor(
                 writer.write("package $packageName\n\n")
 
                 writer.write("import com.ctrip.sqllin.dsl.annotation.ColumnNameDslMaker\n")
+                writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseBlob\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseBoolean\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseNumber\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseString\n")
+                writer.write("import com.ctrip.sqllin.dsl.sql.clause.DefaultClauseBlob\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.SetClause\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.PrimaryKeyInfo\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.Table\n\n")
@@ -185,9 +187,9 @@ class ClauseProcessor(
                 } else {
                     writer.write("        compositePrimaryKeys = listOf(\n")
                     compositePrimaryKeys.forEach {
-                        writer.write("        $it,\n")
+                        writer.write("            \"$it\",\n")
                     }
-                    writer.write("    )\n")
+                    writer.write("        )\n")
                 }
                 writer.write("    )\n\n")
                 writer.write("}\n")
@@ -199,7 +201,7 @@ class ClauseProcessor(
     /**
      * Maps a property's Kotlin type to the corresponding clause element type name.
      *
-     * @return The clause type name (ClauseNumber, ClauseString, ClauseBoolean), or null if unsupported
+     * @return The clause type name (ClauseNumber, ClauseString, ClauseBoolean, ClauseBlob), or null if unsupported
      */
     private fun getClauseElementTypeStr(property: KSPropertyDeclaration): String? = when (
         property.typeName
@@ -219,6 +221,8 @@ class ClauseProcessor(
         String::class.qualifiedName, -> "ClauseString"
 
         Boolean::class.qualifiedName -> "ClauseBoolean"
+
+        ByteArray::class.qualifiedName -> "ClauseBlob"
 
         else -> null
     }
@@ -246,6 +250,8 @@ class ClauseProcessor(
         Char::class.qualifiedName -> "'0'"
         String::class.qualifiedName -> "\"\""
 
+        ByteArray::class.qualifiedName -> "ByteArray(0)"
+
         else -> null
     }
 
@@ -267,12 +273,11 @@ class ClauseProcessor(
         UInt::class.qualifiedName,
         ULong::class.qualifiedName,
         UShort::class.qualifiedName,
-        UByte::class.qualifiedName, -> "appendAny($elementName, value)"
-
-        Char::class.qualifiedName -> "appendString($elementName, value${if (isNotNull) "" else "?"}.toString())"
-        String::class.qualifiedName -> "appendString($elementName, value)"
-
-        Boolean::class.qualifiedName -> "appendAny($elementName, value${if (isNotNull) "" else "?"}.let { if (it) 1 else 0 })"
+        UByte::class.qualifiedName,
+        Char::class.qualifiedName,
+        String::class.qualifiedName,
+        Boolean::class.qualifiedName,
+        ByteArray::class.qualifiedName -> "appendAny($elementName, value)"
         else -> null
     }
 

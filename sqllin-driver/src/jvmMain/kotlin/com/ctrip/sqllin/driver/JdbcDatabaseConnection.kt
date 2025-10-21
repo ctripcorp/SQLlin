@@ -48,15 +48,11 @@ internal class JdbcDatabaseConnection(private val connection: Connection) : Abst
         it.executeUpdate()
     }
 
-    override fun query(sql: String, bindParams: Array<out String?>?): CommonCursor {
-        val statement = connection.prepareStatement(sql)
-        bindParams?.forEachIndexed { index, str ->
-            str?.let {
-                statement.setString(index + 1, it)
-            }
-        }
-        return statement.executeQuery()?.let { JdbcCursor(it) } ?: throw IllegalStateException("The query result is null.")
-    }
+    override fun query(sql: String, bindParams: Array<out Any?>?): CommonCursor =
+        bindParamsToSQL(sql, bindParams)
+            .executeQuery()
+            ?.let { JdbcCursor(it) }
+            ?: throw IllegalStateException("The query result is null.")
 
     private val isTransactionSuccess = AtomicBoolean(false)
 

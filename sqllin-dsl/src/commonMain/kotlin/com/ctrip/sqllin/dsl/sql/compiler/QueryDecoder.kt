@@ -17,8 +17,10 @@
 package com.ctrip.sqllin.dsl.sql.compiler
 
 import com.ctrip.sqllin.driver.CommonCursor
+import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.builtins.ByteArraySerializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.AbstractDecoder
 import kotlinx.serialization.encoding.CompositeDecoder
@@ -42,7 +44,7 @@ import kotlinx.serialization.modules.SerializersModule
  */
 @OptIn(ExperimentalSerializationApi::class)
 internal class QueryDecoder(
-    private val cursor: CommonCursor
+    private val cursor: CommonCursor,
 ) : AbstractDecoder() {
 
     private var elementIndex = 0
@@ -50,6 +52,10 @@ internal class QueryDecoder(
     private var elementNullable = false
 
     override val serializersModule: SerializersModule = EmptySerializersModule()
+
+    private companion object {
+        val byteArrayDescriptor = ByteArraySerializer().descriptor
+    }
 
     /**
      * Determines the next property to decode from the descriptor.
@@ -82,6 +88,21 @@ internal class QueryDecoder(
      */
     private inline fun <T> deserialize(block: (Int) -> T): T = cursorColumnIndex.let {
         if (it >= 0) block(it) else throw SerializationException("The Cursor doesn't have this column")
+    }
+
+    /**
+     * Intercepts ByteArray deserialization to decode BLOBs directly from the cursor.
+     *
+     * By default, kotlinx.serialization treats ByteArray as a collection and would decode
+     * it element-by-element. This override enables efficient single-call BLOB retrieval.
+     */
+    override fun <T> decodeSerializableValue(deserializer: DeserializationStrategy<T>): T {
+        return if (deserializer.descriptor == byteArrayDescriptor) {
+            @Suppress("UNCHECKED_CAST")
+            deserialize { cursor.getByteArray(it) ?: ByteArray(0) } as T
+        } else {
+            super.decodeSerializableValue(deserializer)
+        }
     }
 
     /**

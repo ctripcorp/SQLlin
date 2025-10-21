@@ -16,6 +16,7 @@
 
 package com.ctrip.sqllin.dsl.test
 
+import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.DatabasePath
 import com.ctrip.sqllin.dsl.DSLDBConfiguration
 import com.ctrip.sqllin.dsl.Database
@@ -41,6 +42,8 @@ class CommonBasicTest(private val path: DatabasePath) {
 
     companion object {
         const val DATABASE_NAME = "BookStore.db"
+        const val SQL_CREATE_BOOK = "create table book (id integer primary key autoincrement, name text, author text, pages integer, price real)"
+        const val SQL_CREATE_CATEGORY = "create table category (id integer primary key autoincrement, name text, code integer)"
     }
 
     private inline fun Database.databaseAutoClose(block: (Database) -> Unit) = try {
@@ -490,14 +493,399 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    private fun getDefaultDBConfig(): DSLDBConfiguration =
-        DSLDBConfiguration (
+    fun testCreateTableWithLongPrimaryKey() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            val person1 = PersonWithId(id = null, name = "Alice", age = 25)
+            val person2 = PersonWithId(id = null, name = "Bob", age = 30)
+
+            lateinit var selectStatement: SelectStatement<PersonWithId>
+            database {
+                PersonWithIdTable { table ->
+                    table INSERT listOf(person1, person2)
+                    selectStatement = table SELECT X
+                }
+            }
+
+            val results = selectStatement.getResults()
+            assertEquals(2, results.size)
+            assertEquals("Alice", results[0].name)
+            assertEquals(25, results[0].age)
+            assertEquals("Bob", results[1].name)
+            assertEquals(30, results[1].age)
+        }
+    }
+
+    fun testCreateTableWithStringPrimaryKey() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            val product1 = Product(sku = null, name = "Widget", price = 19.99)
+            val product2 = Product(sku = null, name = "Gadget", price = 29.99)
+
+            lateinit var selectStatement: SelectStatement<Product>
+            database {
+                ProductTable { table ->
+                    table INSERT listOf(product1, product2)
+                    selectStatement = table SELECT X
+                }
+            }
+
+            val results = selectStatement.getResults()
+            assertEquals(2, results.size)
+            assertEquals("Widget", results[0].name)
+            assertEquals(19.99, results[0].price)
+            assertEquals("Gadget", results[1].name)
+            assertEquals(29.99, results[1].price)
+        }
+    }
+
+    fun testCreateTableWithAutoincrement() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            val student1 = StudentWithAutoincrement(id = null, studentName = "Charlie", grade = 85)
+            val student2 = StudentWithAutoincrement(id = null, studentName = "Diana", grade = 92)
+
+            lateinit var selectStatement: SelectStatement<StudentWithAutoincrement>
+            database {
+                StudentWithAutoincrementTable { table ->
+                    table INSERT listOf(student1, student2)
+                    selectStatement = table SELECT X
+                }
+            }
+
+            val results = selectStatement.getResults()
+            assertEquals(2, results.size)
+            assertEquals("Charlie", results[0].studentName)
+            assertEquals(85, results[0].grade)
+            assertEquals("Diana", results[1].studentName)
+            assertEquals(92, results[1].grade)
+        }
+    }
+
+    fun testCreateTableWithCompositePrimaryKey() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            val enrollment1 = Enrollment(studentId = 1, courseId = 101, semester = "Fall 2025")
+            val enrollment2 = Enrollment(studentId = 1, courseId = 102, semester = "Fall 2025")
+            val enrollment3 = Enrollment(studentId = 2, courseId = 101, semester = "Fall 2025")
+
+            lateinit var selectStatement: SelectStatement<Enrollment>
+            database {
+                EnrollmentTable { table ->
+                    table INSERT listOf(enrollment1, enrollment2, enrollment3)
+                    selectStatement = table SELECT X
+                }
+            }
+
+            val results = selectStatement.getResults()
+            assertEquals(3, results.size)
+            assertEquals(true, results.any { it == enrollment1 })
+            assertEquals(true, results.any { it == enrollment2 })
+            assertEquals(true, results.any { it == enrollment3 })
+        }
+    }
+
+    @OptIn(com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI::class)
+    fun testInsertWithId() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            val person1 = PersonWithId(id = 100, name = "Eve", age = 28)
+            val person2 = PersonWithId(id = 200, name = "Frank", age = 35)
+
+            lateinit var selectStatement: SelectStatement<PersonWithId>
+            database {
+                PersonWithIdTable { table ->
+                    table INSERT_WITH_ID listOf(person1, person2)
+                    selectStatement = table SELECT X
+                }
+            }
+
+            val results = selectStatement.getResults()
+            assertEquals(2, results.size)
+            assertEquals(100L, results[0].id)
+            assertEquals("Eve", results[0].name)
+            assertEquals(28, results[0].age)
+            assertEquals(200L, results[1].id)
+            assertEquals("Frank", results[1].name)
+            assertEquals(35, results[1].age)
+        }
+    }
+
+    fun testCreateInDatabaseScope() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            val person = PersonWithId(id = null, name = "Grace", age = 40)
+            val product = Product(sku = null, name = "Thingamajig", price = 49.99)
+
+            lateinit var personStatement: SelectStatement<PersonWithId>
+            lateinit var productStatement: SelectStatement<Product>
+            database {
+                PersonWithIdTable { table ->
+                    table INSERT person
+                    personStatement = table SELECT X
+                }
+                ProductTable { table ->
+                    table INSERT product
+                    productStatement = table SELECT X
+                }
+            }
+
+            assertEquals(1, personStatement.getResults().size)
+            assertEquals("Grace", personStatement.getResults().first().name)
+            assertEquals(1, productStatement.getResults().size)
+            assertEquals("Thingamajig", productStatement.getResults().first().name)
+            assertEquals(49.99, productStatement.getResults().first().price)
+        }
+    }
+
+    fun testUpdateAndDeleteWithPrimaryKey() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            val person1 = PersonWithId(id = null, name = "Henry", age = 45)
+            val person2 = PersonWithId(id = null, name = "Iris", age = 50)
+
+            database {
+                PersonWithIdTable { table ->
+                    table INSERT listOf(person1, person2)
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<PersonWithId>
+            database {
+                PersonWithIdTable { table ->
+                    table UPDATE SET { age = 46 } WHERE (name EQ "Henry")
+                    selectStatement = table SELECT WHERE (name EQ "Henry")
+                }
+            }
+
+            val updatedPerson = selectStatement.getResults().first()
+            assertEquals("Henry", updatedPerson.name)
+            assertEquals(46, updatedPerson.age)
+
+            database {
+                PersonWithIdTable { table ->
+                    table DELETE WHERE (name EQ "Iris")
+                    selectStatement = table SELECT X
+                }
+            }
+
+            val remainingResults = selectStatement.getResults()
+            assertEquals(1, remainingResults.size)
+            assertEquals("Henry", remainingResults.first().name)
+        }
+    }
+
+    fun testByteArrayInsert() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            val file1 = FileData(
+                id = null,
+                fileName = "test.bin",
+                content = byteArrayOf(0x01, 0x02, 0x03, 0xFF.toByte()),
+                metadata = "Binary test file"
+            )
+            val file2 = FileData(
+                id = null,
+                fileName = "empty.dat",
+                content = byteArrayOf(),
+                metadata = "Empty file"
+            )
+            val file3 = FileData(
+                id = null,
+                fileName = "large.bin",
+                content = ByteArray(256) { it.toByte() },
+                metadata = "Large file with all byte values"
+            )
+
+            lateinit var selectStatement: SelectStatement<FileData>
+            database {
+                FileDataTable { table ->
+                    table INSERT listOf(file1, file2, file3)
+                    selectStatement = table SELECT X
+                }
+            }
+
+            val results = selectStatement.getResults()
+            assertEquals(3, results.size)
+
+            // Verify first file
+            assertEquals("test.bin", results[0].fileName)
+            assertEquals(true, results[0].content.contentEquals(byteArrayOf(0x01, 0x02, 0x03, 0xFF.toByte())))
+            assertEquals("Binary test file", results[0].metadata)
+
+            // Verify empty file
+            assertEquals("empty.dat", results[1].fileName)
+            assertEquals(true, results[1].content.contentEquals(byteArrayOf()))
+            assertEquals("Empty file", results[1].metadata)
+
+            // Verify large file
+            assertEquals("large.bin", results[2].fileName)
+            assertEquals(256, results[2].content.size)
+            assertEquals(true, results[2].content.contentEquals(ByteArray(256) { it.toByte() }))
+        }
+    }
+
+    fun testByteArraySelect() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            val file = FileData(
+                id = null,
+                fileName = "select_test.bin",
+                content = byteArrayOf(0xDE.toByte(), 0xAD.toByte(), 0xBE.toByte(), 0xEF.toByte()),
+                metadata = "SELECT test"
+            )
+
+            database {
+                FileDataTable { table ->
+                    table INSERT file
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<FileData>
+            database {
+                FileDataTable { table ->
+                    selectStatement = table SELECT WHERE (fileName EQ "select_test.bin")
+                }
+            }
+
+            val results = selectStatement.getResults()
+            assertEquals(1, results.size)
+            assertEquals("select_test.bin", results.first().fileName)
+            assertEquals(true, results.first().content.contentEquals(byteArrayOf(0xDE.toByte(), 0xAD.toByte(), 0xBE.toByte(), 0xEF.toByte())))
+        }
+    }
+
+    fun testByteArrayUpdate() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            val originalFile = FileData(
+                id = null,
+                fileName = "update_test.bin",
+                content = byteArrayOf(0x00, 0x01, 0x02),
+                metadata = "Original"
+            )
+
+            database {
+                FileDataTable { table ->
+                    table INSERT originalFile
+                }
+            }
+
+            val newContent = byteArrayOf(0xFF.toByte(), 0xFE.toByte(), 0xFD.toByte())
+            lateinit var selectStatement: SelectStatement<FileData>
+            database {
+                FileDataTable { table ->
+                    table UPDATE SET {
+                        content = newContent
+                        metadata = "Updated"
+                    } WHERE (fileName EQ "update_test.bin")
+                    selectStatement = table SELECT WHERE (fileName EQ "update_test.bin")
+                }
+            }
+
+            val updatedFile = selectStatement.getResults().first()
+            assertEquals("update_test.bin", updatedFile.fileName)
+            assertEquals(true, updatedFile.content.contentEquals(newContent))
+            assertEquals("Updated", updatedFile.metadata)
+        }
+    }
+
+    fun testByteArrayDelete() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            val file1 = FileData(
+                id = null,
+                fileName = "delete_test1.bin",
+                content = byteArrayOf(0x01, 0x02),
+                metadata = "To delete"
+            )
+            val file2 = FileData(
+                id = null,
+                fileName = "delete_test2.bin",
+                content = byteArrayOf(0x03, 0x04),
+                metadata = "To keep"
+            )
+
+            database {
+                FileDataTable { table ->
+                    table INSERT listOf(file1, file2)
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<FileData>
+            database {
+                FileDataTable { table ->
+                    table DELETE WHERE (fileName EQ "delete_test1.bin")
+                    selectStatement = table SELECT X
+                }
+            }
+
+            val results = selectStatement.getResults()
+            assertEquals(1, results.size)
+            assertEquals("delete_test2.bin", results.first().fileName)
+        }
+    }
+
+    fun testByteArrayMultipleOperations() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            // Test multiple INSERT, UPDATE, SELECT operations
+            val file1 = FileData(
+                id = null,
+                fileName = "multi1.bin",
+                content = byteArrayOf(0xAA.toByte(), 0xBB.toByte()),
+                metadata = "First"
+            )
+            val file2 = FileData(
+                id = null,
+                fileName = "multi2.bin",
+                content = byteArrayOf(0xCC.toByte(), 0xDD.toByte()),
+                metadata = "Second"
+            )
+
+            // Insert
+            database {
+                FileDataTable { table ->
+                    table INSERT listOf(file1, file2)
+                }
+            }
+
+            // Update first file
+            val newContent = byteArrayOf(0x11, 0x22, 0x33)
+            database {
+                FileDataTable { table ->
+                    table UPDATE SET {
+                        content = newContent
+                    } WHERE (fileName EQ "multi1.bin")
+                }
+            }
+
+            // Select and verify
+            lateinit var selectStatement: SelectStatement<FileData>
+            database {
+                FileDataTable { table ->
+                    selectStatement = table SELECT WHERE (fileName EQ "multi1.bin")
+                }
+            }
+
+            val updatedFile = selectStatement.getResults().first()
+            assertEquals(true, updatedFile.content.contentEquals(newContent))
+            assertEquals("First", updatedFile.metadata)
+        }
+    }
+
+    private fun getDefaultDBConfig(): DatabaseConfiguration =
+        DatabaseConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                it.execSQL(SQL_CREATE_BOOK)
+                it.execSQL(SQL_CREATE_CATEGORY)
+            }
+        )
+
+    private fun getNewAPIDBConfig(): DSLDBConfiguration =
+        DSLDBConfiguration(
             name = DATABASE_NAME,
             path = path,
             version = 1,
             create = {
                 CREATE(BookTable)
                 CREATE(CategoryTable)
+                CREATE(PersonWithIdTable)
+                CREATE(ProductTable)
+                CREATE(StudentWithAutoincrementTable)
+                CREATE(EnrollmentTable)
+                CREATE(FileDataTable)
             }
         )
 }

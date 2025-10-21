@@ -91,30 +91,40 @@ internal object Create : Operation {
                 }
             }
             val isNullable = descriptor.isNullable
+            val isPrimaryKey = elementName == table.primaryKeyInfo?.primaryKeyName
+
             append(elementName)
             append(type)
-            if (elementName == table.primaryKeyInfo?.primaryKeyName) {
-                if (table.primaryKeyInfo?.isAutomaticIncrement == true && type == FullNameCache.LONG)
+
+            if (isPrimaryKey) {
+                if (table.primaryKeyInfo?.isAutomaticIncrement == true && type == " INTEGER")
                     append(" PRIMARY KEY AUTOINCREMENT")
                 else
                     append(" PRIMARY KEY")
-            } else if (isNullable) {
+                // Add comma if not the last element
                 if (elementIndex < lastIndex)
                     append(',')
-
-            } else {
+            } else if (!isNullable) {
+                append(" NOT NULL")
                 if (elementIndex < lastIndex)
-                    append(" NOT NULL,")
-                else
-                    append(" NOT NULL")
+                    append(',')
+            } else {
+                // Nullable non-primary key columns
+                if (elementIndex < lastIndex)
+                    append(',')
             }
         }
-        table.primaryKeyInfo?.compositePrimaryKeys?.joinTo(
-            buffer = this,
-            separator = ",",
-            prefix = ", PRIMARY KEY ",
-            postfix = ")"
-        )
+        table.primaryKeyInfo?.compositePrimaryKeys?.let {
+            append(", PRIMARY KEY (")
+            if (it.isEmpty())
+                return@let
+            append(it[0])
+            for (i in 1 ..< it.size) {
+                append(',')
+                append(it[i])
+            }
+            append(')')
+        }
         append(')')
     }
 }

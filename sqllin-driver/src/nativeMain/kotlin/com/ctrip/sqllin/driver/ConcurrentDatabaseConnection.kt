@@ -44,7 +44,7 @@ internal class ConcurrentDatabaseConnection(
         delegateConnection.executeUpdateDelete(sql, bindParams)
     }
 
-    override fun query(sql: String, bindParams: Array<out String?>?): CommonCursor = accessLock.withLock {
+    override fun query(sql: String, bindParams: Array<out Any?>?): CommonCursor = accessLock.withLock {
         delegateConnection.query(sql, bindParams)
     }
 

@@ -47,7 +47,7 @@ internal fun <T> encodeEntities2InsertValues(
     table: Table<T>,
     builder: StringBuilder,
     values: Iterable<T>,
-    parameters: MutableList<String>,
+    parameters: MutableList<Any?>,
     isInsertWithId: Boolean,
 ) = with(builder) {
     val isInsertId = table.primaryKeyInfo?.run {
@@ -55,15 +55,14 @@ internal fun <T> encodeEntities2InsertValues(
     } ?: true
     val serializer = table.kSerializer()
     append('(')
-    val primaryKeyIndex = appendDBColumnName(serializer.descriptor, table.primaryKeyInfo?.primaryKeyName, isInsertId)
-    if (primaryKeyIndex >= 0)
-        parameters.removeAt(primaryKeyIndex)
+    val primaryKeyName = table.primaryKeyInfo?.primaryKeyName
+    appendDBColumnName(serializer.descriptor, primaryKeyName, isInsertId)
     append(')')
     append(" values ")
     val iterator = values.iterator()
     fun appendNext() {
         val value = iterator.next()
-        val encoder = InsertValuesEncoder(parameters)
+        val encoder = InsertValuesEncoder(parameters, primaryKeyName, isInsertId)
         encoder.encodeSerializableValue(serializer, value)
         append(encoder.valuesSQL)
     }
@@ -90,27 +89,22 @@ internal fun StringBuilder.appendDBColumnName(
     descriptor: SerialDescriptor,
     primaryKeyName: String?,
     isInsertId: Boolean,
-): Int = if (isInsertId) {
-    appendDBColumnName(descriptor)
-    -1
-} else {
-    var index = -1
-    if (descriptor.elementsCount > 0) {
-        val elementName = descriptor.getElementName(0)
+) {
+    if (isInsertId) {
+        appendDBColumnName(descriptor)
+    } else {
+        val lastIndex = descriptor.elementsCount - 1
+        for (i in 0 ..< lastIndex) {
+            val elementName = descriptor.getElementName(i)
+            if (elementName != primaryKeyName) {
+                append(elementName)
+                append(',')
+            }
+        }
+        val elementName = descriptor.getElementName(lastIndex)
         if (elementName != primaryKeyName)
             append(elementName)
-        else
-            index = 0
     }
-    for (i in 1 ..< descriptor.elementsCount) {
-        append(',')
-        val elementName = descriptor.getElementName(i)
-        if (elementName != primaryKeyName)
-            append(elementName)
-        else
-            index = i
-    }
-    index
 }
 
 /**

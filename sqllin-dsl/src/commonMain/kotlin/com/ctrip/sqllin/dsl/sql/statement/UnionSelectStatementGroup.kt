@@ -46,7 +46,7 @@ internal class UnionSelectStatementGroup<T> : StatementContainer {
      */
     internal fun unionStatements(isUnionAll: Boolean): FinalSelectStatement<T> {
         require(statementList.isNotEmpty()) { "Please write at least two 'select' statements on 'UNION' scope" }
-        var parameters: MutableList<String>? = null
+        var parameters: MutableList<Any?>? = null
         val unionSqlStr = buildString {
             check(statementList.size > 1) { "Please write at least two 'select' statements on 'UNION' scope" }
             val unionKeyWord = if (isUnionAll) " UNION ALL " else " UNION "

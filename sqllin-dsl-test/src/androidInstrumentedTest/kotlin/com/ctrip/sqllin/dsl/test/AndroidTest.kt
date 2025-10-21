@@ -61,6 +61,42 @@ class AndroidTest {
     @Test
     fun testNullValue() = commonTest.testNullValue()
 
+    @Test
+    fun testCreateTableWithLongPrimaryKey() = commonTest.testCreateTableWithLongPrimaryKey()
+
+    @Test
+    fun testCreateTableWithStringPrimaryKey() = commonTest.testCreateTableWithStringPrimaryKey()
+
+    @Test
+    fun testCreateTableWithAutoincrement() = commonTest.testCreateTableWithAutoincrement()
+
+    @Test
+    fun testCreateTableWithCompositePrimaryKey() = commonTest.testCreateTableWithCompositePrimaryKey()
+
+    @Test
+    fun testInsertWithId() = commonTest.testInsertWithId()
+
+    @Test
+    fun testCreateInDatabaseScope() = commonTest.testCreateInDatabaseScope()
+
+    @Test
+    fun testUpdateAndDeleteWithPrimaryKey() = commonTest.testUpdateAndDeleteWithPrimaryKey()
+
+    @Test
+    fun testByteArrayInsert() = commonTest.testByteArrayInsert()
+
+    @Test
+    fun testByteArraySelect() = commonTest.testByteArraySelect()
+
+    @Test
+    fun testByteArrayUpdate() = commonTest.testByteArrayUpdate()
+
+    @Test
+    fun testByteArrayDelete() = commonTest.testByteArrayDelete()
+
+    @Test
+    fun testByteArrayMultipleOperations() = commonTest.testByteArrayMultipleOperations()
+
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

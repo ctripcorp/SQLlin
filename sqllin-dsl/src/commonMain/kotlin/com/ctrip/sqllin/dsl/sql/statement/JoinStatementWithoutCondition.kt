@@ -58,12 +58,12 @@ public class JoinStatementWithoutCondition<R> internal constructor(
         val sql = buildString {
             append(sqlStr)
             append(" USING (")
-            do {
+            append(iterator.next().valueName)
+            while (iterator.hasNext()) {
+                append(',')
                 append(iterator.next().valueName)
-                val hasNext = iterator.hasNext()
-                val symbol = if (hasNext) ',' else ')'
-                append(symbol)
-            } while (hasNext)
+            }
+            append(')')
         }
         val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, null)
         addSelectStatement(joinStatement)

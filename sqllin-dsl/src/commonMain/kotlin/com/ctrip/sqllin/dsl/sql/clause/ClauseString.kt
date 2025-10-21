@@ -39,13 +39,13 @@ public class ClauseString(
 ) : ClauseElement(valueName, table, isFunction) {
 
     /** Equals (=), or IS NULL if value is null */
-    internal infix fun eq(str: String?): SelectCondition = appendString("=", " IS", str)
+    internal infix fun eq(str: String?): SelectCondition = appendString("=", " IS NULL", str)
 
     /** Equals (=) - compare against another column/function */
     internal infix fun eq(clauseString: ClauseString): SelectCondition = appendClauseString("=", clauseString)
 
     /** Not equals (!=), or IS NOT NULL if value is null */
-    internal infix fun neq(str: String?): SelectCondition = appendString("!=", " IS NOT", str)
+    internal infix fun neq(str: String?): SelectCondition = appendString("!=", " IS NOT NULL", str)
 
     /** Not equals (!=) - compare against another column/function */
     internal infix fun neq(clauseString: ClauseString): SelectCondition = appendClauseString("!=", clauseString)
@@ -89,7 +89,6 @@ public class ClauseString(
             val isNull = str == null
             if (isNull) {
                 append(nullSymbol)
-                append(" NULL")
             } else {
                 append(notNullSymbol)
                 append('?')
