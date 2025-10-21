@@ -37,9 +37,9 @@ internal class AndroidDatabaseConnection(private val database: SQLiteDatabase) :
 
     override fun executeUpdateDelete(sql: String, bindParams: Array<out Any?>?) = execSQL(sql, bindParams)
 
-    override fun query(sql: String, bindParams: Array<out Any?>?): CommonCursor =
-        if (bindParams == null) {
-            AndroidCursor(database.rawQuery(sql, null))
+    override fun query(sql: String, bindParams: Array<out Any?>?): CommonCursor {
+        val cursor = if (bindParams == null) {
+            database.rawQuery(sql, null)
         } else {
             // Use rawQueryWithFactory to bind parameters with proper types
             // This allows us to bind parameters with their actual types (Int, Long, Double, etc.)
@@ -50,8 +50,10 @@ internal class AndroidDatabaseConnection(private val database: SQLiteDatabase) :
             }
             // Pass emptyArray() for selectionArgs since we bind parameters via the factory
             // Use empty string for editTable since it's only needed for updateable cursors
-            AndroidCursor(database.rawQueryWithFactory(cursorFactory, sql, null, ""))
+            database.rawQueryWithFactory(cursorFactory, sql, null, "")
         }
+        return AndroidCursor(cursor)
+    }
 
     /**
      * Binds parameters to SQLiteQuery with proper type handling.

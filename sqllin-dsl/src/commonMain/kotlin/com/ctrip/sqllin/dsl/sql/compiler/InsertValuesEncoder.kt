@@ -37,6 +37,7 @@ import kotlinx.serialization.modules.SerializersModule
  *
  * @param parameters Mutable list to accumulate parameter values
  * @param primaryKeyName Name of primary key field to skip, or null to include all fields
+ * @param isInsertId whether ignore encoding the special primary key that represents rowid in SQLite
  *
  * @author Yuang Qiao
  */

@@ -114,12 +114,17 @@ internal object Create : Operation {
                     append(',')
             }
         }
-        table.primaryKeyInfo?.compositePrimaryKeys?.joinTo(
-            buffer = this,
-            separator = ",",
-            prefix = ", PRIMARY KEY (",
-            postfix = ")",
-        )
+        table.primaryKeyInfo?.compositePrimaryKeys?.let {
+            append(", PRIMARY KEY (")
+            if (it.isEmpty())
+                return@let
+            append(it[0])
+            for (i in 1 ..< it.size) {
+                append(',')
+                append(it[i])
+            }
+            append(')')
+        }
         append(')')
     }
 }
