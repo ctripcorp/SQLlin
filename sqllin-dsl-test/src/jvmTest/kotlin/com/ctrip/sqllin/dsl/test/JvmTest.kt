@@ -55,6 +55,27 @@ class JvmTest {
     @Test
     fun testNullValue() = commonTest.testNullValue()
 
+    @Test
+    fun testCreateTableWithLongPrimaryKey() = commonTest.testCreateTableWithLongPrimaryKey()
+
+    @Test
+    fun testCreateTableWithStringPrimaryKey() = commonTest.testCreateTableWithStringPrimaryKey()
+
+    @Test
+    fun testCreateTableWithAutoincrement() = commonTest.testCreateTableWithAutoincrement()
+
+    @Test
+    fun testCreateTableWithCompositePrimaryKey() = commonTest.testCreateTableWithCompositePrimaryKey()
+
+    @Test
+    fun testInsertWithId() = commonTest.testInsertWithId()
+
+    @Test
+    fun testCreateInDatabaseScope() = commonTest.testCreateInDatabaseScope()
+
+    @Test
+    fun testUpdateAndDeleteWithPrimaryKey() = commonTest.testUpdateAndDeleteWithPrimaryKey()
+
     @BeforeTest
     fun setUp() {
         deleteDatabase(path, CommonBasicTest.DATABASE_NAME)

@@ -43,6 +43,7 @@ import kotlinx.serialization.modules.SerializersModule
 internal class InsertValuesEncoder(
     val parameters: MutableList<Any?>,
     val primaryKeyName: String?,
+    val isInsertId: Boolean,
 ) : AbstractEncoder() {
 
     override val serializersModule: SerializersModule = EmptySerializersModule()
@@ -88,8 +89,7 @@ internal class InsertValuesEncoder(
     override fun encodeElement(descriptor: SerialDescriptor, index: Int): Boolean {
         elementsCount = descriptor.elementsCount
         elementsIndex = index
-        val elementName = descriptor.getElementName(index)
-        return elementName != primaryKeyName
+        return isInsertId || descriptor.getElementName(index) != primaryKeyName
     }
 
     /**

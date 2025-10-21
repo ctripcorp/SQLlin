@@ -16,7 +16,9 @@
 
 package com.ctrip.sqllin.dsl.test
 
+import com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey
 import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
 import kotlinx.serialization.Serializable
 
 /**
@@ -63,4 +65,36 @@ data class NullTester(
     val paramInt: Int?,
     val paramString: String?,
     val paramDouble: Double?,
+)
+
+@DBRow("person_with_id")
+@Serializable
+data class PersonWithId(
+    @PrimaryKey val id: Long?,
+    val name: String,
+    val age: Int,
+)
+
+@DBRow("product")
+@Serializable
+data class Product(
+    @PrimaryKey val sku: String?,
+    val name: String,
+    val price: Double,
+)
+
+@DBRow("student_with_autoincrement")
+@Serializable
+data class StudentWithAutoincrement(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    val studentName: String,
+    val grade: Int,
+)
+
+@DBRow("enrollment")
+@Serializable
+data class Enrollment(
+    @CompositePrimaryKey val studentId: Long,
+    @CompositePrimaryKey val courseId: Long,
+    val semester: String,
 )

@@ -62,7 +62,7 @@ internal fun <T> encodeEntities2InsertValues(
     val iterator = values.iterator()
     fun appendNext() {
         val value = iterator.next()
-        val encoder = InsertValuesEncoder(parameters, primaryKeyName)
+        val encoder = InsertValuesEncoder(parameters, primaryKeyName, isInsertId)
         encoder.encodeSerializableValue(serializer, value)
         append(encoder.valuesSQL)
     }
@@ -93,17 +93,17 @@ internal fun StringBuilder.appendDBColumnName(
     if (isInsertId) {
         appendDBColumnName(descriptor)
     } else {
-        if (descriptor.elementsCount > 0) {
-            val elementName = descriptor.getElementName(0)
-            if (elementName != primaryKeyName)
-                append(elementName)
-        }
-        for (i in 1 ..< descriptor.elementsCount) {
-            append(',')
+        val lastIndex = descriptor.elementsCount - 1
+        for (i in 0 ..< lastIndex) {
             val elementName = descriptor.getElementName(i)
-            if (elementName != primaryKeyName)
+            if (elementName != primaryKeyName) {
                 append(elementName)
+                append(',')
+            }
         }
+        val elementName = descriptor.getElementName(lastIndex)
+        if (elementName != primaryKeyName)
+            append(elementName)
     }
 }
 

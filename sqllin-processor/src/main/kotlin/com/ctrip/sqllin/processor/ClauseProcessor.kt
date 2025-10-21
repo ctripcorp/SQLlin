@@ -187,9 +187,9 @@ class ClauseProcessor(
                 } else {
                     writer.write("        compositePrimaryKeys = listOf(\n")
                     compositePrimaryKeys.forEach {
-                        writer.write("        $it,\n")
+                        writer.write("            \"$it\",\n")
                     }
-                    writer.write("    )\n")
+                    writer.write("        )\n")
                 }
                 writer.write("    )\n\n")
                 writer.write("}\n")

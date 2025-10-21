@@ -62,6 +62,7 @@ public class JoinStatementWithoutCondition<R> internal constructor(
                 separator = ",",
                 prefix = " USING (",
                 postfix = ")",
+                transform = { it.valueName }
             )
         }
         val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, null)
