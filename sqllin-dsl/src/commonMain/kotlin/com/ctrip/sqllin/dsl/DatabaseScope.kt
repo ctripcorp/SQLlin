@@ -18,6 +18,7 @@ package com.ctrip.sqllin.dsl
 
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.X
@@ -544,6 +545,7 @@ public class DatabaseScope internal constructor(
      * PersonTable.CREATE()
      * ```
      */
+    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <T> CREATE(table: Table<T>) {
         val statement = Create.create(table, databaseConnection)
@@ -553,6 +555,7 @@ public class DatabaseScope internal constructor(
     /**
      * Creates this table from its definition (extension function variant).
      */
+    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     @JvmName("create")
     public fun <T> Table<T>.CREATE(): Unit = CREATE(this)

@@ -19,6 +19,7 @@ package com.ctrip.sqllin.dsl
 import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.DatabasePath
 import com.ctrip.sqllin.driver.openDatabase
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 
 /**
  * Factory functions for creating [Database] instances.
@@ -73,6 +74,7 @@ public fun Database(
  * @param enableSimpleSQLLog Whether to enable simple SQL logging for debugging
  * @return A new database instance
  */
+@ExperimentalDSLDatabaseAPI
 public fun Database(
     dsldbConfiguration: DSLDBConfiguration,
     enableSimpleSQLLog: Boolean = false,
