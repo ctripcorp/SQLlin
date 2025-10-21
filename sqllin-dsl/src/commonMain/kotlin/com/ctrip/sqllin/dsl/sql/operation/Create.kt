@@ -114,10 +114,8 @@ internal object Create : Operation {
                     append(',')
             }
         }
-        table.primaryKeyInfo?.compositePrimaryKeys?.let {
+        table.primaryKeyInfo?.compositePrimaryKeys?.takeIf { it.isNotEmpty() }?.let {
             append(", PRIMARY KEY (")
-            if (it.isEmpty())
-                return@let
             append(it[0])
             for (i in 1 ..< it.size) {
                 append(',')
