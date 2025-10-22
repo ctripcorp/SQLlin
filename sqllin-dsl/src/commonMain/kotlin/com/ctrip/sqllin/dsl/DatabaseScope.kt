@@ -23,8 +23,10 @@ import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.clause.*
+import com.ctrip.sqllin.dsl.sql.operation.Alert
 import com.ctrip.sqllin.dsl.sql.operation.Create
 import com.ctrip.sqllin.dsl.sql.operation.Delete
+import com.ctrip.sqllin.dsl.sql.operation.Drop
 import com.ctrip.sqllin.dsl.sql.operation.Insert
 import com.ctrip.sqllin.dsl.sql.operation.Select
 import com.ctrip.sqllin.dsl.sql.operation.Update
@@ -48,6 +50,8 @@ import kotlin.jvm.JvmName
  * - **DELETE**: Remove records with WHERE clauses
  * - **SELECT**: Query records with WHERE, ORDER BY, LIMIT, GROUP BY, JOIN, and UNION
  * - **CREATE**: Create tables from data class definitions
+ * - **DROP**: Remove tables from the database
+ * - **ALERT (ALTER)**: Modify table structures (add columns, rename tables/columns, drop columns)
  *
  * Transaction support:
  * - Use [transaction] to execute multiple statements atomically
@@ -56,11 +60,19 @@ import kotlin.jvm.JvmName
  * Example:
  * ```kotlin
  * database {
+ *     // Create and modify table structure
+ *     CREATE(PersonTable)
+ *     PersonTable ALERT_ADD_COLUMN email
+ *
+ *     // Data manipulation
  *     transaction {
  *         PersonTable INSERT person
  *         PersonTable UPDATE SET { name = "Alice" } WHERE (age GTE 18)
  *     }
  *     val adults = PersonTable SELECT WHERE(age GTE 18) LIMIT 10
+ *
+ *     // Cleanup
+ *     PersonTable.DROP()
  * }
  * ```
  *
@@ -559,4 +571,183 @@ public class DatabaseScope internal constructor(
     @StatementDslMaker
     @JvmName("create")
     public fun <T> Table<T>.CREATE(): Unit = CREATE(this)
+
+    // ========== DROP Operations ==========
+
+    /**
+     * Drops (removes) a table from the database.
+     *
+     * **⚠️ WARNING**: This is a destructive operation that permanently deletes
+     * the table and all its data. Use with caution.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     DROP(PersonTable)
+     *     // or using extension function
+     *     PersonTable.DROP()
+     * }
+     * ```
+     *
+     * @param table The table to drop
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> DROP(table: Table<T>) {
+        val statement = Drop.drop(table, databaseConnection)
+        addStatement(statement)
+    }
+
+    /**
+     * Drops (removes) this table from the database (extension function variant).
+     *
+     * **⚠️ WARNING**: This is a destructive operation that permanently deletes
+     * the table and all its data. Use with caution.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     PersonTable.DROP()
+     * }
+     * ```
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("drop")
+    public fun <T> Table<T>.DROP(): Unit = DROP(this)
+
+    // ========== ALERT (ALTER) Operations ==========
+
+    /**
+     * Adds a new column to an existing table.
+     *
+     * This operation modifies the table structure by adding a new column definition.
+     * Note: SQLite has limitations on ALTER TABLE - some operations like adding columns
+     * with constraints may require table recreation.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     PersonTable ALERT_ADD_COLUMN email
+     * }
+     * ```
+     *
+     * @param column The column definition to add to the table
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.ALERT_ADD_COLUMN(column: ClauseElement) {
+        val statement = Alert.addColumn(this, column, databaseConnection)
+        addStatement(statement)
+    }
+
+    /**
+     * Renames this table to a new name.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     PersonTable ALERT_RENAME_TABLE_TO NewPersonTable
+     * }
+     * ```
+     *
+     * @param newTable The new table definition containing the target name
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.ALERT_RENAME_TABLE_TO(newTable: Table<*>) {
+        val statement = Alert.renameTable(tableName, newTable, databaseConnection)
+        addStatement(statement)
+    }
+
+    /**
+     * Renames a table from an old name (as String) to a new table definition.
+     *
+     * This variant is useful when you don't have a Table object for the old table name.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     "old_person" ALERT_RENAME_TABLE_TO NewPersonTable
+     * }
+     * ```
+     *
+     * @receiver The current name of the table to rename
+     * @param newTable The new table definition containing the target name
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun String.ALERT_RENAME_TABLE_TO(newTable: Table<*>) {
+        val statement = Alert.renameTable(this, newTable, databaseConnection)
+        addStatement(statement)
+    }
+
+    /**
+     * Renames a column within this table using ClauseElement references.
+     *
+     * This variant allows you to use strongly-typed column references for both
+     * the old and new column names.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     PersonTable.RENAME_COLUMN(PersonTable.age, PersonTable.yearsOld)
+     * }
+     * ```
+     *
+     * @param oldColumn The current column to rename
+     * @param newColumn The new column definition with the target name
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T, R : ClauseElement> Table<T>.RENAME_COLUMN(oldColumn: R, newColumn: R) {
+        val statement = Alert.renameColumn(this, oldColumn.valueName, newColumn, databaseConnection)
+        addStatement(statement)
+    }
+
+    /**
+     * Renames a column within this table using a String for the old column name.
+     *
+     * This variant is useful when you don't have a ClauseElement reference for
+     * the old column name.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     PersonTable.RENAME_COLUMN("age", PersonTable.yearsOld)
+     * }
+     * ```
+     *
+     * @param oldColumnName The current name of the column to rename
+     * @param newColumn The new column definition with the target name
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> Table<T>.RENAME_COLUMN(oldColumnName: String, newColumn: ClauseElement) {
+        val statement = Alert.renameColumn(this, oldColumnName, newColumn, databaseConnection)
+        addStatement(statement)
+    }
+
+    /**
+     * Removes a column from this table.
+     *
+     * **⚠️ WARNING**: This permanently deletes the column and all its data.
+     * Note: SQLite has limited support for DROP COLUMN (added in version 3.35.0).
+     * Older SQLite versions may require table recreation to drop columns.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     PersonTable DROP_COLUMN PersonTable.email
+     * }
+     * ```
+     *
+     * @param column The column to remove from the table
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.DROP_COLUMN(column: ClauseElement) {
+        val statement = Alert.dropColumn(this, column, databaseConnection)
+        addStatement(statement)
+    }
 }
