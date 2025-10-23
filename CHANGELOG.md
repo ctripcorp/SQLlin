@@ -2,29 +2,33 @@
 
 - Date format: YYYY-MM-dd
 
-## 2.0.0 / 2025-10-xx
+## 2.0.0 / 2025-10-23
 
 ### All
 
-* Update `Kotlin`'s version to `2.2.20`
+* Update `Kotlin`'s version to `2.2.21`
 * Remove the Desuger configuration
+* Update minimal supported Android version from API 23 to 24
 
 ### sqllin-dsl
 
 * Optimized performance for SQL assembly
-* New API for creating Database: `DSLDBConfiguration`
-* New experimental API: `DatabaseScope#CREATE`
-* New experimental API: `DatabaseScope#DROP`
-* New experimental API: `DatabaseSceop#ALERT`
+* New annotation for marking primary key: `PrimaryKey`
+* New annotation for marking composite primary key: `CompositePrimaryKey`
+* New experimental API for creating Database: `DSLDBConfiguration`
+* New experimental DSL API: `DatabaseScope#CREATE`
+* New experimental DSL API: `DatabaseScope#DROP`
+* New experimental DSL API: `DatabaseSceop#ALERT`
 * Support using ByteArray in DSL, that represents BLOB in SQLite
 
 ### sqllin-driver
 
 * Update the `sqlite-jdbc`'s version to `3.50.3.0`
+* **Breaking change**: The data type of `bindParams` in `DatabaseConnection#query` changed from `Array<out String?>?` to `Array<out Any?>?`
 
 ### sqllin-processor
 
-* Update `KSP`'s version to `2.2.20-2.0.4`
+* Update `KSP`'s version to `2.3.0`
 
 ## 1.4.4 / 2025-07-07
 

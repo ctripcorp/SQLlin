@@ -16,7 +16,7 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-val sqllinVersion = "1.4.4"
+val sqllinVersion = "2.0.0"
 
 kotlin {
     // ......
@@ -126,14 +126,51 @@ val database = Database(
 )
 ```
 
-Note, because of limitation by Android Framework, the `inMemory`, `busyTimeout`, `lookasideSlotSize`, `lookasideSlotCount` 
+Note, because of limitation by Android Framework, the `inMemory`, `busyTimeout`, `lookasideSlotSize`, `lookasideSlotCount`
 only work on Android 9 and higher. And, because [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)(SQLlin is based on it on JVM) doesn't support
 `sqlite3_config()`, the `lookasideSlotSize` and `lookasideSlotCount` don't work on JVM target.
 
-Now, the operations that change database structure haven't been supported by DSL yet. So, you need to write these SQL statements by string
-as in `create` and `upgrade` parameters.
+### Using DSLDBConfiguration for Type-Safe Schema Management
+
+Alternatively, you can use `DSLDBConfiguration` which allows you to use the type-safe SQL DSL in the `create` and `upgrade` callbacks instead of raw SQL strings:
+
+```kotlin
+import com.ctrip.sqllin.driver.DSLDBConfiguration
+import com.ctrip.sqllin.dsl.Database
+
+val database = Database(
+    DSLDBConfiguration(
+        name = "Person.db",
+        path = getGlobalDatabasePath(),
+        version = 1,
+        isReadOnly = false,
+        inMemory = false,
+        journalMode = JournalMode.WAL,
+        synchronousMode = SynchronousMode.NORMAL,
+        busyTimeout = 5000,
+        lookasideSlotSize = 0,
+        lookasideSlotCount = 0,
+        create = {
+            // Use type-safe DSL instead of raw SQL
+            CREATE(PersonTable)
+        },
+        upgrade = { oldVersion, newVersion ->
+            when (oldVersion) {
+                1 -> {
+                    // Example: Add a new column in version 2
+                    PersonTable ALERT_ADD_COLUMN PersonTable.email
+                }
+            }
+        }
+    )
+)
+```
+
+With `DSLDBConfiguration`, you can use CREATE, DROP, and ALTER operations directly in the callbacks, making schema management more type-safe and maintainable. The DSL operations available in these callbacks are the same as those available in regular `database { }` blocks.
 
 Usually, you just need to create one `Database` instance in your component lifecycle. So, you need to close database manually when the lifecycle ended:
+
+> Notice: `DSLDBConfiguration` is experimental, but it will completely replace `DatabaseConfiguration` when it is stable. That means _sqllin-dsl_ will not support to use `DatabaseConfiguration` to create `Database` instances in the future versions.
 
 ```kotlin
 override fun onDestroy() {
@@ -166,6 +203,74 @@ name as table name, for example, `Person`'s default table name is "Person".
 
 In _sqllin-dsl_, objects are serialized to SQL and deserialized from cursor depend on _kotlinx.serialization_. So, you also need to add the `@Serializable` onto your data classes. Therefore, if
 you want to ignore some properties when serialization or deserialization and `Table` classes generation, you can annotate your properties with `kotlinx.serialization.Transient`.
+
+### Defining Primary Keys
+
+SQLlin provides annotations to define primary keys for your database tables.
+
+#### Single Primary Key with @PrimaryKey
+
+Use `@PrimaryKey` to mark a single property as the primary key:
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class Person(
+    @PrimaryKey(autoIncrement = true)
+    val id: Long? = null,  // Auto-incrementing primary key
+    val name: String,
+    val age: Int,
+)
+```
+
+**Important type and nullability rules:**
+
+- **For `Long` primary keys with auto-increment**: The property **must** be declared as nullable (`Long?`). This maps to SQLite's `INTEGER PRIMARY KEY` which acts as an alias for the internal `rowid`. When inserting a new record with `id = null`, SQLite automatically generates the ID.
+
+- **For other types (String, Int, etc.)**: The property **must** be non-nullable. You must provide a unique value when inserting:
+
+```kotlin
+@DBRow
+@Serializable
+data class User(
+    @PrimaryKey
+    val username: String,  // Non-nullable, user-provided primary key
+    val email: String,
+)
+```
+
+The `autoIncrement` parameter enables stricter auto-incrementing behavior (using `AUTOINCREMENT` keyword), ensuring row IDs are never reused. This is only meaningful for `Long?` properties.
+
+#### Composite Primary Key with @CompositePrimaryKey
+
+Use `@CompositePrimaryKey` when your table's primary key consists of multiple columns:
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class Enrollment(
+    @CompositePrimaryKey
+    val studentId: Long,
+    @CompositePrimaryKey
+    val courseId: Long,
+    val enrollmentDate: String,
+)
+```
+
+**Important rules:**
+
+- You can apply `@CompositePrimaryKey` to **multiple properties** in the same class
+- All properties with `@CompositePrimaryKey` **must be non-nullable**
+- You **cannot** mix `@PrimaryKey` and `@CompositePrimaryKey` in the same class - use one or the other
+- The combination of all `@CompositePrimaryKey` properties forms the table's composite primary key
 
 ## Next Step
 

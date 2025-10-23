@@ -2,6 +2,162 @@
 
 在[《开始使用》](getting-start-cn.md)中，我们学习了如何创建 `Database` 实例以及定义你自己的数据库实体。现在我们将开始学习如何在 SQLlin 中编写 SQL 语句。
 
+## 表结构操作
+
+SQLlin 提供了用于管理表结构的类型安全 DSL 操作：CREATE、DROP 和 ALTER（在 API 中称为 ALERT）。
+
+### CREATE - 创建表
+
+你可以使用 CREATE 操作直接从数据类定义创建表：
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class Person(
+    @PrimaryKey(autoIncrement = true)
+    val id: Long = 0,
+    val name: String,
+    val age: Int,
+)
+
+fun sample() {
+    database {
+        // Create table using infix notation
+        CREATE(PersonTable)
+
+        // Or using extension function
+        PersonTable.CREATE()
+    }
+}
+```
+
+CREATE 操作会根据你的数据类定义自动生成相应的 SQL CREATE TABLE 语句，包括：
+- 正确的列类型（String → TEXT、Int → INT、Long → INTEGER/BIGINT 等）
+- 非空属性的 NOT NULL 约束
+- PRIMARY KEY 约束（单一或组合主键）
+- 自增主键的 AUTOINCREMENT
+
+### DROP - 删除表
+
+DROP 操作会从数据库中永久删除表及其所有数据：
+
+```kotlin
+fun sample() {
+    database {
+        // Drop table using infix notation
+        DROP(PersonTable)
+
+        // Or using extension function
+        PersonTable.DROP()
+    }
+}
+```
+
+**⚠️ 警告**：DROP 是一个破坏性操作。执行后，表及其所有数据将被永久删除。请谨慎使用。
+
+### ALTER - 修改表结构
+
+SQLlin 提供了多种 ALTER（ALERT）操作来修改现有的表结构：
+
+#### 添加列
+
+向现有表添加新列：
+
+```kotlin
+@DBRow
+@Serializable
+data class Person(
+    val name: String,
+    val age: Int,
+    val email: String? = null,  // New column
+)
+
+fun sample() {
+    database {
+        PersonTable ALERT_ADD_COLUMN PersonTable.email
+    }
+}
+```
+
+#### 重命名表
+
+将现有表重命名为新名称：
+
+```kotlin
+fun sample() {
+    database {
+        // Rename using Table object
+        PersonTable ALERT_RENAME_TABLE_TO NewPersonTable
+
+        // Or rename using old table name as String
+        "old_person" ALERT_RENAME_TABLE_TO NewPersonTable
+    }
+}
+```
+
+#### 重命名列
+
+重命名表中的列：
+
+```kotlin
+fun sample() {
+    database {
+        // Using ClauseElement references (type-safe)
+        PersonTable.RENAME_COLUMN(PersonTable.age, PersonTable.yearsOld)
+
+        // Or using String for old column name
+        PersonTable.RENAME_COLUMN("age", PersonTable.yearsOld)
+    }
+}
+```
+
+#### 删除列
+
+从现有表中删除列：
+
+```kotlin
+fun sample() {
+    database {
+        PersonTable DROP_COLUMN PersonTable.email
+    }
+}
+```
+
+**⚠️ 警告**：DROP COLUMN 会永久删除列及其所有数据。请注意，SQLite 的 DROP COLUMN 支持是在 3.35.0 版本中添加的，因此较旧的 SQLite 版本可能需要重建表。
+
+### 在 DSLDBConfiguration 中使用结构操作
+
+这些操作在使用 `DSLDBConfiguration` 时的数据库创建和升级回调中特别有用：
+
+```kotlin
+import com.ctrip.sqllin.dsl.DSLDBConfiguration
+
+val database = Database(
+    DSLDBConfiguration(
+        name = "Person.db",
+        path = getGlobalDatabasePath(),
+        version = 2,
+        create = {
+            CREATE(PersonTable)
+            CREATE(AddressTable)
+        },
+        upgrade = { oldVersion, newVersion ->
+            when (oldVersion) {
+                1 -> {
+                    // Upgrade from version 1 to 2
+                    PersonTable ALERT_ADD_COLUMN PersonTable.email
+                    CREATE(AddressTable)
+                }
+            }
+        }
+    )
+)
+```
+
 ## 插入
 
 `Database` 类重载了类型为 `<T> Database.(Database.() -> T) -> T` 的函数操作符。当你调用该操作符函数时，它将产生一个 _DatabaseScope_ （数据库作用域）。
