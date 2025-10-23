@@ -14,7 +14,7 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-val sqllinVersion = "1.4.4"
+val sqllinVersion = "2.0.0"
 
 kotlin {
     // ......
@@ -122,9 +122,47 @@ val database = Database(
 注意，由于 Android Framework 的限制，`inMemory`、`journalMode`、`lookasideSlotSize`、`lookasideSlotCount` 这些参数仅在 Android 9 及以上版本生效。 并且，由于
 [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)（SQLlin 在 JVM 上基于它）不支持 `sqlite3_config()`，`lookasideSlotSize` 和 `lookasideSlotCount` 两个属性在 JVM 平台不生效。
 
-当前由于会改变数据库结构的操作暂时还没有 DSL 化支持。因此，你需要在 `create` 和 `update` 参数中使用字符串编写 SQL 语句。
+### 使用 DSLDBConfiguration 进行类型安全的模式管理
+
+除此之外，你还可以使用新的试验性 API `DSLDBConfiguration`，它允许你在 `create` 和 `upgrade` 回调中使用类型安全的 SQL DSL，而不是原始的 SQL 字符串：
+
+```kotlin
+import com.ctrip.sqllin.driver.DSLDBConfiguration
+import com.ctrip.sqllin.dsl.Database
+
+val database = Database(
+    DSLDBConfiguration(
+        name = "Person.db",
+        path = getGlobalDatabasePath(),
+        version = 1,
+        isReadOnly = false,
+        inMemory = false,
+        journalMode = JournalMode.WAL,
+        synchronousMode = SynchronousMode.NORMAL,
+        busyTimeout = 5000,
+        lookasideSlotSize = 0,
+        lookasideSlotCount = 0,
+        create = {
+            // Use type-safe DSL instead of raw SQL
+            CREATE(PersonTable)
+        },
+        upgrade = { oldVersion, newVersion ->
+            when (oldVersion) {
+                1 -> {
+                    // Example: Add a new column in version 2
+                    PersonTable ALERT_ADD_COLUMN PersonTable.email
+                }
+            }
+        }
+    )
+)
+```
+
+通过使用 `DSLDBConfiguration`，你可以直接在回调中使用 CREATE、DROP 和 ALTER 操作，使模式管理更加类型安全和易于维护。这些回调中可用的 DSL 操作与常规 `database { }` 块中可用的操作相同。
 
 通常你只需要在你的组件的生命周期内创建一个 `Database` 对象，所以你需要在组件的生命周期结束时手动关闭数据库：
+
+> 注意: `DSLDBConfiguration` 处于实验性阶段，但当其稳定后会彻底取代 `DatabaseConfiguration`, 也就是说在未来版本中 _sqllin-dsl_ 将不再支持使用 `DatabaseConfiguration` 创建 `Database` 实例。
 
 ```kotlin
 override fun onDestroy() {
@@ -155,6 +193,74 @@ data class Person(
 
 在 _sqllin-dsl_ 中，对象序列化为 SQL 语句，或者从游标中反序列化依赖 _kotlinx.serialization_，所以你需要在你的 data class
 上添加 `@Serializable` 注解。因此，如果你想在序列化或反序列化以及 `Table` 类生成的时候忽略某些属性，你可以给你的属性添加 `kotlinx.serialization.Transient` 注解。
+
+### 定义主键
+
+SQLlin 提供了用于定义数据库表主键的注解。
+
+#### 使用 @PrimaryKey 定义单一主键
+
+使用 `@PrimaryKey` 标记单个属性作为主键：
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class Person(
+    @PrimaryKey(autoIncrement = true)
+    val id: Long? = null,  // Auto-incrementing primary key
+    val name: String,
+    val age: Int,
+)
+```
+
+**重要的类型和可空性规则：**
+
+- **对于自增的 `Long` 主键**：属性**必须**声明为可空类型（`Long?`）。这会映射到 SQLite 的 `INTEGER PRIMARY KEY`，它作为内部 `rowid` 的别名。当插入 `id = null` 的新记录时，SQLite 会自动生成 ID。
+
+- **对于其他类型（String、Int 等）**：属性**必须**是非空的。插入时必须提供唯一值：
+
+```kotlin
+@DBRow
+@Serializable
+data class User(
+    @PrimaryKey
+    val username: String,  // Non-nullable, user-provided primary key
+    val email: String,
+)
+```
+
+`autoIncrement` 参数启用更严格的自增行为（使用 `AUTOINCREMENT` 关键字），确保行 ID 永远不会被重用。这仅对 `Long?` 属性有意义。
+
+#### 使用 @CompositePrimaryKey 定义组合主键
+
+当表的主键由多个列组成时，使用 `@CompositePrimaryKey`：
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class Enrollment(
+    @CompositePrimaryKey
+    val studentId: Long,
+    @CompositePrimaryKey
+    val courseId: Long,
+    val enrollmentDate: String,
+)
+```
+
+**重要规则：**
+
+- 你可以在同一个类中对**多个属性**应用 `@CompositePrimaryKey`
+- 所有带有 `@CompositePrimaryKey` 的属性**必须是非空的**
+- 你**不能**在同一个类中混合使用 `@PrimaryKey` 和 `@CompositePrimaryKey` - 只能使用其中一个
+- 所有 `@CompositePrimaryKey` 属性的组合形成表的组合主键
 
 ## 接下来
 

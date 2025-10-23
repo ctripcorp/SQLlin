@@ -97,6 +97,36 @@ class AndroidTest {
     @Test
     fun testByteArrayMultipleOperations() = commonTest.testByteArrayMultipleOperations()
 
+    @Test
+    fun testDropTable() = commonTest.testDropTable()
+
+    @Test
+    fun testDropTableExtensionFunction() = commonTest.testDropTableExtensionFunction()
+
+    @Test
+    fun testAlertAddColumn() = commonTest.testAlertAddColumn()
+
+    @Test
+    fun testAlertRenameTableWithTableObject() = commonTest.testAlertRenameTableWithTableObject()
+
+    @Test
+    fun testAlertRenameTableWithString() = commonTest.testAlertRenameTableWithString()
+
+    @Test
+    fun testRenameColumnWithClauseElement() = commonTest.testRenameColumnWithClauseElement()
+
+    @Test
+    fun testRenameColumnWithString() = commonTest.testRenameColumnWithString()
+
+    @Test
+    fun testDropColumn() = commonTest.testDropColumn()
+
+    @Test
+    fun testDropAndRecreateTable() = commonTest.testDropAndRecreateTable()
+
+    @Test
+    fun testAlertOperationsInTransaction() = commonTest.testAlertOperationsInTransaction()
+
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

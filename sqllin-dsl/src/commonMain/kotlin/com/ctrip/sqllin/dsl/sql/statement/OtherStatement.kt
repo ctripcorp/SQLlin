@@ -77,14 +77,14 @@ public class InsertStatement internal constructor(
 }
 
 /**
- * CREATE statement (final form).
+ * CREATE, DROP, ALERT statement (final form).
  *
  * Represents a complete CREATE TABLE operation. Does not support parameterized queries
  * since DDL statements use direct SQL execution.
  *
  * @author Yuang Qiao
  */
-public class CreateStatement internal constructor(
+public class TableStructureStatement internal constructor(
     sqlStr: String,
     private val connection: DatabaseConnection,
 ) : SingleStatement(sqlStr) {

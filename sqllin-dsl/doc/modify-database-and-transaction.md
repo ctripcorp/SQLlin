@@ -5,6 +5,162 @@
 In [Getting Start](getting-start.md), we have learned how to create the `Database` instance and define your database entities. Now,
 we start to learn how to write SQL statements with SQLlin.
 
+## Table Structure Operations
+
+SQLlin provides type-safe DSL operations for managing table structures: CREATE, DROP, and ALTER (referred to as ALERT in the API).
+
+### CREATE - Creating Tables
+
+You can create tables directly from your data class definitions using the CREATE operation:
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class Person(
+    @PrimaryKey(autoIncrement = true)
+    val id: Long = 0,
+    val name: String,
+    val age: Int,
+)
+
+fun sample() {
+    database {
+        // Create table using infix notation
+        CREATE(PersonTable)
+
+        // Or using extension function
+        PersonTable.CREATE()
+    }
+}
+```
+
+The CREATE operation automatically generates the appropriate SQL CREATE TABLE statement based on your data class definition, including:
+- Correct column types (String → TEXT, Int → INT, Long → INTEGER/BIGINT, etc.)
+- NOT NULL constraints for non-nullable properties
+- PRIMARY KEY constraints (single or composite)
+- AUTOINCREMENT for auto-incrementing primary keys
+
+### DROP - Removing Tables
+
+The DROP operation permanently removes a table and all its data from the database:
+
+```kotlin
+fun sample() {
+    database {
+        // Drop table using infix notation
+        DROP(PersonTable)
+
+        // Or using extension function
+        PersonTable.DROP()
+    }
+}
+```
+
+**⚠️ WARNING**: DROP is a destructive operation. Once executed, the table and all its data are permanently deleted. Use with caution.
+
+### ALTER - Modifying Table Structure
+
+SQLlin provides several ALTER (ALERT) operations for modifying existing table structures:
+
+#### Add Column
+
+Add a new column to an existing table:
+
+```kotlin
+@DBRow
+@Serializable
+data class Person(
+    val name: String,
+    val age: Int,
+    val email: String? = null,  // New column
+)
+
+fun sample() {
+    database {
+        PersonTable ALERT_ADD_COLUMN PersonTable.email
+    }
+}
+```
+
+#### Rename Table
+
+Rename an existing table to a new name:
+
+```kotlin
+fun sample() {
+    database {
+        // Rename using Table object
+        PersonTable ALERT_RENAME_TABLE_TO NewPersonTable
+
+        // Or rename using old table name as String
+        "old_person" ALERT_RENAME_TABLE_TO NewPersonTable
+    }
+}
+```
+
+#### Rename Column
+
+Rename a column within a table:
+
+```kotlin
+fun sample() {
+    database {
+        // Using ClauseElement references (type-safe)
+        PersonTable.RENAME_COLUMN(PersonTable.age, PersonTable.yearsOld)
+
+        // Or using String for old column name
+        PersonTable.RENAME_COLUMN("age", PersonTable.yearsOld)
+    }
+}
+```
+
+#### Drop Column
+
+Remove a column from an existing table:
+
+```kotlin
+fun sample() {
+    database {
+        PersonTable DROP_COLUMN PersonTable.email
+    }
+}
+```
+
+**⚠️ WARNING**: DROP COLUMN permanently deletes the column and all its data. Note that SQLite's DROP COLUMN support was added in version 3.35.0, so older SQLite versions may require table recreation.
+
+### Using Structure Operations with DSLDBConfiguration
+
+These operations are particularly useful in database creation and upgrade callbacks when using `DSLDBConfiguration`:
+
+```kotlin
+import com.ctrip.sqllin.dsl.DSLDBConfiguration
+
+val database = Database(
+    DSLDBConfiguration(
+        name = "Person.db",
+        path = getGlobalDatabasePath(),
+        version = 2,
+        create = {
+            CREATE(PersonTable)
+            CREATE(AddressTable)
+        },
+        upgrade = { oldVersion, newVersion ->
+            when (oldVersion) {
+                1 -> {
+                    // Upgrade from version 1 to 2
+                    PersonTable ALERT_ADD_COLUMN PersonTable.email
+                    CREATE(AddressTable)
+                }
+            }
+        }
+    )
+)
+```
+
 ## Insert
 
 The class `Database` has overloaded function operator that type is `<T> Database.(Database.() -> T) -> T`. When you invoke

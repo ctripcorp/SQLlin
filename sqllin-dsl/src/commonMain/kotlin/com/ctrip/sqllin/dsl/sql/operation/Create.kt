@@ -18,7 +18,8 @@ package com.ctrip.sqllin.dsl.sql.operation
 
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.sql.Table
-import com.ctrip.sqllin.dsl.sql.statement.CreateStatement
+import com.ctrip.sqllin.dsl.sql.statement.SingleStatement
+import com.ctrip.sqllin.dsl.sql.statement.TableStructureStatement
 
 /**
  * CREATE TABLE operation builder.
@@ -41,8 +42,8 @@ internal object Create : Operation {
      * @param connection Database connection for execution
      * @return CREATE statement ready for execution
      */
-    fun <T> create(table: Table<T>, connection: DatabaseConnection): CreateStatement =
-        CreateStatement(buildSQL(table), connection)
+    fun <T> create(table: Table<T>, connection: DatabaseConnection): SingleStatement =
+        TableStructureStatement(buildSQL(table), connection)
 
     /**
      * Generates the CREATE TABLE SQL by inspecting entity properties.
@@ -74,22 +75,7 @@ internal object Create : Operation {
         for (elementIndex in 0 .. lastIndex) {
             val elementName = tableDescriptor.getElementName(elementIndex)
             val descriptor = tableDescriptor.getElementDescriptor(elementIndex)
-            val type = with(descriptor.serialName) {
-                when {
-                    startsWith(FullNameCache.BYTE) || startsWith(FullNameCache.UBYTE) -> " TINYINT"
-                    startsWith(FullNameCache.SHORT) || startsWith(FullNameCache.USHORT) -> " SMALLINT"
-                    startsWith(FullNameCache.INT) || startsWith(FullNameCache.UINT) -> " INT"
-                    startsWith(FullNameCache.LONG) -> if (elementName == table.primaryKeyInfo?.primaryKeyName) " INTEGER" else " BIGINT"
-                    startsWith(FullNameCache.ULONG) -> " BIGINT"
-                    startsWith(FullNameCache.FLOAT) -> " FLOAT"
-                    startsWith(FullNameCache.DOUBLE) -> " DOUBLE"
-                    startsWith(FullNameCache.BOOLEAN) -> " BOOLEAN"
-                    startsWith(FullNameCache.CHAR) -> " CHAR(1)"
-                    startsWith(FullNameCache.STRING) -> " TEXT"
-                    startsWith(FullNameCache.BYTE_ARRAY) -> " BLOB"
-                    else -> throw IllegalStateException("Hasn't support the type '$this' yet")
-                }
-            }
+            val type = FullNameCache.getSerialNameBySerialName(descriptor.serialName, elementName, table)
             val isNullable = descriptor.isNullable
             val isPrimaryKey = elementName == table.primaryKeyInfo?.primaryKeyName
 
