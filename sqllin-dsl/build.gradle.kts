@@ -63,34 +63,6 @@ kotlin {
             implementation(libs.kotlinx.serialization)
             implementation(libs.kotlinx.coroutines.core)
         }
-        val jvmAndNativeMain by creating {
-            dependsOn(commonMain.get())
-        }
-
-        jvmMain { dependsOn(jvmAndNativeMain) }
-
-        // Configure all native targets to depend on jvmAndNativeMain
-        iosX64Main { dependsOn(jvmAndNativeMain) }
-        iosArm64Main { dependsOn(jvmAndNativeMain) }
-        iosSimulatorArm64Main { dependsOn(jvmAndNativeMain) }
-
-        macosX64Main { dependsOn(jvmAndNativeMain) }
-        macosArm64Main { dependsOn(jvmAndNativeMain) }
-
-        watchosArm32Main { dependsOn(jvmAndNativeMain) }
-        watchosArm64Main { dependsOn(jvmAndNativeMain) }
-        watchosX64Main { dependsOn(jvmAndNativeMain) }
-        watchosSimulatorArm64Main { dependsOn(jvmAndNativeMain) }
-        watchosDeviceArm64Main { dependsOn(jvmAndNativeMain) }
-
-        tvosArm64Main { dependsOn(jvmAndNativeMain) }
-        tvosX64Main { dependsOn(jvmAndNativeMain) }
-        tvosSimulatorArm64Main { dependsOn(jvmAndNativeMain) }
-
-        linuxX64Main { dependsOn(jvmAndNativeMain) }
-        linuxArm64Main { dependsOn(jvmAndNativeMain) }
-
-        mingwX64Main { dependsOn(jvmAndNativeMain) }
     }
 }
 
@@ -99,12 +71,12 @@ gradle.taskGraph.whenReady {
         return@whenReady
     tasks.forEach {
         when {
-            it.name.contains("linux", true) -> {
-                it.enabled = HostManager.hostIsLinux
-            }
-            it.name.contains("mingw", true) -> {
-                it.enabled = HostManager.hostIsMingw
-            }
+            it.name.contains("linux", true) -> it.enabled = HostManager.hostIsLinux
+            it.name.contains("mingw", true) -> it.enabled = HostManager.hostIsMingw
+            it.name.contains("ios", true)
+                    || it.name.contains("macos", true)
+                    || it.name.contains("watchos", true)
+                    || it.name.contains("tvos", true) -> it.enabled = HostManager.hostIsMac
         }
     }
 }

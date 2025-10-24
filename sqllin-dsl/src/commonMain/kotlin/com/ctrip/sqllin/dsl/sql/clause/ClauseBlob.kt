@@ -34,7 +34,7 @@ import com.ctrip.sqllin.dsl.sql.Table
  *
  * @author Yuang Qiao
  */
-public open class DefaultClauseBlob internal constructor(
+public class ClauseBlob(
     valueName: String,
     table: Table<*>,
     isFunction: Boolean,
@@ -58,7 +58,7 @@ public open class DefaultClauseBlob internal constructor(
      * @param clauseBlob The BLOB column/function to compare against
      * @return Condition expression comparing two BLOB columns
      */
-    internal infix fun eq(clauseBlob: DefaultClauseBlob): SelectCondition = appendClauseBlob("=", clauseBlob)
+    internal infix fun eq(clauseBlob: ClauseBlob): SelectCondition = appendClauseBlob("=", clauseBlob)
 
     /**
      * Creates an inequality comparison condition (!=).
@@ -78,9 +78,9 @@ public open class DefaultClauseBlob internal constructor(
      * @param clauseBlob The BLOB column/function to compare against
      * @return Condition expression comparing two BLOB columns
      */
-    internal infix fun neq(clauseBlob: DefaultClauseBlob): SelectCondition = appendClauseBlob("!=", clauseBlob)
+    internal infix fun neq(clauseBlob: ClauseBlob): SelectCondition = appendClauseBlob("!=", clauseBlob)
 
-    protected open fun appendBlob(notNullSymbol: String, nullSymbol: String, blob: ByteArray?): SelectCondition {
+    private fun appendBlob(notNullSymbol: String, nullSymbol: String, blob: ByteArray?): SelectCondition {
         val sql = buildString {
             if (!isFunction) {
                 append(table.tableName)
@@ -97,7 +97,7 @@ public open class DefaultClauseBlob internal constructor(
         return SelectCondition(sql, if (blob == null) null else mutableListOf(blob))
     }
 
-    private fun appendClauseBlob(symbol: String, clauseBlob: DefaultClauseBlob): SelectCondition {
+    private fun appendClauseBlob(symbol: String, clauseBlob: ClauseBlob): SelectCondition {
         val sql = buildString {
             append(table.tableName)
             append('.')
@@ -113,13 +113,7 @@ public open class DefaultClauseBlob internal constructor(
     }
 
     override fun hashCode(): Int = valueName.hashCode() + table.tableName.hashCode()
-    override fun equals(other: Any?): Boolean = (other as? DefaultClauseBlob)?.let {
+    override fun equals(other: Any?): Boolean = (other as? ClauseBlob)?.let {
         it.valueName == valueName && it.table.tableName == table.tableName
     } ?: false
 }
-
-public expect fun ClauseBlob(
-    valueName: String,
-    table: Table<*>,
-    isFunction: Boolean,
-): DefaultClauseBlob
