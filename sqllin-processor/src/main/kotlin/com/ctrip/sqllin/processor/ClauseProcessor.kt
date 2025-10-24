@@ -101,7 +101,6 @@ class ClauseProcessor(
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseBoolean\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseNumber\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseString\n")
-                writer.write("import com.ctrip.sqllin.dsl.sql.clause.DefaultClauseBlob\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.SetClause\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.PrimaryKeyInfo\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.Table\n\n")
