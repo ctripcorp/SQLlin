@@ -71,12 +71,12 @@ gradle.taskGraph.whenReady {
         return@whenReady
     tasks.forEach {
         when {
-            it.name.contains("linux", true) -> {
-                it.enabled = HostManager.hostIsLinux
-            }
-            it.name.contains("mingw", true) -> {
-                it.enabled = HostManager.hostIsMingw
-            }
+            it.name.contains("linux", true) -> it.enabled = HostManager.hostIsLinux
+            it.name.contains("mingw", true) -> it.enabled = HostManager.hostIsMingw
+            it.name.contains("ios", true)
+                    || it.name.contains("macos", true)
+                    || it.name.contains("watchos", true)
+                    || it.name.contains("tvos", true) -> it.enabled = HostManager.hostIsMac
         }
     }
 }
