@@ -127,6 +127,27 @@ class AndroidTest {
     @Test
     fun testAlertOperationsInTransaction() = commonTest.testAlertOperationsInTransaction()
 
+    @Test
+    fun testStringComparisonOperators() = commonTest.testStringComparisonOperators()
+
+    @Test
+    fun testStringInOperator() = commonTest.testStringInOperator()
+
+    @Test
+    fun testStringBetweenOperator() = commonTest.testStringBetweenOperator()
+
+    @Test
+    fun testBlobComparisonOperators() = commonTest.testBlobComparisonOperators()
+
+    @Test
+    fun testBlobInOperator() = commonTest.testBlobInOperator()
+
+    @Test
+    fun testBlobBetweenOperator() = commonTest.testBlobBetweenOperator()
+
+    @Test
+    fun testStringComparisonWithColumns() = commonTest.testStringComparisonWithColumns()
+
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

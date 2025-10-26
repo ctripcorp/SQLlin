@@ -1219,6 +1219,208 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    fun testStringComparisonOperators() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        val book0 = Book(name = "Alice in Wonderland", author = "Lewis Carroll", pages = 200, price = 15.99)
+        val book1 = Book(name = "Bob's Adventures", author = "Bob Smith", pages = 300, price = 20.99)
+        val book2 = Book(name = "Charlie and the Chocolate Factory", author = "Roald Dahl", pages = 250, price = 18.99)
+        val book3 = Book(name = "David Copperfield", author = "Charles Dickens", pages = 400, price = 25.99)
+
+        var statementLT: SelectStatement<Book>? = null
+        var statementLTE: SelectStatement<Book>? = null
+        var statementGT: SelectStatement<Book>? = null
+        var statementGTE: SelectStatement<Book>? = null
+
+        database {
+            BookTable { table ->
+                table INSERT listOf(book0, book1, book2, book3)
+                statementLT = table SELECT WHERE (name LT "Bob's Adventures")
+                statementLTE = table SELECT WHERE (name LTE "Bob's Adventures")
+                statementGT = table SELECT WHERE (name GT "Charlie and the Chocolate Factory")
+                statementGTE = table SELECT WHERE (name GTE "Charlie and the Chocolate Factory")
+            }
+        }
+
+        // Test LT
+        val resultsLT = statementLT!!.getResults()
+        assertEquals(1, resultsLT.size)
+        assertEquals(book0, resultsLT[0])
+
+        // Test LTE
+        val resultsLTE = statementLTE!!.getResults()
+        assertEquals(2, resultsLTE.size)
+        assertEquals(true, resultsLTE.any { it == book0 })
+        assertEquals(true, resultsLTE.any { it == book1 })
+
+        // Test GT
+        val resultsGT = statementGT!!.getResults()
+        assertEquals(1, resultsGT.size)
+        assertEquals(book3, resultsGT[0])
+
+        // Test GTE
+        val resultsGTE = statementGTE!!.getResults()
+        assertEquals(2, resultsGTE.size)
+        assertEquals(true, resultsGTE.any { it == book2 })
+        assertEquals(true, resultsGTE.any { it == book3 })
+    }
+
+    fun testStringInOperator() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        val book0 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
+        val book1 = Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72)
+        val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
+        val book3 = Book(name = "Modern Java Recipes", author ="Ken Kousen", pages = 322, price = 25.78)
+
+        var statementIN: SelectStatement<Book>? = null
+
+        database {
+            BookTable { table ->
+                table INSERT listOf(book0, book1, book2, book3)
+                statementIN = table SELECT WHERE (author IN listOf("Dan Brown", "Unknown Author"))
+            }
+        }
+
+        val results = statementIN!!.getResults()
+        assertEquals(2, results.size)
+        assertEquals(true, results.any { it == book0 })
+        assertEquals(true, results.any { it == book2 })
+    }
+
+    fun testStringBetweenOperator() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        val book0 = Book(name = "Alice in Wonderland", author = "Lewis Carroll", pages = 200, price = 15.99)
+        val book1 = Book(name = "Bob's Adventures", author = "Bob Smith", pages = 300, price = 20.99)
+        val book2 = Book(name = "Charlie and the Chocolate Factory", author = "Roald Dahl", pages = 250, price = 18.99)
+        val book3 = Book(name = "David Copperfield", author = "Charles Dickens", pages = 400, price = 25.99)
+
+        var statementBETWEEN: SelectStatement<Book>? = null
+
+        database {
+            BookTable { table ->
+                table INSERT listOf(book0, book1, book2, book3)
+                statementBETWEEN = table SELECT WHERE (name BETWEEN ("Bob's Adventures" to "Charlie and the Chocolate Factory"))
+            }
+        }
+
+        val results = statementBETWEEN!!.getResults()
+        assertEquals(2, results.size)
+        assertEquals(true, results.any { it == book1 })
+        assertEquals(true, results.any { it == book2 })
+    }
+
+    fun testBlobComparisonOperators() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        val file0 = FileData(id = null, fileName = "file0.bin", content = byteArrayOf(0x01, 0x02), metadata = "File 0")
+        val file1 = FileData(id = null, fileName = "file1.bin", content = byteArrayOf(0x03, 0x04), metadata = "File 1")
+        val file2 = FileData(id = null, fileName = "file2.bin", content = byteArrayOf(0x05, 0x06), metadata = "File 2")
+        val file3 = FileData(id = null, fileName = "file3.bin", content = byteArrayOf(0x07, 0x08), metadata = "File 3")
+
+        var statementLT: SelectStatement<FileData>? = null
+        var statementLTE: SelectStatement<FileData>? = null
+        var statementGT: SelectStatement<FileData>? = null
+        var statementGTE: SelectStatement<FileData>? = null
+
+        database {
+            FileDataTable { table ->
+                table INSERT listOf(file0, file1, file2, file3)
+                statementLT = table SELECT WHERE (content LT byteArrayOf(0x03, 0x04))
+                statementLTE = table SELECT WHERE (content LTE byteArrayOf(0x03, 0x04))
+                statementGT = table SELECT WHERE (content GT byteArrayOf(0x05, 0x06))
+                statementGTE = table SELECT WHERE (content GTE byteArrayOf(0x05, 0x06))
+            }
+        }
+
+        // Test LT
+        val resultsLT = statementLT!!.getResults()
+        assertEquals(1, resultsLT.size)
+        assertEquals("file0.bin", resultsLT[0].fileName)
+
+        // Test LTE
+        val resultsLTE = statementLTE!!.getResults()
+        assertEquals(2, resultsLTE.size)
+        assertEquals(true, resultsLTE.any { it.fileName == "file0.bin" })
+        assertEquals(true, resultsLTE.any { it.fileName == "file1.bin" })
+
+        // Test GT
+        val resultsGT = statementGT!!.getResults()
+        assertEquals(1, resultsGT.size)
+        assertEquals("file3.bin", resultsGT[0].fileName)
+
+        // Test GTE
+        val resultsGTE = statementGTE!!.getResults()
+        assertEquals(2, resultsGTE.size)
+        assertEquals(true, resultsGTE.any { it.fileName == "file2.bin" })
+        assertEquals(true, resultsGTE.any { it.fileName == "file3.bin" })
+    }
+
+    fun testBlobInOperator() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        val file0 = FileData(id = null, fileName = "file0.bin", content = byteArrayOf(0x01, 0x02), metadata = "File 0")
+        val file1 = FileData(id = null, fileName = "file1.bin", content = byteArrayOf(0x03, 0x04), metadata = "File 1")
+        val file2 = FileData(id = null, fileName = "file2.bin", content = byteArrayOf(0x05, 0x06), metadata = "File 2")
+        val file3 = FileData(id = null, fileName = "file3.bin", content = byteArrayOf(0x07, 0x08), metadata = "File 3")
+
+        var statementIN: SelectStatement<FileData>? = null
+
+        database {
+            FileDataTable { table ->
+                table INSERT listOf(file0, file1, file2, file3)
+                statementIN = table SELECT WHERE (content IN listOf(
+                    byteArrayOf(0x01, 0x02),
+                    byteArrayOf(0x05, 0x06),
+                    byteArrayOf(0x09, 0x0A)
+                ))
+            }
+        }
+
+        val results = statementIN!!.getResults()
+        assertEquals(2, results.size)
+        assertEquals(true, results.any { it.fileName == "file0.bin" })
+        assertEquals(true, results.any { it.fileName == "file2.bin" })
+    }
+
+    fun testBlobBetweenOperator() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        val file0 = FileData(id = null, fileName = "file0.bin", content = byteArrayOf(0x01, 0x02), metadata = "File 0")
+        val file1 = FileData(id = null, fileName = "file1.bin", content = byteArrayOf(0x03, 0x04), metadata = "File 1")
+        val file2 = FileData(id = null, fileName = "file2.bin", content = byteArrayOf(0x05, 0x06), metadata = "File 2")
+        val file3 = FileData(id = null, fileName = "file3.bin", content = byteArrayOf(0x07, 0x08), metadata = "File 3")
+
+        var statementBETWEEN: SelectStatement<FileData>? = null
+
+        database {
+            FileDataTable { table ->
+                table INSERT listOf(file0, file1, file2, file3)
+                statementBETWEEN = table SELECT WHERE (content BETWEEN (byteArrayOf(0x03, 0x04) to byteArrayOf(0x05, 0x06)))
+            }
+        }
+
+        val results = statementBETWEEN!!.getResults()
+        assertEquals(2, results.size)
+        assertEquals(true, results.any { it.fileName == "file1.bin" })
+        assertEquals(true, results.any { it.fileName == "file2.bin" })
+    }
+
+    fun testStringComparisonWithColumns() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        val book0 = Book(name = "Same Name", author = "Same Name", pages = 200, price = 15.99)
+        val book1 = Book(name = "Different", author = "Another", pages = 300, price = 20.99)
+
+        var statementEQ: SelectStatement<Book>? = null
+        var statementNEQ: SelectStatement<Book>? = null
+
+        database {
+            BookTable { table ->
+                table INSERT listOf(book0, book1)
+                statementEQ = table SELECT WHERE (name EQ BookTable.author)
+                statementNEQ = table SELECT WHERE (name NEQ BookTable.author)
+            }
+        }
+
+        // Test column comparison EQ
+        val resultsEQ = statementEQ!!.getResults()
+        assertEquals(1, resultsEQ.size)
+        assertEquals(book0, resultsEQ[0])
+
+        // Test column comparison NEQ
+        val resultsNEQ = statementNEQ!!.getResults()
+        assertEquals(1, resultsNEQ.size)
+        assertEquals(book1, resultsNEQ[0])
+    }
+
     private fun getDefaultDBConfig(): DatabaseConfiguration =
         DatabaseConfiguration(
             name = DATABASE_NAME,
