@@ -20,6 +20,7 @@ import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.DatabasePath
 import com.ctrip.sqllin.dsl.DSLDBConfiguration
 import com.ctrip.sqllin.dsl.Database
+import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.clause.*
@@ -583,7 +584,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI::class)
+    @OptIn(AdvancedInsertAPI::class)
     fun testInsertWithId() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             val person1 = PersonWithId(id = 100, name = "Eve", age = 28)
@@ -864,7 +865,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testDropTable() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             // Insert data into PersonWithIdTable
@@ -903,7 +904,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testDropTableExtensionFunction() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             // Insert data into ProductTable
@@ -941,7 +942,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testAlertAddColumn() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             // Insert initial data
@@ -976,7 +977,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testAlertRenameTableWithTableObject() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             // Insert data into StudentWithAutoincrementTable
@@ -1016,7 +1017,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testAlertRenameTableWithString() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             // Insert data into EnrollmentTable
@@ -1048,7 +1049,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testRenameColumnWithClauseElement() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             // Insert data
@@ -1079,7 +1080,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testRenameColumnWithString() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             // Insert data
@@ -1111,7 +1112,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testDropColumn() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             // Insert data
@@ -1142,7 +1143,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testDropAndRecreateTable() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             // Insert data into FileDataTable
@@ -1182,7 +1183,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testAlertOperationsInTransaction() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             // Insert initial data
