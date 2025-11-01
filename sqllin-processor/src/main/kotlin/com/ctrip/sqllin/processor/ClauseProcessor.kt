@@ -36,6 +36,7 @@ import java.io.OutputStreamWriter
  * - Mutable properties for UPDATE SET clauses
  * - Primary key metadata extraction from [@PrimaryKey][com.ctrip.sqllin.dsl.annotation.PrimaryKey]
  *   and [@CompositePrimaryKey][com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey] annotations
+ * - Support for typealias of primitive types (resolves typealiases to their underlying types)
  *
  * The generated code provides compile-time safety for SQL DSL operations.
  *
@@ -164,7 +165,7 @@ class ClauseProcessor(
                     }
                     writer.write(nullableSymbol)
                     writer.write("        get() = ${getSetClauseGetterValue(property)}\n")
-                    writer.write("        set(value) = ${appendFunction(elementName, property, isNotNull)}\n\n")
+                    writer.write("        set(value) = ${appendFunction(elementName, property)}\n\n")
                 }
 
                 // Write the override instance for property `primaryKeyInfo`.
@@ -199,12 +200,27 @@ class ClauseProcessor(
 
     /**
      * Maps a property's Kotlin type to the corresponding clause element type name.
+     * Supports typealiases by resolving them to their underlying types.
      *
      * @return The clause type name (ClauseNumber, ClauseString, ClauseBoolean, ClauseBlob), or null if unsupported
      */
-    private fun getClauseElementTypeStr(property: KSPropertyDeclaration): String? = when (
-        property.typeName
-    ) {
+    private fun getClauseElementTypeStr(property: KSPropertyDeclaration): String? {
+        val declaration = property.type.resolve().declaration
+        return getClauseElementTypeStrByTypeName(declaration.typeName) ?: kotlin.run {
+            if (declaration is KSTypeAlias)
+                getClauseElementTypeStrByTypeName(declaration.typeName)
+            else
+                null
+        }
+    }
+
+    /**
+     * Maps a fully qualified type name to its corresponding clause element type.
+     *
+     * @param typeName The fully qualified type name to map
+     * @return The clause type name (ClauseNumber, ClauseString, ClauseBoolean, ClauseBlob), or null if unsupported
+     */
+    private fun getClauseElementTypeStrByTypeName(typeName: String?): String? = when (typeName) {
         Int::class.qualifiedName,
         Long::class.qualifiedName,
         Short::class.qualifiedName,
@@ -228,12 +244,27 @@ class ClauseProcessor(
 
     /**
      * Generates the default getter value for SetClause properties based on type.
+     * Supports typealiases by resolving them to their underlying types.
      *
      * @return The default value string for the property type, or null if unsupported
      */
-    private fun getSetClauseGetterValue(property: KSPropertyDeclaration): String? = when (
-        property.typeName
-    ) {
+    private fun getSetClauseGetterValue(property: KSPropertyDeclaration): String? {
+        val declaration = property.type.resolve().declaration
+        return getDefaultValueByType(declaration.typeName) ?: kotlin.run {
+            if (declaration is KSTypeAlias)
+                getDefaultValueByType(declaration.typeName)
+            else
+                null
+        }
+    }
+
+    /**
+     * Returns the default value string for a given type name.
+     *
+     * @param typeName The fully qualified type name
+     * @return The default value string (e.g., "0" for Int, "false" for Boolean), or null if unsupported
+     */
+    private fun getDefaultValueByType(typeName: String?): String? = when (typeName) {
         Int::class.qualifiedName -> "0"
         Long::class.qualifiedName -> "0L"
         Short::class.qualifiedName -> "0"
@@ -256,13 +287,30 @@ class ClauseProcessor(
 
     /**
      * Generates the appropriate append function call for SetClause setters.
+     * Supports typealiases by resolving them to their underlying types.
      *
      * @param elementName The serialized element name
      * @param property The property declaration
-     * @param isNotNull Whether the property is non-nullable
      * @return The append function call string, or null if unsupported type
      */
-    private fun appendFunction(elementName: String, property: KSPropertyDeclaration, isNotNull: Boolean): String? = when (property.typeName) {
+    private fun appendFunction(elementName: String, property: KSPropertyDeclaration): String? {
+        val declaration = property.type.resolve().declaration
+        return appendFunctionByTypeName(elementName, declaration.typeName) ?: kotlin.run {
+            if (declaration is KSTypeAlias)
+                appendFunctionByTypeName(elementName, declaration.typeName)
+            else
+                null
+        }
+    }
+
+    /**
+     * Generates the append function call for a given type name.
+     *
+     * @param elementName The serialized element name
+     * @param typeName The fully qualified type name
+     * @return The append function call string, or null if unsupported type
+     */
+    private fun appendFunctionByTypeName(elementName: String, typeName: String?): String? = when (typeName) {
         Int::class.qualifiedName,
         Long::class.qualifiedName,
         Short::class.qualifiedName,
@@ -285,4 +333,16 @@ class ClauseProcessor(
      */
     private inline val KSPropertyDeclaration.typeName
         get() = type.resolve().declaration.qualifiedName?.asString()
+
+    /**
+     * Extension property that resolves a type alias to its underlying fully qualified type name.
+     */
+    private inline val KSTypeAlias.typeName
+        get() = type.resolve().declaration.qualifiedName?.asString()
+
+    /**
+     * Extension property that retrieves a declaration's fully qualified type name.
+     */
+    private inline val KSDeclaration.typeName
+        get() = qualifiedName?.asString()
 }

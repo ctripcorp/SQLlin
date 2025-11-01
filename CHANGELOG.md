@@ -1,6 +1,12 @@
 # SQLlin Change Log
 
 - Date format: YYYY-MM-dd
+- 
+## 2.1.0 / 2025-11-xx
+
+### sqllin-processor
+
+* Support typealias of supported types(primitive types, String, ByteArray etc) in generated tables
 
 ## 2.0.0 / 2025-10-23
 
@@ -255,7 +261,7 @@ a runtime exception. Thanks for [@nbransby](https://github.com/nbransby).
 
 * Add the new JVM target
 * **Breaking change**: Remove the public property: `DatabaseConnection#closed`
-* The Android (< 9) target supports to set the `journalMode` and `synchronousMode` now
+* The Android(< 9) target supports to set the `journalMode` and `synchronousMode` now
 
 ## v1.1.1 / 2023-08-12
 

@@ -22,6 +22,17 @@ import com.ctrip.sqllin.dsl.annotation.PrimaryKey
 import kotlinx.serialization.Serializable
 
 /**
+ * Type aliases for testing typealias support in sqllin-processor
+ */
+typealias Price = Double
+typealias PageCount = Int
+typealias Age = Int
+typealias Grade = Int
+typealias StudentId = Long
+typealias CourseId = Long
+typealias Code = Int
+
+/**
  * Book entity
  * @author Yuang Qiao
  */
@@ -31,15 +42,15 @@ import kotlinx.serialization.Serializable
 data class Book(
     val name: String,
     val author: String,
-    val price: Double,
-    val pages: Int,
+    val price: Price,
+    val pages: PageCount,
 )
 
 @DBRow("category")
 @Serializable
 data class Category(
     val name: String,
-    val code: Int,
+    val code: Code,
 )
 
 @Serializable
@@ -72,7 +83,7 @@ data class NullTester(
 data class PersonWithId(
     @PrimaryKey val id: Long?,
     val name: String,
-    val age: Int,
+    val age: Age,
 )
 
 @DBRow("product")
@@ -80,7 +91,7 @@ data class PersonWithId(
 data class Product(
     @PrimaryKey val sku: String?,
     val name: String,
-    val price: Double,
+    val price: Price,
 )
 
 @DBRow("student_with_autoincrement")
@@ -88,14 +99,14 @@ data class Product(
 data class StudentWithAutoincrement(
     @PrimaryKey(isAutoincrement = true) val id: Long?,
     val studentName: String,
-    val grade: Int,
+    val grade: Grade,
 )
 
 @DBRow("enrollment")
 @Serializable
 data class Enrollment(
-    @CompositePrimaryKey val studentId: Long,
-    @CompositePrimaryKey val courseId: Long,
+    @CompositePrimaryKey val studentId: StudentId,
+    @CompositePrimaryKey val courseId: CourseId,
     val semester: String,
 )
 

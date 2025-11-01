@@ -5,7 +5,6 @@
 * Support the key word REFERENCE
 * Support JOIN sub-query
 * Support Enum type
-* Support typealias for primitive types
 
 ## Medium Priority
 
