@@ -62,16 +62,7 @@ class AndroidTest {
     fun testNullValue() = commonTest.testNullValue()
 
     @Test
-    fun testCreateTableWithLongPrimaryKey() = commonTest.testCreateTableWithLongPrimaryKey()
-
-    @Test
-    fun testCreateTableWithStringPrimaryKey() = commonTest.testCreateTableWithStringPrimaryKey()
-
-    @Test
-    fun testCreateTableWithAutoincrement() = commonTest.testCreateTableWithAutoincrement()
-
-    @Test
-    fun testCreateTableWithCompositePrimaryKey() = commonTest.testCreateTableWithCompositePrimaryKey()
+    fun testPrimaryKeyVariations() = commonTest.testPrimaryKeyVariations()
 
     @Test
     fun testInsertWithId() = commonTest.testInsertWithId()
@@ -83,70 +74,16 @@ class AndroidTest {
     fun testUpdateAndDeleteWithPrimaryKey() = commonTest.testUpdateAndDeleteWithPrimaryKey()
 
     @Test
-    fun testByteArrayInsert() = commonTest.testByteArrayInsert()
+    fun testByteArrayAndBlobOperations() = commonTest.testByteArrayAndBlobOperations()
 
     @Test
-    fun testByteArraySelect() = commonTest.testByteArraySelect()
+    fun testDropAndCreateTable() = commonTest.testDropAndCreateTable()
 
     @Test
-    fun testByteArrayUpdate() = commonTest.testByteArrayUpdate()
+    fun testSchemaModification() = commonTest.testSchemaModification()
 
     @Test
-    fun testByteArrayDelete() = commonTest.testByteArrayDelete()
-
-    @Test
-    fun testByteArrayMultipleOperations() = commonTest.testByteArrayMultipleOperations()
-
-    @Test
-    fun testDropTable() = commonTest.testDropTable()
-
-    @Test
-    fun testDropTableExtensionFunction() = commonTest.testDropTableExtensionFunction()
-
-    @Test
-    fun testAlertAddColumn() = commonTest.testAlertAddColumn()
-
-    @Test
-    fun testAlertRenameTableWithTableObject() = commonTest.testAlertRenameTableWithTableObject()
-
-    @Test
-    fun testAlertRenameTableWithString() = commonTest.testAlertRenameTableWithString()
-
-    @Test
-    fun testRenameColumnWithClauseElement() = commonTest.testRenameColumnWithClauseElement()
-
-    @Test
-    fun testRenameColumnWithString() = commonTest.testRenameColumnWithString()
-
-    @Test
-    fun testDropColumn() = commonTest.testDropColumn()
-
-    @Test
-    fun testDropAndRecreateTable() = commonTest.testDropAndRecreateTable()
-
-    @Test
-    fun testAlertOperationsInTransaction() = commonTest.testAlertOperationsInTransaction()
-
-    @Test
-    fun testStringComparisonOperators() = commonTest.testStringComparisonOperators()
-
-    @Test
-    fun testStringInOperator() = commonTest.testStringInOperator()
-
-    @Test
-    fun testStringBetweenOperator() = commonTest.testStringBetweenOperator()
-
-    @Test
-    fun testBlobComparisonOperators() = commonTest.testBlobComparisonOperators()
-
-    @Test
-    fun testBlobInOperator() = commonTest.testBlobInOperator()
-
-    @Test
-    fun testBlobBetweenOperator() = commonTest.testBlobBetweenOperator()
-
-    @Test
-    fun testStringComparisonWithColumns() = commonTest.testStringComparisonWithColumns()
+    fun testStringOperators() = commonTest.testStringOperators()
 
     @Before
     fun setUp() {
