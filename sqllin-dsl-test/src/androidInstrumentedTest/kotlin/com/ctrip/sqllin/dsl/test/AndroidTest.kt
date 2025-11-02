@@ -85,6 +85,9 @@ class AndroidTest {
     @Test
     fun testStringOperators() = commonTest.testStringOperators()
 
+    @Test
+    fun testEnumOperations() = commonTest.testEnumOperations()
+
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

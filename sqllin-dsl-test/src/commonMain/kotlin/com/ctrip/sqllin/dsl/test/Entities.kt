@@ -33,6 +33,30 @@ typealias CourseId = Long
 typealias Code = Int
 
 /**
+ * Enum types for testing enum support
+ */
+
+/**
+ * User status enum for testing enum functionality
+ */
+enum class UserStatus {
+    ACTIVE,
+    INACTIVE,
+    SUSPENDED,
+    BANNED
+}
+
+/**
+ * Priority level enum for testing enum comparisons
+ */
+enum class Priority {
+    LOW,
+    MEDIUM,
+    HIGH,
+    CRITICAL
+}
+
+/**
  * Book entity
  * @author Yuang Qiao
  */
@@ -141,3 +165,29 @@ data class FileData(
         return result
     }
 }
+
+/**
+ * User entity with enum fields for testing enum support
+ */
+@DBRow("user_account")
+@Serializable
+data class UserAccount(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    val username: String,
+    val email: String,
+    val status: UserStatus,
+    val priority: Priority,
+    val notes: String?,
+)
+
+/**
+ * Task entity with nullable enum for testing nullable enum support
+ */
+@DBRow("task")
+@Serializable
+data class Task(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    val title: String,
+    val priority: Priority?,
+    val description: String,
+)

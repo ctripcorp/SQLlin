@@ -41,7 +41,7 @@ import com.ctrip.sqllin.dsl.sql.Table
 public class ClauseString(
     valueName: String,
     table: Table<*>,
-    isFunction: Boolean,
+    isFunction: Boolean = false,
 ) : ClauseElement(valueName, table, isFunction) {
 
     /** Equals (=), or IS NULL if value is null */

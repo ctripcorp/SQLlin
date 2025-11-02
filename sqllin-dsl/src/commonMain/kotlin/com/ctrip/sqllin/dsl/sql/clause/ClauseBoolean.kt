@@ -31,8 +31,7 @@ import com.ctrip.sqllin.dsl.sql.Table
 public class ClauseBoolean(
     valueName: String,
     table: Table<*>,
-    isFunction: Boolean,
-) : ClauseElement(valueName, table, isFunction) {
+) : ClauseElement(valueName, table, false) {
 
     /**
      * Creates a condition comparing this Boolean column/function to a value.

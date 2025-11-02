@@ -17,6 +17,8 @@
 package com.ctrip.sqllin.dsl.sql.operation
 
 import com.ctrip.sqllin.dsl.sql.Table
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.SerialKind
 
 /**
  * Cached qualified names for Kotlin types used in SQLite type mapping.
@@ -57,16 +59,18 @@ internal object FullNameCache {
     val BYTE_ARRAY = ByteArray::class.qualifiedName!!
 
     /**
-     * Maps a Kotlin type's serial name to its corresponding SQLite column type declaration.
+     * Maps a Kotlin type's serial descriptor to its corresponding SQLite column type declaration.
      *
-     * This function converts kotlinx.serialization descriptor serial names (fully qualified type names)
-     * into appropriate SQLite column type strings for use in DDL statements like CREATE TABLE and
-     * ALTER TABLE ADD COLUMN.
+     * This function converts kotlinx.serialization descriptors into appropriate SQLite column type
+     * strings for use in DDL statements like CREATE TABLE and ALTER TABLE ADD COLUMN. It analyzes
+     * both the serial name (fully qualified type name) and the descriptor kind (e.g., ENUM) to
+     * determine the correct SQLite type.
      *
      * Type mapping rules:
      * - **Byte/UByte** → TINYINT
      * - **Short/UShort** → SMALLINT
      * - **Int/UInt** → INT
+     * - **Enum** → INT (stored as ordinal values)
      * - **Long** → INTEGER (if primary key) or BIGINT (if not)
      * - **ULong** → BIGINT
      * - **Float** → FLOAT
@@ -82,24 +86,30 @@ internal object FullNameCache {
      *
      * Example usage:
      * ```kotlin
-     * val sqlType = getSerialNameBySerialName("kotlin.String", "username", userTable)
+     * val descriptor = User.serializer().descriptor.getElementDescriptor(0)
+     * val sqlType = getSerialNameBySerialName(descriptor, "username", userTable)
      * // Returns: " TEXT"
      *
-     * val pkType = getSerialNameBySerialName("kotlin.Long", "id", userTable)
+     * val pkDescriptor = User.serializer().descriptor.getElementDescriptor(1)
+     * val pkType = getSerialNameBySerialName(pkDescriptor, "id", userTable)
      * // Returns: " INTEGER" (if "id" is the primary key) or " BIGINT" (if not)
+     *
+     * val enumDescriptor = User.serializer().descriptor.getElementDescriptor(2)
+     * val enumType = getSerialNameBySerialName(enumDescriptor, "status", userTable)
+     * // Returns: " INT" (enum stored as ordinal)
      * ```
      *
-     * @param serialName The kotlinx.serialization serial name (fully qualified type name)
+     * @param descriptor The kotlinx.serialization serial descriptor for the type
      * @param elementName The property/column name being processed
      * @param table The table definition, used to check primary key information
-     * @return A string starting with a space followed by the SQLite type name (e.g., " TEXT", " INTEGER")
+     * @return A string starting with a space followed by the SQLite type name (e.g., " TEXT", " INTEGER", " INT")
      * @throws IllegalStateException if the type is not supported by SQLlin
      */
-    fun getSerialNameBySerialName(serialName: String, elementName: String, table: Table<*>): String = with(serialName) {
+    fun getSerialNameBySerialName(descriptor: SerialDescriptor, elementName: String, table: Table<*>): String = with(descriptor.serialName) {
         when {
             startsWith(BYTE) || startsWith(UBYTE) -> " TINYINT"
             startsWith(SHORT) || startsWith(USHORT) -> " SMALLINT"
-            startsWith(INT) || startsWith(UINT) -> " INT"
+            startsWith(INT) || startsWith(UINT) || descriptor.kind == SerialKind.ENUM -> " INT"
             startsWith(LONG) -> if (elementName == table.primaryKeyInfo?.primaryKeyName) " INTEGER" else " BIGINT"
             startsWith(ULONG) -> " BIGINT"
             startsWith(FLOAT) -> " FLOAT"

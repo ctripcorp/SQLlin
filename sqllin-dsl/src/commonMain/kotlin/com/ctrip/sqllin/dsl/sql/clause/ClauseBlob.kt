@@ -45,8 +45,7 @@ import com.ctrip.sqllin.dsl.sql.Table
 public class ClauseBlob(
     valueName: String,
     table: Table<*>,
-    isFunction: Boolean,
-) : ClauseElement(valueName, table, isFunction) {
+) : ClauseElement(valueName, table, false) {
 
     /**
      * Creates an equality comparison condition (=).
@@ -154,10 +153,8 @@ public class ClauseBlob(
 
     private fun appendNullableBlob(notNullSymbol: String, nullSymbol: String, blob: ByteArray?): SelectCondition {
         val sql = buildString {
-            if (!isFunction) {
-                append(table.tableName)
-                append('.')
-            }
+            append(table.tableName)
+            append('.')
             append(valueName)
             if (blob == null) {
                 append(nullSymbol)
@@ -171,10 +168,8 @@ public class ClauseBlob(
 
     private fun appendBlob(symbol: String, blob: ByteArray): SelectCondition {
         val sql = buildString {
-            if (!isFunction) {
-                append(table.tableName)
-                append('.')
-            }
+            append(table.tableName)
+            append('.')
             append(valueName)
             append(symbol)
         }
@@ -209,10 +204,8 @@ public class ClauseBlob(
         val parameters = blobs.toMutableList<Any?>()
         require(parameters.isNotEmpty()) { "Param 'blobs' must not be empty!!!" }
         val sql = buildString {
-            if (!isFunction) {
-                append(table.tableName)
-                append('.')
-            }
+            append(table.tableName)
+            append('.')
             append(valueName)
             append(" IN (")
 
@@ -235,10 +228,8 @@ public class ClauseBlob(
      */
     internal infix fun between(range: Pair<ByteArray, ByteArray>): SelectCondition {
         val sql = buildString {
-            if (!isFunction) {
-                append(table.tableName)
-                append('.')
-            }
+            append(table.tableName)
+            append('.')
             append(valueName)
             append(" BETWEEN ? AND ?")
         }

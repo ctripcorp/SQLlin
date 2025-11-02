@@ -40,7 +40,7 @@ import com.ctrip.sqllin.dsl.sql.Table
 public class ClauseNumber(
     valueName: String,
     table: Table<*>,
-    isFunction: Boolean,
+    isFunction: Boolean = false,
 ) : ClauseElement(valueName, table, isFunction) {
 
     /**

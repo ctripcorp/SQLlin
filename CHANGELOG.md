@@ -4,9 +4,12 @@
 - 
 ## 2.1.0 / 2025-11-xx
 
-### sqllin-processor
+### sqllin-dsl
 
 * Support typealias of supported types(primitive types, String, ByteArray etc) in generated tables
+* Support enumerated types in DSL APIs, includes `=`, `!=`, `<`, `<=`, `>`, `>=` operators
+* Support `<`, `<=`, `>`, `>=`, `IN`, `BETWEEN...AND` operators for String
+* Support `=`, `!=`, `<`, `<=`, `>`, `>=`, `IN`, `BETWEEN...AND` operators for ByteArray
 
 ## 2.0.0 / 2025-10-23
 

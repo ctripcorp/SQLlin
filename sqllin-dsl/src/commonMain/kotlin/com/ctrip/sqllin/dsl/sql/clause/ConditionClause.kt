@@ -28,6 +28,7 @@ import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
  * - Numeric: LT, LTE, EQ, NEQ, GT, GTE, IN, BETWEEN
  * - String: LT, LTE, EQ, NEQ, GT, GTE, IN, BETWEEN, LIKE, GLOB
  * - Blob: LT, LTE, EQ, NEQ, GT, GTE, IN, BETWEEN
+ * - Enum: LT, LTE, EQ, NEQ, GT, GTE
  * - Boolean: IS
  * - Logic: AND, OR
  *
@@ -218,6 +219,54 @@ public infix fun ClauseBlob.IN(blobs: Iterable<ByteArray>): SelectCondition = in
 // If the 'blob' between the 'range'
 @StatementDslMaker
 public infix fun ClauseBlob.BETWEEN(range: Pair<ByteArray, ByteArray>): SelectCondition = between(range)
+
+// Less than, <
+@StatementDslMaker
+public infix fun <T : Enum<T>> ClauseEnum<T>.LT(entry: T): SelectCondition = lt(entry)
+
+// Less than, append to ClauseEnum
+@StatementDslMaker
+public infix fun <T : Enum<T>> ClauseEnum<T>.LT(clauseEnum: ClauseEnum<T>): SelectCondition = lt(clauseEnum)
+
+// Less than or equal to, <=
+@StatementDslMaker
+public infix fun <T : Enum<T>> ClauseEnum<T>.LTE(entry: T): SelectCondition = lte(entry)
+
+// Less than or equal to, append to ClauseEnum
+@StatementDslMaker
+public infix fun <T : Enum<T>> ClauseEnum<T>.LTE(clauseEnum: ClauseEnum<T>): SelectCondition = lte(clauseEnum)
+
+// Equals, ==
+@StatementDslMaker
+public infix fun <T : Enum<T>> ClauseEnum<T>.EQ(entry: T?): SelectCondition = eq(entry)
+
+// Equals, append to ClauseEnum
+@StatementDslMaker
+public infix fun <T : Enum<T>> ClauseEnum<T>.EQ(clauseEnum: ClauseEnum<T>): SelectCondition = eq(clauseEnum)
+
+// Not equal to, !=
+@StatementDslMaker
+public infix fun <T : Enum<T>> ClauseEnum<T>.NEQ(entry: T?): SelectCondition = neq(entry)
+
+// Not equal to, append to ClauseEnum
+@StatementDslMaker
+public infix fun <T : Enum<T>> ClauseEnum<T>.NEQ(clauseEnum: ClauseEnum<T>): SelectCondition = neq(clauseEnum)
+
+// Greater than, >
+@StatementDslMaker
+public infix fun <T : Enum<T>> ClauseEnum<T>.GT(entry: T): SelectCondition = gt(entry)
+
+// Greater than, append to ClauseEnum
+@StatementDslMaker
+public infix fun <T : Enum<T>> ClauseEnum<T>.GT(clauseEnum: ClauseEnum<T>): SelectCondition = gt(clauseEnum)
+
+// Greater than or equal to, >=
+@StatementDslMaker
+public infix fun <T : Enum<T>> ClauseEnum<T>.GTE(entry: T): SelectCondition = gte(entry)
+
+// Greater than or equal to, append to ClauseEnum
+@StatementDslMaker
+public infix fun <T : Enum<T>> ClauseEnum<T>.GTE(clauseEnum: ClauseEnum<T>): SelectCondition = gte(clauseEnum)
 
 // Condition 'IS' operator
 @StatementDslMaker

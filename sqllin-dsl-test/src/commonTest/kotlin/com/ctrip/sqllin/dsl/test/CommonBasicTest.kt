@@ -1324,6 +1324,195 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(colBook1, resultsNEQ[0])
     }
 
+    /**
+     * Comprehensive test for enum type support covering all operations:
+     * INSERT, SELECT, UPDATE, DELETE, equality/comparison operators,
+     * nullable enums, complex conditions, and ORDER BY
+     */
+    fun testEnumOperations() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        // Section 1: Basic INSERT and SELECT
+        val user1 = UserAccount(null, "john_doe", "john@example.com", UserStatus.ACTIVE, Priority.HIGH, "VIP user")
+        val user2 = UserAccount(null, "jane_smith", "jane@example.com", UserStatus.INACTIVE, Priority.LOW, null)
+        database {
+            UserAccountTable { table ->
+                table INSERT listOf(user1, user2)
+            }
+        }
+
+        var selectAll: SelectStatement<UserAccount>? = null
+        database {
+            selectAll = UserAccountTable SELECT X
+        }
+        val allUsers = selectAll!!.getResults()
+        assertEquals(2, allUsers.size)
+        assertEquals(UserStatus.ACTIVE, allUsers[0].status)
+        assertEquals(Priority.HIGH, allUsers[0].priority)
+        assertEquals(UserStatus.INACTIVE, allUsers[1].status)
+        assertEquals(Priority.LOW, allUsers[1].priority)
+
+        // Section 2: Equality operators (EQ, NEQ)
+        val testUsers = listOf(
+            UserAccount(null, "user1", "user1@test.com", UserStatus.ACTIVE, Priority.HIGH, null),
+            UserAccount(null, "user2", "user2@test.com", UserStatus.INACTIVE, Priority.MEDIUM, null),
+            UserAccount(null, "user3", "user3@test.com", UserStatus.ACTIVE, Priority.LOW, null),
+            UserAccount(null, "user4", "user4@test.com", UserStatus.SUSPENDED, Priority.CRITICAL, null),
+        )
+        database {
+            UserAccountTable { table ->
+                table DELETE X
+                table INSERT testUsers
+            }
+        }
+
+        var selectEQ: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectEQ = it SELECT WHERE (it.status EQ UserStatus.ACTIVE)
+            }
+        }
+        val activeUsers = selectEQ!!.getResults()
+        assertEquals(2, activeUsers.size)
+        assertEquals(true, activeUsers.all { it.status == UserStatus.ACTIVE })
+
+        var selectNEQ: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectNEQ = it SELECT WHERE (it.status NEQ UserStatus.ACTIVE)
+            }
+        }
+        val nonActiveUsers = selectNEQ!!.getResults()
+        assertEquals(2, nonActiveUsers.size)
+        assertEquals(false, nonActiveUsers.any { it.status == UserStatus.ACTIVE })
+
+        // Section 3: Comparison operators (LT, LTE, GT, GTE)
+        var selectLT: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectLT = it SELECT WHERE (it.priority LT Priority.HIGH)
+            }
+        }
+        assertEquals(2, selectLT!!.getResults().size)
+
+        var selectGTE: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectGTE = it SELECT WHERE (it.priority GTE Priority.HIGH)
+            }
+        }
+        val highPriorityUsers = selectGTE!!.getResults()
+        assertEquals(2, highPriorityUsers.size)
+        assertEquals(true, highPriorityUsers.all { it.priority == Priority.HIGH || it.priority == Priority.CRITICAL })
+
+        // Section 4: Nullable enum handling
+        val tasks = listOf(
+            Task(null, "High priority task", Priority.HIGH, "Important"),
+            Task(null, "Unassigned task", null, "No priority set"),
+            Task(null, "Low priority task", Priority.LOW, "Can wait"),
+        )
+        database {
+            TaskTable { table ->
+                table INSERT tasks
+            }
+        }
+
+        var selectNull: SelectStatement<Task>? = null
+        database {
+            TaskTable {
+                selectNull = it SELECT WHERE (it.priority EQ null)
+            }
+        }
+        val nullTasks = selectNull!!.getResults()
+        assertEquals(1, nullTasks.size)
+        assertEquals("Unassigned task", nullTasks[0].title)
+
+        var selectNotNull: SelectStatement<Task>? = null
+        database {
+            TaskTable {
+                selectNotNull = it SELECT WHERE (it.priority NEQ null)
+            }
+        }
+        assertEquals(2, selectNotNull!!.getResults().size)
+
+        // Section 5: UPDATE with enum values
+        database {
+            UserAccountTable { table ->
+                table UPDATE SET {
+                    status = UserStatus.BANNED
+                    priority = Priority.CRITICAL
+                } WHERE (table.username EQ "user1")
+            }
+        }
+
+        var selectUpdated: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectUpdated = it SELECT WHERE (it.username EQ "user1")
+            }
+        }
+        val updatedUser = selectUpdated!!.getResults().first()
+        assertEquals(UserStatus.BANNED, updatedUser.status)
+        assertEquals(Priority.CRITICAL, updatedUser.priority)
+
+        // Section 6: Complex conditions (AND/OR)
+        var selectAND: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectAND = it SELECT WHERE (
+                    (it.status EQ UserStatus.SUSPENDED) AND (it.priority EQ Priority.CRITICAL)
+                )
+            }
+        }
+        assertEquals(1, selectAND!!.getResults().size)
+
+        var selectOR: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectOR = it SELECT WHERE (
+                    (it.status EQ UserStatus.BANNED) OR (it.priority LTE Priority.LOW)
+                )
+            }
+        }
+        assertEquals(2, selectOR!!.getResults().size)
+
+        // Section 7: ORDER BY enum columns
+        var selectOrderByASC: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable { table ->
+                selectOrderByASC = table SELECT ORDER_BY (priority to ASC)
+            }
+        }
+        val orderedASC = selectOrderByASC!!.getResults()
+        assertEquals(Priority.LOW, orderedASC[0].priority)
+        assertEquals(Priority.CRITICAL, orderedASC[orderedASC.size - 1].priority)
+
+        var selectOrderByDESC: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable { table ->
+                selectOrderByDESC = table SELECT ORDER_BY (table.status to DESC)
+            }
+        }
+        val orderedDESC = selectOrderByDESC!!.getResults()
+        // After UPDATE in Section 5, user1 is BANNED (highest ordinal 3)
+        assertEquals(UserStatus.BANNED, orderedDESC[0].status)
+        assertEquals(UserStatus.ACTIVE, orderedDESC[orderedDESC.size - 1].status)
+
+        // Section 8: DELETE with enum WHERE clause
+        database {
+            UserAccountTable { table ->
+                table DELETE WHERE (table.status EQ UserStatus.BANNED)
+            }
+        }
+
+        var selectAfterDelete: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectAfterDelete = it SELECT X
+            }
+        }
+        val remainingUsers = selectAfterDelete!!.getResults()
+        assertEquals(false, remainingUsers.any { it.status == UserStatus.BANNED })
+    }
+
     private fun getDefaultDBConfig(): DatabaseConfiguration =
         DatabaseConfiguration(
             name = DATABASE_NAME,
@@ -1348,6 +1537,8 @@ class CommonBasicTest(private val path: DatabasePath) {
                 CREATE(StudentWithAutoincrementTable)
                 CREATE(EnrollmentTable)
                 CREATE(FileDataTable)
+                CREATE(UserAccountTable)
+                CREATE(TaskTable)
             }
         )
 }

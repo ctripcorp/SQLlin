@@ -100,6 +100,7 @@ class ClauseProcessor(
                 writer.write("import com.ctrip.sqllin.dsl.annotation.ColumnNameDslMaker\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseBlob\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseBoolean\n")
+                writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseEnum\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseNumber\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseString\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.clause.SetClause\n")
@@ -153,7 +154,7 @@ class ClauseProcessor(
                     // Write 'SelectClause' code.
                     writer.write("    @ColumnNameDslMaker\n")
                     writer.write("    val $propertyName\n")
-                    writer.write("        get() = $clauseElementTypeName($elementName, this, false)\n\n")
+                    writer.write("        get() = $clauseElementTypeName($elementName, this)\n\n")
 
                     // Write 'SetClause' code.
                     writer.write("    @ColumnNameDslMaker\n")
@@ -200,22 +201,41 @@ class ClauseProcessor(
 
     /**
      * Maps a property's Kotlin type to the corresponding clause element type name.
-     * Supports typealiases by resolving them to their underlying types.
      *
-     * @return The clause type name (ClauseNumber, ClauseString, ClauseBoolean, ClauseBlob), or null if unsupported
+     * Handles three categories:
+     * - **Typealiases**: Resolves to underlying type and maps to appropriate clause type
+     * - **Enum classes**: Maps to `ClauseEnum<EnumType>` for type-safe enum operations
+     * - **Standard types**: Maps to ClauseNumber, ClauseString, ClauseBoolean, or ClauseBlob
+     *
+     * @param property The property declaration to analyze
+     * @return The clause type name (ClauseNumber, ClauseString, ClauseBoolean, ClauseBlob, ClauseEnum), or null if unsupported
      */
-    private fun getClauseElementTypeStr(property: KSPropertyDeclaration): String? {
+    private fun getClauseElementTypeStr(property: KSPropertyDeclaration): String? = when (
         val declaration = property.type.resolve().declaration
-        return getClauseElementTypeStrByTypeName(declaration.typeName) ?: kotlin.run {
-            if (declaration is KSTypeAlias)
-                getClauseElementTypeStrByTypeName(declaration.typeName)
-            else
-                null
+    ) {
+        is KSTypeAlias -> {
+            val realDeclaration = declaration.type.resolve().declaration
+            getClauseElementTypeStrByTypeName(realDeclaration.typeName) ?: kotlin.run {
+                if (realDeclaration is KSClassDeclaration && realDeclaration.classKind == ClassKind.ENUM_CLASS)
+                    "ClauseEnum<${realDeclaration.typeName}>"
+                else
+                    null
+            }
         }
+        is KSClassDeclaration if declaration.classKind == ClassKind.ENUM_CLASS -> "ClauseEnum<${declaration.typeName}>"
+        else -> getClauseElementTypeStrByTypeName(declaration.typeName)
     }
 
     /**
      * Maps a fully qualified type name to its corresponding clause element type.
+     *
+     * Supports primitive types and their unsigned variants:
+     * - Numeric types (Byte, Short, Int, Long, Float, Double, UByte, UShort, UInt, ULong) → ClauseNumber
+     * - Text types (Char, String) → ClauseString
+     * - Boolean → ClauseBoolean
+     * - ByteArray → ClauseBlob
+     *
+     * Note: Enum types are handled separately by [getClauseElementTypeStr].
      *
      * @param typeName The fully qualified type name to map
      * @return The clause type name (ClauseNumber, ClauseString, ClauseBoolean, ClauseBlob), or null if unsupported
@@ -249,12 +269,24 @@ class ClauseProcessor(
      * @return The default value string for the property type, or null if unsupported
      */
     private fun getSetClauseGetterValue(property: KSPropertyDeclaration): String? {
-        val declaration = property.type.resolve().declaration
-        return getDefaultValueByType(declaration.typeName) ?: kotlin.run {
-            if (declaration is KSTypeAlias)
-                getDefaultValueByType(declaration.typeName)
-            else
-                null
+        fun KSClassDeclaration.firstEnum() = declarations
+            .filterIsInstance<KSClassDeclaration>()
+            .firstOrNull { it.classKind == ClassKind.ENUM_ENTRY }
+            ?.qualifiedName?.asString()
+        return when (val declaration = property.type.resolve().declaration) {
+            is KSTypeAlias -> {
+                val realDeclaration = declaration.type.resolve().declaration
+                getDefaultValueByType(realDeclaration.typeName) ?: kotlin.run {
+                    if (realDeclaration is KSClassDeclaration && realDeclaration.classKind == ClassKind.ENUM_CLASS)
+                        realDeclaration.firstEnum()
+                    else
+                        null
+                }
+            }
+            is KSClassDeclaration if declaration.classKind == ClassKind.ENUM_CLASS -> {
+                declaration.firstEnum()
+            }
+            else -> getDefaultValueByType(declaration.typeName)
         }
     }
 
@@ -289,18 +321,27 @@ class ClauseProcessor(
      * Generates the appropriate append function call for SetClause setters.
      * Supports typealiases by resolving them to their underlying types.
      *
+     * For enum types, converts the enum value to its ordinal before appending.
+     * Handles nullable enums with safe-call operator.
+     *
      * @param elementName The serialized element name
      * @param property The property declaration
      * @return The append function call string, or null if unsupported type
      */
-    private fun appendFunction(elementName: String, property: KSPropertyDeclaration): String? {
+    private fun appendFunction(elementName: String, property: KSPropertyDeclaration): String? = when (
         val declaration = property.type.resolve().declaration
-        return appendFunctionByTypeName(elementName, declaration.typeName) ?: kotlin.run {
-            if (declaration is KSTypeAlias)
-                appendFunctionByTypeName(elementName, declaration.typeName)
-            else
-                null
+    ) {
+        is KSTypeAlias -> {
+            val realDeclaration = declaration.type.resolve().declaration
+            appendFunctionByTypeName(elementName, realDeclaration.typeName) ?: kotlin.run {
+                if (realDeclaration is KSClassDeclaration && realDeclaration.classKind == ClassKind.ENUM_CLASS)
+                    "appendAny($elementName, value?.ordinal)"
+                else
+                    null
+            }
         }
+        is KSClassDeclaration if declaration.classKind == ClassKind.ENUM_CLASS -> "appendAny($elementName, value?.ordinal)"
+        else -> appendFunctionByTypeName(elementName, declaration.typeName)
     }
 
     /**

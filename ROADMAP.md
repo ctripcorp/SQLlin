@@ -4,7 +4,6 @@
 
 * Support the key word REFERENCE
 * Support JOIN sub-query
-* Support Enum type
 
 ## Medium Priority
 

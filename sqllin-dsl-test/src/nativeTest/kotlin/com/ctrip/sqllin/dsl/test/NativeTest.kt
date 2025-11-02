@@ -95,6 +95,9 @@ class NativeTest {
     @Test
     fun testStringOperators() = commonTest.testStringOperators()
 
+    @Test
+    fun testEnumOperations() = commonTest.testEnumOperations()
+
     @BeforeTest
     fun setUp() {
         deleteDatabase(path, CommonBasicTest.DATABASE_NAME)

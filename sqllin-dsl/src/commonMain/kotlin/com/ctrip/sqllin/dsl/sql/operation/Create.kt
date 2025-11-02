@@ -20,6 +20,7 @@ import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.statement.SingleStatement
 import com.ctrip.sqllin.dsl.sql.statement.TableStructureStatement
+import kotlinx.serialization.descriptors.SerialKind
 
 /**
  * CREATE TABLE operation builder.
@@ -75,7 +76,7 @@ internal object Create : Operation {
         for (elementIndex in 0 .. lastIndex) {
             val elementName = tableDescriptor.getElementName(elementIndex)
             val descriptor = tableDescriptor.getElementDescriptor(elementIndex)
-            val type = FullNameCache.getSerialNameBySerialName(descriptor.serialName, elementName, table)
+            val type = FullNameCache.getSerialNameBySerialName(descriptor, elementName, table)
             val isNullable = descriptor.isNullable
             val isPrimaryKey = elementName == table.primaryKeyInfo?.primaryKeyName
 
