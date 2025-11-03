@@ -191,3 +191,70 @@ data class Task(
     val priority: Priority?,
     val description: String,
 )
+
+/**
+ * Test entity for @Unique annotation
+ * Tests single-column uniqueness constraints
+ */
+@DBRow("unique_email_test")
+@Serializable
+data class UniqueEmailTest(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @com.ctrip.sqllin.dsl.annotation.Unique val email: String,
+    val name: String,
+)
+
+/**
+ * Test entity for @CollateNoCase annotation
+ * Tests case-insensitive text collation
+ */
+@DBRow("collate_nocase_test")
+@Serializable
+data class CollateNoCaseTest(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @com.ctrip.sqllin.dsl.annotation.CollateNoCase val username: String,
+    @com.ctrip.sqllin.dsl.annotation.CollateNoCase @com.ctrip.sqllin.dsl.annotation.Unique val email: String,
+    val description: String,
+)
+
+/**
+ * Test entity for @CompositeUnique annotation
+ * Tests multi-column uniqueness constraints with groups
+ */
+@DBRow("composite_unique_test")
+@Serializable
+data class CompositeUniqueTest(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @com.ctrip.sqllin.dsl.annotation.CompositeUnique(0) val groupA: String,
+    @com.ctrip.sqllin.dsl.annotation.CompositeUnique(0) val groupB: Int,
+    @com.ctrip.sqllin.dsl.annotation.CompositeUnique(1) val groupC: String,
+    @com.ctrip.sqllin.dsl.annotation.CompositeUnique(1) val groupD: String,
+    val notes: String?,
+)
+
+/**
+ * Test entity for multiple @CompositeUnique groups on same property
+ * Tests that a property can belong to multiple composite unique constraints
+ */
+@DBRow("multi_group_unique_test")
+@Serializable
+data class MultiGroupUniqueTest(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @com.ctrip.sqllin.dsl.annotation.CompositeUnique(0, 1) val userId: Int,
+    @com.ctrip.sqllin.dsl.annotation.CompositeUnique(0) val eventType: String,
+    @com.ctrip.sqllin.dsl.annotation.CompositeUnique(1) val timestamp: Long,
+    val metadata: String?,
+)
+
+/**
+ * Test entity combining multiple column modifiers
+ * Tests interaction between @Unique, @CollateNoCase, and NOT NULL (non-nullable type)
+ */
+@DBRow("combined_constraints_test")
+@Serializable
+data class CombinedConstraintsTest(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @com.ctrip.sqllin.dsl.annotation.Unique @com.ctrip.sqllin.dsl.annotation.CollateNoCase val code: String,
+    @com.ctrip.sqllin.dsl.annotation.Unique val serial: String,
+    val value: Int,
+)

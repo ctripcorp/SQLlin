@@ -1513,6 +1513,441 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(false, remainingUsers.any { it.status == UserStatus.BANNED })
     }
 
+    /**
+     * Test for compile-time CREATE TABLE generation
+     * Verifies that createSQL property contains the correct SQL statement
+     */
+    fun testCreateSQLGeneration() {
+        // Test 1: Simple table with primary key and basic types
+        val personSQL = PersonWithIdTable.createSQL
+        assertEquals(true, personSQL.contains("CREATE TABLE person_with_id"))
+        assertEquals(true, personSQL.contains("id INTEGER PRIMARY KEY"))
+        assertEquals(true, personSQL.contains("name TEXT NOT NULL"))
+        assertEquals(true, personSQL.contains("age INT NOT NULL"))
+
+        // Test 2: Table with autoincrement
+        val studentSQL = StudentWithAutoincrementTable.createSQL
+        assertEquals(true, studentSQL.contains("CREATE TABLE student_with_autoincrement"))
+        assertEquals(true, studentSQL.contains("id INTEGER PRIMARY KEY AUTOINCREMENT"))
+
+        // Test 3: Table with composite primary key
+        val enrollmentSQL = EnrollmentTable.createSQL
+        assertEquals(true, enrollmentSQL.contains("CREATE TABLE enrollment"))
+        assertEquals(true, enrollmentSQL.contains("PRIMARY KEY(studentId,courseId)"))
+
+        // Test 4: Table with enum fields (stored as INT)
+        val userSQL = UserAccountTable.createSQL
+        assertEquals(true, userSQL.contains("CREATE TABLE user_account"))
+        assertEquals(true, userSQL.contains("status INT NOT NULL"))
+        assertEquals(true, userSQL.contains("priority INT NOT NULL"))
+
+        // Test 5: Table with ByteArray (BLOB type)
+        val fileSQL = FileDataTable.createSQL
+        assertEquals(true, fileSQL.contains("CREATE TABLE file_data"))
+        assertEquals(true, fileSQL.contains("content BLOB NOT NULL"))
+    }
+
+    /**
+     * Test for @Unique annotation
+     * Verifies that UNIQUE constraints prevent duplicate values
+     */
+    fun testUniqueConstraint() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(UniqueEmailTestTable)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            // Verify CREATE SQL contains UNIQUE keyword
+            val createSQL = UniqueEmailTestTable.createSQL
+            assertEquals(true, createSQL.contains("email TEXT NOT NULL UNIQUE"))
+
+            // Test 1: Insert records with unique emails - should succeed
+            val user1 = UniqueEmailTest(null, "alice@example.com", "Alice")
+            val user2 = UniqueEmailTest(null, "bob@example.com", "Bob")
+
+            database {
+                UniqueEmailTestTable { table ->
+                    table INSERT listOf(user1, user2)
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<UniqueEmailTest>
+            database {
+                selectStatement = UniqueEmailTestTable SELECT X
+            }
+            assertEquals(2, selectStatement.getResults().size)
+
+            // Test 2: Try to insert duplicate email - should fail
+            val user3 = UniqueEmailTest(null, "alice@example.com", "Alice Clone")
+            var duplicateInsertFailed = false
+            try {
+                database {
+                    UniqueEmailTestTable { table ->
+                        table INSERT user3
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateInsertFailed = true
+            }
+            assertEquals(true, duplicateInsertFailed, "Duplicate email should violate UNIQUE constraint")
+
+            // Verify only 2 records exist
+            database {
+                selectStatement = UniqueEmailTestTable SELECT X
+            }
+            assertEquals(2, selectStatement.getResults().size)
+        }
+    }
+
+    /**
+     * Test for @CollateNoCase annotation
+     * Verifies case-insensitive text comparison
+     */
+    fun testCollateNoCaseConstraint() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(CollateNoCaseTestTable)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            // Verify CREATE SQL contains COLLATE NOCASE
+            val createSQL = CollateNoCaseTestTable.createSQL
+            assertEquals(true, createSQL.contains("username TEXT NOT NULL COLLATE NOCASE"))
+            assertEquals(true, createSQL.contains("email TEXT NOT NULL COLLATE NOCASE UNIQUE"))
+
+            // Test 1: Insert users with different case usernames
+            val user1 = CollateNoCaseTest(null, "JohnDoe", "john@example.com", "First user")
+            val user2 = CollateNoCaseTest(null, "janedoe", "jane@example.com", "Second user")
+            database {
+                CollateNoCaseTestTable { table ->
+                    table INSERT listOf(user1, user2)
+                }
+            }
+
+            // Test 2: Case-insensitive search
+            var selectStatement: SelectStatement<CollateNoCaseTest>? = null
+            database {
+                CollateNoCaseTestTable { table ->
+                    selectStatement = table SELECT WHERE (username EQ "johndoe")  // lowercase query
+                }
+            }
+            val results1 = selectStatement!!.getResults()
+            assertEquals(1, results1.size)
+            assertEquals("JohnDoe", results1[0].username)  // Original case preserved
+
+            // Test 3: Another case variant
+            database {
+                CollateNoCaseTestTable { table ->
+                    selectStatement = table SELECT WHERE (username EQ "JOHNDOE")  // uppercase query
+                }
+            }
+            val results2 = selectStatement!!.getResults()
+            assertEquals(1, results2.size)
+            assertEquals("JohnDoe", results2[0].username)
+
+            // Test 4: UNIQUE + NOCASE - duplicate email in different case should fail
+            val user3 = CollateNoCaseTest(null, "alice", "JOHN@EXAMPLE.COM", "Duplicate email")
+            var duplicateFailed = false
+            try {
+                database {
+                    CollateNoCaseTestTable { table ->
+                        table INSERT user3
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateFailed = true
+            }
+            assertEquals(true, duplicateFailed, "Duplicate email (different case) should violate UNIQUE constraint with NOCASE")
+        }
+    }
+
+    /**
+     * Test for @CompositeUnique annotation
+     * Verifies multi-column uniqueness constraints with multiple groups
+     */
+    fun testCompositeUniqueConstraint() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(CompositeUniqueTestTable)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            // Verify CREATE SQL contains composite UNIQUE constraints
+            val createSQL = CompositeUniqueTestTable.createSQL
+            assertEquals(true, createSQL.contains("UNIQUE(groupA,groupB)"))
+            assertEquals(true, createSQL.contains("UNIQUE(groupC,groupD)"))
+
+            // Test 1: Insert records with unique combinations
+            val record1 = CompositeUniqueTest(null, "A1", 1, "C1", "D1", "First record")
+            val record2 = CompositeUniqueTest(null, "A1", 2, "C1", "D2", "Different groupB")
+            val record3 = CompositeUniqueTest(null, "A2", 1, "C2", "D1", "Different groupA")
+            database {
+                CompositeUniqueTestTable { table ->
+                    table INSERT listOf(record1, record2, record3)
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<CompositeUniqueTest>
+            database {
+                selectStatement = CompositeUniqueTestTable SELECT X
+            }
+            assertEquals(3, selectStatement.getResults().size)
+
+            // Test 2: Try to insert duplicate (groupA, groupB) - should fail
+            val record4 = CompositeUniqueTest(null, "A1", 1, "C3", "D3", "Duplicate group 0")
+            var duplicateGroup0Failed = false
+            try {
+                database {
+                    CompositeUniqueTestTable { table ->
+                        table INSERT record4
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateGroup0Failed = true
+            }
+            assertEquals(true, duplicateGroup0Failed, "Duplicate (groupA, groupB) should violate group 0 UNIQUE constraint")
+
+            // Test 3: Try to insert duplicate (groupC, groupD) - should fail
+            val record5 = CompositeUniqueTest(null, "A3", 3, "C1", "D1", "Duplicate group 1")
+            var duplicateGroup1Failed = false
+            try {
+                database {
+                    CompositeUniqueTestTable { table ->
+                        table INSERT record5
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateGroup1Failed = true
+            }
+            assertEquals(true, duplicateGroup1Failed, "Duplicate (groupC, groupD) should violate group 1 UNIQUE constraint")
+
+            // Verify still only 3 records
+            database {
+                selectStatement = CompositeUniqueTestTable SELECT X
+            }
+            assertEquals(3, selectStatement.getResults().size)
+        }
+    }
+
+    /**
+     * Test for multiple @CompositeUnique groups on same property
+     * Verifies a property can participate in multiple composite constraints
+     */
+    fun testMultiGroupCompositeUnique() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(MultiGroupUniqueTestTable)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            // Verify CREATE SQL contains both composite UNIQUE constraints
+            val createSQL = MultiGroupUniqueTestTable.createSQL
+            assertEquals(true, createSQL.contains("UNIQUE(userId,eventType)"))
+            assertEquals(true, createSQL.contains("UNIQUE(userId,timestamp)"))
+
+            // Test 1: Insert valid records
+            val event1 = MultiGroupUniqueTest(null, 1, "login", 1000L, "User 1 login")
+            val event2 = MultiGroupUniqueTest(null, 1, "logout", 2000L, "User 1 logout")
+            val event3 = MultiGroupUniqueTest(null, 2, "login", 1000L, "User 2 login")
+            database {
+                MultiGroupUniqueTestTable { table ->
+                    table INSERT listOf(event1, event2, event3)
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<MultiGroupUniqueTest>
+            database {
+                selectStatement = MultiGroupUniqueTestTable SELECT X
+            }
+            assertEquals(3, selectStatement.getResults().size)
+
+            // Test 2: Try duplicate (userId, eventType) - should fail group 0 constraint
+            val event4 = MultiGroupUniqueTest(null, 1, "login", 3000L, "Duplicate userId+eventType")
+            var duplicateGroup0Failed = false
+            try {
+                database {
+                    MultiGroupUniqueTestTable { table ->
+                        table INSERT event4
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateGroup0Failed = true
+            }
+            assertEquals(true, duplicateGroup0Failed, "Duplicate (userId, eventType) should violate group 0 constraint")
+
+            // Test 3: Try duplicate (userId, timestamp) - should fail group 1 constraint
+            val event5 = MultiGroupUniqueTest(null, 2, "logout", 1000L, "Duplicate userId+timestamp")
+            var duplicateGroup1Failed = false
+            try {
+                database {
+                    MultiGroupUniqueTestTable { table ->
+                        table INSERT event5
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateGroup1Failed = true
+            }
+            assertEquals(true, duplicateGroup1Failed, "Duplicate (userId, timestamp) should violate group 1 constraint")
+
+            // Verify still only 3 records
+            database {
+                selectStatement = MultiGroupUniqueTestTable SELECT X
+            }
+            assertEquals(3, selectStatement.getResults().size)
+        }
+    }
+
+    /**
+     * Test for combined constraints
+     * Verifies interaction of @Unique, @CollateNoCase, and NOT NULL
+     */
+    fun testCombinedConstraints() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(CombinedConstraintsTestTable)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            // Verify CREATE SQL
+            val createSQL = CombinedConstraintsTestTable.createSQL
+            // Check for key components (order may vary)
+            assertEquals(true, createSQL.contains("code TEXT NOT NULL"))
+            assertEquals(true, createSQL.contains("COLLATE NOCASE"))
+            assertEquals(true, createSQL.contains("UNIQUE"))
+            assertEquals(true, createSQL.contains("serial TEXT NOT NULL UNIQUE"))
+            assertEquals(true, createSQL.contains("value INT NOT NULL"))
+
+            // Test 1: Insert valid records
+            val item1 = CombinedConstraintsTest(null, "CODE123", "SN-001", 100)
+            val item2 = CombinedConstraintsTest(null, "CODE456", "SN-002", 200)
+            database {
+                CombinedConstraintsTestTable { table ->
+                    table INSERT listOf(item1, item2)
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<CombinedConstraintsTest>
+            database {
+                selectStatement = CombinedConstraintsTestTable SELECT X
+            }
+            assertEquals(2, selectStatement.getResults().size)
+
+            // Test 2: Search with different case (NOCASE on code)
+            database {
+                CombinedConstraintsTestTable { table ->
+                    selectStatement = table SELECT WHERE (code EQ "code123")  // lowercase
+                }
+            }
+            assertEquals(1, selectStatement.getResults().size)
+            assertEquals("CODE123", selectStatement.getResults()[0].code)
+
+            // Test 3: Try duplicate code (different case) - should fail due to UNIQUE + NOCASE
+            val item3 = CombinedConstraintsTest(null, "code123", "SN-003", 300)
+            var duplicateCodeFailed = false
+            try {
+                database {
+                    CombinedConstraintsTestTable { table ->
+                        table INSERT item3
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateCodeFailed = true
+            }
+            assertEquals(true, duplicateCodeFailed, "Duplicate code (different case) should fail")
+
+            // Test 4: Try duplicate serial (case-sensitive) - should fail
+            val item4 = CombinedConstraintsTest(null, "CODE789", "SN-001", 400)
+            var duplicateSerialFailed = false
+            try {
+                database {
+                    CombinedConstraintsTestTable { table ->
+                        table INSERT item4
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateSerialFailed = true
+            }
+            assertEquals(true, duplicateSerialFailed, "Duplicate serial should fail")
+
+            // Test 5: Different case serial should succeed (no NOCASE on serial)
+            val item5 = CombinedConstraintsTest(null, "CODE789", "sn-001", 400)
+            database {
+                CombinedConstraintsTestTable { table ->
+                    table INSERT item5
+                }
+            }
+
+            database {
+                selectStatement = CombinedConstraintsTestTable SELECT X
+            }
+            assertEquals(3, selectStatement.getResults().size)
+        }
+    }
+
+    /**
+     * Test NOT NULL constraint enforcement
+     * Verifies that non-nullable Kotlin types generate NOT NULL constraints
+     */
+    fun testNotNullConstraint() {
+        Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+            // Test 1: Verify NOT NULL in CREATE SQL
+            val bookSQL = BookTable.createSQL
+            assertEquals(true, bookSQL.contains("name TEXT NOT NULL"))
+            assertEquals(true, bookSQL.contains("author TEXT NOT NULL"))
+            assertEquals(true, bookSQL.contains("pages INT NOT NULL"))
+            assertEquals(true, bookSQL.contains("price DOUBLE NOT NULL"))
+
+            // Test 2: Verify nullable columns don't have NOT NULL
+            val nullTesterSQL = NullTesterTable.createSQL
+            // Nullable columns should not have NOT NULL
+            assertEquals(false, nullTesterSQL.contains("paramInt INT NOT NULL"))
+            assertEquals(false, nullTesterSQL.contains("paramString TEXT NOT NULL"))
+            assertEquals(false, nullTesterSQL.contains("paramDouble DOUBLE NOT NULL"))
+
+            // Test 3: Verify data insertion and retrieval
+            val book = Book(name = "Test Book", author = "Test Author", pages = 300, price = 25.99)
+            database {
+                BookTable { table ->
+                    table INSERT book
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<Book>
+            database {
+                selectStatement = BookTable SELECT WHERE (BookTable.name EQ "Test Book")
+            }
+            val result = selectStatement.getResults().first()
+            assertEquals("Test Book", result.name)
+            assertEquals("Test Author", result.author)
+            assertEquals(300, result.pages)
+            assertEquals(25.99, result.price)
+        }
+    }
+
     private fun getDefaultDBConfig(): DatabaseConfiguration =
         DatabaseConfiguration(
             name = DATABASE_NAME,
@@ -1539,6 +1974,11 @@ class CommonBasicTest(private val path: DatabasePath) {
                 CREATE(FileDataTable)
                 CREATE(UserAccountTable)
                 CREATE(TaskTable)
+                CREATE(UniqueEmailTestTable)
+                CREATE(CollateNoCaseTestTable)
+                CREATE(CompositeUniqueTestTable)
+                CREATE(MultiGroupUniqueTestTable)
+                CREATE(CombinedConstraintsTestTable)
             }
         )
 }

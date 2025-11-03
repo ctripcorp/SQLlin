@@ -191,7 +191,7 @@ public class ClauseNumber(
             builder.append('.')
         }
         builder.append(valueName)
-        val parameters = if (number == null){
+        val parameters = if (number == null) {
             builder.append(nullSymbol)
             null
         } else {

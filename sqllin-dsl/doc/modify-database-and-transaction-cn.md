@@ -171,7 +171,7 @@ private val database = Database(name = "Person.db", path = getGlobalPath(), vers
 fun sample() {
     database {
         PersonTable { table ->
-            // 编写你的 SQL 语句...
+            // Write your SQL statements...
         }
     }
 }

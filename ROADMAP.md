@@ -2,7 +2,7 @@
 
 ## High Priority
 
-* Support the key word REFERENCE
+* Support the keyword REFERENCE
 * Support JOIN sub-query
 
 ## Medium Priority

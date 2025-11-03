@@ -77,7 +77,7 @@ actual fun getGlobalDatabasePath(): DatabasePath =
     
 val applicationContext: Context
     get() {
-        // 使用自己的方式获取 applicationContext
+        // Use your own way to get `applicationContext`
     }
 ```
 
@@ -186,7 +186,7 @@ data class Person(
 )
 ```
 你定义的数据库实体的属性名应与数据库表的列名相对应。数据库实体不应该拥有名字与表中的所有列名均不相同的属性，但是
-数据库实体的属性数量可以比表中列的数量少。
+数据库实体的属性数量可以比表中列的数量少（当且仅当你不需要使用 _sqllin-dsl_ 来创建表的情况下）。
 
 `@DBRow` 的参数 `tableName` 表示数据库中的表名，请确保传入正确的值。如果不手动传入，_sqllin-processor_
 将会使用类名作为表名，比如 `Person` 类的默认表名是"Person"。
@@ -261,6 +261,231 @@ data class Enrollment(
 - 所有带有 `@CompositePrimaryKey` 的属性**必须是非空的**
 - 你**不能**在同一个类中混合使用 `@PrimaryKey` 和 `@CompositePrimaryKey` - 只能使用其中一个
 - 所有 `@CompositePrimaryKey` 属性的组合形成表的组合主键
+
+### 列约束和修饰符
+
+SQLlin 提供了多个注解来为表列添加约束和修饰符。
+
+#### @Unique - 单列唯一性
+
+使用 `@Unique` 强制要求列中的值不能重复：
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import com.ctrip.sqllin.dsl.annotation.Unique
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class User(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @Unique val email: String,        // Each email must be unique
+    @Unique val username: String,     // Each username must be unique
+    val displayName: String,
+)
+// Generated SQL: CREATE TABLE User(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   email TEXT UNIQUE,
+//   username TEXT UNIQUE,
+//   displayName TEXT
+// )
+```
+
+**重要注意事项：**
+- UNIQUE 列允许多个 NULL 值（在 SQL 中 NULL 不等于 NULL）
+- 要防止 NULL 值，请使用非空类型：`val email: String`
+
+#### @CompositeUnique - 多列唯一性
+
+使用 `@CompositeUnique` 确保**多个列的组合**是唯一的：
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import com.ctrip.sqllin.dsl.annotation.CompositeUnique
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class Enrollment(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @CompositeUnique(0) val studentId: Int,
+    @CompositeUnique(0) val courseId: Int,
+    val enrollmentDate: String,
+)
+// Generated SQL: CREATE TABLE Enrollment(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   studentId INT,
+//   courseId INT,
+//   enrollmentDate TEXT,
+//   UNIQUE(studentId, courseId)
+// )
+// A student cannot enroll in the same course twice
+```
+
+**分组：** 属性可以通过指定不同的组号属于多个唯一约束组：
+
+```kotlin
+@DBRow
+@Serializable
+data class Event(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @CompositeUnique(0, 1) val userId: Int,     // Part of groups 0 and 1
+    @CompositeUnique(0) val eventType: String,  // Part of group 0
+    @CompositeUnique(1) val timestamp: Long,    // Part of group 1
+)
+// Generated SQL: CREATE TABLE Event(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   userId INT,
+//   eventType TEXT,
+//   timestamp BIGINT,
+//   UNIQUE(userId, eventType),    // Group 0: userId + eventType
+//   UNIQUE(userId, timestamp)     // Group 1: userId + timestamp
+// )
+```
+
+**默认行为：**
+- 如果未指定组：`@CompositeUnique()`，默认为组 `0`
+- 所有具有相同组号的属性会组合成一个组合约束
+
+#### @CollateNoCase - 不区分大小写的文本比较
+
+使用 `@CollateNoCase` 使字符串比较不区分大小写：
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import com.ctrip.sqllin.dsl.annotation.CollateNoCase
+import com.ctrip.sqllin.dsl.annotation.Unique
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class User(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @CollateNoCase @Unique val email: String,  // Case-insensitive unique email
+    @CollateNoCase val username: String,        // Case-insensitive username
+    val bio: String,
+)
+// Generated SQL: CREATE TABLE User(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   email TEXT COLLATE NOCASE UNIQUE,
+//   username TEXT COLLATE NOCASE,
+//   bio TEXT
+// )
+```
+
+**类型限制：**
+- **只能**应用于 `String` 或 `Char` 属性（及其可空变体）
+- 尝试在非文本类型上使用会导致编译时错误
+
+**COLLATE NOCASE 的 SQLite 行为：**
+- `'ABC' = 'abc'` 结果为 true
+- `ORDER BY` 子句不区分大小写排序
+- 列上的索引不区分大小写
+
+#### 组合多个约束
+
+你可以在同一个属性上组合多个约束注解：
+
+```kotlin
+@DBRow
+@Serializable
+data class Product(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @Unique @CollateNoCase val code: String,  // Unique and case-insensitive
+    val name: String,
+    val price: Double,
+)
+```
+
+### 支持的类型
+
+SQLlin 支持以下 Kotlin 类型用于 `@DBRow` 数据类的属性：
+
+#### 数值类型
+- **整数类型：** `Byte`、`Short`、`Int`、`Long`
+- **无符号整数类型：** `UByte`、`UShort`、`UInt`、`ULong`
+- **浮点类型：** `Float`、`Double`
+
+#### 文本类型
+- `String` - 映射到 SQLite TEXT
+- `Char` - 映射到 SQLite CHAR(1)
+
+#### 其他类型
+- `Boolean` - 映射到 SQLite BOOLEAN（存储为 0 或 1）
+- `ByteArray` - 映射到 SQLite BLOB（用于二进制数据）
+- **枚举类** - 映射到 SQLite INT（存储为序数值）
+
+#### 类型别名
+- 上述支持类型的任何类型别名
+- 类型别名可以嵌套（一个类型别名的类型别名）
+
+```kotlin
+typealias UserId = Long
+typealias Price = Double
+typealias Age = Int
+
+// You can also create typealiases of other typealiases
+typealias AccountId = UserId
+
+@DBRow
+@Serializable
+data class Product(
+    @PrimaryKey val id: UserId,      // Works! Typealias of Long
+    val name: String,
+    val price: Price,                // Works! Typealias of Double
+    val ownerId: AccountId,          // Works! Typealias of typealias
+)
+```
+
+**重要注意事项：**
+- 处理器会递归解析类型别名以找到底层类型
+- 底层类型必须是上述支持的类型之一
+
+#### 可空类型
+- 上述所有类型都可以为可空（例如 `String?`、`Int?`、`Boolean?`）
+- 例外：主键有特殊的可空性规则（参见主键部分）
+
+#### 枚举示例
+
+```kotlin
+enum class UserStatus {
+    ACTIVE, INACTIVE, SUSPENDED, BANNED
+}
+
+@DBRow
+@Serializable
+data class User(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    val username: String,
+    val status: UserStatus,         // Stored as 0, 1, 2, or 3
+    val priority: Priority?,        // Nullable enum is also supported
+)
+```
+
+**重要注意事项：**
+- 枚举值存储为其序数（整数）值
+- 更改枚举常量的顺序会影响存储的值
+- 如果需要更稳定的存储，考虑使用 String
+
+#### SQLite 类型映射
+
+| Kotlin 类型 | SQLite 类型 |
+|------------|-------------|
+| Byte, UByte | TINYINT |
+| Short, UShort | SMALLINT |
+| Int, UInt | INT |
+| Long | BIGINT（如果是主键则为 INTEGER） |
+| ULong | BIGINT |
+| Float | FLOAT |
+| Double | DOUBLE |
+| Boolean | BOOLEAN |
+| Char | CHAR(1) |
+| String | TEXT |
+| ByteArray | BLOB |
+| Enum | INT |
 
 ## 接下来
 

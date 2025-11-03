@@ -73,4 +73,50 @@ public abstract class Table<T>(
      * during code generation.
      */
     public abstract val primaryKeyInfo: PrimaryKeyInfo?
+
+    /**
+     * The complete CREATE TABLE SQL statement for this table.
+     *
+     * This property contains a fully-formed CREATE TABLE statement generated at compile-time
+     * by the sqllin-processor KSP plugin. The statement includes:
+     * - Table name
+     * - All non-transient columns with appropriate SQLite types
+     * - Column constraints (PRIMARY KEY, NOT NULL, UNIQUE, COLLATE NOCASE)
+     * - Table-level constraints (composite primary keys, composite unique constraints)
+     *
+     * ### Generation Details
+     * - Generated during annotation processing from [@DBRow][com.ctrip.sqllin.dsl.annotation.DBRow] classes
+     * - Kotlin types are mapped to SQLite types (Int→INT, String→TEXT, etc.)
+     * - Annotations like [@PrimaryKey], [@Unique], [@CollateNoCase], etc. add corresponding SQL clauses
+     * - Enum properties are stored as INTEGER (ordinal values)
+     *
+     * ### Example
+     * For a data class:
+     * ```kotlin
+     * @Serializable
+     * @DBRow
+     * data class User(
+     *     @PrimaryKey(isAutoincrement = true) val id: Long?,
+     *     @Unique @CollateNoCase val email: String,
+     *     val name: String,
+     *     val age: Int
+     * )
+     * ```
+     *
+     * The generated `createSQL` would be:
+     * ```sql
+     * CREATE TABLE User(id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT COLLATE NOCASE UNIQUE,name TEXT,age INT)
+     * ```
+     *
+     * ### Performance Note
+     * Since this is generated at compile-time, there is no runtime overhead for constructing
+     * the CREATE TABLE statement, unlike previous versions that built it at runtime.
+     *
+     * @see com.ctrip.sqllin.dsl.annotation.DBRow
+     * @see com.ctrip.sqllin.dsl.annotation.PrimaryKey
+     * @see com.ctrip.sqllin.dsl.annotation.Unique
+     * @see com.ctrip.sqllin.dsl.annotation.CompositeUnique
+     * @see com.ctrip.sqllin.dsl.annotation.CollateNoCase
+     */
+    public abstract val createSQL: String
 }

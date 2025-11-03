@@ -82,6 +82,27 @@ class JvmTest {
     @Test
     fun testEnumOperations() = commonTest.testEnumOperations()
 
+    @Test
+    fun testCreateSQLGeneration() = commonTest.testCreateSQLGeneration()
+
+    @Test
+    fun testUniqueConstraint() = commonTest.testUniqueConstraint()
+
+    @Test
+    fun testCollateNoCaseConstraint() = commonTest.testCollateNoCaseConstraint()
+
+    @Test
+    fun testCompositeUniqueConstraint() = commonTest.testCompositeUniqueConstraint()
+
+    @Test
+    fun testMultiGroupCompositeUnique() = commonTest.testMultiGroupCompositeUnique()
+
+    @Test
+    fun testCombinedConstraints() = commonTest.testCombinedConstraints()
+
+    @Test
+    fun testNotNullConstraint() = commonTest.testNotNullConstraint()
+
     @BeforeTest
     fun setUp() {
         deleteDatabase(path, CommonBasicTest.DATABASE_NAME)

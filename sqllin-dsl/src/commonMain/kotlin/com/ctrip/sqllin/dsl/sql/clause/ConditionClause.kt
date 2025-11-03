@@ -29,7 +29,7 @@ import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
  * - String: LT, LTE, EQ, NEQ, GT, GTE, IN, BETWEEN, LIKE, GLOB
  * - Blob: LT, LTE, EQ, NEQ, GT, GTE, IN, BETWEEN
  * - Enum: LT, LTE, EQ, NEQ, GT, GTE
- * - Boolean: IS
+ * - Boolean: IS, ISNOT
  * - Logic: AND, OR
  *
  * @param T The entity type this clause operates on
@@ -268,9 +268,13 @@ public infix fun <T : Enum<T>> ClauseEnum<T>.GTE(entry: T): SelectCondition = gt
 @StatementDslMaker
 public infix fun <T : Enum<T>> ClauseEnum<T>.GTE(clauseEnum: ClauseEnum<T>): SelectCondition = gte(clauseEnum)
 
-// Condition 'IS' operator
+// Condition for judging whether a column is a Boolean value
 @StatementDslMaker
-public infix fun ClauseBoolean.IS(bool: Boolean): SelectCondition = _is(bool)
+public infix fun ClauseBoolean.IS(bool: Boolean?): SelectCondition = _is(bool)
+
+// Condition for judging whether a column is NOT a Boolean value
+@StatementDslMaker
+public infix fun ClauseBoolean.ISNOT(bool: Boolean?): SelectCondition = _isNot(bool)
 
 // Condition 'OR' operator
 @StatementDslMaker

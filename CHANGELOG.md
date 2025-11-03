@@ -10,6 +10,11 @@
 * Support enumerated types in DSL APIs, includes `=`, `!=`, `<`, `<=`, `>`, `>=` operators
 * Support `<`, `<=`, `>`, `>=`, `IN`, `BETWEEN...AND` operators for String
 * Support `=`, `!=`, `<`, `<=`, `>`, `>=`, `IN`, `BETWEEN...AND` operators for ByteArray
+* Add a new condiction function `ISNOT` for Boolean, and `IS` starts to support to receive a nullable parameter
+* Refactored CREATE statements building process, move it from runtime to compile-time.
+* New experimental API for _COLLATE NOCASE_ keyword: `CollateNoCase`
+* New experimental API for single column with _UNIQUE_ keyword: `Unique`
+* New Experimental API for composite column groups with _UNIQUE_ keyword: `CompositeUnique`
 
 ## 2.0.0 / 2025-10-23
 

@@ -41,7 +41,7 @@ You are an expert Kotlin test engineer specializing in database libraries and DS
    - Use in-memory databases or test databases for integration tests
    - Clean up database state between tests (transactions, rollbacks, or cleanup hooks)
    - Test SQL injection prevention and parameterized query handling
-   - For both of sqllin-driver and sqllin-dsl, always change `JvmTest`, `NativeTest`, `AndroidTest` in the meantime
+   - For both of sqllin-driver and sqllin-dsl, always add new tests in `JvmTest`, `NativeTest`, `AndroidTest` in the meantime
 
 5. **DSL-Specific Testing Considerations**:
    - Verify that DSL constructs generate correct SQL

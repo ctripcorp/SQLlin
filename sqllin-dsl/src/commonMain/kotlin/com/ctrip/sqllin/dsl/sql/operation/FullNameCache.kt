@@ -105,7 +105,7 @@ internal object FullNameCache {
      * @return A string starting with a space followed by the SQLite type name (e.g., " TEXT", " INTEGER", " INT")
      * @throws IllegalStateException if the type is not supported by SQLlin
      */
-    fun getSerialNameBySerialName(descriptor: SerialDescriptor, elementName: String, table: Table<*>): String = with(descriptor.serialName) {
+    fun getTypeNameBySerialName(descriptor: SerialDescriptor, elementName: String, table: Table<*>): String = with(descriptor.serialName) {
         when {
             startsWith(BYTE) || startsWith(UBYTE) -> " TINYINT"
             startsWith(SHORT) || startsWith(USHORT) -> " SMALLINT"
