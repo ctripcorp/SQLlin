@@ -2,7 +2,7 @@
 
 - Date format: YYYY-MM-dd
 - 
-## 2.1.0 / 2025-11-xx
+## 2.1.0 / 2025-11-04
 
 ### sqllin-dsl
 

@@ -27,7 +27,7 @@ import kotlinx.serialization.Transient
 
 @DBRow
 @Serializable
-data class TestPrimitiveTypeForKSP(
+class TestPrimitiveTypeForKSP(
     val testInt: Int,
     val testLong: Long,
     val testShort: Short,
@@ -41,5 +41,8 @@ data class TestPrimitiveTypeForKSP(
     val testBoolean: Boolean?,
     val testChar: Char?,
     val testString: String,
+    val testByteArray: ByteArray,
+    val testEnum: Priority,
+    val testTypeAlias: Code,
     @Transient val testTransient: Int = 0,
 )

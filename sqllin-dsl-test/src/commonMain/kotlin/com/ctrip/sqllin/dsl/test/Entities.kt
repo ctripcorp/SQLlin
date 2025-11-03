@@ -16,9 +16,12 @@
 
 package com.ctrip.sqllin.dsl.test
 
+import com.ctrip.sqllin.dsl.annotation.CollateNoCase
 import com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey
+import com.ctrip.sqllin.dsl.annotation.CompositeUnique
 import com.ctrip.sqllin.dsl.annotation.DBRow
 import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import com.ctrip.sqllin.dsl.annotation.Unique
 import kotlinx.serialization.Serializable
 
 /**
@@ -200,7 +203,7 @@ data class Task(
 @Serializable
 data class UniqueEmailTest(
     @PrimaryKey(isAutoincrement = true) val id: Long?,
-    @com.ctrip.sqllin.dsl.annotation.Unique val email: String,
+    @Unique val email: String,
     val name: String,
 )
 
@@ -212,8 +215,8 @@ data class UniqueEmailTest(
 @Serializable
 data class CollateNoCaseTest(
     @PrimaryKey(isAutoincrement = true) val id: Long?,
-    @com.ctrip.sqllin.dsl.annotation.CollateNoCase val username: String,
-    @com.ctrip.sqllin.dsl.annotation.CollateNoCase @com.ctrip.sqllin.dsl.annotation.Unique val email: String,
+    @CollateNoCase val username: String,
+    @CollateNoCase @Unique val email: String,
     val description: String,
 )
 
@@ -225,10 +228,10 @@ data class CollateNoCaseTest(
 @Serializable
 data class CompositeUniqueTest(
     @PrimaryKey(isAutoincrement = true) val id: Long?,
-    @com.ctrip.sqllin.dsl.annotation.CompositeUnique(0) val groupA: String,
-    @com.ctrip.sqllin.dsl.annotation.CompositeUnique(0) val groupB: Int,
-    @com.ctrip.sqllin.dsl.annotation.CompositeUnique(1) val groupC: String,
-    @com.ctrip.sqllin.dsl.annotation.CompositeUnique(1) val groupD: String,
+    @CompositeUnique(0) val groupA: String,
+    @CompositeUnique(0) val groupB: Int,
+    @CompositeUnique(1) val groupC: String,
+    @CompositeUnique(1) val groupD: String,
     val notes: String?,
 )
 
@@ -240,9 +243,9 @@ data class CompositeUniqueTest(
 @Serializable
 data class MultiGroupUniqueTest(
     @PrimaryKey(isAutoincrement = true) val id: Long?,
-    @com.ctrip.sqllin.dsl.annotation.CompositeUnique(0, 1) val userId: Int,
-    @com.ctrip.sqllin.dsl.annotation.CompositeUnique(0) val eventType: String,
-    @com.ctrip.sqllin.dsl.annotation.CompositeUnique(1) val timestamp: Long,
+    @CompositeUnique(0, 1) val userId: Int,
+    @CompositeUnique(0) val eventType: String,
+    @CompositeUnique(1) val timestamp: Long,
     val metadata: String?,
 )
 
@@ -254,7 +257,7 @@ data class MultiGroupUniqueTest(
 @Serializable
 data class CombinedConstraintsTest(
     @PrimaryKey(isAutoincrement = true) val id: Long?,
-    @com.ctrip.sqllin.dsl.annotation.Unique @com.ctrip.sqllin.dsl.annotation.CollateNoCase val code: String,
-    @com.ctrip.sqllin.dsl.annotation.Unique val serial: String,
+    @Unique @CollateNoCase val code: String,
+    @Unique val serial: String,
     val value: Int,
 )

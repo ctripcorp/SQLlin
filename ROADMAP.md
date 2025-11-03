@@ -2,12 +2,16 @@
 
 ## High Priority
 
-* Support the keyword REFERENCE
-* Support JOIN sub-query
+* Support FOREIGN KEY DSL
+* Support CREATE INDEX DSL
 
 ## Medium Priority
 
-* Support WASM platform
+* Support WASM platform DSL
+* Support CREATE VIRTUAL TABLE DSL
+* Support CREATE VIEW DSL
+* Support CREATE TRIGGER DSL
+* Support JOIN sub-query DSL
 
 ## Low Priority
 
