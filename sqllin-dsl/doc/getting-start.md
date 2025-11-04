@@ -195,7 +195,7 @@ data class Person(
 ```
 
 Your database entities' property names should be same with the database table's column names. The database entities cannot have properties with names different from all
-column names in the table. But the count of your database entities' properties can less than the count of columns.
+column names in the table. But the count of your database entities' properties can less than the count of columns(only when you don't need to use _sqllin-dsl_ to create the tables).
 
 The `@DBRow`'s param `tableName` represents the table name in Database, please ensure pass
 the correct value. If you don't pass the parameter manually, _sqllin-processor_ will use the class
@@ -271,6 +271,231 @@ data class Enrollment(
 - All properties with `@CompositePrimaryKey` **must be non-nullable**
 - You **cannot** mix `@PrimaryKey` and `@CompositePrimaryKey` in the same class - use one or the other
 - The combination of all `@CompositePrimaryKey` properties forms the table's composite primary key
+
+### Column Constraints and Modifiers
+
+SQLlin provides several annotations to add constraints and modifiers to your table columns.
+
+#### @Unique - Single Column Uniqueness
+
+Use `@Unique` to enforce that no two rows can have the same value in a column:
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import com.ctrip.sqllin.dsl.annotation.Unique
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class User(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @Unique val email: String,        // Each email must be unique
+    @Unique val username: String,     // Each username must be unique
+    val displayName: String,
+)
+// Generated SQL: CREATE TABLE User(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   email TEXT UNIQUE,
+//   username TEXT UNIQUE,
+//   displayName TEXT
+// )
+```
+
+**Important notes:**
+- Multiple NULL values are allowed in a UNIQUE column (NULL is not equal to NULL in SQL)
+- To prevent NULL values, use a non-nullable type: `val email: String`
+
+#### @CompositeUnique - Multi-Column Uniqueness
+
+Use `@CompositeUnique` to ensure that the **combination** of multiple columns is unique:
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import com.ctrip.sqllin.dsl.annotation.CompositeUnique
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class Enrollment(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @CompositeUnique(0) val studentId: Int,
+    @CompositeUnique(0) val courseId: Int,
+    val enrollmentDate: String,
+)
+// Generated SQL: CREATE TABLE Enrollment(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   studentId INT,
+//   courseId INT,
+//   enrollmentDate TEXT,
+//   UNIQUE(studentId, courseId)
+// )
+// A student cannot enroll in the same course twice
+```
+
+**Grouping:** Properties can belong to multiple unique constraint groups by specifying different group numbers:
+
+```kotlin
+@DBRow
+@Serializable
+data class Event(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @CompositeUnique(0, 1) val userId: Int,     // Part of groups 0 and 1
+    @CompositeUnique(0) val eventType: String,  // Part of group 0
+    @CompositeUnique(1) val timestamp: Long,    // Part of group 1
+)
+// Generated SQL: CREATE TABLE Event(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   userId INT,
+//   eventType TEXT,
+//   timestamp BIGINT,
+//   UNIQUE(userId, eventType),    // Group 0: userId + eventType
+//   UNIQUE(userId, timestamp)     // Group 1: userId + timestamp
+// )
+```
+
+**Default behavior:**
+- If no group is specified: `@CompositeUnique()`, defaults to group `0`
+- All properties with the same group number are combined into a single composite constraint
+
+#### @CollateNoCase - Case-Insensitive Text Comparison
+
+Use `@CollateNoCase` to make string comparisons case-insensitive:
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import com.ctrip.sqllin.dsl.annotation.NoCase
+import com.ctrip.sqllin.dsl.annotation.Unique
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class User(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @CollateNoCase @Unique val email: String,  // Case-insensitive unique email
+    @CollateNoCase val username: String,        // Case-insensitive username
+    val bio: String,
+)
+// Generated SQL: CREATE TABLE User(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   email TEXT COLLATE NOCASE UNIQUE,
+//   username TEXT COLLATE NOCASE,
+//   bio TEXT
+// )
+```
+
+**Type restrictions:**
+- Can **only** be applied to `String` or `Char` properties (and their nullable variants)
+- Attempting to use on non-text types will result in a compile-time error
+
+**SQLite behavior with COLLATE NOCASE:**
+- `'ABC' = 'abc'` evaluates to true
+- `ORDER BY` clauses sort case-insensitively
+- Indexes on the column are case-insensitive
+
+#### Combining Multiple Constraints
+
+You can combine multiple constraint annotations on the same property:
+
+```kotlin
+@DBRow
+@Serializable
+data class Product(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @Unique @CollateNoCase val code: String,  // Unique and case-insensitive
+    val name: String,
+    val price: Double,
+)
+```
+
+### Supported Types
+
+SQLlin supports the following Kotlin types for properties in `@DBRow` data classes:
+
+#### Numeric Types
+- **Integer types:** `Byte`, `Short`, `Int`, `Long`
+- **Unsigned integer types:** `UByte`, `UShort`, `UInt`, `ULong`
+- **Floating-point types:** `Float`, `Double`
+
+#### Text Types
+- `String` - Maps to SQLite TEXT
+- `Char` - Maps to SQLite CHAR(1)
+
+#### Other Types
+- `Boolean` - Maps to SQLite BOOLEAN (stored as 0 or 1)
+- `ByteArray` - Maps to SQLite BLOB (for binary data)
+- **Enum classes** - Maps to SQLite INT (stored as ordinal values)
+
+#### Type Aliases
+- Any typealias of the supported types above
+- Typealiases can be nested (typealias of another typealias)
+
+```kotlin
+typealias UserId = Long
+typealias Price = Double
+typealias Age = Int
+
+// You can also create typealiases of other typealiases
+typealias AccountId = UserId
+
+@DBRow
+@Serializable
+data class Product(
+    @PrimaryKey val id: UserId,      // Works! Typealias of Long
+    val name: String,
+    val price: Price,                // Works! Typealias of Double
+    val ownerId: AccountId,          // Works! Typealias of typealias
+)
+```
+
+**Important notes:**
+- The processor resolves typealiases recursively to find the underlying type
+- The underlying type must be one of the supported types listed above
+
+#### Nullable Types
+- All of the above types can be nullable (e.g., `String?`, `Int?`, `Boolean?`)
+- Exception: Primary keys have special nullability rules (see Primary Key section)
+
+#### Enum Example
+
+```kotlin
+enum class UserStatus {
+    ACTIVE, INACTIVE, SUSPENDED, BANNED
+}
+
+@DBRow
+@Serializable
+data class User(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    val username: String,
+    val status: UserStatus,         // Stored as 0, 1, 2, or 3
+    val priority: Priority?,        // Nullable enum is also supported
+)
+```
+
+**Important notes:**
+- Enum values are stored as their ordinal (integer) values
+- Changing the order of enum constants will affect the stored values
+- Consider using String if you need more stable storage
+
+#### SQLite Type Mappings
+
+| Kotlin Type | SQLite Type |
+|------------|-------------|
+| Byte, UByte | TINYINT |
+| Short, UShort | SMALLINT |
+| Int, UInt | INT |
+| Long | BIGINT (INTEGER if primary key) |
+| ULong | BIGINT |
+| Float | FLOAT |
+| Double | DOUBLE |
+| Boolean | BOOLEAN |
+| Char | CHAR(1) |
+| String | TEXT |
+| ByteArray | BLOB |
+| Enum | INT |
 
 ## Next Step
 

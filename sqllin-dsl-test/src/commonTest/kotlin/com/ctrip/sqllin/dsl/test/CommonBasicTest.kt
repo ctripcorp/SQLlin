@@ -20,6 +20,7 @@ import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.DatabasePath
 import com.ctrip.sqllin.dsl.DSLDBConfiguration
 import com.ctrip.sqllin.dsl.Database
+import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.clause.*
@@ -495,95 +496,87 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    fun testCreateTableWithLongPrimaryKey() {
+    fun testPrimaryKeyVariations() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            // Test 1: Long primary key
             val person1 = PersonWithId(id = null, name = "Alice", age = 25)
             val person2 = PersonWithId(id = null, name = "Bob", age = 30)
 
-            lateinit var selectStatement: SelectStatement<PersonWithId>
+            lateinit var personStatement: SelectStatement<PersonWithId>
             database {
                 PersonWithIdTable { table ->
                     table INSERT listOf(person1, person2)
-                    selectStatement = table SELECT X
+                    personStatement = table SELECT X
                 }
             }
 
-            val results = selectStatement.getResults()
-            assertEquals(2, results.size)
-            assertEquals("Alice", results[0].name)
-            assertEquals(25, results[0].age)
-            assertEquals("Bob", results[1].name)
-            assertEquals(30, results[1].age)
-        }
-    }
+            val personResults = personStatement.getResults()
+            assertEquals(2, personResults.size)
+            assertEquals("Alice", personResults[0].name)
+            assertEquals(25, personResults[0].age)
+            assertEquals("Bob", personResults[1].name)
+            assertEquals(30, personResults[1].age)
 
-    fun testCreateTableWithStringPrimaryKey() {
-        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            // Test 2: String primary key
             val product1 = Product(sku = null, name = "Widget", price = 19.99)
             val product2 = Product(sku = null, name = "Gadget", price = 29.99)
 
-            lateinit var selectStatement: SelectStatement<Product>
+            lateinit var productStatement: SelectStatement<Product>
             database {
                 ProductTable { table ->
                     table INSERT listOf(product1, product2)
-                    selectStatement = table SELECT X
+                    productStatement = table SELECT X
                 }
             }
 
-            val results = selectStatement.getResults()
-            assertEquals(2, results.size)
-            assertEquals("Widget", results[0].name)
-            assertEquals(19.99, results[0].price)
-            assertEquals("Gadget", results[1].name)
-            assertEquals(29.99, results[1].price)
-        }
-    }
+            val productResults = productStatement.getResults()
+            assertEquals(2, productResults.size)
+            assertEquals("Widget", productResults[0].name)
+            assertEquals(19.99, productResults[0].price)
+            assertEquals("Gadget", productResults[1].name)
+            assertEquals(29.99, productResults[1].price)
 
-    fun testCreateTableWithAutoincrement() {
-        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            // Test 3: Autoincrement primary key
             val student1 = StudentWithAutoincrement(id = null, studentName = "Charlie", grade = 85)
             val student2 = StudentWithAutoincrement(id = null, studentName = "Diana", grade = 92)
 
-            lateinit var selectStatement: SelectStatement<StudentWithAutoincrement>
+            lateinit var studentStatement: SelectStatement<StudentWithAutoincrement>
             database {
                 StudentWithAutoincrementTable { table ->
                     table INSERT listOf(student1, student2)
-                    selectStatement = table SELECT X
+                    studentStatement = table SELECT X
                 }
             }
 
-            val results = selectStatement.getResults()
-            assertEquals(2, results.size)
-            assertEquals("Charlie", results[0].studentName)
-            assertEquals(85, results[0].grade)
-            assertEquals("Diana", results[1].studentName)
-            assertEquals(92, results[1].grade)
-        }
-    }
+            val studentResults = studentStatement.getResults()
+            assertEquals(2, studentResults.size)
+            assertEquals("Charlie", studentResults[0].studentName)
+            assertEquals(85, studentResults[0].grade)
+            assertEquals("Diana", studentResults[1].studentName)
+            assertEquals(92, studentResults[1].grade)
 
-    fun testCreateTableWithCompositePrimaryKey() {
-        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            // Test 4: Composite primary key
             val enrollment1 = Enrollment(studentId = 1, courseId = 101, semester = "Fall 2025")
             val enrollment2 = Enrollment(studentId = 1, courseId = 102, semester = "Fall 2025")
             val enrollment3 = Enrollment(studentId = 2, courseId = 101, semester = "Fall 2025")
 
-            lateinit var selectStatement: SelectStatement<Enrollment>
+            lateinit var enrollmentStatement: SelectStatement<Enrollment>
             database {
                 EnrollmentTable { table ->
                     table INSERT listOf(enrollment1, enrollment2, enrollment3)
-                    selectStatement = table SELECT X
+                    enrollmentStatement = table SELECT X
                 }
             }
 
-            val results = selectStatement.getResults()
-            assertEquals(3, results.size)
-            assertEquals(true, results.any { it == enrollment1 })
-            assertEquals(true, results.any { it == enrollment2 })
-            assertEquals(true, results.any { it == enrollment3 })
+            val enrollmentResults = enrollmentStatement.getResults()
+            assertEquals(3, enrollmentResults.size)
+            assertEquals(true, enrollmentResults.any { it == enrollment1 })
+            assertEquals(true, enrollmentResults.any { it == enrollment2 })
+            assertEquals(true, enrollmentResults.any { it == enrollment3 })
         }
     }
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI::class)
+    @OptIn(AdvancedInsertAPI::class)
     fun testInsertWithId() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             val person1 = PersonWithId(id = 100, name = "Eve", age = 28)
@@ -670,8 +663,9 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    fun testByteArrayInsert() {
+    fun testByteArrayAndBlobOperations() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            // Test 1: INSERT - multiple files including empty and large
             val file1 = FileData(
                 id = null,
                 fileName = "test.bin",
@@ -701,70 +695,50 @@ class CommonBasicTest(private val path: DatabasePath) {
 
             val results = selectStatement.getResults()
             assertEquals(3, results.size)
-
-            // Verify first file
             assertEquals("test.bin", results[0].fileName)
             assertEquals(true, results[0].content.contentEquals(byteArrayOf(0x01, 0x02, 0x03, 0xFF.toByte())))
             assertEquals("Binary test file", results[0].metadata)
-
-            // Verify empty file
             assertEquals("empty.dat", results[1].fileName)
             assertEquals(true, results[1].content.contentEquals(byteArrayOf()))
             assertEquals("Empty file", results[1].metadata)
-
-            // Verify large file
             assertEquals("large.bin", results[2].fileName)
             assertEquals(256, results[2].content.size)
             assertEquals(true, results[2].content.contentEquals(ByteArray(256) { it.toByte() }))
-        }
-    }
 
-    fun testByteArraySelect() {
-        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            val file = FileData(
+            // Test 2: SELECT with WHERE clause
+            val selectFile = FileData(
                 id = null,
                 fileName = "select_test.bin",
                 content = byteArrayOf(0xDE.toByte(), 0xAD.toByte(), 0xBE.toByte(), 0xEF.toByte()),
                 metadata = "SELECT test"
             )
-
             database {
                 FileDataTable { table ->
-                    table INSERT file
+                    table INSERT selectFile
                 }
             }
-
-            lateinit var selectStatement: SelectStatement<FileData>
             database {
                 FileDataTable { table ->
                     selectStatement = table SELECT WHERE (fileName EQ "select_test.bin")
                 }
             }
+            assertEquals(1, selectStatement.getResults().size)
+            assertEquals("select_test.bin", selectStatement.getResults().first().fileName)
+            assertEquals(true, selectStatement.getResults().first().content.contentEquals(byteArrayOf(0xDE.toByte(), 0xAD.toByte(), 0xBE.toByte(), 0xEF.toByte())))
 
-            val results = selectStatement.getResults()
-            assertEquals(1, results.size)
-            assertEquals("select_test.bin", results.first().fileName)
-            assertEquals(true, results.first().content.contentEquals(byteArrayOf(0xDE.toByte(), 0xAD.toByte(), 0xBE.toByte(), 0xEF.toByte())))
-        }
-    }
-
-    fun testByteArrayUpdate() {
-        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            // Test 3: UPDATE
             val originalFile = FileData(
                 id = null,
                 fileName = "update_test.bin",
                 content = byteArrayOf(0x00, 0x01, 0x02),
                 metadata = "Original"
             )
-
             database {
                 FileDataTable { table ->
                     table INSERT originalFile
                 }
             }
-
             val newContent = byteArrayOf(0xFF.toByte(), 0xFE.toByte(), 0xFD.toByte())
-            lateinit var selectStatement: SelectStatement<FileData>
             database {
                 FileDataTable { table ->
                     table UPDATE SET {
@@ -774,100 +748,177 @@ class CommonBasicTest(private val path: DatabasePath) {
                     selectStatement = table SELECT WHERE (fileName EQ "update_test.bin")
                 }
             }
-
             val updatedFile = selectStatement.getResults().first()
             assertEquals("update_test.bin", updatedFile.fileName)
             assertEquals(true, updatedFile.content.contentEquals(newContent))
             assertEquals("Updated", updatedFile.metadata)
-        }
-    }
 
-    fun testByteArrayDelete() {
-        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            val file1 = FileData(
+            // Test 4: DELETE
+            val deleteFile1 = FileData(
                 id = null,
                 fileName = "delete_test1.bin",
                 content = byteArrayOf(0x01, 0x02),
                 metadata = "To delete"
             )
-            val file2 = FileData(
+            val deleteFile2 = FileData(
                 id = null,
                 fileName = "delete_test2.bin",
                 content = byteArrayOf(0x03, 0x04),
                 metadata = "To keep"
             )
-
             database {
                 FileDataTable { table ->
-                    table INSERT listOf(file1, file2)
+                    table INSERT listOf(deleteFile1, deleteFile2)
                 }
             }
-
-            lateinit var selectStatement: SelectStatement<FileData>
             database {
                 FileDataTable { table ->
                     table DELETE WHERE (fileName EQ "delete_test1.bin")
-                    selectStatement = table SELECT X
+                    selectStatement = table SELECT WHERE (fileName LIKE "delete_test%")
                 }
             }
+            assertEquals(1, selectStatement.getResults().size)
+            assertEquals("delete_test2.bin", selectStatement.getResults().first().fileName)
 
-            val results = selectStatement.getResults()
-            assertEquals(1, results.size)
-            assertEquals("delete_test2.bin", results.first().fileName)
-        }
-    }
-
-    fun testByteArrayMultipleOperations() {
-        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            // Test multiple INSERT, UPDATE, SELECT operations
-            val file1 = FileData(
+            // Test 5: Multiple operations (INSERT, UPDATE, SELECT)
+            val multiFile1 = FileData(
                 id = null,
                 fileName = "multi1.bin",
                 content = byteArrayOf(0xAA.toByte(), 0xBB.toByte()),
                 metadata = "First"
             )
-            val file2 = FileData(
+            val multiFile2 = FileData(
                 id = null,
                 fileName = "multi2.bin",
                 content = byteArrayOf(0xCC.toByte(), 0xDD.toByte()),
                 metadata = "Second"
             )
-
-            // Insert
             database {
                 FileDataTable { table ->
-                    table INSERT listOf(file1, file2)
+                    table INSERT listOf(multiFile1, multiFile2)
                 }
             }
-
-            // Update first file
-            val newContent = byteArrayOf(0x11, 0x22, 0x33)
+            val multiNewContent = byteArrayOf(0x11, 0x22, 0x33)
             database {
                 FileDataTable { table ->
                     table UPDATE SET {
-                        content = newContent
+                        content = multiNewContent
                     } WHERE (fileName EQ "multi1.bin")
-                }
-            }
-
-            // Select and verify
-            lateinit var selectStatement: SelectStatement<FileData>
-            database {
-                FileDataTable { table ->
                     selectStatement = table SELECT WHERE (fileName EQ "multi1.bin")
                 }
             }
+            val multiUpdatedFile = selectStatement.getResults().first()
+            assertEquals(true, multiUpdatedFile.content.contentEquals(multiNewContent))
+            assertEquals("First", multiUpdatedFile.metadata)
 
-            val updatedFile = selectStatement.getResults().first()
-            assertEquals(true, updatedFile.content.contentEquals(newContent))
-            assertEquals("First", updatedFile.metadata)
+            // Test 6: Blob comparison operators (LT, LTE, GT, GTE)
+            // Clear the table first to avoid data from previous tests
+            database {
+                FileDataTable { table ->
+                    table DELETE X
+                }
+            }
+
+            val compareFile0 = FileData(id = null, fileName = "compare0.bin", content = byteArrayOf(0x01, 0x02), metadata = "File 0")
+            val compareFile1 = FileData(id = null, fileName = "compare1.bin", content = byteArrayOf(0x03, 0x04), metadata = "File 1")
+            val compareFile2 = FileData(id = null, fileName = "compare2.bin", content = byteArrayOf(0x05, 0x06), metadata = "File 2")
+            val compareFile3 = FileData(id = null, fileName = "compare3.bin", content = byteArrayOf(0x07, 0x08), metadata = "File 3")
+
+            var statementLT: SelectStatement<FileData>? = null
+            var statementLTE: SelectStatement<FileData>? = null
+            var statementGT: SelectStatement<FileData>? = null
+            var statementGTE: SelectStatement<FileData>? = null
+
+            database {
+                FileDataTable { table ->
+                    table INSERT listOf(compareFile0, compareFile1, compareFile2, compareFile3)
+                    statementLT = table SELECT WHERE (content LT byteArrayOf(0x03, 0x04))
+                    statementLTE = table SELECT WHERE (content LTE byteArrayOf(0x03, 0x04))
+                    statementGT = table SELECT WHERE (content GT byteArrayOf(0x05, 0x06))
+                    statementGTE = table SELECT WHERE (content GTE byteArrayOf(0x05, 0x06))
+                }
+            }
+
+            val resultsLT = statementLT!!.getResults()
+            assertEquals(1, resultsLT.size)
+            assertEquals("compare0.bin", resultsLT[0].fileName)
+
+            val resultsLTE = statementLTE!!.getResults()
+            assertEquals(2, resultsLTE.size)
+            assertEquals(true, resultsLTE.any { it.fileName == "compare0.bin" })
+            assertEquals(true, resultsLTE.any { it.fileName == "compare1.bin" })
+
+            val resultsGT = statementGT!!.getResults()
+            assertEquals(1, resultsGT.size)
+            assertEquals("compare3.bin", resultsGT[0].fileName)
+
+            val resultsGTE = statementGTE!!.getResults()
+            assertEquals(2, resultsGTE.size)
+            assertEquals(true, resultsGTE.any { it.fileName == "compare2.bin" })
+            assertEquals(true, resultsGTE.any { it.fileName == "compare3.bin" })
+
+            // Test 7: Blob IN operator
+            // Clear the table first
+            database {
+                FileDataTable { table ->
+                    table DELETE X
+                }
+            }
+
+            val inFile0 = FileData(id = null, fileName = "in0.bin", content = byteArrayOf(0x01, 0x02), metadata = "In 0")
+            val inFile1 = FileData(id = null, fileName = "in1.bin", content = byteArrayOf(0x03, 0x04), metadata = "In 1")
+            val inFile2 = FileData(id = null, fileName = "in2.bin", content = byteArrayOf(0x05, 0x06), metadata = "In 2")
+            val inFile3 = FileData(id = null, fileName = "in3.bin", content = byteArrayOf(0x07, 0x08), metadata = "In 3")
+
+            var statementIN: SelectStatement<FileData>? = null
+            database {
+                FileDataTable { table ->
+                    table INSERT listOf(inFile0, inFile1, inFile2, inFile3)
+                    statementIN = table SELECT WHERE (content IN listOf(
+                        byteArrayOf(0x01, 0x02),
+                        byteArrayOf(0x05, 0x06),
+                        byteArrayOf(0x09, 0x0A)
+                    ))
+                }
+            }
+
+            val resultsIN = statementIN!!.getResults()
+            assertEquals(2, resultsIN.size)
+            assertEquals(true, resultsIN.any { it.fileName == "in0.bin" })
+            assertEquals(true, resultsIN.any { it.fileName == "in2.bin" })
+
+            // Test 8: Blob BETWEEN operator
+            // Clear the table first
+            database {
+                FileDataTable { table ->
+                    table DELETE X
+                }
+            }
+
+            val betweenFile0 = FileData(id = null, fileName = "between0.bin", content = byteArrayOf(0x01, 0x02), metadata = "Between 0")
+            val betweenFile1 = FileData(id = null, fileName = "between1.bin", content = byteArrayOf(0x03, 0x04), metadata = "Between 1")
+            val betweenFile2 = FileData(id = null, fileName = "between2.bin", content = byteArrayOf(0x05, 0x06), metadata = "Between 2")
+            val betweenFile3 = FileData(id = null, fileName = "between3.bin", content = byteArrayOf(0x07, 0x08), metadata = "Between 3")
+
+            var statementBETWEEN: SelectStatement<FileData>? = null
+            database {
+                FileDataTable { table ->
+                    table INSERT listOf(betweenFile0, betweenFile1, betweenFile2, betweenFile3)
+                    statementBETWEEN = table SELECT WHERE (content BETWEEN (byteArrayOf(0x03, 0x04) to byteArrayOf(0x05, 0x06)))
+                }
+            }
+
+            val resultsBETWEEN = statementBETWEEN!!.getResults()
+            assertEquals(2, resultsBETWEEN.size)
+            assertEquals(true, resultsBETWEEN.any { it.fileName == "between1.bin" })
+            assertEquals(true, resultsBETWEEN.any { it.fileName == "between2.bin" })
         }
     }
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
-    fun testDropTable() {
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testDropAndCreateTable() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            // Insert data into PersonWithIdTable
+            // Test 1: DROP using global function
             val person1 = PersonWithId(id = null, name = "Alice", age = 25)
             val person2 = PersonWithId(id = null, name = "Bob", age = 30)
 
@@ -877,36 +928,27 @@ class CommonBasicTest(private val path: DatabasePath) {
                 }
             }
 
-            // Verify data exists
-            lateinit var selectStatement1: SelectStatement<PersonWithId>
+            lateinit var personStatement1: SelectStatement<PersonWithId>
             database {
-                selectStatement1 = PersonWithIdTable SELECT X
+                personStatement1 = PersonWithIdTable SELECT X
             }
-            assertEquals(2, selectStatement1.getResults().size)
+            assertEquals(2, personStatement1.getResults().size)
 
-            // Drop the table
             database {
                 DROP(PersonWithIdTable)
             }
 
-            // Recreate the table
             database {
                 CREATE(PersonWithIdTable)
             }
 
-            // Verify table is empty after recreation
-            lateinit var selectStatement2: SelectStatement<PersonWithId>
+            lateinit var personStatement2: SelectStatement<PersonWithId>
             database {
-                selectStatement2 = PersonWithIdTable SELECT X
+                personStatement2 = PersonWithIdTable SELECT X
             }
-            assertEquals(0, selectStatement2.getResults().size)
-        }
-    }
+            assertEquals(0, personStatement2.getResults().size)
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
-    fun testDropTableExtensionFunction() {
-        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            // Insert data into ProductTable
+            // Test 2: DROP using extension function
             val product = Product(sku = "SKU-001", name = "Widget", price = 19.99)
 
             database {
@@ -915,237 +957,27 @@ class CommonBasicTest(private val path: DatabasePath) {
                 }
             }
 
-            // Verify data exists
-            lateinit var selectStatement1: SelectStatement<Product>
+            lateinit var productStatement1: SelectStatement<Product>
             database {
-                selectStatement1 = ProductTable SELECT X
+                productStatement1 = ProductTable SELECT X
             }
-            assertEquals(1, selectStatement1.getResults().size)
+            assertEquals(1, productStatement1.getResults().size)
 
-            // Drop the table using extension function
             database {
                 ProductTable.DROP()
             }
 
-            // Recreate the table
             database {
                 CREATE(ProductTable)
             }
 
-            // Verify table is empty after recreation
-            lateinit var selectStatement2: SelectStatement<Product>
+            lateinit var productStatement2: SelectStatement<Product>
             database {
-                selectStatement2 = ProductTable SELECT X
+                productStatement2 = ProductTable SELECT X
             }
-            assertEquals(0, selectStatement2.getResults().size)
-        }
-    }
+            assertEquals(0, productStatement2.getResults().size)
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
-    fun testAlertAddColumn() {
-        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            // Insert initial data
-            val person = PersonWithId(id = null, name = "Charlie", age = 35)
-
-            database {
-                PersonWithIdTable { table ->
-                    table INSERT person
-                }
-            }
-
-            // Note: ALERT operations require correct SQL syntax ("ALTER TABLE" not "ALERT TABLE")
-            // This test verifies the DSL compiles and the statement can be created
-            // In production, the SQL string would need to be corrected to "ALTER TABLE"
-            try {
-                database {
-                    PersonWithIdTable ALERT_ADD_COLUMN PersonWithIdTable.name
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation due to "ALERT TABLE" typo
-                // The test passes if the DSL syntax is valid
-                e.printStackTrace()
-            }
-
-            // Verify original data still exists
-            lateinit var selectStatement: SelectStatement<PersonWithId>
-            database {
-                selectStatement = PersonWithIdTable SELECT X
-            }
-            assertEquals(1, selectStatement.getResults().size)
-            assertEquals("Charlie", selectStatement.getResults().first().name)
-        }
-    }
-
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
-    fun testAlertRenameTableWithTableObject() {
-        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            // Insert data into StudentWithAutoincrementTable
-            val student1 = StudentWithAutoincrement(id = null, studentName = "Diana", grade = 90)
-            val student2 = StudentWithAutoincrement(id = null, studentName = "Ethan", grade = 85)
-
-            database {
-                StudentWithAutoincrementTable { table ->
-                    table INSERT listOf(student1, student2)
-                }
-            }
-
-            // Verify data exists
-            lateinit var selectStatement1: SelectStatement<StudentWithAutoincrement>
-            database {
-                selectStatement1 = StudentWithAutoincrementTable SELECT X
-            }
-            assertEquals(2, selectStatement1.getResults().size)
-
-            // Test DSL syntax for ALERT_RENAME_TABLE_TO
-            // Note: This will fail with current "ALERT TABLE" typo - should be "ALTER TABLE"
-            try {
-                database {
-                    StudentWithAutoincrementTable ALERT_RENAME_TABLE_TO StudentWithAutoincrementTable
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation
-                e.printStackTrace()
-            }
-
-            // Verify data still accessible
-            lateinit var selectStatement2: SelectStatement<StudentWithAutoincrement>
-            database {
-                selectStatement2 = StudentWithAutoincrementTable SELECT X
-            }
-            assertEquals(2, selectStatement2.getResults().size)
-        }
-    }
-
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
-    fun testAlertRenameTableWithString() {
-        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            // Insert data into EnrollmentTable
-            val enrollment = Enrollment(studentId = 1, courseId = 101, semester = "Spring 2025")
-
-            database {
-                EnrollmentTable { table ->
-                    table INSERT enrollment
-                }
-            }
-
-            // Test DSL syntax for String-based ALERT_RENAME_TABLE_TO
-            try {
-                database {
-                    "enrollment" ALERT_RENAME_TABLE_TO EnrollmentTable
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation
-                e.printStackTrace()
-            }
-
-            // Verify data still exists
-            lateinit var selectStatement: SelectStatement<Enrollment>
-            database {
-                selectStatement = EnrollmentTable SELECT X
-            }
-            assertEquals(1, selectStatement.getResults().size)
-            assertEquals("Spring 2025", selectStatement.getResults().first().semester)
-        }
-    }
-
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
-    fun testRenameColumnWithClauseElement() {
-        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            // Insert data
-            val book = Book(name = "Test Book", author = "Test Author", pages = 200, price = 15.99)
-
-            database {
-                BookTable { table ->
-                    table INSERT book
-                }
-            }
-
-            // Test DSL syntax for RENAME_COLUMN with ClauseElement
-            try {
-                database {
-                    BookTable.RENAME_COLUMN(BookTable.name, BookTable.author)
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation
-                e.printStackTrace()
-            }
-
-            // Verify data still exists
-            lateinit var selectStatement: SelectStatement<Book>
-            database {
-                selectStatement = BookTable SELECT X
-            }
-            assertEquals(1, selectStatement.getResults().size)
-        }
-    }
-
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
-    fun testRenameColumnWithString() {
-        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            // Insert data
-            val category = Category(name = "Fiction", code = 100)
-
-            database {
-                CategoryTable { table ->
-                    table INSERT category
-                }
-            }
-
-            // Test DSL syntax for RENAME_COLUMN with String
-            try {
-                database {
-                    CategoryTable.RENAME_COLUMN("name", CategoryTable.code)
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation
-                e.printStackTrace()
-            }
-
-            // Verify data still exists
-            lateinit var selectStatement: SelectStatement<Category>
-            database {
-                selectStatement = CategoryTable SELECT X
-            }
-            assertEquals(1, selectStatement.getResults().size)
-            assertEquals(100, selectStatement.getResults().first().code)
-        }
-    }
-
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
-    fun testDropColumn() {
-        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            // Insert data
-            val person = PersonWithId(id = null, name = "Frank", age = 40)
-
-            database {
-                PersonWithIdTable { table ->
-                    table INSERT person
-                }
-            }
-
-            // Test DSL syntax for DROP_COLUMN
-            try {
-                database {
-                    PersonWithIdTable DROP_COLUMN PersonWithIdTable.age
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation or SQLite version
-                e.printStackTrace()
-            }
-
-            // Verify data still exists
-            lateinit var selectStatement: SelectStatement<PersonWithId>
-            database {
-                selectStatement = PersonWithIdTable SELECT X
-            }
-            assertEquals(1, selectStatement.getResults().size)
-        }
-    }
-
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
-    fun testDropAndRecreateTable() {
-        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            // Insert data into FileDataTable
+            // Test 3: DROP and recreate FileDataTable with binary data
             val fileData = FileData(
                 id = null,
                 fileName = "test.txt",
@@ -1159,43 +991,195 @@ class CommonBasicTest(private val path: DatabasePath) {
                 }
             }
 
-            // Verify data exists
-            lateinit var selectStatement1: SelectStatement<FileData>
+            lateinit var fileStatement1: SelectStatement<FileData>
             database {
-                selectStatement1 = FileDataTable SELECT X
+                fileStatement1 = FileDataTable SELECT X
             }
-            assertEquals(1, selectStatement1.getResults().size)
-            assertEquals("test.txt", selectStatement1.getResults().first().fileName)
+            assertEquals(1, fileStatement1.getResults().size)
+            assertEquals("test.txt", fileStatement1.getResults().first().fileName)
 
-            // Drop and recreate the table
             database {
                 FileDataTable.DROP()
                 CREATE(FileDataTable)
             }
 
-            // Verify table is empty after recreation
-            lateinit var selectStatement2: SelectStatement<FileData>
+            lateinit var fileStatement2: SelectStatement<FileData>
             database {
-                selectStatement2 = FileDataTable SELECT X
+                fileStatement2 = FileDataTable SELECT X
             }
-            assertEquals(0, selectStatement2.getResults().size)
+            assertEquals(0, fileStatement2.getResults().size)
         }
     }
 
-    @OptIn(com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI::class)
-    fun testAlertOperationsInTransaction() {
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testSchemaModification() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            // Insert initial data
-            val person1 = PersonWithId(id = null, name = "Grace", age = 28)
-            val person2 = PersonWithId(id = null, name = "Henry", age = 32)
+            // Test 1: ALERT_ADD_COLUMN
+            // Note: ALERT operations have a typo in the DSL - should be "ALTER TABLE" not "ALERT TABLE"
+            // This test verifies the DSL compiles and the statement can be created
+            val person = PersonWithId(id = null, name = "Charlie", age = 35)
 
             database {
                 PersonWithIdTable { table ->
-                    table INSERT listOf(person1, person2)
+                    table INSERT person
                 }
             }
 
-            // Test ALERT operations within a transaction
+            try {
+                database {
+                    PersonWithIdTable ALERT_ADD_COLUMN PersonWithIdTable.name
+                }
+            } catch (e: Exception) {
+                // Expected to fail with current implementation due to "ALERT TABLE" typo
+                e.printStackTrace()
+            }
+
+            lateinit var personStatement: SelectStatement<PersonWithId>
+            database {
+                personStatement = PersonWithIdTable SELECT X
+            }
+            assertEquals(1, personStatement.getResults().size)
+            assertEquals("Charlie", personStatement.getResults().first().name)
+
+            // Test 2: ALERT_RENAME_TABLE_TO with TableObject
+            val student1 = StudentWithAutoincrement(id = null, studentName = "Diana", grade = 90)
+            val student2 = StudentWithAutoincrement(id = null, studentName = "Ethan", grade = 85)
+
+            database {
+                StudentWithAutoincrementTable { table ->
+                    table INSERT listOf(student1, student2)
+                }
+            }
+
+            lateinit var studentStatement1: SelectStatement<StudentWithAutoincrement>
+            database {
+                studentStatement1 = StudentWithAutoincrementTable SELECT X
+            }
+            assertEquals(2, studentStatement1.getResults().size)
+
+            try {
+                database {
+                    StudentWithAutoincrementTable ALERT_RENAME_TABLE_TO StudentWithAutoincrementTable
+                }
+            } catch (e: Exception) {
+                // Expected to fail with current implementation
+                e.printStackTrace()
+            }
+
+            lateinit var studentStatement2: SelectStatement<StudentWithAutoincrement>
+            database {
+                studentStatement2 = StudentWithAutoincrementTable SELECT X
+            }
+            assertEquals(2, studentStatement2.getResults().size)
+
+            // Test 3: ALERT_RENAME_TABLE_TO with String
+            val enrollment = Enrollment(studentId = 1, courseId = 101, semester = "Spring 2025")
+
+            database {
+                EnrollmentTable { table ->
+                    table INSERT enrollment
+                }
+            }
+
+            try {
+                database {
+                    "enrollment" ALERT_RENAME_TABLE_TO EnrollmentTable
+                }
+            } catch (e: Exception) {
+                // Expected to fail with current implementation
+                e.printStackTrace()
+            }
+
+            lateinit var enrollmentStatement: SelectStatement<Enrollment>
+            database {
+                enrollmentStatement = EnrollmentTable SELECT X
+            }
+            assertEquals(1, enrollmentStatement.getResults().size)
+            assertEquals("Spring 2025", enrollmentStatement.getResults().first().semester)
+
+            // Test 4: RENAME_COLUMN with ClauseElement
+            val book = Book(name = "Test Book", author = "Test Author", pages = 200, price = 15.99)
+
+            database {
+                BookTable { table ->
+                    table INSERT book
+                }
+            }
+
+            try {
+                database {
+                    BookTable.RENAME_COLUMN(BookTable.name, BookTable.author)
+                }
+            } catch (e: Exception) {
+                // Expected to fail with current implementation
+                e.printStackTrace()
+            }
+
+            lateinit var bookStatement: SelectStatement<Book>
+            database {
+                bookStatement = BookTable SELECT X
+            }
+            assertEquals(1, bookStatement.getResults().size)
+
+            // Test 5: RENAME_COLUMN with String
+            val category = Category(name = "Fiction", code = 100)
+
+            database {
+                CategoryTable { table ->
+                    table INSERT category
+                }
+            }
+
+            try {
+                database {
+                    CategoryTable.RENAME_COLUMN("name", CategoryTable.code)
+                }
+            } catch (e: Exception) {
+                // Expected to fail with current implementation
+                e.printStackTrace()
+            }
+
+            lateinit var categoryStatement: SelectStatement<Category>
+            database {
+                categoryStatement = CategoryTable SELECT X
+            }
+            assertEquals(1, categoryStatement.getResults().size)
+            assertEquals(100, categoryStatement.getResults().first().code)
+
+            // Test 6: DROP_COLUMN
+            val dropPerson = PersonWithId(id = null, name = "Frank", age = 40)
+
+            database {
+                PersonWithIdTable { table ->
+                    table INSERT dropPerson
+                }
+            }
+
+            try {
+                database {
+                    PersonWithIdTable DROP_COLUMN PersonWithIdTable.age
+                }
+            } catch (e: Exception) {
+                // Expected to fail with current implementation or SQLite version
+                e.printStackTrace()
+            }
+
+            lateinit var dropStatement: SelectStatement<PersonWithId>
+            database {
+                dropStatement = PersonWithIdTable SELECT WHERE (PersonWithIdTable.name EQ "Frank")
+            }
+            assertEquals(1, dropStatement.getResults().size)
+
+            // Test 7: ALERT operations within a transaction
+            val txPerson1 = PersonWithId(id = null, name = "Grace", age = 28)
+            val txPerson2 = PersonWithId(id = null, name = "Henry", age = 32)
+
+            database {
+                PersonWithIdTable { table ->
+                    table INSERT listOf(txPerson1, txPerson2)
+                }
+            }
+
             try {
                 database {
                     transaction {
@@ -1208,14 +1192,759 @@ class CommonBasicTest(private val path: DatabasePath) {
                 e.printStackTrace()
             }
 
-            // Verify data integrity
-            lateinit var selectStatement: SelectStatement<PersonWithId>
+            lateinit var txStatement: SelectStatement<PersonWithId>
             database {
-                selectStatement = PersonWithIdTable SELECT X
+                txStatement = PersonWithIdTable SELECT WHERE (PersonWithIdTable.name EQ "Grace" OR (PersonWithIdTable.name EQ "Henry"))
+            }
+            assertEquals(2, txStatement.getResults().size)
+            assertEquals(true, txStatement.getResults().any { it.name == "Grace" })
+            assertEquals(true, txStatement.getResults().any { it.name == "Henry" })
+        }
+    }
+
+    fun testStringOperators() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        // Test 1: Comparison operators (LT, LTE, GT, GTE)
+        val book0 = Book(name = "Alice in Wonderland", author = "Lewis Carroll", pages = 200, price = 15.99)
+        val book1 = Book(name = "Bob's Adventures", author = "Bob Smith", pages = 300, price = 20.99)
+        val book2 = Book(name = "Charlie and the Chocolate Factory", author = "Roald Dahl", pages = 250, price = 18.99)
+        val book3 = Book(name = "David Copperfield", author = "Charles Dickens", pages = 400, price = 25.99)
+
+        var statementLT: SelectStatement<Book>? = null
+        var statementLTE: SelectStatement<Book>? = null
+        var statementGT: SelectStatement<Book>? = null
+        var statementGTE: SelectStatement<Book>? = null
+
+        database {
+            BookTable { table ->
+                table INSERT listOf(book0, book1, book2, book3)
+                statementLT = table SELECT WHERE (name LT "Bob's Adventures")
+                statementLTE = table SELECT WHERE (name LTE "Bob's Adventures")
+                statementGT = table SELECT WHERE (name GT "Charlie and the Chocolate Factory")
+                statementGTE = table SELECT WHERE (name GTE "Charlie and the Chocolate Factory")
+            }
+        }
+
+        val resultsLT = statementLT!!.getResults()
+        assertEquals(1, resultsLT.size)
+        assertEquals(book0, resultsLT[0])
+
+        val resultsLTE = statementLTE!!.getResults()
+        assertEquals(2, resultsLTE.size)
+        assertEquals(true, resultsLTE.any { it == book0 })
+        assertEquals(true, resultsLTE.any { it == book1 })
+
+        val resultsGT = statementGT!!.getResults()
+        assertEquals(1, resultsGT.size)
+        assertEquals(book3, resultsGT[0])
+
+        val resultsGTE = statementGTE!!.getResults()
+        assertEquals(2, resultsGTE.size)
+        assertEquals(true, resultsGTE.any { it == book2 })
+        assertEquals(true, resultsGTE.any { it == book3 })
+
+        // Test 2: IN operator
+        // Clear the table first
+        database {
+            BookTable { table ->
+                table DELETE X
+            }
+        }
+
+        val inBook0 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
+        val inBook1 = Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72)
+        val inBook2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
+        val inBook3 = Book(name = "Modern Java Recipes", author ="Ken Kousen", pages = 322, price = 25.78)
+
+        var statementIN: SelectStatement<Book>? = null
+        database {
+            BookTable { table ->
+                table INSERT listOf(inBook0, inBook1, inBook2, inBook3)
+                statementIN = table SELECT WHERE (author IN listOf("Dan Brown", "Unknown Author"))
+            }
+        }
+
+        val resultsIN = statementIN!!.getResults()
+        assertEquals(2, resultsIN.size)
+        assertEquals(true, resultsIN.any { it == inBook0 })
+        assertEquals(true, resultsIN.any { it == inBook2 })
+
+        // Test 3: BETWEEN operator
+        // Clear the table first
+        database {
+            BookTable { table ->
+                table DELETE X
+            }
+        }
+
+        val betweenBook0 = Book(name = "Alice in Wonderland", author = "Lewis Carroll", pages = 200, price = 15.99)
+        val betweenBook1 = Book(name = "Bob's Adventures", author = "Bob Smith", pages = 300, price = 20.99)
+        val betweenBook2 = Book(name = "Charlie and the Chocolate Factory", author = "Roald Dahl", pages = 250, price = 18.99)
+        val betweenBook3 = Book(name = "David Copperfield", author = "Charles Dickens", pages = 400, price = 25.99)
+
+        var statementBETWEEN: SelectStatement<Book>? = null
+        database {
+            BookTable { table ->
+                table INSERT listOf(betweenBook0, betweenBook1, betweenBook2, betweenBook3)
+                statementBETWEEN = table SELECT WHERE (name BETWEEN ("Bob's Adventures" to "Charlie and the Chocolate Factory"))
+            }
+        }
+
+        val resultsBETWEEN = statementBETWEEN!!.getResults()
+        assertEquals(2, resultsBETWEEN.size)
+        assertEquals(true, resultsBETWEEN.any { it == betweenBook1 })
+        assertEquals(true, resultsBETWEEN.any { it == betweenBook2 })
+
+        // Test 4: Column comparison (EQ, NEQ)
+        // Clear the table first
+        database {
+            BookTable { table ->
+                table DELETE X
+            }
+        }
+
+        val colBook0 = Book(name = "Same Name", author = "Same Name", pages = 200, price = 15.99)
+        val colBook1 = Book(name = "Different", author = "Another", pages = 300, price = 20.99)
+
+        var statementEQ: SelectStatement<Book>? = null
+        var statementNEQ: SelectStatement<Book>? = null
+        database {
+            BookTable { table ->
+                table INSERT listOf(colBook0, colBook1)
+                statementEQ = table SELECT WHERE (name EQ BookTable.author)
+                statementNEQ = table SELECT WHERE (name NEQ BookTable.author)
+            }
+        }
+
+        val resultsEQ = statementEQ!!.getResults()
+        assertEquals(1, resultsEQ.size)
+        assertEquals(colBook0, resultsEQ[0])
+
+        val resultsNEQ = statementNEQ!!.getResults()
+        assertEquals(1, resultsNEQ.size)
+        assertEquals(colBook1, resultsNEQ[0])
+    }
+
+    /**
+     * Comprehensive test for enum type support covering all operations:
+     * INSERT, SELECT, UPDATE, DELETE, equality/comparison operators,
+     * nullable enums, complex conditions, and ORDER BY
+     */
+    fun testEnumOperations() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        // Section 1: Basic INSERT and SELECT
+        val user1 = UserAccount(null, "john_doe", "john@example.com", UserStatus.ACTIVE, Priority.HIGH, "VIP user")
+        val user2 = UserAccount(null, "jane_smith", "jane@example.com", UserStatus.INACTIVE, Priority.LOW, null)
+        database {
+            UserAccountTable { table ->
+                table INSERT listOf(user1, user2)
+            }
+        }
+
+        var selectAll: SelectStatement<UserAccount>? = null
+        database {
+            selectAll = UserAccountTable SELECT X
+        }
+        val allUsers = selectAll!!.getResults()
+        assertEquals(2, allUsers.size)
+        assertEquals(UserStatus.ACTIVE, allUsers[0].status)
+        assertEquals(Priority.HIGH, allUsers[0].priority)
+        assertEquals(UserStatus.INACTIVE, allUsers[1].status)
+        assertEquals(Priority.LOW, allUsers[1].priority)
+
+        // Section 2: Equality operators (EQ, NEQ)
+        val testUsers = listOf(
+            UserAccount(null, "user1", "user1@test.com", UserStatus.ACTIVE, Priority.HIGH, null),
+            UserAccount(null, "user2", "user2@test.com", UserStatus.INACTIVE, Priority.MEDIUM, null),
+            UserAccount(null, "user3", "user3@test.com", UserStatus.ACTIVE, Priority.LOW, null),
+            UserAccount(null, "user4", "user4@test.com", UserStatus.SUSPENDED, Priority.CRITICAL, null),
+        )
+        database {
+            UserAccountTable { table ->
+                table DELETE X
+                table INSERT testUsers
+            }
+        }
+
+        var selectEQ: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectEQ = it SELECT WHERE (it.status EQ UserStatus.ACTIVE)
+            }
+        }
+        val activeUsers = selectEQ!!.getResults()
+        assertEquals(2, activeUsers.size)
+        assertEquals(true, activeUsers.all { it.status == UserStatus.ACTIVE })
+
+        var selectNEQ: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectNEQ = it SELECT WHERE (it.status NEQ UserStatus.ACTIVE)
+            }
+        }
+        val nonActiveUsers = selectNEQ!!.getResults()
+        assertEquals(2, nonActiveUsers.size)
+        assertEquals(false, nonActiveUsers.any { it.status == UserStatus.ACTIVE })
+
+        // Section 3: Comparison operators (LT, LTE, GT, GTE)
+        var selectLT: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectLT = it SELECT WHERE (it.priority LT Priority.HIGH)
+            }
+        }
+        assertEquals(2, selectLT!!.getResults().size)
+
+        var selectGTE: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectGTE = it SELECT WHERE (it.priority GTE Priority.HIGH)
+            }
+        }
+        val highPriorityUsers = selectGTE!!.getResults()
+        assertEquals(2, highPriorityUsers.size)
+        assertEquals(true, highPriorityUsers.all { it.priority == Priority.HIGH || it.priority == Priority.CRITICAL })
+
+        // Section 4: Nullable enum handling
+        val tasks = listOf(
+            Task(null, "High priority task", Priority.HIGH, "Important"),
+            Task(null, "Unassigned task", null, "No priority set"),
+            Task(null, "Low priority task", Priority.LOW, "Can wait"),
+        )
+        database {
+            TaskTable { table ->
+                table INSERT tasks
+            }
+        }
+
+        var selectNull: SelectStatement<Task>? = null
+        database {
+            TaskTable {
+                selectNull = it SELECT WHERE (it.priority EQ null)
+            }
+        }
+        val nullTasks = selectNull!!.getResults()
+        assertEquals(1, nullTasks.size)
+        assertEquals("Unassigned task", nullTasks[0].title)
+
+        var selectNotNull: SelectStatement<Task>? = null
+        database {
+            TaskTable {
+                selectNotNull = it SELECT WHERE (it.priority NEQ null)
+            }
+        }
+        assertEquals(2, selectNotNull!!.getResults().size)
+
+        // Section 5: UPDATE with enum values
+        database {
+            UserAccountTable { table ->
+                table UPDATE SET {
+                    status = UserStatus.BANNED
+                    priority = Priority.CRITICAL
+                } WHERE (table.username EQ "user1")
+            }
+        }
+
+        var selectUpdated: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectUpdated = it SELECT WHERE (it.username EQ "user1")
+            }
+        }
+        val updatedUser = selectUpdated!!.getResults().first()
+        assertEquals(UserStatus.BANNED, updatedUser.status)
+        assertEquals(Priority.CRITICAL, updatedUser.priority)
+
+        // Section 6: Complex conditions (AND/OR)
+        var selectAND: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectAND = it SELECT WHERE (
+                    (it.status EQ UserStatus.SUSPENDED) AND (it.priority EQ Priority.CRITICAL)
+                )
+            }
+        }
+        assertEquals(1, selectAND!!.getResults().size)
+
+        var selectOR: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectOR = it SELECT WHERE (
+                    (it.status EQ UserStatus.BANNED) OR (it.priority LTE Priority.LOW)
+                )
+            }
+        }
+        assertEquals(2, selectOR!!.getResults().size)
+
+        // Section 7: ORDER BY enum columns
+        var selectOrderByASC: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable { table ->
+                selectOrderByASC = table SELECT ORDER_BY (priority to ASC)
+            }
+        }
+        val orderedASC = selectOrderByASC!!.getResults()
+        assertEquals(Priority.LOW, orderedASC[0].priority)
+        assertEquals(Priority.CRITICAL, orderedASC[orderedASC.size - 1].priority)
+
+        var selectOrderByDESC: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable { table ->
+                selectOrderByDESC = table SELECT ORDER_BY (table.status to DESC)
+            }
+        }
+        val orderedDESC = selectOrderByDESC!!.getResults()
+        // After UPDATE in Section 5, user1 is BANNED (highest ordinal 3)
+        assertEquals(UserStatus.BANNED, orderedDESC[0].status)
+        assertEquals(UserStatus.ACTIVE, orderedDESC[orderedDESC.size - 1].status)
+
+        // Section 8: DELETE with enum WHERE clause
+        database {
+            UserAccountTable { table ->
+                table DELETE WHERE (table.status EQ UserStatus.BANNED)
+            }
+        }
+
+        var selectAfterDelete: SelectStatement<UserAccount>? = null
+        database {
+            UserAccountTable {
+                selectAfterDelete = it SELECT X
+            }
+        }
+        val remainingUsers = selectAfterDelete!!.getResults()
+        assertEquals(false, remainingUsers.any { it.status == UserStatus.BANNED })
+    }
+
+    /**
+     * Test for compile-time CREATE TABLE generation
+     * Verifies that createSQL property contains the correct SQL statement
+     */
+    fun testCreateSQLGeneration() {
+        // Test 1: Simple table with primary key and basic types
+        val personSQL = PersonWithIdTable.createSQL
+        assertEquals(true, personSQL.contains("CREATE TABLE person_with_id"))
+        assertEquals(true, personSQL.contains("id INTEGER PRIMARY KEY"))
+        assertEquals(true, personSQL.contains("name TEXT NOT NULL"))
+        assertEquals(true, personSQL.contains("age INT NOT NULL"))
+
+        // Test 2: Table with autoincrement
+        val studentSQL = StudentWithAutoincrementTable.createSQL
+        assertEquals(true, studentSQL.contains("CREATE TABLE student_with_autoincrement"))
+        assertEquals(true, studentSQL.contains("id INTEGER PRIMARY KEY AUTOINCREMENT"))
+
+        // Test 3: Table with composite primary key
+        val enrollmentSQL = EnrollmentTable.createSQL
+        assertEquals(true, enrollmentSQL.contains("CREATE TABLE enrollment"))
+        assertEquals(true, enrollmentSQL.contains("PRIMARY KEY(studentId,courseId)"))
+
+        // Test 4: Table with enum fields (stored as INT)
+        val userSQL = UserAccountTable.createSQL
+        assertEquals(true, userSQL.contains("CREATE TABLE user_account"))
+        assertEquals(true, userSQL.contains("status INT NOT NULL"))
+        assertEquals(true, userSQL.contains("priority INT NOT NULL"))
+
+        // Test 5: Table with ByteArray (BLOB type)
+        val fileSQL = FileDataTable.createSQL
+        assertEquals(true, fileSQL.contains("CREATE TABLE file_data"))
+        assertEquals(true, fileSQL.contains("content BLOB NOT NULL"))
+    }
+
+    /**
+     * Test for @Unique annotation
+     * Verifies that UNIQUE constraints prevent duplicate values
+     */
+    fun testUniqueConstraint() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(UniqueEmailTestTable)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            // Verify CREATE SQL contains UNIQUE keyword
+            val createSQL = UniqueEmailTestTable.createSQL
+            assertEquals(true, createSQL.contains("email TEXT NOT NULL UNIQUE"))
+
+            // Test 1: Insert records with unique emails - should succeed
+            val user1 = UniqueEmailTest(null, "alice@example.com", "Alice")
+            val user2 = UniqueEmailTest(null, "bob@example.com", "Bob")
+
+            database {
+                UniqueEmailTestTable { table ->
+                    table INSERT listOf(user1, user2)
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<UniqueEmailTest>
+            database {
+                selectStatement = UniqueEmailTestTable SELECT X
             }
             assertEquals(2, selectStatement.getResults().size)
-            assertEquals(true, selectStatement.getResults().any { it.name == "Grace" })
-            assertEquals(true, selectStatement.getResults().any { it.name == "Henry" })
+
+            // Test 2: Try to insert duplicate email - should fail
+            val user3 = UniqueEmailTest(null, "alice@example.com", "Alice Clone")
+            var duplicateInsertFailed = false
+            try {
+                database {
+                    UniqueEmailTestTable { table ->
+                        table INSERT user3
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateInsertFailed = true
+            }
+            assertEquals(true, duplicateInsertFailed, "Duplicate email should violate UNIQUE constraint")
+
+            // Verify only 2 records exist
+            database {
+                selectStatement = UniqueEmailTestTable SELECT X
+            }
+            assertEquals(2, selectStatement.getResults().size)
+        }
+    }
+
+    /**
+     * Test for @CollateNoCase annotation
+     * Verifies case-insensitive text comparison
+     */
+    fun testCollateNoCaseConstraint() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(CollateNoCaseTestTable)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            // Verify CREATE SQL contains COLLATE NOCASE
+            val createSQL = CollateNoCaseTestTable.createSQL
+            assertEquals(true, createSQL.contains("username TEXT NOT NULL COLLATE NOCASE"))
+            assertEquals(true, createSQL.contains("email TEXT NOT NULL COLLATE NOCASE UNIQUE"))
+
+            // Test 1: Insert users with different case usernames
+            val user1 = CollateNoCaseTest(null, "JohnDoe", "john@example.com", "First user")
+            val user2 = CollateNoCaseTest(null, "janedoe", "jane@example.com", "Second user")
+            database {
+                CollateNoCaseTestTable { table ->
+                    table INSERT listOf(user1, user2)
+                }
+            }
+
+            // Test 2: Case-insensitive search
+            var selectStatement: SelectStatement<CollateNoCaseTest>? = null
+            database {
+                CollateNoCaseTestTable { table ->
+                    selectStatement = table SELECT WHERE (username EQ "johndoe")  // lowercase query
+                }
+            }
+            val results1 = selectStatement!!.getResults()
+            assertEquals(1, results1.size)
+            assertEquals("JohnDoe", results1[0].username)  // Original case preserved
+
+            // Test 3: Another case variant
+            database {
+                CollateNoCaseTestTable { table ->
+                    selectStatement = table SELECT WHERE (username EQ "JOHNDOE")  // uppercase query
+                }
+            }
+            val results2 = selectStatement!!.getResults()
+            assertEquals(1, results2.size)
+            assertEquals("JohnDoe", results2[0].username)
+
+            // Test 4: UNIQUE + NOCASE - duplicate email in different case should fail
+            val user3 = CollateNoCaseTest(null, "alice", "JOHN@EXAMPLE.COM", "Duplicate email")
+            var duplicateFailed = false
+            try {
+                database {
+                    CollateNoCaseTestTable { table ->
+                        table INSERT user3
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateFailed = true
+            }
+            assertEquals(true, duplicateFailed, "Duplicate email (different case) should violate UNIQUE constraint with NOCASE")
+        }
+    }
+
+    /**
+     * Test for @CompositeUnique annotation
+     * Verifies multi-column uniqueness constraints with multiple groups
+     */
+    fun testCompositeUniqueConstraint() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(CompositeUniqueTestTable)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            // Verify CREATE SQL contains composite UNIQUE constraints
+            val createSQL = CompositeUniqueTestTable.createSQL
+            assertEquals(true, createSQL.contains("UNIQUE(groupA,groupB)"))
+            assertEquals(true, createSQL.contains("UNIQUE(groupC,groupD)"))
+
+            // Test 1: Insert records with unique combinations
+            val record1 = CompositeUniqueTest(null, "A1", 1, "C1", "D1", "First record")
+            val record2 = CompositeUniqueTest(null, "A1", 2, "C1", "D2", "Different groupB")
+            val record3 = CompositeUniqueTest(null, "A2", 1, "C2", "D1", "Different groupA")
+            database {
+                CompositeUniqueTestTable { table ->
+                    table INSERT listOf(record1, record2, record3)
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<CompositeUniqueTest>
+            database {
+                selectStatement = CompositeUniqueTestTable SELECT X
+            }
+            assertEquals(3, selectStatement.getResults().size)
+
+            // Test 2: Try to insert duplicate (groupA, groupB) - should fail
+            val record4 = CompositeUniqueTest(null, "A1", 1, "C3", "D3", "Duplicate group 0")
+            var duplicateGroup0Failed = false
+            try {
+                database {
+                    CompositeUniqueTestTable { table ->
+                        table INSERT record4
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateGroup0Failed = true
+            }
+            assertEquals(true, duplicateGroup0Failed, "Duplicate (groupA, groupB) should violate group 0 UNIQUE constraint")
+
+            // Test 3: Try to insert duplicate (groupC, groupD) - should fail
+            val record5 = CompositeUniqueTest(null, "A3", 3, "C1", "D1", "Duplicate group 1")
+            var duplicateGroup1Failed = false
+            try {
+                database {
+                    CompositeUniqueTestTable { table ->
+                        table INSERT record5
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateGroup1Failed = true
+            }
+            assertEquals(true, duplicateGroup1Failed, "Duplicate (groupC, groupD) should violate group 1 UNIQUE constraint")
+
+            // Verify still only 3 records
+            database {
+                selectStatement = CompositeUniqueTestTable SELECT X
+            }
+            assertEquals(3, selectStatement.getResults().size)
+        }
+    }
+
+    /**
+     * Test for multiple @CompositeUnique groups on same property
+     * Verifies a property can participate in multiple composite constraints
+     */
+    fun testMultiGroupCompositeUnique() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(MultiGroupUniqueTestTable)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            // Verify CREATE SQL contains both composite UNIQUE constraints
+            val createSQL = MultiGroupUniqueTestTable.createSQL
+            assertEquals(true, createSQL.contains("UNIQUE(userId,eventType)"))
+            assertEquals(true, createSQL.contains("UNIQUE(userId,timestamp)"))
+
+            // Test 1: Insert valid records
+            val event1 = MultiGroupUniqueTest(null, 1, "login", 1000L, "User 1 login")
+            val event2 = MultiGroupUniqueTest(null, 1, "logout", 2000L, "User 1 logout")
+            val event3 = MultiGroupUniqueTest(null, 2, "login", 1000L, "User 2 login")
+            database {
+                MultiGroupUniqueTestTable { table ->
+                    table INSERT listOf(event1, event2, event3)
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<MultiGroupUniqueTest>
+            database {
+                selectStatement = MultiGroupUniqueTestTable SELECT X
+            }
+            assertEquals(3, selectStatement.getResults().size)
+
+            // Test 2: Try duplicate (userId, eventType) - should fail group 0 constraint
+            val event4 = MultiGroupUniqueTest(null, 1, "login", 3000L, "Duplicate userId+eventType")
+            var duplicateGroup0Failed = false
+            try {
+                database {
+                    MultiGroupUniqueTestTable { table ->
+                        table INSERT event4
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateGroup0Failed = true
+            }
+            assertEquals(true, duplicateGroup0Failed, "Duplicate (userId, eventType) should violate group 0 constraint")
+
+            // Test 3: Try duplicate (userId, timestamp) - should fail group 1 constraint
+            val event5 = MultiGroupUniqueTest(null, 2, "logout", 1000L, "Duplicate userId+timestamp")
+            var duplicateGroup1Failed = false
+            try {
+                database {
+                    MultiGroupUniqueTestTable { table ->
+                        table INSERT event5
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateGroup1Failed = true
+            }
+            assertEquals(true, duplicateGroup1Failed, "Duplicate (userId, timestamp) should violate group 1 constraint")
+
+            // Verify still only 3 records
+            database {
+                selectStatement = MultiGroupUniqueTestTable SELECT X
+            }
+            assertEquals(3, selectStatement.getResults().size)
+        }
+    }
+
+    /**
+     * Test for combined constraints
+     * Verifies interaction of @Unique, @CollateNoCase, and NOT NULL
+     */
+    fun testCombinedConstraints() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(CombinedConstraintsTestTable)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            // Verify CREATE SQL
+            val createSQL = CombinedConstraintsTestTable.createSQL
+            // Check for key components (order may vary)
+            assertEquals(true, createSQL.contains("code TEXT NOT NULL"))
+            assertEquals(true, createSQL.contains("COLLATE NOCASE"))
+            assertEquals(true, createSQL.contains("UNIQUE"))
+            assertEquals(true, createSQL.contains("serial TEXT NOT NULL UNIQUE"))
+            assertEquals(true, createSQL.contains("value INT NOT NULL"))
+
+            // Test 1: Insert valid records
+            val item1 = CombinedConstraintsTest(null, "CODE123", "SN-001", 100)
+            val item2 = CombinedConstraintsTest(null, "CODE456", "SN-002", 200)
+            database {
+                CombinedConstraintsTestTable { table ->
+                    table INSERT listOf(item1, item2)
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<CombinedConstraintsTest>
+            database {
+                selectStatement = CombinedConstraintsTestTable SELECT X
+            }
+            assertEquals(2, selectStatement.getResults().size)
+
+            // Test 2: Search with different case (NOCASE on code)
+            database {
+                CombinedConstraintsTestTable { table ->
+                    selectStatement = table SELECT WHERE (code EQ "code123")  // lowercase
+                }
+            }
+            assertEquals(1, selectStatement.getResults().size)
+            assertEquals("CODE123", selectStatement.getResults()[0].code)
+
+            // Test 3: Try duplicate code (different case) - should fail due to UNIQUE + NOCASE
+            val item3 = CombinedConstraintsTest(null, "code123", "SN-003", 300)
+            var duplicateCodeFailed = false
+            try {
+                database {
+                    CombinedConstraintsTestTable { table ->
+                        table INSERT item3
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateCodeFailed = true
+            }
+            assertEquals(true, duplicateCodeFailed, "Duplicate code (different case) should fail")
+
+            // Test 4: Try duplicate serial (case-sensitive) - should fail
+            val item4 = CombinedConstraintsTest(null, "CODE789", "SN-001", 400)
+            var duplicateSerialFailed = false
+            try {
+                database {
+                    CombinedConstraintsTestTable { table ->
+                        table INSERT item4
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                duplicateSerialFailed = true
+            }
+            assertEquals(true, duplicateSerialFailed, "Duplicate serial should fail")
+
+            // Test 5: Different case serial should succeed (no NOCASE on serial)
+            val item5 = CombinedConstraintsTest(null, "CODE789", "sn-001", 400)
+            database {
+                CombinedConstraintsTestTable { table ->
+                    table INSERT item5
+                }
+            }
+
+            database {
+                selectStatement = CombinedConstraintsTestTable SELECT X
+            }
+            assertEquals(3, selectStatement.getResults().size)
+        }
+    }
+
+    /**
+     * Test NOT NULL constraint enforcement
+     * Verifies that non-nullable Kotlin types generate NOT NULL constraints
+     */
+    fun testNotNullConstraint() {
+        Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+            // Test 1: Verify NOT NULL in CREATE SQL
+            val bookSQL = BookTable.createSQL
+            assertEquals(true, bookSQL.contains("name TEXT NOT NULL"))
+            assertEquals(true, bookSQL.contains("author TEXT NOT NULL"))
+            assertEquals(true, bookSQL.contains("pages INT NOT NULL"))
+            assertEquals(true, bookSQL.contains("price DOUBLE NOT NULL"))
+
+            // Test 2: Verify nullable columns don't have NOT NULL
+            val nullTesterSQL = NullTesterTable.createSQL
+            // Nullable columns should not have NOT NULL
+            assertEquals(false, nullTesterSQL.contains("paramInt INT NOT NULL"))
+            assertEquals(false, nullTesterSQL.contains("paramString TEXT NOT NULL"))
+            assertEquals(false, nullTesterSQL.contains("paramDouble DOUBLE NOT NULL"))
+
+            // Test 3: Verify data insertion and retrieval
+            val book = Book(name = "Test Book", author = "Test Author", pages = 300, price = 25.99)
+            database {
+                BookTable { table ->
+                    table INSERT book
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<Book>
+            database {
+                selectStatement = BookTable SELECT WHERE (BookTable.name EQ "Test Book")
+            }
+            val result = selectStatement.getResults().first()
+            assertEquals("Test Book", result.name)
+            assertEquals("Test Author", result.author)
+            assertEquals(300, result.pages)
+            assertEquals(25.99, result.price)
         }
     }
 
@@ -1243,6 +1972,13 @@ class CommonBasicTest(private val path: DatabasePath) {
                 CREATE(StudentWithAutoincrementTable)
                 CREATE(EnrollmentTable)
                 CREATE(FileDataTable)
+                CREATE(UserAccountTable)
+                CREATE(TaskTable)
+                CREATE(UniqueEmailTestTable)
+                CREATE(CollateNoCaseTestTable)
+                CREATE(CompositeUniqueTestTable)
+                CREATE(MultiGroupUniqueTestTable)
+                CREATE(CombinedConstraintsTestTable)
             }
         )
 }

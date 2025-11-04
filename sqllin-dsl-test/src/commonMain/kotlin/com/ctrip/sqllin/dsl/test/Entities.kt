@@ -16,10 +16,48 @@
 
 package com.ctrip.sqllin.dsl.test
 
+import com.ctrip.sqllin.dsl.annotation.CollateNoCase
 import com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey
+import com.ctrip.sqllin.dsl.annotation.CompositeUnique
 import com.ctrip.sqllin.dsl.annotation.DBRow
 import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import com.ctrip.sqllin.dsl.annotation.Unique
 import kotlinx.serialization.Serializable
+
+/**
+ * Type aliases for testing typealias support in sqllin-processor
+ */
+typealias Price = Double
+typealias PageCount = Int
+typealias Age = Int
+typealias Grade = Int
+typealias StudentId = Long
+typealias CourseId = Long
+typealias Code = Int
+
+/**
+ * Enum types for testing enum support
+ */
+
+/**
+ * User status enum for testing enum functionality
+ */
+enum class UserStatus {
+    ACTIVE,
+    INACTIVE,
+    SUSPENDED,
+    BANNED
+}
+
+/**
+ * Priority level enum for testing enum comparisons
+ */
+enum class Priority {
+    LOW,
+    MEDIUM,
+    HIGH,
+    CRITICAL
+}
 
 /**
  * Book entity
@@ -31,15 +69,15 @@ import kotlinx.serialization.Serializable
 data class Book(
     val name: String,
     val author: String,
-    val price: Double,
-    val pages: Int,
+    val price: Price,
+    val pages: PageCount,
 )
 
 @DBRow("category")
 @Serializable
 data class Category(
     val name: String,
-    val code: Int,
+    val code: Code,
 )
 
 @Serializable
@@ -72,7 +110,7 @@ data class NullTester(
 data class PersonWithId(
     @PrimaryKey val id: Long?,
     val name: String,
-    val age: Int,
+    val age: Age,
 )
 
 @DBRow("product")
@@ -80,7 +118,7 @@ data class PersonWithId(
 data class Product(
     @PrimaryKey val sku: String?,
     val name: String,
-    val price: Double,
+    val price: Price,
 )
 
 @DBRow("student_with_autoincrement")
@@ -88,14 +126,14 @@ data class Product(
 data class StudentWithAutoincrement(
     @PrimaryKey(isAutoincrement = true) val id: Long?,
     val studentName: String,
-    val grade: Int,
+    val grade: Grade,
 )
 
 @DBRow("enrollment")
 @Serializable
 data class Enrollment(
-    @CompositePrimaryKey val studentId: Long,
-    @CompositePrimaryKey val courseId: Long,
+    @CompositePrimaryKey val studentId: StudentId,
+    @CompositePrimaryKey val courseId: CourseId,
     val semester: String,
 )
 
@@ -130,3 +168,96 @@ data class FileData(
         return result
     }
 }
+
+/**
+ * User entity with enum fields for testing enum support
+ */
+@DBRow("user_account")
+@Serializable
+data class UserAccount(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    val username: String,
+    val email: String,
+    val status: UserStatus,
+    val priority: Priority,
+    val notes: String?,
+)
+
+/**
+ * Task entity with nullable enum for testing nullable enum support
+ */
+@DBRow("task")
+@Serializable
+data class Task(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    val title: String,
+    val priority: Priority?,
+    val description: String,
+)
+
+/**
+ * Test entity for @Unique annotation
+ * Tests single-column uniqueness constraints
+ */
+@DBRow("unique_email_test")
+@Serializable
+data class UniqueEmailTest(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @Unique val email: String,
+    val name: String,
+)
+
+/**
+ * Test entity for @CollateNoCase annotation
+ * Tests case-insensitive text collation
+ */
+@DBRow("collate_nocase_test")
+@Serializable
+data class CollateNoCaseTest(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @CollateNoCase val username: String,
+    @CollateNoCase @Unique val email: String,
+    val description: String,
+)
+
+/**
+ * Test entity for @CompositeUnique annotation
+ * Tests multi-column uniqueness constraints with groups
+ */
+@DBRow("composite_unique_test")
+@Serializable
+data class CompositeUniqueTest(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @CompositeUnique(0) val groupA: String,
+    @CompositeUnique(0) val groupB: Int,
+    @CompositeUnique(1) val groupC: String,
+    @CompositeUnique(1) val groupD: String,
+    val notes: String?,
+)
+
+/**
+ * Test entity for multiple @CompositeUnique groups on same property
+ * Tests that a property can belong to multiple composite unique constraints
+ */
+@DBRow("multi_group_unique_test")
+@Serializable
+data class MultiGroupUniqueTest(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @CompositeUnique(0, 1) val userId: Int,
+    @CompositeUnique(0) val eventType: String,
+    @CompositeUnique(1) val timestamp: Long,
+    val metadata: String?,
+)
+
+/**
+ * Test entity combining multiple column modifiers
+ * Tests interaction between @Unique, @CollateNoCase, and NOT NULL (non-nullable type)
+ */
+@DBRow("combined_constraints_test")
+@Serializable
+data class CombinedConstraintsTest(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @Unique @CollateNoCase val code: String,
+    @Unique val serial: String,
+    val value: Int,
+)

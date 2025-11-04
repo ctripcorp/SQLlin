@@ -31,27 +31,67 @@ import com.ctrip.sqllin.dsl.sql.Table
 public class ClauseBoolean(
     valueName: String,
     table: Table<*>,
-    isFunction: Boolean,
-) : ClauseElement(valueName, table, isFunction) {
+) : ClauseElement(valueName, table, false) {
 
     /**
      * Creates a condition comparing this Boolean column/function to a value.
      *
+     * Since SQLite stores booleans as integers (0 = false, 1 = true), this generates
+     * numeric comparison SQL:
+     * - `true` → `column > 0`
+     * - `false` → `column <= 0`
+     * - `null` → `column IS NULL`
+     *
      * @param bool The Boolean value to compare against
-     * @return Condition expression (e.g., `column > 0` for true, `column <= 0` for false)
+     * @return Condition expression for use in WHERE clauses
      */
-    internal infix fun _is(bool: Boolean): SelectCondition {
+    internal infix fun _is(bool: Boolean?): SelectCondition {
         val sql = buildString {
-            if (!isFunction) {
-                append(table.tableName)
-                append('.')
-            }
+            append(table.tableName)
+            append('.')
             append(valueName)
-            if (bool)
-                append('>')
-            else
-                append("<=")
-            append('0')
+            append(
+                when {
+                    bool == null -> " IS NULL"
+                    bool -> ">0"
+                    else ->"<=0"
+                }
+            )
+        }
+        return SelectCondition(sql, null)
+    }
+
+    /**
+     * Creates a negated condition comparing this Boolean column/function to a value.
+     *
+     * This is the inverse of [_is], generating negated numeric comparison SQL:
+     * - `true` → `column <= 0` (NOT true = false)
+     * - `false` → `column > 0` (NOT false = true)
+     * - `null` → `column IS NOT NULL`
+     *
+     * ### Usage
+     * Used internally by DSL operators to create "is not" conditions:
+     * ```kotlin
+     * WHERE(UserTable.isActive ISNOT true)  // finds inactive users
+     * WHERE(UserTable.isDeleted ISNOT false) // finds deleted users
+     * ```
+     *
+     * @param bool The Boolean value to negate and compare against
+     * @return Negated condition expression for use in WHERE clauses
+     * @see _is
+     */
+    internal infix fun _isNot(bool: Boolean?): SelectCondition {
+        val sql = buildString {
+            append(table.tableName)
+            append('.')
+            append(valueName)
+            append(
+                when {
+                    bool == null -> " IS NOT NULL"
+                    bool -> "<=0"
+                    else -> ">0"
+                }
+            )
         }
         return SelectCondition(sql, null)
     }

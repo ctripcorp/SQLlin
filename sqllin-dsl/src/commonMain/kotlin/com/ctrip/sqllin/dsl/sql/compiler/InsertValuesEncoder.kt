@@ -96,6 +96,10 @@ internal class InsertValuesEncoder(
 
     /**
      * Encodes any non-null value as a parameter placeholder.
+     *
+     * This includes primitive types (Int, Long, String, etc.) and enum ordinal values.
+     * When kotlinx.serialization processes an enum, it automatically converts it to its
+     * ordinal integer value before calling this method.
      */
     override fun encodeValue(value: Any) = appendAny(value)
 
@@ -103,11 +107,6 @@ internal class InsertValuesEncoder(
      * Encodes null as a parameter placeholder.
      */
     override fun encodeNull() = appendAny(null)
-
-    /**
-     * Encodes enum as its ordinal integer value parameter.
-     */
-    override fun encodeEnum(enumDescriptor: SerialDescriptor, index: Int) = appendAny(index)
 
     /**
      * Handles inline values (including ByteArray).

@@ -40,7 +40,7 @@ import com.ctrip.sqllin.dsl.sql.Table
 public class ClauseNumber(
     valueName: String,
     table: Table<*>,
-    isFunction: Boolean,
+    isFunction: Boolean = false,
 ) : ClauseElement(valueName, table, isFunction) {
 
     /**
@@ -191,7 +191,7 @@ public class ClauseNumber(
             builder.append('.')
         }
         builder.append(valueName)
-        val parameters = if (number == null){
+        val parameters = if (number == null) {
             builder.append(nullSymbol)
             null
         } else {

@@ -19,6 +19,7 @@ package com.ctrip.sqllin.sample
 import com.ctrip.sqllin.dsl.DSLDBConfiguration
 import com.ctrip.sqllin.dsl.Database
 import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.PrimaryKey
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
@@ -36,6 +37,7 @@ import kotlinx.serialization.Serializable
 
 object Sample {
 
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
     private val db by lazy {
         Database(
             DSLDBConfiguration(
@@ -110,11 +112,13 @@ object Sample {
     }
 }
 
+typealias MyInt = Int
+
 @DBRow("person")
 @Serializable
 data class Person(
     @PrimaryKey val id: Long?,
-    val age: Int?,
+    val age: MyInt?,
     val name: String?,
 )
 
@@ -130,7 +134,7 @@ data class Transcript(
 @Serializable
 data class Student(
     val name: String?,
-    val age: Int?,
+    val age: MyInt?,
     val math: Int,
     val english: Int,
 )

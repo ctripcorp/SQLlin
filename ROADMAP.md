@@ -2,14 +2,16 @@
 
 ## High Priority
 
-* Support the key word REFERENCE
-* Support JOIN sub-query
-* Support Enum type
-* Support typealias for primitive types
+* Support FOREIGN KEY DSL
+* Support CREATE INDEX DSL
 
 ## Medium Priority
 
-* Support WASM platform
+* Support WASM platform DSL
+* Support CREATE VIRTUAL TABLE DSL
+* Support CREATE VIEW DSL
+* Support CREATE TRIGGER DSL
+* Support JOIN sub-query DSL
 
 ## Low Priority
 

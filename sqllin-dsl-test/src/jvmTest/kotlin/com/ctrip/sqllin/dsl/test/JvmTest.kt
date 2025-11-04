@@ -56,16 +56,7 @@ class JvmTest {
     fun testNullValue() = commonTest.testNullValue()
 
     @Test
-    fun testCreateTableWithLongPrimaryKey() = commonTest.testCreateTableWithLongPrimaryKey()
-
-    @Test
-    fun testCreateTableWithStringPrimaryKey() = commonTest.testCreateTableWithStringPrimaryKey()
-
-    @Test
-    fun testCreateTableWithAutoincrement() = commonTest.testCreateTableWithAutoincrement()
-
-    @Test
-    fun testCreateTableWithCompositePrimaryKey() = commonTest.testCreateTableWithCompositePrimaryKey()
+    fun testPrimaryKeyVariations() = commonTest.testPrimaryKeyVariations()
 
     @Test
     fun testInsertWithId() = commonTest.testInsertWithId()
@@ -77,49 +68,40 @@ class JvmTest {
     fun testUpdateAndDeleteWithPrimaryKey() = commonTest.testUpdateAndDeleteWithPrimaryKey()
 
     @Test
-    fun testByteArrayInsert() = commonTest.testByteArrayInsert()
+    fun testByteArrayAndBlobOperations() = commonTest.testByteArrayAndBlobOperations()
 
     @Test
-    fun testByteArraySelect() = commonTest.testByteArraySelect()
+    fun testDropAndCreateTable() = commonTest.testDropAndCreateTable()
 
     @Test
-    fun testByteArrayUpdate() = commonTest.testByteArrayUpdate()
+    fun testSchemaModification() = commonTest.testSchemaModification()
 
     @Test
-    fun testByteArrayDelete() = commonTest.testByteArrayDelete()
+    fun testStringOperators() = commonTest.testStringOperators()
 
     @Test
-    fun testByteArrayMultipleOperations() = commonTest.testByteArrayMultipleOperations()
+    fun testEnumOperations() = commonTest.testEnumOperations()
 
     @Test
-    fun testDropTable() = commonTest.testDropTable()
+    fun testCreateSQLGeneration() = commonTest.testCreateSQLGeneration()
 
     @Test
-    fun testDropTableExtensionFunction() = commonTest.testDropTableExtensionFunction()
+    fun testUniqueConstraint() = commonTest.testUniqueConstraint()
 
     @Test
-    fun testAlertAddColumn() = commonTest.testAlertAddColumn()
+    fun testCollateNoCaseConstraint() = commonTest.testCollateNoCaseConstraint()
 
     @Test
-    fun testAlertRenameTableWithTableObject() = commonTest.testAlertRenameTableWithTableObject()
+    fun testCompositeUniqueConstraint() = commonTest.testCompositeUniqueConstraint()
 
     @Test
-    fun testAlertRenameTableWithString() = commonTest.testAlertRenameTableWithString()
+    fun testMultiGroupCompositeUnique() = commonTest.testMultiGroupCompositeUnique()
 
     @Test
-    fun testRenameColumnWithClauseElement() = commonTest.testRenameColumnWithClauseElement()
+    fun testCombinedConstraints() = commonTest.testCombinedConstraints()
 
     @Test
-    fun testRenameColumnWithString() = commonTest.testRenameColumnWithString()
-
-    @Test
-    fun testDropColumn() = commonTest.testDropColumn()
-
-    @Test
-    fun testDropAndRecreateTable() = commonTest.testDropAndRecreateTable()
-
-    @Test
-    fun testAlertOperationsInTransaction() = commonTest.testAlertOperationsInTransaction()
+    fun testNotNullConstraint() = commonTest.testNotNullConstraint()
 
     @BeforeTest
     fun setUp() {

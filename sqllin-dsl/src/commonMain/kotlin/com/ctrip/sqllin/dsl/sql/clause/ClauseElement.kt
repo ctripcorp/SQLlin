@@ -25,10 +25,11 @@ import com.ctrip.sqllin.dsl.sql.Table
  * Clause elements maintain their source table and whether they represent a function call.
  *
  * Subclasses provide type-specific wrappers:
- * - [ClauseBoolean]: Boolean column/function references with comparison operators
+ * - [ClauseBoolean]: Boolean column references with comparison operators
  * - [ClauseNumber]: Numeric column/function references with arithmetic and comparison operators
  * - [ClauseString]: String column/function references with text comparison operators
- * - [ClauseBlob]: BLOB (ByteArray) column/function references with comparison operators
+ * - [ClauseBlob]: BLOB (ByteArray) column references with comparison operators
+ * - [ClauseEnum]: Enum column references with ordinal-based comparison operators
  *
  * Used in:
  * - WHERE/HAVING conditions

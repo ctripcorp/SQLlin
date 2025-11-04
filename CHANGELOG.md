@@ -1,6 +1,20 @@
 # SQLlin Change Log
 
 - Date format: YYYY-MM-dd
+- 
+## 2.1.0 / 2025-11-04
+
+### sqllin-dsl
+
+* Support typealias of supported types(primitive types, String, ByteArray etc) in generated tables
+* Support enumerated types in DSL APIs, includes `=`, `!=`, `<`, `<=`, `>`, `>=` operators
+* Support `<`, `<=`, `>`, `>=`, `IN`, `BETWEEN...AND` operators for String
+* Support `=`, `!=`, `<`, `<=`, `>`, `>=`, `IN`, `BETWEEN...AND` operators for ByteArray
+* Add a new condiction function `ISNOT` for Boolean, and `IS` starts to support to receive a nullable parameter
+* Refactored CREATE statements building process, move it from runtime to compile-time.
+* New experimental API for _COLLATE NOCASE_ keyword: `CollateNoCase`
+* New experimental API for single column with _UNIQUE_ keyword: `Unique`
+* New Experimental API for composite column groups with _UNIQUE_ keyword: `CompositeUnique`
 
 ## 2.0.0 / 2025-10-23
 
@@ -255,7 +269,7 @@ a runtime exception. Thanks for [@nbransby](https://github.com/nbransby).
 
 * Add the new JVM target
 * **Breaking change**: Remove the public property: `DatabaseConnection#closed`
-* The Android (< 9) target supports to set the `journalMode` and `synchronousMode` now
+* The Android(< 9) target supports to set the `journalMode` and `synchronousMode` now
 
 ## v1.1.1 / 2023-08-12
 

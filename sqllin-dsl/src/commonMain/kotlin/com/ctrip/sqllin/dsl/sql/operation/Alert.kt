@@ -89,8 +89,8 @@ internal object Alert : Operation {
             append(newColumn.valueName)
             val propertyDescriptor = table.kSerializer().descriptor
             val index = propertyDescriptor.getElementIndex(newColumn.valueName)
-            val serialName = propertyDescriptor.getElementDescriptor(index).serialName
-            append(FullNameCache.getSerialNameBySerialName(serialName, newColumn.valueName, table))
+            val descriptor = propertyDescriptor.getElementDescriptor(index)
+            append(FullNameCache.getTypeNameBySerialName(descriptor, newColumn.valueName, table))
         }
         return TableStructureStatement(sql, connection)
     }
