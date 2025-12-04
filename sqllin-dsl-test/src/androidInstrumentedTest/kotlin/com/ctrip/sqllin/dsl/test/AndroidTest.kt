@@ -109,6 +109,15 @@ class AndroidTest {
     @Test
     fun testNotNullConstraint() = commonTest.testNotNullConstraint()
 
+    @Test
+    fun testStringAggregateFunctions() = commonTest.testStringAggregateFunctions()
+
+    @Test
+    fun testIndexOperations() = commonTest.testIndexOperations()
+
+    @Test
+    fun testBlobLengthFunction() = commonTest.testBlobLengthFunction()
+
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

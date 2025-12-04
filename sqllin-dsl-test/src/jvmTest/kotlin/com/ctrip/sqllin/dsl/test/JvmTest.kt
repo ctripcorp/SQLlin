@@ -103,6 +103,15 @@ class JvmTest {
     @Test
     fun testNotNullConstraint() = commonTest.testNotNullConstraint()
 
+    @Test
+    fun testStringAggregateFunctions() = commonTest.testStringAggregateFunctions()
+
+    @Test
+    fun testIndexOperations() = commonTest.testIndexOperations()
+
+    @Test
+    fun testBlobLengthFunction() = commonTest.testBlobLengthFunction()
+
     @BeforeTest
     fun setUp() {
         deleteDatabase(path, CommonBasicTest.DATABASE_NAME)

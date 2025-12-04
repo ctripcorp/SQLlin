@@ -18,7 +18,11 @@ fun sample() {
 会帮助我们生成一些 `ClauseElement` 来表示列名。SQL 函数将会接收一个 `ClauseElement` 作为参数并返回一个
 `ClauseElement` 作为结果。SQLlin 支持的函数如下：
 
-> `count`, `max`, `min`, `avg`, `sum`, `abs`, `upper`, `lower`, `length`
+> **聚合函数**: `count`, `max`, `min`, `avg`, `sum`, `group_concat`
+>
+> **数值函数**: `abs`, `round`, `random`, `sign`
+>
+> **字符串函数**: `upper`, `lower`, `length`, `substr`, `trim`, `ltrim`, `rtrim`, `replace`, `instr`, `printf`
 
 `count` 函数有一个不同点，它可以接收一个 `X` 作为参数用于表示 SQL 中的 `count(*)`， 如前面的示例所示。
 

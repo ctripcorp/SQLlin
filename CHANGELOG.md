@@ -1,7 +1,30 @@
 # SQLlin Change Log
 
 - Date format: YYYY-MM-dd
-- 
+
+## 2.2.0 / 2025-11-xx
+
+### sqllin-dsl
+
+* New experimental DSL API: `DatabaseScope#CREATE_INDEX` for creating indexes
+* New experimental DSL API: `DatabaseScope#CREATE_UNIQUE_INDEX` for creating unique indexes
+* New SQL aggregate function: `group_concat` for concatenating values with a separator
+* New SQL scalar functions: `round`, `random`, `sign`
+* New SQL string functions: `substr`, `trim`, `ltrim`, `rtrim`, `replace`, `instr`, `printf`
+* New overload for `length` function to support `ClauseBlob` type
+* **Breaking change**: The parameter type of `abs` function changed from `ClauseElement` to `ClauseNumber`
+* **Breaking change**: The parameter type of `upper` function changed from `ClauseElement` to `ClauseString`
+* **Breaking change**: The parameter type of `lower` function changed from `ClauseElement` to `ClauseString`
+* **Breaking change**: The parameter type of `length` function changed from `ClauseElement` to `ClauseString`
+
+### sqllin-driver
+
+* Update the `sqlite-jdbc`'s version to `3.51.1.0`
+
+### sqllin-processor
+
+* Update `KSP`'s version to `2.3.3`
+
 ## 2.1.0 / 2025-11-04
 
 ### sqllin-dsl

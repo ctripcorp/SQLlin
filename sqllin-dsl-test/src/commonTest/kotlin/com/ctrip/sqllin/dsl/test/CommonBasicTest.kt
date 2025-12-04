@@ -307,6 +307,15 @@ class CommonBasicTest(private val path: DatabasePath) {
         var selectStatement6: SelectStatement<Book>? = null
         var selectStatement7: SelectStatement<Book>? = null
         var selectStatement8: SelectStatement<Book>? = null
+        var selectStatement9: SelectStatement<Book>? = null
+        var selectStatement10: SelectStatement<Book>? = null
+        var selectStatement11: SelectStatement<Book>? = null
+        var selectStatement12: SelectStatement<Book>? = null
+        var selectStatement13: SelectStatement<Book>? = null
+        var selectStatement14: SelectStatement<Book>? = null
+        var selectStatement15: SelectStatement<Book>? = null
+        var selectStatement16: SelectStatement<Book>? = null
+        var selectStatement17: SelectStatement<Book>? = null
         database {
             BookTable { table ->
                 table INSERT listOf(book0, book1, book2, book3, book4)
@@ -319,6 +328,19 @@ class CommonBasicTest(private val path: DatabasePath) {
                 selectStatement6 = table SELECT GROUP_BY (author) HAVING (min(price) LT 17)
                 selectStatement7 = table SELECT GROUP_BY (author) HAVING (avg(pages) LT 400)
                 selectStatement8 = table SELECT GROUP_BY (author) HAVING (sum(pages) LTE 970)
+                // New functions: round, sign
+                selectStatement9 = table SELECT WHERE(round(price, 0) EQ 17.0)
+                selectStatement10 = table SELECT WHERE(sign(pages) EQ 1)
+                // New string functions: substr, trim, ltrim, rtrim
+                selectStatement11 = table SELECT WHERE(substr(name, 1, 6) EQ "Kotlin")
+                selectStatement12 = table SELECT WHERE(trim(name) EQ "Kotlin Cookbook")
+                selectStatement13 = table SELECT WHERE(ltrim(name) EQ "Kotlin Cookbook")
+                selectStatement14 = table SELECT WHERE(rtrim(name) EQ "Kotlin Cookbook")
+                // New string functions: replace, instr
+                selectStatement15 = table SELECT WHERE(instr(name, "Kotlin") GT 0)
+                selectStatement16 = table SELECT WHERE(replace(author, "Brown", "Smith") EQ "Dan Smith")
+                // Test random function (just check it returns results)
+                selectStatement17 = table SELECT ORDER_BY(random()) LIMIT 3
             }
         }
         assertEquals(book1, selectStatement0?.getResults()?.first())
@@ -330,6 +352,16 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(book0.author, selectStatement6?.getResults()?.first()?.author)
         assertEquals(book4.author, selectStatement7?.getResults()?.first()?.author)
         assertEquals(book0.author, selectStatement8?.getResults()?.first()?.author)
+        // Verify new functions
+        assertEquals(book0, selectStatement9?.getResults()?.first())
+        assertEquals(5, selectStatement10?.getResults()?.size) // All books have positive pages
+        assertEquals(true, selectStatement11?.getResults()?.size == 2) // Kotlin Cookbook and Kotlin Guide Pratique
+        assertEquals(book1, selectStatement12?.getResults()?.first())
+        assertEquals(book1, selectStatement13?.getResults()?.first())
+        assertEquals(book1, selectStatement14?.getResults()?.first())
+        assertEquals(true, selectStatement15?.getResults()?.size == 2) // Books with "Kotlin" in name
+        assertEquals(book0, selectStatement16?.getResults()?.first())
+        assertEquals(3, selectStatement17?.getResults()?.size) // Random ordering, but should return 3 results
     }
 
     fun testJoinClause() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
@@ -1511,6 +1543,176 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
         val remainingUsers = selectAfterDelete!!.getResults()
         assertEquals(false, remainingUsers.any { it.status == UserStatus.BANNED })
+    }
+
+    /**
+     * Test for new SQL string aggregate and formatting functions
+     * Tests group_concat and printf functions
+     */
+    fun testStringAggregateFunctions() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        // Clear and insert test data
+        val book0 = Book(name = "Book A", author = "Author X", pages = 100, price = 10.50)
+        val book1 = Book(name = "Book B", author = "Author X", pages = 200, price = 20.99)
+        val book2 = Book(name = "Book C", author = "Author Y", pages = 300, price = 30.00)
+
+        database {
+            BookTable { table ->
+                table DELETE X
+                table INSERT listOf(book0, book1, book2)
+            }
+        }
+
+        // Test group_concat - concatenate book names by author
+        var groupConcatStatement: SelectStatement<Book>? = null
+        database {
+            BookTable { table ->
+                groupConcatStatement = table SELECT GROUP_BY(author) HAVING (group_concat(name, ",") LIKE "%Book A%")
+            }
+        }
+        assertEquals(1, groupConcatStatement?.getResults()?.size)
+        assertEquals("Author X", groupConcatStatement?.getResults()?.first()?.author)
+
+        // Test printf - format price as currency
+        var printfStatement: SelectStatement<Book>? = null
+        database {
+            BookTable { table ->
+                printfStatement = table SELECT WHERE (printf("%.2f", name) LIKE "%.2f")
+            }
+        }
+        // Printf formats the value, we're just checking it can be used in queries
+        assertNotEquals(null, printfStatement?.getResults())
+    }
+
+    /**
+     * Test for CREATE_INDEX and CREATE_UNIQUE_INDEX operations
+     * Verifies index creation functionality
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testIndexOperations() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        // Test 1: CREATE_INDEX on single column
+        database {
+            BookTable.CREATE_INDEX("idx_book_name", BookTable.name)
+        }
+
+        // Verify index was created by inserting data and querying
+        val book1 = Book(name = "Test Book 1", author = "Author 1", pages = 100, price = 10.99)
+        val book2 = Book(name = "Test Book 2", author = "Author 2", pages = 200, price = 20.99)
+        database {
+            BookTable { table ->
+                table INSERT listOf(book1, book2)
+            }
+        }
+
+        lateinit var selectStatement: SelectStatement<Book>
+        database {
+            selectStatement = BookTable SELECT WHERE (BookTable.name EQ "Test Book 1")
+        }
+        assertEquals(1, selectStatement.getResults().size)
+        assertEquals(book1.name, selectStatement.getResults().first().name)
+
+        // Test 2: CREATE_INDEX on multiple columns
+        database {
+            PersonWithIdTable.CREATE_INDEX("idx_person_name_age", PersonWithIdTable.name, PersonWithIdTable.age)
+        }
+
+        val person1 = PersonWithId(id = null, name = "Alice", age = 25)
+        val person2 = PersonWithId(id = null, name = "Bob", age = 30)
+        database {
+            PersonWithIdTable { table ->
+                table INSERT listOf(person1, person2)
+            }
+        }
+
+        lateinit var personStatement: SelectStatement<PersonWithId>
+        database {
+            personStatement = PersonWithIdTable SELECT WHERE (PersonWithIdTable.name EQ "Alice" AND (PersonWithIdTable.age EQ 25))
+        }
+        assertEquals(1, personStatement.getResults().size)
+        assertEquals("Alice", personStatement.getResults().first().name)
+
+        // Test 3: CREATE_UNIQUE_INDEX - should enforce uniqueness
+        database {
+            ProductTable.CREATE_UNIQUE_INDEX("idx_unique_product_name", ProductTable.name)
+        }
+
+        val product1 = Product(sku = null, name = "Widget", price = 19.99)
+        database {
+            ProductTable { table ->
+                table INSERT product1
+            }
+        }
+
+        // Try to insert duplicate - should fail
+        val product2 = Product(sku = null, name = "Widget", price = 29.99)
+        var duplicateFailed = false
+        try {
+            database {
+                ProductTable { table ->
+                    table INSERT product2
+                }
+            }
+        } catch (e: Exception) {
+            duplicateFailed = true
+        }
+        assertEquals(true, duplicateFailed, "Duplicate value should violate unique index")
+
+        // Test 4: Verify empty columns parameter throws exception
+        var emptyColumnsFailed = false
+        try {
+            database {
+                BookTable.CREATE_INDEX("idx_empty")
+            }
+        } catch (e: IllegalArgumentException) {
+            emptyColumnsFailed = true
+        }
+        assertEquals(true, emptyColumnsFailed, "CREATE_INDEX with no columns should throw IllegalArgumentException")
+
+        // Test 5: CREATE_UNIQUE_INDEX with empty columns should also fail
+        var emptyUniqueColumnsFailed = false
+        try {
+            database {
+                BookTable.CREATE_UNIQUE_INDEX("idx_unique_empty")
+            }
+        } catch (e: IllegalArgumentException) {
+            emptyUniqueColumnsFailed = true
+        }
+        assertEquals(true, emptyUniqueColumnsFailed, "CREATE_UNIQUE_INDEX with no columns should throw IllegalArgumentException")
+    }
+
+    /**
+     * Test for length function with BLOB type
+     * Verifies length() works with ClauseBlob parameter
+     */
+    fun testBlobLengthFunction() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        val file1 = FileData(id = null, fileName = "small.bin", content = byteArrayOf(0x01, 0x02, 0x03), metadata = "Small file")
+        val file2 = FileData(id = null, fileName = "large.bin", content = ByteArray(100) { it.toByte() }, metadata = "Large file")
+
+        database {
+            FileDataTable { table ->
+                table DELETE X
+                table INSERT listOf(file1, file2)
+            }
+        }
+
+        // Test length function with BLOB
+        var lengthStatement: SelectStatement<FileData>? = null
+        database {
+            FileDataTable { table ->
+                lengthStatement = table SELECT WHERE (length(content) EQ 3)
+            }
+        }
+        assertEquals(1, lengthStatement?.getResults()?.size)
+        assertEquals("small.bin", lengthStatement?.getResults()?.first()?.fileName)
+
+        // Test length with GT operator
+        var lengthGTStatement: SelectStatement<FileData>? = null
+        database {
+            FileDataTable { table ->
+                lengthGTStatement = table SELECT WHERE (length(content) GT 10)
+            }
+        }
+        assertEquals(1, lengthGTStatement?.getResults()?.size)
+        assertEquals("large.bin", lengthGTStatement?.getResults()?.first()?.fileName)
     }
 
     /**
