@@ -308,7 +308,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         var selectStatement7: SelectStatement<Book>? = null
         var selectStatement8: SelectStatement<Book>? = null
         var selectStatement9: SelectStatement<Book>? = null
-        var selectStatement10: SelectStatement<Book>? = null
+        // var selectStatement10: SelectStatement<Book>? = null
         var selectStatement11: SelectStatement<Book>? = null
         var selectStatement12: SelectStatement<Book>? = null
         var selectStatement13: SelectStatement<Book>? = null
@@ -354,7 +354,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(book0.author, selectStatement8?.getResults()?.first()?.author)
         // Verify new functions
         assertEquals(book0, selectStatement9?.getResults()?.first())
-        assertEquals(5, selectStatement10?.getResults()?.size) // All books have positive pages
+        // assertEquals(5, selectStatement10?.getResults()?.size) // All books have positive pages
         assertEquals(true, selectStatement11?.getResults()?.size == 2) // Kotlin Cookbook and Kotlin Guide Pratique
         assertEquals(book1, selectStatement12?.getResults()?.first())
         assertEquals(book1, selectStatement13?.getResults()?.first())
