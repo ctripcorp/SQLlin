@@ -152,6 +152,15 @@ class NativeTest {
     @Test
     fun testForeignKeyWithoutPragma() = commonTest.testForeignKeyWithoutPragma()
 
+    @Test
+    fun testDefaultValuesCreateSQL() = commonTest.testDefaultValuesCreateSQL()
+
+    @Test
+    fun testDefaultValuesInsert() = commonTest.testDefaultValuesInsert()
+
+    @Test
+    fun testDefaultValuesWithForeignKey() = commonTest.testDefaultValuesWithForeignKey()
+
     @BeforeTest
     fun setUp() {
         deleteDatabase(path, CommonBasicTest.DATABASE_NAME)

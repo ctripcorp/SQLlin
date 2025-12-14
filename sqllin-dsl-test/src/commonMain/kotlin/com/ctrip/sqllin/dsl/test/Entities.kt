@@ -382,3 +382,65 @@ data class FKComment(
     val content: String,
     val createdAt: String,
 )
+
+/**
+ * Default Values Test Entities
+ */
+
+/**
+ * Test entity for @Default annotation with basic types
+ * Tests default values for String, Int, Boolean, and SQLite functions
+ */
+@DBRow("default_values_test")
+@Serializable
+data class DefaultValuesTest(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    val name: String,
+    @com.ctrip.sqllin.dsl.annotation.Default("'active'") val status: String,
+    @com.ctrip.sqllin.dsl.annotation.Default("0") val loginCount: Int,
+    @com.ctrip.sqllin.dsl.annotation.Default("1") val isEnabled: Boolean,
+    @com.ctrip.sqllin.dsl.annotation.Default("CURRENT_TIMESTAMP") val createdAt: String,
+)
+
+/**
+ * Test entity for @Default annotation with nullable types
+ * Tests default values on nullable columns
+ */
+@DBRow("default_nullable_test")
+@Serializable
+data class DefaultNullableTest(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    val name: String,
+    @com.ctrip.sqllin.dsl.annotation.Default("'In Stock'") val availability: String?,
+    @com.ctrip.sqllin.dsl.annotation.Default("100") val quantity: Int?,
+    @com.ctrip.sqllin.dsl.annotation.Default("0.0") val discount: Double?,
+)
+
+/**
+ * Parent table for testing @Default with foreign key SET_DEFAULT trigger
+ */
+@DBRow("default_fk_parent")
+@Serializable
+data class DefaultFKParent(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    val name: String,
+)
+
+/**
+ * Child table with @Default and foreign key SET_DEFAULT trigger
+ * Tests that default values work with ON_DELETE_SET_DEFAULT
+ */
+@DBRow("default_fk_child")
+@Serializable
+@com.ctrip.sqllin.dsl.annotation.ForeignKeyGroup(
+    group = 0,
+    tableName = "default_fk_parent",
+    trigger = com.ctrip.sqllin.dsl.annotation.Trigger.ON_DELETE_SET_DEFAULT
+)
+data class DefaultFKChild(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @com.ctrip.sqllin.dsl.annotation.ForeignKey(group = 0, reference = "id")
+    @com.ctrip.sqllin.dsl.annotation.Default("0")
+    val parentId: Long,
+    val description: String,
+)

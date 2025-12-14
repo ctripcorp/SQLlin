@@ -10,6 +10,7 @@
 * New experimental DSL API: `DatabaseScope#CREATE_UNIQUE_INDEX` for creating unique indexes
 * New experimental DSL API: `DatabaseScope#PRAGMA_FOREIGN_KEYS` for enabling foreign keys
 * New experimental annotation APIs: `ForeignKeyGroup`, `References`, `ForeignKey` for supporting foreign keys for table and column levels
+* New experimental annotation API: `@Default` for specifying default values for columns in CREATE TABLE statements
 * New SQL aggregate function: `group_concat` for concatenating values with a separator
 * New SQL scalar functions: `round`, `random`, `sign`
 * New SQL string functions: `substr`, `trim`, `ltrim`, `rtrim`, `replace`, `instr`, `printf`

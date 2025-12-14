@@ -142,6 +142,15 @@ class AndroidTest {
     @Test
     fun testForeignKeyWithoutPragma() = commonTest.testForeignKeyWithoutPragma()
 
+    @Test
+    fun testDefaultValuesCreateSQL() = commonTest.testDefaultValuesCreateSQL()
+
+    @Test
+    fun testDefaultValuesInsert() = commonTest.testDefaultValuesInsert()
+
+    @Test
+    fun testDefaultValuesWithForeignKey() = commonTest.testDefaultValuesWithForeignKey()
+
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

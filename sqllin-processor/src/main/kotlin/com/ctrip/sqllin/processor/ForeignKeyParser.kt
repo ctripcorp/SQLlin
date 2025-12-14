@@ -79,6 +79,7 @@ class ForeignKeyParser {
         const val ANNOTATION_GROUP = "com.ctrip.sqllin.dsl.annotation.ForeignKeyGroup"
         const val ANNOTATION_REFERENCES = "com.ctrip.sqllin.dsl.annotation.References"
         const val ANNOTATION_FOREIGN_KEY = "com.ctrip.sqllin.dsl.annotation.ForeignKey"
+        const val ANNOTATION_DEFAULT = "com.ctrip.sqllin.dsl.annotation.Default"
     }
 
     /**
@@ -200,60 +201,37 @@ class ForeignKeyParser {
         propertyName: String,
         isNotNull: Boolean,
     ) {
+        val columnReferenceEntities = ArrayList<ColumnReferenceEntity>()
+        var defaultValue = ""
         annotations.forEach { annotation ->
             when (annotation.annotationType.resolve().declaration.qualifiedName?.asString()) {
                 ANNOTATION_REFERENCES -> {
-                    var tableName = ""
-                    var triggerEnumName: String
-                    var triggerSQL = ""
-                    var constraintName = ""
-                    var foreignKeys = emptyList<String>()
+                    val columnReferenceEntity = ColumnReferenceEntity()
                     annotation.arguments.forEach { argument ->
                         when (argument.name?.asString()) {
-                            "tableName" -> tableName = (argument.value as String).ifBlank {
+                            "tableName" -> columnReferenceEntity.tableName = (argument.value as String).ifBlank {
                                 throw IllegalArgumentException("The parameter `tableName` can't be blank or empty.")
                             }
                             "trigger" -> {
                                 val declaration = argument.value as? KSClassDeclaration
                                 if (declaration != null && declaration.classKind == ClassKind.ENUM_ENTRY) {
-                                    triggerEnumName = declaration.simpleName.asString()
-                                    if ((triggerEnumName == "ON_DELETE_SET_NULL" || triggerEnumName == "ON_UPDATE_SET_NULL") && isNotNull) {
-                                        throw IllegalArgumentException("Can't use trigger `ON_DELETE_SET_NULL` or `ON_UPDATE_SET_NULL` on a non-null property.")
-                                    }
+                                    val triggerEnumName = declaration.simpleName.asString()
                                     if (triggerEnumName != "NULL") {
-                                        triggerSQL = triggerEnumName.triggerNameToSQL()
+                                        columnReferenceEntity.triggerSQL = triggerEnumName.triggerNameToSQL()
                                     }
                                 }
                             }
-                            "constraintName" -> constraintName = argument.value as String
+                            "constraintName" -> columnReferenceEntity.constraintName = argument.value as String
                             "foreignKeys" -> {
-                                foreignKeys = (argument.value as? List<String>)?.filter { it.isNotBlank() }
+                                columnReferenceEntity.foreignKeys = (argument.value as? List<String>)?.filter { it.isNotBlank() }
                                     ?: throw IllegalArgumentException("The parameter `foreignKeys` can't be null.")
-                                if (foreignKeys.isEmpty()) {
+                                if (columnReferenceEntity.foreignKeys.isEmpty()) {
                                     throw IllegalArgumentException("The parameter `foreignKeys` can't be empty or contain only blank values.")
                                 }
                             }
                         }
                     }
-                    with(createSQLBuilder) {
-                        if (constraintName.isNotEmpty()) {
-                            append(" CONSTRAINT ")
-                            append(constraintName)
-                        }
-                        append(" REFERENCES ")
-                        append(tableName)
-                        append('(')
-                        append(foreignKeys.first())
-                        for (i in 1 ..< foreignKeys.size) {
-                            append(',')
-                            append(foreignKeys[i])
-                        }
-                        append(')')
-                        if (triggerSQL.isNotEmpty()) {
-                            append(' ')
-                            append(triggerSQL)
-                        }
-                    }
+                    columnReferenceEntities.add(columnReferenceEntity)
                 }
                 ANNOTATION_FOREIGN_KEY -> {
                     var group = 0
@@ -274,6 +252,45 @@ class ForeignKeyParser {
                         columns.add(propertyName)
                         references.add(reference)
                     }
+                }
+                ANNOTATION_DEFAULT -> {
+                    annotation
+                        .arguments
+                        .find { it.name?.asString() == "value" }
+                        ?.let { defaultValue = it.value as String }
+                }
+            }
+        }
+
+        with(createSQLBuilder) {
+            val hasDefaultValue = defaultValue.isNotEmpty()
+            if (hasDefaultValue) {
+                append(" DEFAULT ")
+                append(defaultValue)
+            }
+            columnReferenceEntities.forEach {
+                if (it.constraintName.isNotEmpty()) {
+                    append(" CONSTRAINT ")
+                    append(it.constraintName)
+                }
+                append(" REFERENCES ")
+                append(it.tableName)
+                append('(')
+                append(it.foreignKeys.first())
+                for (i in 1 ..< it.foreignKeys.size) {
+                    append(',')
+                    append(it.foreignKeys[i])
+                }
+                append(')')
+                if (it.triggerSQL.isNotEmpty()) {
+                    when (it.triggerSQL) {
+                        "ON DELETE SET NULL", "ON UPDATE SET NULL" ->
+                            check(!isNotNull) { "Can't use trigger `ON_DELETE_SET_NULL` or `ON_UPDATE_SET_NULL` on a non-null property." }
+                        "ON DELETE SET DEFAULT", "ON UPDATE SET DEFAULT" ->
+                            check(isNotNull || hasDefaultValue) { "The column must be nullable or have a default value when using trigger 'ON DELETE SET DEFAULT' or 'ON UPDATE SET DEFAULT'" }
+                    }
+                    append(' ')
+                    append(it.triggerSQL)
                 }
             }
         }
@@ -381,5 +398,12 @@ class ForeignKeyParser {
         val constraintName: String,
         val columns: MutableList<String>,
         val references: MutableList<String>,
+    )
+
+    private class ColumnReferenceEntity(
+        var tableName: String = "",
+        var triggerSQL: String = "",
+        var constraintName: String = "",
+        var foreignKeys: List<String> = emptyList(),
     )
 }

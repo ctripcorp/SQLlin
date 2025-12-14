@@ -2611,6 +2611,167 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    /**
+     * Test for @Default annotation - CREATE SQL generation
+     * Verifies that createSQL property contains the DEFAULT clause
+     */
+    fun testDefaultValuesCreateSQL() {
+        // Test 1: Basic default values
+        val defaultValuesSQL = DefaultValuesTestTable.createSQL
+        assertEquals(true, defaultValuesSQL.contains("CREATE TABLE default_values_test"))
+        assertEquals(true, defaultValuesSQL.contains("status TEXT NOT NULL DEFAULT 'active'"))
+        assertEquals(true, defaultValuesSQL.contains("loginCount INT NOT NULL DEFAULT 0"))
+        assertEquals(true, defaultValuesSQL.contains("isEnabled BOOLEAN NOT NULL DEFAULT 1"))
+        assertEquals(true, defaultValuesSQL.contains("createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"))
+
+        // Test 2: Nullable columns with default values
+        val defaultNullableSQL = DefaultNullableTestTable.createSQL
+        assertEquals(true, defaultNullableSQL.contains("CREATE TABLE default_nullable_test"))
+        assertEquals(true, defaultNullableSQL.contains("availability TEXT DEFAULT 'In Stock'"))
+        assertEquals(true, defaultNullableSQL.contains("quantity INT DEFAULT 100"))
+        assertEquals(true, defaultNullableSQL.contains("discount DOUBLE DEFAULT 0.0"))
+
+        // Test 3: Default values with foreign key SET_DEFAULT trigger
+        val defaultFKChildSQL = DefaultFKChildTable.createSQL
+        assertEquals(true, defaultFKChildSQL.contains("CREATE TABLE default_fk_child"))
+        assertEquals(true, defaultFKChildSQL.contains("parentId BIGINT NOT NULL DEFAULT 0"))
+        assertEquals(true, defaultFKChildSQL.contains("FOREIGN KEY (parentId) REFERENCES default_fk_parent(id) ON DELETE SET DEFAULT"))
+    }
+
+    /**
+     * Test for @Default annotation - INSERT behavior
+     * Verifies that default values are used when columns are omitted in INSERT
+     * Note: SQLlin's INSERT operation always provides all column values from data classes,
+     * so this test verifies the schema is correctly generated with DEFAULT clauses
+     */
+    fun testDefaultValuesInsert() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(DefaultValuesTestTable)
+                CREATE(DefaultNullableTestTable)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            // Test 1: Verify CREATE SQL contains DEFAULT clauses
+            val createSQL = DefaultValuesTestTable.createSQL
+            assertEquals(true, createSQL.contains("DEFAULT 'active'"))
+            assertEquals(true, createSQL.contains("DEFAULT 0"))
+            assertEquals(true, createSQL.contains("DEFAULT 1"))
+
+            // Test 2: Insert record with all fields specified
+            val record1 = DefaultValuesTest(
+                id = null,
+                name = "Test User",
+                status = "active",
+                loginCount = 0,
+                isEnabled = true,
+                createdAt = "2025-12-14 00:00:00"
+            )
+            database {
+                DefaultValuesTestTable { table ->
+                    table INSERT record1
+                }
+            }
+
+            // Verify insertion
+            lateinit var selectStatement: SelectStatement<DefaultValuesTest>
+            database {
+                selectStatement = DefaultValuesTestTable SELECT X
+            }
+            assertEquals(1, selectStatement.getResults().size)
+            val result = selectStatement.getResults()[0]
+            assertEquals("Test User", result.name)
+            assertEquals("active", result.status)
+            assertEquals(0, result.loginCount)
+
+            // Test 3: Nullable columns with default values
+            val nullableRecord = DefaultNullableTest(
+                id = null,
+                name = "Product A",
+                availability = "In Stock",
+                quantity = 100,
+                discount = 0.0
+            )
+            database {
+                DefaultNullableTestTable { table ->
+                    table INSERT nullableRecord
+                }
+            }
+
+            lateinit var selectNullable: SelectStatement<DefaultNullableTest>
+            database {
+                selectNullable = DefaultNullableTestTable SELECT X
+            }
+            assertEquals(1, selectNullable.getResults().size)
+            assertEquals("Product A", selectNullable.getResults()[0].name)
+            assertEquals("In Stock", selectNullable.getResults()[0].availability)
+            assertEquals(100, selectNullable.getResults()[0].quantity)
+        }
+    }
+
+    /**
+     * Test for @Default annotation with foreign key ON_DELETE_SET_DEFAULT trigger
+     * Verifies that default values are correctly included in CREATE TABLE statements with foreign keys
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testDefaultValuesWithForeignKey() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                PRAGMA_FOREIGN_KEYS(true)
+                CREATE(DefaultFKParentTable)
+                CREATE(DefaultFKChildTable)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            // Test 1: Verify CREATE SQL contains DEFAULT with foreign key
+            val childSQL = DefaultFKChildTable.createSQL
+            assertEquals(true, childSQL.contains("parentId BIGINT NOT NULL DEFAULT 0"))
+            assertEquals(true, childSQL.contains("FOREIGN KEY"))
+            assertEquals(true, childSQL.contains("REFERENCES default_fk_parent(id)"))
+            assertEquals(true, childSQL.contains("ON DELETE SET DEFAULT"))
+
+            // Test 2: Verify we can insert parent and child records
+            val parent = DefaultFKParent(id = null, name = "Test Parent")
+            database {
+                DefaultFKParentTable { table ->
+                    table INSERT parent
+                }
+            }
+
+            // Get parent ID
+            lateinit var parentSelect: SelectStatement<DefaultFKParent>
+            database {
+                parentSelect = DefaultFKParentTable SELECT X
+            }
+            val parents = parentSelect.getResults()
+            assertEquals(1, parents.size)
+            val parentId = parents[0].id!!
+
+            // Test 3: Insert child record referencing parent
+            val child = DefaultFKChild(id = null, parentId = parentId, description = "Test Child")
+            database {
+                DefaultFKChildTable { table ->
+                    table INSERT child
+                }
+            }
+
+            // Verify child was inserted with correct parentId
+            lateinit var childSelect: SelectStatement<DefaultFKChild>
+            database {
+                childSelect = DefaultFKChildTable SELECT X
+            }
+            assertEquals(1, childSelect.getResults().size)
+            assertEquals(parentId, childSelect.getResults()[0].parentId)
+            assertEquals("Test Child", childSelect.getResults()[0].description)
+        }
+    }
+
     private fun getDefaultDBConfig(): DatabaseConfiguration =
         DatabaseConfiguration(
             name = DATABASE_NAME,

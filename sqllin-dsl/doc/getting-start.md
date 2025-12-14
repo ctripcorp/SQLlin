@@ -410,6 +410,82 @@ data class Product(
 )
 ```
 
+#### @Default - Column Default Values
+
+Use `@Default` to specify default values for columns in your CREATE TABLE statements. SQLite will automatically use these values when inserting rows without explicitly providing values for these columns:
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import com.ctrip.sqllin.dsl.annotation.Default
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class User(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    val name: String,
+    @Default("'active'") val status: String,              // String default
+    @Default("0") val loginCount: Int,                     // Numeric default
+    @Default("1") val isEnabled: Boolean,                  // Boolean default (1 = true)
+    @Default("CURRENT_TIMESTAMP") val createdAt: String,   // SQLite function
+)
+// Generated SQL: CREATE TABLE User(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   name TEXT NOT NULL,
+//   status TEXT NOT NULL DEFAULT 'active',
+//   loginCount INT NOT NULL DEFAULT 0,
+//   isEnabled INT NOT NULL DEFAULT 1,
+//   createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+// )
+```
+
+**Value format:**
+- **Strings**: Must be enclosed in single quotes: `'default text'`
+- **Numbers**: Plain numeric literals: `0`, `42`, `3.14`
+- **Booleans**: Use `0` for false or `1` for true
+- **NULL**: Use the literal `NULL`
+- **Expressions**: SQLite functions like `CURRENT_TIMESTAMP`, `datetime('now')`, `(random())`, etc.
+
+**Integration with Foreign Key Triggers:**
+
+Default values are **required** when using `ON_DELETE_SET_DEFAULT` or `ON_UPDATE_SET_DEFAULT` triggers:
+
+```kotlin
+@DBRow
+@Serializable
+data class Order(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(
+        tableName = "User",
+        foreignKeys = ["id"],
+        trigger = Trigger.ON_DELETE_SET_DEFAULT
+    )
+    @Default("0")  // REQUIRED when using ON_DELETE_SET_DEFAULT
+    val userId: Long,
+    val amount: Double,
+)
+// When a User is deleted, their Orders' userId becomes 0
+```
+
+**Important notes:**
+- **String values must use single quotes**: `'text'`, not `"text"`
+- Default values don't override explicitly provided values in INSERT statements
+- Functions like `CURRENT_TIMESTAMP` are evaluated at insertion time, not at table creation
+- The annotation processor doesn't validate that the default value matches the column type
+
+**Common pitfall:**
+
+```kotlin
+// ❌ Wrong - using double quotes for strings
+@Default("\"active\"")
+val status: String
+
+// ✅ Correct - using single quotes for strings
+@Default("'active'")
+val status: String
+```
+
 ### Supported Types
 
 SQLlin supports the following Kotlin types for properties in `@DBRow` data classes:

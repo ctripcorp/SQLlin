@@ -400,6 +400,82 @@ data class Product(
 )
 ```
 
+#### @Default - 列默认值
+
+使用 `@Default` 为 CREATE TABLE 语句中的列指定默认值。当插入行时未显式提供这些列的值时，SQLite 会自动使用这些默认值：
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import com.ctrip.sqllin.dsl.annotation.Default
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class User(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    val name: String,
+    @Default("'active'") val status: String,              // String default
+    @Default("0") val loginCount: Int,                     // Numeric default
+    @Default("1") val isEnabled: Boolean,                  // Boolean default (1 = true)
+    @Default("CURRENT_TIMESTAMP") val createdAt: String,   // SQLite function
+)
+// Generated SQL: CREATE TABLE User(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   name TEXT NOT NULL,
+//   status TEXT NOT NULL DEFAULT 'active',
+//   loginCount INT NOT NULL DEFAULT 0,
+//   isEnabled INT NOT NULL DEFAULT 1,
+//   createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+// )
+```
+
+**值格式：**
+- **字符串**：必须用单引号括起来：`'默认文本'`
+- **数字**：纯数字字面量：`0`、`42`、`3.14`
+- **布尔值**：用 `0` 表示 false，用 `1` 表示 true
+- **NULL**：使用字面量 `NULL`
+- **表达式**：SQLite 函数，如 `CURRENT_TIMESTAMP`、`datetime('now')`、`(random())` 等
+
+**与外键触发器的集成：**
+
+当使用 `ON_DELETE_SET_DEFAULT` 或 `ON_UPDATE_SET_DEFAULT` 触发器时，**必须**设置默认值：
+
+```kotlin
+@DBRow
+@Serializable
+data class Order(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(
+        tableName = "User",
+        foreignKeys = ["id"],
+        trigger = Trigger.ON_DELETE_SET_DEFAULT
+    )
+    @Default("0")  // REQUIRED when using ON_DELETE_SET_DEFAULT
+    val userId: Long,
+    val amount: Double,
+)
+// When a User is deleted, their Orders' userId becomes 0
+```
+
+**重要注意事项：**
+- **字符串值必须使用单引号**：`'text'`，而不是 `"text"`
+- 默认值不会覆盖 INSERT 语句中显式提供的值
+- 像 `CURRENT_TIMESTAMP` 这样的函数在插入时求值，而不是在创建表时
+- 注解处理器不会验证默认值是否与列类型匹配
+
+**常见陷阱：**
+
+```kotlin
+// ❌ Wrong - using double quotes for strings
+@Default("\"active\"")
+val status: String
+
+// ✅ Correct - using single quotes for strings
+@Default("'active'")
+val status: String
+```
+
 ### 支持的类型
 
 SQLlin 支持以下 Kotlin 类型用于 `@DBRow` 数据类的属性：

@@ -739,3 +739,165 @@ public enum class Trigger {
      */
     ON_UPDATE_RESTRICT,
 }
+
+/**
+ * Specifies a default value for a column in SQLite CREATE TABLE statements.
+ *
+ * This annotation adds a DEFAULT clause to the column definition, which SQLite uses
+ * to automatically populate the column when a new row is inserted without explicitly
+ * providing a value for this column. Default values are also critical for foreign key
+ * constraints that use `ON DELETE SET DEFAULT` or `ON UPDATE SET DEFAULT` triggers.
+ *
+ * ### When to Use
+ * - To provide fallback values for optional columns
+ * - To ensure columns have sensible defaults when not specified
+ * - When using `Trigger.ON_DELETE_SET_DEFAULT` or `Trigger.ON_UPDATE_SET_DEFAULT` in foreign keys
+ * - To simplify INSERT operations by reducing required fields
+ *
+ * ### Value Format
+ * The `value` parameter must be a valid SQLite literal expression:
+ * - **Strings**: Must be enclosed in single quotes: `'default text'`
+ * - **Numbers**: Plain numeric literals: `0`, `42`, `3.14`
+ * - **Booleans**: Use `0` for false or `1` for true
+ * - **NULL**: Use the literal `NULL` (though this is rarely needed for nullable columns)
+ * - **Expressions**: SQLite functions like `CURRENT_TIMESTAMP`, `datetime('now')`, etc.
+ *
+ * ### Example: Basic Default Values
+ * ```kotlin
+ * @DBRow
+ * @Serializable
+ * data class User(
+ *     @PrimaryKey val id: Long?,
+ *     val name: String,
+ *     @Default("'active'") val status: String,      // String default
+ *     @Default("0") val loginCount: Int,             // Numeric default
+ *     @Default("1") val isEnabled: Boolean,          // Boolean default (1 = true)
+ *     @Default("CURRENT_TIMESTAMP") val createdAt: String  // SQLite function
+ * )
+ * // Generated SQL:
+ * // CREATE TABLE User(
+ * //   id INTEGER PRIMARY KEY,
+ * //   name TEXT NOT NULL,
+ * //   status TEXT NOT NULL DEFAULT 'active',
+ * //   loginCount INT NOT NULL DEFAULT 0,
+ * //   isEnabled INT NOT NULL DEFAULT 1,
+ * //   createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+ * // )
+ * ```
+ *
+ * ### Example: With Foreign Key SET DEFAULT Trigger
+ * ```kotlin
+ * @DBRow
+ * @Serializable
+ * data class Order(
+ *     @PrimaryKey val id: Long?,
+ *     @References(
+ *         tableName = "User",
+ *         foreignKeys = ["id"],
+ *         trigger = Trigger.ON_DELETE_SET_DEFAULT
+ *     )
+ *     @Default("0")  // REQUIRED when using ON_DELETE_SET_DEFAULT
+ *     val userId: Long,
+ *     val amount: Double
+ * )
+ * // Generated SQL:
+ * // CREATE TABLE Order(
+ * //   id INTEGER PRIMARY KEY,
+ * //   userId BIGINT NOT NULL DEFAULT 0 REFERENCES User(id) ON DELETE SET DEFAULT,
+ * //   amount REAL NOT NULL
+ * // )
+ * // When a User is deleted, their Orders' userId becomes 0
+ * ```
+ *
+ * ### Example: Nullable Column with Default
+ * ```kotlin
+ * @DBRow
+ * @Serializable
+ * data class Product(
+ *     @PrimaryKey val id: Long?,
+ *     val name: String,
+ *     @Default("'In Stock'") val availability: String?,
+ *     @Default("100") val quantity: Int?
+ * )
+ * // Generated SQL:
+ * // CREATE TABLE Product(
+ * //   id INTEGER PRIMARY KEY,
+ * //   name TEXT NOT NULL,
+ * //   availability TEXT DEFAULT 'In Stock',
+ * //   quantity INT DEFAULT 100
+ * // )
+ * ```
+ *
+ * ### Example: Using SQLite Functions
+ * ```kotlin
+ * @DBRow
+ * @Serializable
+ * data class Event(
+ *     @PrimaryKey val id: Long?,
+ *     val name: String,
+ *     @Default("datetime('now')") val timestamp: String,
+ *     @Default("(random())") val randomId: Long
+ * )
+ * // Generated SQL:
+ * // CREATE TABLE Event(
+ * //   id INTEGER PRIMARY KEY,
+ * //   name TEXT NOT NULL,
+ * //   timestamp TEXT NOT NULL DEFAULT datetime('now'),
+ * //   randomId BIGINT NOT NULL DEFAULT (random())
+ * // )
+ * ```
+ *
+ * ### Important Notes
+ * - **String values must use single quotes**: `'text'`, not `"text"`
+ * - **No type validation**: The annotation processor doesn't verify that the default value
+ *   matches the column type - SQLite will handle type coercion or raise runtime errors
+ * - **Expressions are passed as-is**: Complex expressions like `(random())` or
+ *   `datetime('now', 'localtime')` are valid
+ * - **Required for SET_DEFAULT triggers**: When using `ON_DELETE_SET_DEFAULT` or
+ *   `ON_UPDATE_SET_DEFAULT` triggers on foreign keys, the column **must** have a default
+ *   value or be nullable
+ *
+ * ### Common Pitfalls
+ *
+ * #### Wrong: Using double quotes for strings
+ * ```kotlin
+ * @Default("\"active\"")  // ❌ Wrong - SQLite uses single quotes
+ * val status: String
+ * ```
+ *
+ * #### Correct: Using single quotes for strings
+ * ```kotlin
+ * @Default("'active'")  // ✅ Correct
+ * val status: String
+ * ```
+ *
+ * #### Wrong: Forgetting default with SET_DEFAULT trigger
+ * ```kotlin
+ * @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_DEFAULT)
+ * val userId: Long  // ❌ Compile error - needs @Default or must be nullable
+ * ```
+ *
+ * #### Correct: Adding default value
+ * ```kotlin
+ * @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_DEFAULT)
+ * @Default("0")
+ * val userId: Long  // ✅ Correct
+ * ```
+ *
+ * ### SQLite Behavior
+ * - Default values are evaluated **once** when the CREATE TABLE statement is executed
+ * - Functions like `CURRENT_TIMESTAMP` are evaluated **at insertion time**, not at table creation
+ * - Default values don't override explicitly provided values in INSERT statements
+ * - If a column has both DEFAULT and NOT NULL, you can omit it in INSERT (it won't be NULL)
+ *
+ * @property value The SQLite default value expression (e.g., `'text'`, `0`, `CURRENT_TIMESTAMP`)
+ *
+ * @see References
+ * @see ForeignKeyGroup
+ * @see Trigger.ON_DELETE_SET_DEFAULT
+ * @see Trigger.ON_UPDATE_SET_DEFAULT
+ * @see DBRow
+ */
+@Target(AnnotationTarget.PROPERTY)
+@Retention(AnnotationRetention.BINARY)
+public annotation class Default(val value: String)
