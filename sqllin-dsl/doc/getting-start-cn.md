@@ -487,6 +487,341 @@ data class User(
 | ByteArray | BLOB |
 | Enum | INT |
 
+### 外键约束
+
+SQLlin 提供了对外键约束的全面支持,以维护表之间的引用完整性。外键通过在插入、更新或删除数据时强制执行规则,确保表之间的关系保持一致。
+
+#### 重要：启用外键
+
+默认情况下,SQLite **不会强制执行**外键约束(为了向后兼容)。你必须在创建表之前使用 `PRAGMA_FOREIGN_KEYS(true)` 显式启用外键强制执行：
+
+```kotlin
+database {
+    // CRITICAL: Enable foreign key enforcement first
+    PRAGMA_FOREIGN_KEYS(true)
+
+    // Now create tables with foreign keys
+    CREATE(UserTable)
+    CREATE(OrderTable)  // Has foreign key to UserTable
+}
+```
+
+**关键点：**
+- 此设置是**每个连接**的,必须在每次打开数据库时设置
+- 此设置**不能**在事务内部更改
+- 如果不启用此设置,外键将成为模式的一部分但**不会被强制执行**
+
+#### 定义外键
+
+SQLlin 提供了两种定义外键的方法：
+
+##### 方法 1：使用 @References 的列级外键
+
+对于简单的单列外键,使用 `@References`。这是**大多数用例的推荐方法**：
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import com.ctrip.sqllin.dsl.annotation.References
+import com.ctrip.sqllin.dsl.annotation.Trigger
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class User(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    val name: String,
+    val email: String,
+)
+
+@DBRow
+@Serializable
+data class Order(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(
+        tableName = "User",
+        foreignKeys = ["id"],
+        trigger = Trigger.ON_DELETE_CASCADE
+    )
+    val userId: Long,
+    val amount: Double,
+    val orderDate: String,
+)
+// Generated SQL: CREATE TABLE Order(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   userId BIGINT REFERENCES User(id) ON DELETE CASCADE,
+//   amount DOUBLE,
+//   orderDate TEXT
+// )
+```
+
+##### 方法 2：使用 @ForeignKeyGroup + @ForeignKey 的表级外键
+
+对于引用多个列的组合外键,使用此方法：
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey
+import com.ctrip.sqllin.dsl.annotation.ForeignKeyGroup
+import com.ctrip.sqllin.dsl.annotation.ForeignKey
+import com.ctrip.sqllin.dsl.annotation.Trigger
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class Product(
+    @CompositePrimaryKey val categoryId: Int,
+    @CompositePrimaryKey val productCode: String,
+    val name: String,
+    val price: Double,
+)
+
+@DBRow
+@Serializable
+@ForeignKeyGroup(
+    group = 0,
+    tableName = "Product",
+    trigger = Trigger.ON_DELETE_CASCADE,
+    constraintName = "fk_product"
+)
+data class OrderItem(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @ForeignKey(group = 0, reference = "categoryId")
+    val productCategory: Int,
+    @ForeignKey(group = 0, reference = "productCode")
+    val productCode: String,
+    val quantity: Int,
+)
+// Generated SQL: CREATE TABLE OrderItem(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   productCategory INT,
+//   productCode TEXT,
+//   quantity INT,
+//   CONSTRAINT fk_product FOREIGN KEY (productCategory,productCode)
+//     REFERENCES Product(categoryId,productCode) ON DELETE CASCADE
+// )
+```
+
+#### 引用操作（触发器）
+
+触发器定义了当被引用的行被删除或更新时会发生什么。SQLlin 通过 `Trigger` 枚举支持所有标准 SQLite 触发器：
+
+##### DELETE 触发器
+
+**ON_DELETE_CASCADE**：当父行被删除时,自动删除子行
+```kotlin
+@DBRow
+@Serializable
+data class Order(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_CASCADE)
+    val userId: Long,
+    val amount: Double,
+)
+// When a User is deleted, all their Orders are automatically deleted
+```
+
+**ON_DELETE_SET_NULL**：当父行被删除时,将外键设置为 NULL（需要可空列）
+```kotlin
+@DBRow
+@Serializable
+data class Post(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_NULL)
+    val authorId: Long?,  // Must be nullable!
+    val content: String,
+)
+// When a User is deleted, their Posts remain but authorId becomes NULL
+```
+
+**ON_DELETE_RESTRICT**：如果存在子行,阻止删除父行
+```kotlin
+@DBRow
+@Serializable
+data class OrderItem(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(tableName = "Order", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_RESTRICT)
+    val orderId: Long,
+    val productId: Long,
+)
+// An Order cannot be deleted if it has OrderItems
+```
+
+**ON_DELETE_SET_DEFAULT**：当父行被删除时,将外键设置为其默认值
+```kotlin
+@DBRow
+@Serializable
+data class Comment(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_DEFAULT)
+    val userId: Long = 0L,  // Default to 0 (anonymous user)
+    val content: String,
+)
+```
+
+##### UPDATE 触发器
+
+UPDATE 操作也有相同的操作：
+- `ON_UPDATE_CASCADE`：当父主键更改时,更新子外键
+- `ON_UPDATE_SET_NULL`：将子外键设置为 NULL（需要可空列）
+- `ON_UPDATE_RESTRICT`：如果存在子行,阻止更新父主键
+- `ON_UPDATE_SET_DEFAULT`：将子外键设置为默认值
+
+##### 触发器行为摘要
+
+| 触发器 | 父行删除/更新 | 子行行为 | 需要可空？ |
+|---------|------------------------|----------------|-------------------|
+| NULL（默认） | 允许 | 无变化 | 否 |
+| CASCADE | 允许 | 子行被删除/更新 | 否 |
+| SET_NULL | 允许 | 外键设置为 NULL | **是** |
+| SET_DEFAULT | 允许 | 外键设置为 DEFAULT | 否 |
+| RESTRICT | **阻止** | 操作失败 | 否 |
+
+#### 多个外键
+
+一个表可以有多个指向不同父表的外键约束：
+
+```kotlin
+@DBRow
+@Serializable
+@ForeignKeyGroup(group = 0, tableName = "User", trigger = Trigger.ON_DELETE_CASCADE)
+@ForeignKeyGroup(group = 1, tableName = "Product", trigger = Trigger.ON_DELETE_RESTRICT)
+data class OrderItem(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @ForeignKey(group = 0, reference = "id") val userId: Long,
+    @ForeignKey(group = 1, reference = "id") val productId: Long,
+    val quantity: Int,
+)
+// Generated SQL: CREATE TABLE OrderItem(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   userId BIGINT,
+//   productId BIGINT,
+//   quantity INT,
+//   FOREIGN KEY (userId) REFERENCES User(id) ON DELETE CASCADE,
+//   FOREIGN KEY (productId) REFERENCES Product(id) ON DELETE RESTRICT
+// )
+```
+
+或使用 `@References`：
+```kotlin
+@DBRow
+@Serializable
+data class OrderItem(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_CASCADE)
+    val userId: Long,
+    @References(tableName = "Product", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_RESTRICT)
+    val productId: Long,
+    val quantity: Int,
+)
+```
+
+#### 命名约束
+
+你可以选择为外键约束命名,以获得更好的错误消息和模式内省：
+
+```kotlin
+@DBRow
+@Serializable
+data class Order(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(
+        tableName = "User",
+        foreignKeys = ["id"],
+        trigger = Trigger.ON_DELETE_CASCADE,
+        constraintName = "fk_order_user"  // 可选的约束名称
+    )
+    val userId: Long,
+)
+// Generated SQL: userId BIGINT CONSTRAINT fk_order_user REFERENCES User(id) ON DELETE CASCADE
+```
+
+#### 最佳实践
+
+1. **始终启用外键**：在每个数据库会话开始时调用 `PRAGMA_FOREIGN_KEYS(true)`
+2. **先创建父表**：在创建具有外键的表之前创建被引用的表
+3. **对依赖数据使用 CASCADE**：当子数据不应该在没有父数据的情况下存在时使用 `ON_DELETE_CASCADE`
+4. **对可选关系使用 SET_NULL**：当子数据可以独立存在时使用 `ON_DELETE_SET_NULL`
+5. **使用 RESTRICT 进行保护**：使用 `ON_DELETE_RESTRICT` 防止意外删除父数据
+6. **考虑可空列**：当关系是可选的时使用可空的外键列
+7. **命名你的约束**：使用 `constraintName` 参数以获得更好的调试和错误消息
+
+#### 完整示例
+
+这是一个演示外键关系的完整示例：
+
+```kotlin
+import com.ctrip.sqllin.dsl.Database
+import com.ctrip.sqllin.dsl.annotation.*
+import kotlinx.serialization.Serializable
+
+// Parent table: Users
+@DBRow
+@Serializable
+data class User(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @Unique val email: String,
+    val name: String,
+)
+
+// Child table: Orders with CASCADE delete
+@DBRow
+@Serializable
+data class Order(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_CASCADE)
+    val userId: Long,
+    val amount: Double,
+    val orderDate: String,
+)
+
+// Child table: Posts with SET_NULL delete
+@DBRow
+@Serializable
+data class Post(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_NULL)
+    val authorId: Long?,  // Nullable - posts can exist without author
+    val title: String,
+    val content: String,
+)
+
+fun setupDatabase() {
+    database {
+        // CRITICAL: Enable foreign key enforcement
+        PRAGMA_FOREIGN_KEYS(true)
+
+        // Create parent table first
+        CREATE(UserTable)
+
+        // Then create child tables
+        CREATE(OrderTable)
+        CREATE(PostTable)
+
+        // Insert some data
+        val user = User(id = null, email = "alice@example.com", name = "Alice")
+        UserTable INSERT user
+
+        val order = Order(id = null, userId = 1L, amount = 99.99, orderDate = "2025-01-15")
+        OrderTable INSERT order
+
+        // This will fail because user 999 doesn't exist (foreign key violation)
+        try {
+            val invalidOrder = Order(id = null, userId = 999L, amount = 50.0, orderDate = "2025-01-15")
+            OrderTable INSERT invalidOrder  // Throws exception!
+        } catch (e: Exception) {
+            println("Foreign key constraint violation: ${e.message}")
+        }
+
+        // Delete the user - CASCADE will delete their orders, SET_NULL will null post authors
+        UserTable DELETE WHERE(UserTable.id EQ 1L)
+        // All orders for user 1 are automatically deleted
+        // All posts by user 1 have authorId set to NULL
+    }
+}
+```
+
 ## 接下来
 
 你已经学习完了所有的准备工作，现在可以开始学习如何操作数据库了：

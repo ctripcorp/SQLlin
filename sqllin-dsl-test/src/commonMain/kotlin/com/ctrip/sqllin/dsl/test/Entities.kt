@@ -261,3 +261,124 @@ data class CombinedConstraintsTest(
     @Unique val serial: String,
     val value: Int,
 )
+
+/**
+ * Foreign Key Test Entities
+ */
+
+/**
+ * Parent table for testing @References annotation
+ */
+@DBRow("fk_user")
+@Serializable
+data class FKUser(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @Unique val email: String,
+    val name: String,
+)
+
+/**
+ * Child table with CASCADE delete using @References
+ */
+@DBRow("fk_order")
+@Serializable
+data class FKOrder(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @com.ctrip.sqllin.dsl.annotation.References(
+        tableName = "fk_user",
+        foreignKeys = ["id"],
+        trigger = com.ctrip.sqllin.dsl.annotation.Trigger.ON_DELETE_CASCADE
+    )
+    val userId: Long,
+    val amount: Double,
+    val orderDate: String,
+)
+
+/**
+ * Child table with SET_NULL delete using @References
+ */
+@DBRow("fk_post")
+@Serializable
+data class FKPost(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @com.ctrip.sqllin.dsl.annotation.References(
+        tableName = "fk_user",
+        foreignKeys = ["id"],
+        trigger = com.ctrip.sqllin.dsl.annotation.Trigger.ON_DELETE_SET_NULL
+    )
+    val authorId: Long?,
+    val title: String,
+    val content: String,
+)
+
+/**
+ * Child table with RESTRICT delete using @References
+ */
+@DBRow("fk_profile")
+@Serializable
+data class FKProfile(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @com.ctrip.sqllin.dsl.annotation.References(
+        tableName = "fk_user",
+        foreignKeys = ["id"],
+        trigger = com.ctrip.sqllin.dsl.annotation.Trigger.ON_DELETE_RESTRICT
+    )
+    val userId: Long,
+    val bio: String,
+    val website: String?,
+)
+
+/**
+ * Parent table with composite primary key for testing composite foreign keys
+ */
+@DBRow("fk_product")
+@Serializable
+data class FKProduct(
+    @CompositePrimaryKey val categoryId: Int,
+    @CompositePrimaryKey val productCode: String,
+    val name: String,
+    val price: Double,
+)
+
+/**
+ * Child table with composite foreign key using @ForeignKeyGroup and @ForeignKey annotations
+ */
+@DBRow("fk_order_item")
+@Serializable
+@com.ctrip.sqllin.dsl.annotation.ForeignKeyGroup(
+    group = 0,
+    tableName = "fk_product",
+    trigger = com.ctrip.sqllin.dsl.annotation.Trigger.ON_DELETE_CASCADE
+)
+data class FKOrderItem(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @com.ctrip.sqllin.dsl.annotation.ForeignKey(group = 0, reference = "categoryId")
+    val productCategory: Int,
+    @com.ctrip.sqllin.dsl.annotation.ForeignKey(group = 0, reference = "productCode")
+    val productCode: String,
+    val quantity: Int,
+    val subtotal: Double,
+)
+
+/**
+ * Table with multiple foreign keys to different tables
+ */
+@DBRow("fk_comment")
+@Serializable
+data class FKComment(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @com.ctrip.sqllin.dsl.annotation.References(
+        tableName = "fk_user",
+        foreignKeys = ["id"],
+        trigger = com.ctrip.sqllin.dsl.annotation.Trigger.ON_DELETE_CASCADE
+    )
+    val authorId: Long,
+    @com.ctrip.sqllin.dsl.annotation.References(
+        tableName = "fk_post",
+        foreignKeys = ["id"],
+        trigger = com.ctrip.sqllin.dsl.annotation.Trigger.ON_DELETE_CASCADE
+    )
+    val postId: Long,
+    val content: String,
+    val createdAt: String,
+)

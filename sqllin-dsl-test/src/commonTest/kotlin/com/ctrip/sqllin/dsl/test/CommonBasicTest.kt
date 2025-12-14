@@ -2150,6 +2150,467 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    /**
+     * Test PRAGMA_FOREIGN_KEYS function
+     * Verifies foreign key enforcement can be enabled/disabled
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testPragmaForeignKeys() {
+        Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
+            // Test 1: Enable foreign keys
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+            }
+
+            // Test 2: Insert parent record
+            val user = FKUser(id = null, email = "test@example.com", name = "Test User")
+            database {
+                FKUserTable { table ->
+                    table INSERT user
+                }
+            }
+
+            // Test 3: Insert child record with valid foreign key - should succeed
+            val order = FKOrder(id = null, userId = 1L, amount = 99.99, orderDate = "2025-01-15")
+            database {
+                FKOrderTable { table ->
+                    table INSERT order
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<FKOrder>
+            database {
+                selectStatement = FKOrderTable SELECT X
+            }
+            assertEquals(1, selectStatement.getResults().size)
+
+            // Test 4: Try to insert child with invalid foreign key - should fail
+            val invalidOrder = FKOrder(id = null, userId = 999L, amount = 50.0, orderDate = "2025-01-15")
+            var foreignKeyViolated = false
+            try {
+                database {
+                    FKOrderTable { table ->
+                        table INSERT invalidOrder
+                    }
+                }
+            } catch (e: Exception) {
+                foreignKeyViolated = true
+            }
+            assertEquals(true, foreignKeyViolated, "Insert with invalid foreign key should fail when enforcement is enabled")
+        }
+    }
+
+    /**
+     * Test CASCADE delete behavior with @References
+     * Verifies that child rows are automatically deleted when parent is deleted
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testForeignKeyCascadeDelete() {
+        Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
+            // Enable foreign keys
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+            }
+
+            // Insert parent user
+            val user1 = FKUser(id = null, email = "alice@example.com", name = "Alice")
+            val user2 = FKUser(id = null, email = "bob@example.com", name = "Bob")
+            database {
+                FKUserTable { table ->
+                    table INSERT listOf(user1, user2)
+                }
+            }
+
+            // Insert orders for both users
+            val order1 = FKOrder(id = null, userId = 1L, amount = 99.99, orderDate = "2025-01-15")
+            val order2 = FKOrder(id = null, userId = 1L, amount = 49.99, orderDate = "2025-01-16")
+            val order3 = FKOrder(id = null, userId = 2L, amount = 29.99, orderDate = "2025-01-17")
+            database {
+                FKOrderTable { table ->
+                    table INSERT listOf(order1, order2, order3)
+                }
+            }
+
+            // Verify orders exist
+            lateinit var selectOrders: SelectStatement<FKOrder>
+            database {
+                selectOrders = FKOrderTable SELECT X
+            }
+            assertEquals(3, selectOrders.getResults().size)
+
+            // Delete user 1 - should CASCADE delete their orders
+            database {
+                FKUserTable { table ->
+                    table DELETE WHERE (table.id EQ 1L)
+                }
+            }
+
+            // Verify user 1's orders are deleted
+            database {
+                selectOrders = FKOrderTable SELECT X
+            }
+            val remainingOrders = selectOrders.getResults()
+            assertEquals(1, remainingOrders.size)
+            assertEquals(2L, remainingOrders[0].userId)
+
+            // Verify user 2 still exists
+            lateinit var selectUsers: SelectStatement<FKUser>
+            database {
+                selectUsers = FKUserTable SELECT X
+            }
+            assertEquals(1, selectUsers.getResults().size)
+            assertEquals("Bob", selectUsers.getResults()[0].name)
+        }
+    }
+
+    /**
+     * Test SET_NULL delete behavior with @References
+     * Verifies that child foreign keys are set to NULL when parent is deleted
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testForeignKeySetNullDelete() {
+        Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
+            // Enable foreign keys
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+            }
+
+            // Insert parent users
+            val user = FKUser(id = null, email = "author@example.com", name = "Author")
+            database {
+                FKUserTable { table ->
+                    table INSERT user
+                }
+            }
+
+            // Insert posts by the user
+            val post1 = FKPost(id = null, authorId = 1L, title = "First Post", content = "Content 1")
+            val post2 = FKPost(id = null, authorId = 1L, title = "Second Post", content = "Content 2")
+            database {
+                FKPostTable { table ->
+                    table INSERT listOf(post1, post2)
+                }
+            }
+
+            // Verify posts exist with author
+            lateinit var selectPosts: SelectStatement<FKPost>
+            database {
+                selectPosts = FKPostTable SELECT X
+            }
+            val posts = selectPosts.getResults()
+            assertEquals(2, posts.size)
+            assertEquals(1L, posts[0].authorId)
+            assertEquals(1L, posts[1].authorId)
+
+            // Delete the user - should SET_NULL on authorId
+            database {
+                FKUserTable { table ->
+                    table DELETE WHERE (table.id EQ 1L)
+                }
+            }
+
+            // Verify posts still exist but authorId is NULL
+            database {
+                selectPosts = FKPostTable SELECT X
+            }
+            val remainingPosts = selectPosts.getResults()
+            assertEquals(2, remainingPosts.size)
+            assertEquals(null, remainingPosts[0].authorId)
+            assertEquals(null, remainingPosts[1].authorId)
+            assertEquals("First Post", remainingPosts[0].title)
+            assertEquals("Second Post", remainingPosts[1].title)
+        }
+    }
+
+    /**
+     * Test RESTRICT delete behavior with @References
+     * Verifies that parent deletion is prevented when child rows exist
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testForeignKeyRestrictDelete() {
+        Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
+            // Enable foreign keys
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+            }
+
+            // Insert parent user
+            val user = FKUser(id = null, email = "user@example.com", name = "User")
+            database {
+                FKUserTable { table ->
+                    table INSERT user
+                }
+            }
+
+            // Insert profile for the user
+            val profile = FKProfile(id = null, userId = 1L, bio = "User bio", website = "https://example.com")
+            database {
+                FKProfileTable { table ->
+                    table INSERT profile
+                }
+            }
+
+            // Try to delete user - should fail due to RESTRICT
+            var deleteFailed = false
+            try {
+                database {
+                    FKUserTable { table ->
+                        table DELETE WHERE (table.id EQ 1L)
+                    }
+                }
+            } catch (e: Exception) {
+                deleteFailed = true
+            }
+            assertEquals(true, deleteFailed, "Delete should fail with RESTRICT when child rows exist")
+
+            // Verify user still exists
+            lateinit var selectUsers: SelectStatement<FKUser>
+            database {
+                selectUsers = FKUserTable SELECT X
+            }
+            assertEquals(1, selectUsers.getResults().size)
+
+            // Delete the profile first
+            database {
+                FKProfileTable { table ->
+                    table DELETE WHERE (table.userId EQ 1L)
+                }
+            }
+
+            // Now deleting user should succeed
+            database {
+                FKUserTable { table ->
+                    table DELETE WHERE (table.id EQ 1L)
+                }
+            }
+
+            // Verify user is deleted
+            database {
+                selectUsers = FKUserTable SELECT X
+            }
+            assertEquals(0, selectUsers.getResults().size)
+        }
+    }
+
+    /**
+     * Test composite foreign keys with @ForeignKey annotation
+     * Verifies multi-column foreign key constraints work correctly
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testCompositeForeignKey() {
+        Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
+            // Enable foreign keys
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+            }
+
+            // Insert parent products with composite primary key
+            val product1 = FKProduct(categoryId = 1, productCode = "P001", name = "Widget", price = 19.99)
+            val product2 = FKProduct(categoryId = 1, productCode = "P002", name = "Gadget", price = 29.99)
+            val product3 = FKProduct(categoryId = 2, productCode = "P001", name = "Tool", price = 39.99)
+            database {
+                FKProductTable { table ->
+                    table INSERT listOf(product1, product2, product3)
+                }
+            }
+
+            // Insert order items with valid composite foreign keys - should succeed
+            val item1 = FKOrderItem(id = null, productCategory = 1, productCode = "P001", quantity = 2, subtotal = 39.98)
+            val item2 = FKOrderItem(id = null, productCategory = 2, productCode = "P001", quantity = 1, subtotal = 39.99)
+            database {
+                FKOrderItemTable { table ->
+                    table INSERT listOf(item1, item2)
+                }
+            }
+
+            lateinit var selectItems: SelectStatement<FKOrderItem>
+            database {
+                selectItems = FKOrderItemTable SELECT X
+            }
+            assertEquals(2, selectItems.getResults().size)
+
+            // Try to insert with invalid composite foreign key - should fail
+            val invalidItem = FKOrderItem(id = null, productCategory = 1, productCode = "P999", quantity = 1, subtotal = 10.0)
+            var foreignKeyViolated = false
+            try {
+                database {
+                    FKOrderItemTable { table ->
+                        table INSERT invalidItem
+                    }
+                }
+            } catch (e: Exception) {
+                foreignKeyViolated = true
+            }
+            assertEquals(true, foreignKeyViolated, "Insert with invalid composite foreign key should fail")
+
+            // Delete product (1, P001) - should CASCADE delete item1
+            database {
+                FKProductTable { table ->
+                    table DELETE WHERE ((table.categoryId EQ 1) AND (table.productCode EQ "P001"))
+                }
+            }
+
+            // Verify item1 is deleted
+            database {
+                selectItems = FKOrderItemTable SELECT X
+            }
+            val remainingItems = selectItems.getResults()
+            assertEquals(1, remainingItems.size)
+            assertEquals(2, remainingItems[0].productCategory)
+        }
+    }
+
+    /**
+     * Test multiple foreign keys to different tables
+     * Verifies a table can have foreign keys to multiple parent tables
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testMultipleForeignKeys() {
+        Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
+            // Enable foreign keys
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+            }
+
+            // Insert parent user and post
+            val user = FKUser(id = null, email = "commenter@example.com", name = "Commenter")
+            database {
+                FKUserTable { table ->
+                    table INSERT user
+                }
+            }
+
+            val post = FKPost(id = null, authorId = 1L, title = "Test Post", content = "Post content")
+            database {
+                FKPostTable { table ->
+                    table INSERT post
+                }
+            }
+
+            // Insert comment with both foreign keys - should succeed
+            val comment = FKComment(id = null, authorId = 1L, postId = 1L, content = "Great post!", createdAt = "2025-01-15")
+            database {
+                FKCommentTable { table ->
+                    table INSERT comment
+                }
+            }
+
+            lateinit var selectComments: SelectStatement<FKComment>
+            database {
+                selectComments = FKCommentTable SELECT X
+            }
+            assertEquals(1, selectComments.getResults().size)
+
+            // Try to insert with invalid user foreign key - should fail
+            val invalidComment1 = FKComment(id = null, authorId = 999L, postId = 1L, content = "Comment", createdAt = "2025-01-15")
+            var userFKViolated = false
+            try {
+                database {
+                    FKCommentTable { table ->
+                        table INSERT invalidComment1
+                    }
+                }
+            } catch (e: Exception) {
+                userFKViolated = true
+            }
+            assertEquals(true, userFKViolated, "Insert with invalid user foreign key should fail")
+
+            // Try to insert with invalid post foreign key - should fail
+            val invalidComment2 = FKComment(id = null, authorId = 1L, postId = 999L, content = "Comment", createdAt = "2025-01-15")
+            var postFKViolated = false
+            try {
+                database {
+                    FKCommentTable { table ->
+                        table INSERT invalidComment2
+                    }
+                }
+            } catch (e: Exception) {
+                postFKViolated = true
+            }
+            assertEquals(true, postFKViolated, "Insert with invalid post foreign key should fail")
+
+            // Delete user - should CASCADE delete comment
+            database {
+                FKUserTable { table ->
+                    table DELETE WHERE (table.id EQ 1L)
+                }
+            }
+
+            // Verify comment is deleted
+            database {
+                selectComments = FKCommentTable SELECT X
+            }
+            assertEquals(0, selectComments.getResults().size)
+        }
+    }
+
+    /**
+     * Test CREATE SQL generation for foreign keys
+     * Verifies that foreign key constraints are correctly included in CREATE SQL
+     */
+    fun testForeignKeyCreateSQL() {
+        // Test 1: Simple foreign key with @References
+        val orderSQL = FKOrderTable.createSQL
+        assertEquals(true, orderSQL.contains("REFERENCES fk_user(id)"))
+        assertEquals(true, orderSQL.contains("ON DELETE CASCADE"))
+
+        // Test 2: SET_NULL trigger
+        val postSQL = FKPostTable.createSQL
+        assertEquals(true, postSQL.contains("REFERENCES fk_user(id)"))
+        assertEquals(true, postSQL.contains("ON DELETE SET NULL"))
+
+        // Test 3: RESTRICT trigger
+        val profileSQL = FKProfileTable.createSQL
+        assertEquals(true, profileSQL.contains("REFERENCES fk_user(id)"))
+        assertEquals(true, profileSQL.contains("ON DELETE RESTRICT"))
+
+        // Test 4: Composite foreign key with @ForeignKey
+        val orderItemSQL = FKOrderItemTable.createSQL
+        assertEquals(true, orderItemSQL.contains("FOREIGN KEY"))
+        assertEquals(true, orderItemSQL.contains("REFERENCES fk_product"))
+        assertEquals(true, orderItemSQL.contains("ON DELETE CASCADE"))
+
+        // Test 5: Multiple foreign keys
+        val commentSQL = FKCommentTable.createSQL
+        assertEquals(true, commentSQL.contains("REFERENCES fk_user(id)"))
+        assertEquals(true, commentSQL.contains("REFERENCES fk_post(id)"))
+    }
+
+    /**
+     * Test foreign key constraint without PRAGMA_FOREIGN_KEYS enabled
+     * Verifies that constraints are not enforced when PRAGMA is not enabled
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testForeignKeyWithoutPragma() {
+        Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
+            // Note: NOT enabling PRAGMA_FOREIGN_KEYS
+
+            // Insert parent user
+            val user = FKUser(id = null, email = "test@example.com", name = "Test")
+            database {
+                FKUserTable { table ->
+                    table INSERT user
+                }
+            }
+
+            // Insert order with INVALID foreign key - should succeed without enforcement
+            val invalidOrder = FKOrder(id = null, userId = 999L, amount = 99.99, orderDate = "2025-01-15")
+            database {
+                FKOrderTable { table ->
+                    table INSERT invalidOrder
+                }
+            }
+
+            // Verify order was inserted despite invalid foreign key
+            lateinit var selectOrders: SelectStatement<FKOrder>
+            database {
+                selectOrders = FKOrderTable SELECT X
+            }
+            assertEquals(1, selectOrders.getResults().size)
+            assertEquals(999L, selectOrders.getResults()[0].userId)
+        }
+    }
+
     private fun getDefaultDBConfig(): DatabaseConfiguration =
         DatabaseConfiguration(
             name = DATABASE_NAME,
@@ -2181,6 +2642,23 @@ class CommonBasicTest(private val path: DatabasePath) {
                 CREATE(CompositeUniqueTestTable)
                 CREATE(MultiGroupUniqueTestTable)
                 CREATE(CombinedConstraintsTestTable)
+            }
+        )
+
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    private fun getForeignKeyDBConfig(): DSLDBConfiguration =
+        DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(FKUserTable)
+                CREATE(FKOrderTable)
+                CREATE(FKPostTable)
+                CREATE(FKProfileTable)
+                CREATE(FKProductTable)
+                CREATE(FKOrderItemTable)
+                CREATE(FKCommentTable)
             }
         )
 }

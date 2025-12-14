@@ -497,6 +497,341 @@ data class User(
 | ByteArray | BLOB |
 | Enum | INT |
 
+### Foreign Key Constraints
+
+SQLlin provides comprehensive support for foreign key constraints to maintain referential integrity between tables. Foreign keys ensure that relationships between tables remain consistent by enforcing rules when data is inserted, updated, or deleted.
+
+#### Important: Enabling Foreign Keys
+
+By default, SQLite **does not enforce** foreign key constraints for backward compatibility. You must explicitly enable foreign key enforcement using `PRAGMA_FOREIGN_KEYS(true)` before creating tables:
+
+```kotlin
+database {
+    // CRITICAL: Enable foreign key enforcement first
+    PRAGMA_FOREIGN_KEYS(true)
+
+    // Now create tables with foreign keys
+    CREATE(UserTable)
+    CREATE(OrderTable)  // Has foreign key to UserTable
+}
+```
+
+**Key points:**
+- This setting is **per-connection** and must be set each time you open the database
+- The setting **cannot be changed** inside a transaction
+- Without enabling this, foreign keys will be part of the schema but **not enforced**
+
+#### Defining Foreign Keys
+
+SQLlin provides two approaches for defining foreign keys:
+
+##### Approach 1: Column-Level with @References
+
+Use `@References` for simple single-column foreign keys. This is the **recommended approach** for most use cases:
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import com.ctrip.sqllin.dsl.annotation.References
+import com.ctrip.sqllin.dsl.annotation.Trigger
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class User(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    val name: String,
+    val email: String,
+)
+
+@DBRow
+@Serializable
+data class Order(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(
+        tableName = "User",
+        foreignKeys = ["id"],
+        trigger = Trigger.ON_DELETE_CASCADE
+    )
+    val userId: Long,
+    val amount: Double,
+    val orderDate: String,
+)
+// Generated SQL: CREATE TABLE Order(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   userId BIGINT REFERENCES User(id) ON DELETE CASCADE,
+//   amount DOUBLE,
+//   orderDate TEXT
+// )
+```
+
+##### Approach 2: Table-Level with @ForeignKeyGroup + @ForeignKey
+
+Use this approach for composite foreign keys that reference multiple columns:
+
+```kotlin
+import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey
+import com.ctrip.sqllin.dsl.annotation.ForeignKeyGroup
+import com.ctrip.sqllin.dsl.annotation.ForeignKey
+import com.ctrip.sqllin.dsl.annotation.Trigger
+import kotlinx.serialization.Serializable
+
+@DBRow
+@Serializable
+data class Product(
+    @CompositePrimaryKey val categoryId: Int,
+    @CompositePrimaryKey val productCode: String,
+    val name: String,
+    val price: Double,
+)
+
+@DBRow
+@Serializable
+@ForeignKeyGroup(
+    group = 0,
+    tableName = "Product",
+    trigger = Trigger.ON_DELETE_CASCADE,
+    constraintName = "fk_product"
+)
+data class OrderItem(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @ForeignKey(group = 0, reference = "categoryId")
+    val productCategory: Int,
+    @ForeignKey(group = 0, reference = "productCode")
+    val productCode: String,
+    val quantity: Int,
+)
+// Generated SQL: CREATE TABLE OrderItem(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   productCategory INT,
+//   productCode TEXT,
+//   quantity INT,
+//   CONSTRAINT fk_product FOREIGN KEY (productCategory,productCode)
+//     REFERENCES Product(categoryId,productCode) ON DELETE CASCADE
+// )
+```
+
+#### Referential Actions (Triggers)
+
+Triggers define what happens when a referenced row is deleted or updated. SQLlin supports all standard SQLite triggers via the `Trigger` enum:
+
+##### DELETE Triggers
+
+**ON_DELETE_CASCADE**: Automatically delete child rows when parent is deleted
+```kotlin
+@DBRow
+@Serializable
+data class Order(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_CASCADE)
+    val userId: Long,
+    val amount: Double,
+)
+// When a User is deleted, all their Orders are automatically deleted
+```
+
+**ON_DELETE_SET_NULL**: Set foreign key to NULL when parent is deleted (requires nullable column)
+```kotlin
+@DBRow
+@Serializable
+data class Post(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_NULL)
+    val authorId: Long?,  // Must be nullable!
+    val content: String,
+)
+// When a User is deleted, their Posts remain but authorId becomes NULL
+```
+
+**ON_DELETE_RESTRICT**: Prevent deletion of parent if children exist
+```kotlin
+@DBRow
+@Serializable
+data class OrderItem(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(tableName = "Order", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_RESTRICT)
+    val orderId: Long,
+    val productId: Long,
+)
+// An Order cannot be deleted if it has OrderItems
+```
+
+**ON_DELETE_SET_DEFAULT**: Set foreign key to its default value when parent is deleted
+```kotlin
+@DBRow
+@Serializable
+data class Comment(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_DEFAULT)
+    val userId: Long = 0L,  // Default to 0 (anonymous user)
+    val content: String,
+)
+```
+
+##### UPDATE Triggers
+
+The same actions are available for UPDATE operations:
+- `ON_UPDATE_CASCADE`: Update child foreign keys when parent primary key changes
+- `ON_UPDATE_SET_NULL`: Set child foreign keys to NULL (requires nullable column)
+- `ON_UPDATE_RESTRICT`: Prevent updating parent primary key if children exist
+- `ON_UPDATE_SET_DEFAULT`: Set child foreign keys to default value
+
+##### Trigger Behavior Summary
+
+| Trigger | Parent Deleted/Updated | Child Behavior | Nullable Required? |
+|---------|------------------------|----------------|-------------------|
+| NULL (default) | Allowed | No change | No |
+| CASCADE | Allowed | Child rows deleted/updated | No |
+| SET_NULL | Allowed | Foreign key set to NULL | **Yes** |
+| SET_DEFAULT | Allowed | Foreign key set to DEFAULT | No |
+| RESTRICT | **Prevented** | Operation fails | No |
+
+#### Multiple Foreign Keys
+
+A table can have multiple foreign key constraints to different parent tables:
+
+```kotlin
+@DBRow
+@Serializable
+@ForeignKeyGroup(group = 0, tableName = "User", trigger = Trigger.ON_DELETE_CASCADE)
+@ForeignKeyGroup(group = 1, tableName = "Product", trigger = Trigger.ON_DELETE_RESTRICT)
+data class OrderItem(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @ForeignKey(group = 0, reference = "id") val userId: Long,
+    @ForeignKey(group = 1, reference = "id") val productId: Long,
+    val quantity: Int,
+)
+// Generated SQL: CREATE TABLE OrderItem(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   userId BIGINT,
+//   productId BIGINT,
+//   quantity INT,
+//   FOREIGN KEY (userId) REFERENCES User(id) ON DELETE CASCADE,
+//   FOREIGN KEY (productId) REFERENCES Product(id) ON DELETE RESTRICT
+// )
+```
+
+Or using `@References`:
+```kotlin
+@DBRow
+@Serializable
+data class OrderItem(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_CASCADE)
+    val userId: Long,
+    @References(tableName = "Product", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_RESTRICT)
+    val productId: Long,
+    val quantity: Int,
+)
+```
+
+#### Named Constraints
+
+You can optionally name your foreign key constraints for better error messages and schema introspection:
+
+```kotlin
+@DBRow
+@Serializable
+data class Order(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(
+        tableName = "User",
+        foreignKeys = ["id"],
+        trigger = Trigger.ON_DELETE_CASCADE,
+        constraintName = "fk_order_user"  // Optional constraint name
+    )
+    val userId: Long,
+)
+// Generated SQL: userId BIGINT CONSTRAINT fk_order_user REFERENCES User(id) ON DELETE CASCADE
+```
+
+#### Best Practices
+
+1. **Always enable foreign keys**: Call `PRAGMA_FOREIGN_KEYS(true)` at the start of each database session
+2. **Create parent tables first**: Create referenced tables before creating tables with foreign keys to them
+3. **Use CASCADE for dependent data**: Use `ON_DELETE_CASCADE` when child data should not exist without its parent
+4. **Use SET_NULL for optional relationships**: Use `ON_DELETE_SET_NULL` when child data can exist independently
+5. **Use RESTRICT for protection**: Use `ON_DELETE_RESTRICT` to prevent accidental deletion of parent data
+6. **Consider nullable columns**: Use nullable foreign key columns when the relationship is optional
+7. **Name your constraints**: Use `constraintName` parameter for better debugging and error messages
+
+#### Complete Example
+
+Here's a complete example demonstrating foreign key relationships:
+
+```kotlin
+import com.ctrip.sqllin.dsl.Database
+import com.ctrip.sqllin.dsl.annotation.*
+import kotlinx.serialization.Serializable
+
+// Parent table: Users
+@DBRow
+@Serializable
+data class User(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @Unique val email: String,
+    val name: String,
+)
+
+// Child table: Orders with CASCADE delete
+@DBRow
+@Serializable
+data class Order(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_CASCADE)
+    val userId: Long,
+    val amount: Double,
+    val orderDate: String,
+)
+
+// Child table: Posts with SET_NULL delete
+@DBRow
+@Serializable
+data class Post(
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_NULL)
+    val authorId: Long?,  // Nullable - posts can exist without author
+    val title: String,
+    val content: String,
+)
+
+fun setupDatabase() {
+    database {
+        // CRITICAL: Enable foreign key enforcement
+        PRAGMA_FOREIGN_KEYS(true)
+
+        // Create parent table first
+        CREATE(UserTable)
+
+        // Then create child tables
+        CREATE(OrderTable)
+        CREATE(PostTable)
+
+        // Insert some data
+        val user = User(id = null, email = "alice@example.com", name = "Alice")
+        UserTable INSERT user
+
+        val order = Order(id = null, userId = 1L, amount = 99.99, orderDate = "2025-01-15")
+        OrderTable INSERT order
+
+        // This will fail because user 999 doesn't exist (foreign key violation)
+        try {
+            val invalidOrder = Order(id = null, userId = 999L, amount = 50.0, orderDate = "2025-01-15")
+            OrderTable INSERT invalidOrder  // Throws exception!
+        } catch (e: Exception) {
+            println("Foreign key constraint violation: ${e.message}")
+        }
+
+        // Delete the user - CASCADE will delete their orders, SET_NULL will null post authors
+        UserTable DELETE WHERE(UserTable.id EQ 1L)
+        // All orders for user 1 are automatically deleted
+        // All posts by user 1 have authorId set to NULL
+    }
+}
+```
+
 ## Next Step
 
 You have learned all the preparations, you can start learn how to operate database now:

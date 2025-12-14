@@ -128,6 +128,30 @@ class NativeTest {
     @Test
     fun testBlobLengthFunction() = commonTest.testBlobLengthFunction()
 
+    @Test
+    fun testPragmaForeignKeys() = commonTest.testPragmaForeignKeys()
+
+    @Test
+    fun testForeignKeyCascadeDelete() = commonTest.testForeignKeyCascadeDelete()
+
+    @Test
+    fun testForeignKeySetNullDelete() = commonTest.testForeignKeySetNullDelete()
+
+    @Test
+    fun testForeignKeyRestrictDelete() = commonTest.testForeignKeyRestrictDelete()
+
+    @Test
+    fun testCompositeForeignKey() = commonTest.testCompositeForeignKey()
+
+    @Test
+    fun testMultipleForeignKeys() = commonTest.testMultipleForeignKeys()
+
+    @Test
+    fun testForeignKeyCreateSQL() = commonTest.testForeignKeyCreateSQL()
+
+    @Test
+    fun testForeignKeyWithoutPragma() = commonTest.testForeignKeyWithoutPragma()
+
     @BeforeTest
     fun setUp() {
         deleteDatabase(path, CommonBasicTest.DATABASE_NAME)

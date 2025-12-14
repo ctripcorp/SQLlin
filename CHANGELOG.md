@@ -2,12 +2,14 @@
 
 - Date format: YYYY-MM-dd
 
-## 2.2.0 / 2025-11-xx
+## 2.2.0 / 2025-12-xx
 
 ### sqllin-dsl
 
 * New experimental DSL API: `DatabaseScope#CREATE_INDEX` for creating indexes
 * New experimental DSL API: `DatabaseScope#CREATE_UNIQUE_INDEX` for creating unique indexes
+* New experimental DSL API: `DatabaseScope#PRAGMA_FOREIGN_KEYS` for enabling foreign keys
+* New experimental annotation APIs: `ForeignKeyGroup`, `References`, `ForeignKey` for supporting foreign keys for table and column levels
 * New SQL aggregate function: `group_concat` for concatenating values with a separator
 * New SQL scalar functions: `round`, `random`, `sign`
 * New SQL string functions: `substr`, `trim`, `ltrim`, `rtrim`, `replace`, `instr`, `printf`
@@ -16,6 +18,7 @@
 * **Breaking change**: The parameter type of `upper` function changed from `ClauseElement` to `ClauseString`
 * **Breaking change**: The parameter type of `lower` function changed from `ClauseElement` to `ClauseString`
 * **Breaking change**: The parameter type of `length` function changed from `ClauseElement` to `ClauseString`
+* 
 
 ### sqllin-driver
 
@@ -34,10 +37,10 @@
 * Support `<`, `<=`, `>`, `>=`, `IN`, `BETWEEN...AND` operators for String
 * Support `=`, `!=`, `<`, `<=`, `>`, `>=`, `IN`, `BETWEEN...AND` operators for ByteArray
 * Add a new condiction function `ISNOT` for Boolean, and `IS` starts to support to receive a nullable parameter
-* Refactored CREATE statements building process, move it from runtime to compile-time.
-* New experimental API for _COLLATE NOCASE_ keyword: `CollateNoCase`
-* New experimental API for single column with _UNIQUE_ keyword: `Unique`
-* New Experimental API for composite column groups with _UNIQUE_ keyword: `CompositeUnique`
+* Refactored _CREATE_ statements building process, move it from runtime to compile-time.
+* New experimental annotation API for _COLLATE NOCASE_ keyword: `@CollateNoCase`
+* New experimental annotation API for single column with _UNIQUE_ keyword: `@Unique`
+* New experimental annotation API for composite column groups with _UNIQUE_ keyword: `@CompositeUnique`
 
 ## 2.0.0 / 2025-10-23
 
@@ -50,13 +53,13 @@
 ### sqllin-dsl
 
 * Optimized performance for SQL assembly
-* New annotation for marking primary key: `PrimaryKey`
-* New annotation for marking composite primary key: `CompositePrimaryKey`
+* New experimental annotation for marking primary key: `@PrimaryKey`
+* New experimental annotation for marking composite primary key: `@CompositePrimaryKey`
 * New experimental API for creating Database: `DSLDBConfiguration`
 * New experimental DSL API: `DatabaseScope#CREATE`
 * New experimental DSL API: `DatabaseScope#DROP`
 * New experimental DSL API: `DatabaseSceop#ALERT`
-* Support using ByteArray in DSL, that represents BLOB in SQLite
+* Support using `ByteArray` in DSL, that represents _BLOB_ in SQLite
 
 ### sqllin-driver
 
@@ -124,7 +127,7 @@
 
 * Update `kotlinx.coroutines`'s version to `1.10.1`
 * Update `kotlinx.serialization`'s version to `1.8.0`
-* Add some DslMaker annotations, make the DSL apis be more readable
+* Add some `DslMaker` annotations, make the DSL apis be more readable
 
 ### sqllin-driver
 

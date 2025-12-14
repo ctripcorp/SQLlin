@@ -105,6 +105,9 @@ class ClauseProcessor(
             if (classDeclaration.annotations.all { !it.annotationType.resolve().isAssignableFrom(serializableType) })
                 continue // Don't handle the classes that didn't be annotated 'Serializable'
 
+            val foreignKeyParser = ForeignKeyParser()
+            foreignKeyParser.handleGroups(classDeclaration.annotations)
+
             val className = classDeclaration.simpleName.asString()
             val packageName = classDeclaration.packageName.asString()
             val objectName = "${className}Table"
@@ -171,8 +174,8 @@ class ClauseProcessor(
                     val isNotNull = property.type.resolve().nullability == Nullability.NOT_NULL
 
                     // Collect the information of the primary key(s).
-                    val annotations = property.annotations.map { it.annotationType.resolve() }
-                    val isPrimaryKey = annotations.any { it.isAssignableFrom(primaryKeyAnnotationName) }
+                    val annotationKSType = property.annotations.map { it.annotationType.resolve() }
+                    val isPrimaryKey = annotationKSType.any { it.isAssignableFrom(primaryKeyAnnotationName) }
 
                     // Build column definition: name, type, and constraints
                     with(createSQLBuilder) {
@@ -182,7 +185,7 @@ class ClauseProcessor(
 
                         // Handle @PrimaryKey annotation
                         if (isPrimaryKey) {
-                            check(!annotations.any { it.isAssignableFrom(compositePrimaryKeyName) }) { PROMPT_CANT_ADD_BOTH_ANNOTATION }
+                            check(!annotationKSType.any { it.isAssignableFrom(compositePrimaryKeyName) }) { PROMPT_CANT_ADD_BOTH_ANNOTATION }
                             check(!isNotNull) { PROMPT_PRIMARY_KEY_MUST_NOT_NULL }
                             check(!isContainsPrimaryKey) { PROMPT_PRIMARY_KEY_USE_COUNT }
                             isContainsPrimaryKey = true
@@ -199,7 +202,7 @@ class ClauseProcessor(
                                 append(" AUTOINCREMENT")
                             }
                             isRowId = isLong
-                        } else if (annotations.any { it.isAssignableFrom(compositePrimaryKeyName) }) {
+                        } else if (annotationKSType.any { it.isAssignableFrom(compositePrimaryKeyName) }) {
                             // Handle @CompositePrimaryKey - collect for table-level constraint
                             check(isNotNull) { PROMPT_PRIMARY_KEY_MUST_NOT_NULL }
                             compositePrimaryKeys.add(propertyName)
@@ -209,14 +212,17 @@ class ClauseProcessor(
                         }
 
                         // Handle @CollateNoCase annotation - must be on text columns
-                        if (annotations.any { it.isAssignableFrom(noCaseAnnotationName) }) {
+                        if (annotationKSType.any { it.isAssignableFrom(noCaseAnnotationName) }) {
                             check(type == " TEXT" || type == " CHAR(1)") { PROMPT_NO_CASE_MUST_FOR_TEXT }
                             append(" COLLATE NOCASE")
                         }
 
                         // Handle @Unique annotation - single column uniqueness
-                        if (annotations.any { it.isAssignableFrom(uniqueAnnotationName) })
+                        if (annotationKSType.any { it.isAssignableFrom(uniqueAnnotationName) })
                             append(" UNIQUE")
+
+                        // Handle @Reference and @ForeignKey
+                        foreignKeyParser.handleColumnAnnotations(createSQLBuilder, property.annotations, propertyName, isNotNull)
 
                         // Handle @CompositeUnique annotation - collect for table-level constraint
                         val compositeUniqueAnnotation = property.annotations
@@ -250,8 +256,6 @@ class ClauseProcessor(
                     writer.write("    @ColumnNameDslMaker\n")
                     writer.write("    val $propertyName\n")
                     writer.write("        get() = $clauseElementTypeName($elementName, this)\n\n")
-
-                    // Write 'SetClause' code.
                     writer.write("    @ColumnNameDslMaker\n")
                     writer.write("    var SetClause<$className>.$propertyName: ${property.typeName}")
                     val nullableSymbol = when {
@@ -313,6 +317,8 @@ class ClauseProcessor(
                         }
                         append(')')
                     }
+
+                    foreignKeyParser.generateCodeForForeignKey(createSQLBuilder)
 
                     append(')')
                 }
