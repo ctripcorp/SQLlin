@@ -1,3 +1,19 @@
+/*
+ * Copyright (C) 2025 Ctrip.com.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.ctrip.sqllin.processor
 
 import com.google.devtools.ksp.symbol.ClassKind
@@ -13,8 +29,8 @@ import com.google.devtools.ksp.symbol.KSClassDeclaration
  * the appropriate SQLite FOREIGN KEY clauses in CREATE TABLE statements.
  *
  * ### Processing Workflow
- * 1. **Parse class-level annotations**: [handleGroups] extracts [@ForeignKeyGroup] metadata
- * 2. **Parse property annotations**: [handleColumnAnnotations] processes [@ForeignKey] and [@References]
+ * 1. **Parse class-level annotations**: [parseGroups] extracts [@ForeignKeyGroup] metadata
+ * 2. **Parse property annotations**: [parseColumnAnnotations] processes [@ForeignKey] and [@References]
  * 3. **Generate SQL**: [generateCodeForForeignKey] appends FOREIGN KEY clauses to CREATE TABLE
  *
  * ### Supported Annotation Patterns
@@ -67,7 +83,7 @@ class ForeignKeyParser {
 
     /**
      * Map of group number to foreign key metadata.
-     * Populated by [handleGroups] and consumed by [generateCodeForForeignKey].
+     * Populated by [parseGroups] and consumed by [generateCodeForForeignKey].
      */
     private val groupMap = HashMap<Int, ForeignKeyEntity>()
 
@@ -97,7 +113,7 @@ class ForeignKeyParser {
      * @param annotations Sequence of class-level annotations to process
      * @throws IllegalArgumentException if tableName is blank or group number is duplicated
      */
-    fun handleGroups(annotations: Sequence<KSAnnotation>) {
+    fun parseGroups(annotations: Sequence<KSAnnotation>) {
         annotations.forEach { annotation ->
             if (annotation.annotationType.resolve().declaration.qualifiedName?.asString() == ANNOTATION_GROUP) {
                 var group = 0
@@ -178,7 +194,7 @@ class ForeignKeyParser {
      * @throws IllegalArgumentException if validation fails or referenced group doesn't exist
      */
     @Suppress("UNCHECKED_CAST")
-    fun handleColumnAnnotations(
+    fun parseColumnAnnotations(
         createSQLBuilder: StringBuilder,
         annotations: Sequence<KSAnnotation>,
         propertyName: String,
@@ -266,7 +282,7 @@ class ForeignKeyParser {
     /**
      * Generates table-level FOREIGN KEY clauses and appends them to the CREATE TABLE statement.
      *
-     * This method processes all foreign key groups accumulated by [handleColumnAnnotations]
+     * This method processes all foreign key groups accumulated by [parseColumnAnnotations]
      * and generates the corresponding FOREIGN KEY constraints at the table level. Each group
      * is converted into a SQL clause of the form:
      * ```sql
