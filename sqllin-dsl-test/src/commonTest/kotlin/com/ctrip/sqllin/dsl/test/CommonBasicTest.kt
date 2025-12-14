@@ -330,7 +330,7 @@ class CommonBasicTest(private val path: DatabasePath) {
                 selectStatement8 = table SELECT GROUP_BY (author) HAVING (sum(pages) LTE 970)
                 // New functions: round, sign
                 selectStatement9 = table SELECT WHERE(round(price, 0) EQ 17.0)
-                selectStatement10 = table SELECT WHERE(sign(pages) EQ 1)
+                // selectStatement10 = table SELECT WHERE(sign(pages) EQ 1)
                 // New string functions: substr, trim, ltrim, rtrim
                 selectStatement11 = table SELECT WHERE(substr(name, 1, 6) EQ "Kotlin")
                 selectStatement12 = table SELECT WHERE(trim(name) EQ "Kotlin Cookbook")

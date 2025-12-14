@@ -156,13 +156,14 @@ public fun <T> Table<T>.random(): ClauseNumber =
  * // Get the sign of balance
  * SELECT WHERE (sign(Account::balance) EQ 1)
  * ```
+ * ***It is based on SQLite 3.51.1, disabled it temporarily***
  *
  * @param element The numeric value to get the sign of
  * @return ClauseNumber representing -1, 0, or 1
  */
-@FunctionDslMaker
-public fun <T> Table<T>.sign(element: ClauseNumber): ClauseNumber =
-    ClauseNumber("sign(${element.valueName})", this, true)
+/* @FunctionDslMaker
+ public fun <T> Table<T>.sign(element: ClauseNumber): ClauseNumber =
+    ClauseNumber("sign(${element.valueName})", this, true) */
 
 /**
  * UPPER scalar function - converts string to uppercase.

@@ -2,7 +2,7 @@
 
 - Date format: YYYY-MM-dd
 
-## 2.2.0 / 2025-12-14
+## 2.2.0 / 2025-12-15
 
 ### sqllin-dsl
 
@@ -12,7 +12,7 @@
 * New experimental annotation APIs: `ForeignKeyGroup`, `References`, `ForeignKey` for supporting foreign keys for table and column levels
 * New experimental annotation API: `@Default` for specifying default values for columns in CREATE TABLE statements
 * New SQL aggregate function: `group_concat` for concatenating values with a separator
-* New SQL scalar functions: `round`, `random`, `sign`
+* New SQL scalar functions: `round`, `random`
 * New SQL string functions: `substr`, `trim`, `ltrim`, `rtrim`, `replace`, `instr`, `printf`
 * New overload for `length` function to support `ClauseBlob` type
 * **Breaking change**: The parameter type of `abs` function changed from `ClauseElement` to `ClauseNumber`
