@@ -2,7 +2,7 @@
 
 - Date format: YYYY-MM-dd
 
-## 2.2.0 / 2025-12-xx
+## 2.2.0 / 2025-12-14
 
 ### sqllin-dsl
 
@@ -19,7 +19,6 @@
 * **Breaking change**: The parameter type of `upper` function changed from `ClauseElement` to `ClauseString`
 * **Breaking change**: The parameter type of `lower` function changed from `ClauseElement` to `ClauseString`
 * **Breaking change**: The parameter type of `length` function changed from `ClauseElement` to `ClauseString`
-* 
 
 ### sqllin-driver
 
