@@ -22,7 +22,11 @@ In [Modify Database and Transaction](modify-database-and-transaction.md), we hav
 generate some `ClauseElement`s to represent column names. SQL functions will receive a `ClauseElement` as a parameter and return
 a `ClauseElement` as the result. The functions supported by SQLlin are as follows:
 
-> `count`, `max`, `min`, `avg`, `sum`, `abs`, `upper`, `lower`, `length`
+> **Aggregate functions**: `count`, `max`, `min`, `avg`, `sum`, `group_concat`
+>
+> **Numeric functions**: `abs`, `round`, `random`, `sign`
+>
+> **String functions**: `upper`, `lower`, `length`, `substr`, `trim`, `ltrim`, `rtrim`, `replace`, `instr`, `printf`
 
 The `count` function has a different point, it could receive `X` as parameter be used for representing `count(*)` in SQL, as shown in the
 example above.

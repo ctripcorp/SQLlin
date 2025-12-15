@@ -83,6 +83,21 @@ kotlin {
     }
 }
 
+gradle.taskGraph.whenReady {
+    if (!project.hasProperty("onCICD"))
+        return@whenReady
+    tasks.forEach {
+        when {
+            it.name.contains("linux", true) -> it.enabled = HostManager.hostIsLinux
+            it.name.contains("mingw", true) -> it.enabled = HostManager.hostIsMingw
+            it.name.contains("ios", true)
+                    || it.name.contains("macos", true)
+                    || it.name.contains("watchos", true)
+                    || it.name.contains("tvos", true) -> it.enabled = HostManager.hostIsMac
+        }
+    }
+}
+
 android {
     namespace = "com.ctrip.sqllin.dsl.test"
     compileSdk = libs.versions.android.sdk.compile.get().toInt()

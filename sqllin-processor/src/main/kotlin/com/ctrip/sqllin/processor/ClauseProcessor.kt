@@ -24,7 +24,6 @@ import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
 import java.io.OutputStreamWriter
-import java.lang.IllegalStateException
 
 /**
  * KSP symbol processor that generates table objects for database entities.
@@ -71,19 +70,8 @@ class ClauseProcessor(
      */
     private companion object {
         const val ANNOTATION_DATABASE_ROW_NAME = "com.ctrip.sqllin.dsl.annotation.DBRow"
-        const val ANNOTATION_PRIMARY_KEY = "com.ctrip.sqllin.dsl.annotation.PrimaryKey"
-        const val ANNOTATION_COMPOSITE_PRIMARY_KEY = "com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey"
-        const val ANNOTATION_UNIQUE = "com.ctrip.sqllin.dsl.annotation.Unique"
-        const val ANNOTATION_COMPOSITE_UNIQUE = "com.ctrip.sqllin.dsl.annotation.CompositeUnique"
-        const val ANNOTATION_NO_CASE = "com.ctrip.sqllin.dsl.annotation.CollateNoCase"
         const val ANNOTATION_SERIALIZABLE = "kotlinx.serialization.Serializable"
         const val ANNOTATION_TRANSIENT = "kotlinx.serialization.Transient"
-
-        const val PROMPT_CANT_ADD_BOTH_ANNOTATION = "You can't add both @PrimaryKey and @CompositePrimaryKey to the same property."
-        const val PROMPT_PRIMARY_KEY_MUST_NOT_NULL = "The primary key must be not-null."
-        const val PROMPT_PRIMARY_KEY_TYPE = """The primary key's type must be Long when you set the the parameter "isAutoincrement = true" in annotation PrimaryKey."""
-        const val PROMPT_PRIMARY_KEY_USE_COUNT = "You only could use PrimaryKey to annotate one property in a class."
-        const val PROMPT_NO_CASE_MUST_FOR_TEXT = "You only could add annotation @CollateNoCase for a String or Char typed property."
     }
 
     /**
@@ -104,6 +92,9 @@ class ClauseProcessor(
 
             if (classDeclaration.annotations.all { !it.annotationType.resolve().isAssignableFrom(serializableType) })
                 continue // Don't handle the classes that didn't be annotated 'Serializable'
+
+            val foreignKeyParser = ForeignKeyParser()
+            foreignKeyParser.parseGroups(classDeclaration.annotations)
 
             val className = classDeclaration.simpleName.asString()
             val packageName = classDeclaration.packageName.asString()
@@ -137,26 +128,14 @@ class ClauseProcessor(
 
                 writer.write("    inline operator fun <R> invoke(block: $objectName.(table: $objectName) -> R): R = this.block(this)\n\n")
                 val transientName = resolver.getClassDeclarationByName(ANNOTATION_TRANSIENT)!!.asStarProjectedType()
-                val primaryKeyAnnotationName = resolver.getClassDeclarationByName(ANNOTATION_PRIMARY_KEY)!!.asStarProjectedType()
-                val compositePrimaryKeyName = resolver.getClassDeclarationByName(ANNOTATION_COMPOSITE_PRIMARY_KEY)!!.asStarProjectedType()
-                val noCaseAnnotationName = resolver.getClassDeclarationByName(ANNOTATION_NO_CASE)!!.asStarProjectedType()
-                val uniqueAnnotationName = resolver.getClassDeclarationByName(ANNOTATION_UNIQUE)!!.asStarProjectedType()
 
-                // Primary key tracking for metadata generation
-                var primaryKeyName: String? = null
-                var isAutomaticIncrement = false
-                var isRowId = false
-                val compositePrimaryKeys = ArrayList<String>()
-                var isContainsPrimaryKey = false
+                val columnConstraintParser = ColumnConstraintParser(resolver)
 
                 // CREATE TABLE statement builder (compile-time generation)
                 val createSQLBuilder = StringBuilder("CREATE TABLE ").apply {
                     append(tableName)
                     append('(')
                 }
-
-                // Track composite unique constraints: group number → list of column names
-                val compositeUniqueColumns = HashMap<Int, MutableList<String>>()
 
                 // Filter out @Transient properties and convert to list for indexed iteration
                 val propertyList = classDeclaration.getAllProperties().filter { classDeclaration ->
@@ -170,77 +149,14 @@ class ClauseProcessor(
                     val elementName = "$className.serializer().descriptor.getElementName($index)"
                     val isNotNull = property.type.resolve().nullability == Nullability.NOT_NULL
 
-                    // Collect the information of the primary key(s).
-                    val annotations = property.annotations.map { it.annotationType.resolve() }
-                    val isPrimaryKey = annotations.any { it.isAssignableFrom(primaryKeyAnnotationName) }
-
                     // Build column definition: name, type, and constraints
                     with(createSQLBuilder) {
                         append(propertyName)
-                        val type = getSQLiteType(property, isPrimaryKey)
-                        append(type)
 
-                        // Handle @PrimaryKey annotation
-                        if (isPrimaryKey) {
-                            check(!annotations.any { it.isAssignableFrom(compositePrimaryKeyName) }) { PROMPT_CANT_ADD_BOTH_ANNOTATION }
-                            check(!isNotNull) { PROMPT_PRIMARY_KEY_MUST_NOT_NULL }
-                            check(!isContainsPrimaryKey) { PROMPT_PRIMARY_KEY_USE_COUNT }
-                            isContainsPrimaryKey = true
-                            primaryKeyName = propertyName
+                        columnConstraintParser.parseProperty(this, property, propertyName, isNotNull)
 
-                            append(" PRIMARY KEY")
-
-                            isAutomaticIncrement = property.annotations.find {
-                                it.annotationType.resolve().declaration.qualifiedName?.asString() == ANNOTATION_PRIMARY_KEY
-                            }?.arguments?.firstOrNull()?.value as? Boolean ?: false
-                            val isLong = type == " INTEGER" || type == " BIGINT"
-                            if (isAutomaticIncrement) {
-                                check(isLong) { PROMPT_PRIMARY_KEY_TYPE }
-                                append(" AUTOINCREMENT")
-                            }
-                            isRowId = isLong
-                        } else if (annotations.any { it.isAssignableFrom(compositePrimaryKeyName) }) {
-                            // Handle @CompositePrimaryKey - collect for table-level constraint
-                            check(isNotNull) { PROMPT_PRIMARY_KEY_MUST_NOT_NULL }
-                            compositePrimaryKeys.add(propertyName)
-                        } else if (isNotNull) {
-                            // Add NOT NULL constraint for non-nullable, non-PK columns
-                            append(" NOT NULL")
-                        }
-
-                        // Handle @CollateNoCase annotation - must be on text columns
-                        if (annotations.any { it.isAssignableFrom(noCaseAnnotationName) }) {
-                            check(type == " TEXT" || type == " CHAR(1)") { PROMPT_NO_CASE_MUST_FOR_TEXT }
-                            append(" COLLATE NOCASE")
-                        }
-
-                        // Handle @Unique annotation - single column uniqueness
-                        if (annotations.any { it.isAssignableFrom(uniqueAnnotationName) })
-                            append(" UNIQUE")
-
-                        // Handle @CompositeUnique annotation - collect for table-level constraint
-                        val compositeUniqueAnnotation = property.annotations
-                            .find { it.annotationType.resolve().declaration.qualifiedName?.asString() == ANNOTATION_COMPOSITE_UNIQUE }
-
-                        compositeUniqueAnnotation?.run {
-                            // Extract group numbers from annotation (defaults to group 0 if not specified)
-                            arguments
-                                .firstOrNull { it.name?.asString() == "group" }
-                                .let {
-                                    val list = if (it == null) {
-                                        listOf(0)  // Default to group 0
-                                    } else {
-                                        it.value as? List<Int> ?: listOf(0)
-                                    }
-                                    // Add this property to each specified group
-                                    list.forEach { group ->
-                                        val groupList = compositeUniqueColumns[group] ?: ArrayList<String>().also { gl ->
-                                            compositeUniqueColumns[group] = gl
-                                        }
-                                        groupList.add(propertyName)
-                                    }
-                                }
-                        }
+                        // Handle @Reference and @ForeignKey
+                        foreignKeyParser.parseColumnAnnotations(createSQLBuilder, property.annotations, propertyName, isNotNull)
 
                         if (index < propertyList.lastIndex)
                             append(',')
@@ -250,12 +166,10 @@ class ClauseProcessor(
                     writer.write("    @ColumnNameDslMaker\n")
                     writer.write("    val $propertyName\n")
                     writer.write("        get() = $clauseElementTypeName($elementName, this)\n\n")
-
-                    // Write 'SetClause' code.
                     writer.write("    @ColumnNameDslMaker\n")
                     writer.write("    var SetClause<$className>.$propertyName: ${property.typeName}")
                     val nullableSymbol = when {
-                        isRowId -> "?\n"
+                        columnConstraintParser.isRowId -> "?\n"
                         isNotNull -> "\n"
                         else -> "?\n"
                     }
@@ -264,58 +178,9 @@ class ClauseProcessor(
                     writer.write("        set(value) = ${appendFunction(elementName, property)}\n\n")
                 }
 
-                // Write the override instance for property `primaryKeyInfo`.
-                if (primaryKeyName == null && compositePrimaryKeys.isEmpty()) {
-                    writer.write("    override val primaryKeyInfo = null\n\n")
-                } else {
-                    writer.write("    override val primaryKeyInfo = PrimaryKeyInfo(\n")
-                    if (primaryKeyName == null) {
-                        writer.write("        primaryKeyName = null,\n")
-                    } else {
-                        writer.write("        primaryKeyName = \"$primaryKeyName\",\n")
-                    }
-                    writer.write("        isAutomaticIncrement = $isAutomaticIncrement,\n")
-                    writer.write("        isRowId = $isRowId,\n")
-                    if (compositePrimaryKeys.isEmpty()) {
-                        writer.write("        compositePrimaryKeys = null,\n")
-                    } else {
-                        writer.write("        compositePrimaryKeys = listOf(\n")
-                        compositePrimaryKeys.forEach {
-                            writer.write("            \"$it\",\n")
-                        }
-                        writer.write("        )\n")
-                    }
-                    writer.write("    )\n\n")
-                }
-
-                // Append table-level constraints to CREATE TABLE statement
-                with(createSQLBuilder) {
-                    // Add composite primary key constraint if present
-                    compositePrimaryKeys.takeIf { it.isNotEmpty() }?.let {
-                        append(",PRIMARY KEY(")
-                        append(it[0])
-                        for (i in 1 ..< it.size) {
-                            append(',')
-                            append(it[i])
-                        }
-                        append(')')
-                    }
-
-                    // Add composite unique constraints for each group
-                    compositeUniqueColumns.values.forEach {
-                        if (it.isEmpty())
-                            return@forEach
-                        append(",UNIQUE(")
-                        append(it[0])
-                        for (i in 1 ..< it.size) {
-                            append(',')
-                            append(it[i])
-                        }
-                        append(')')
-                    }
-
-                    append(')')
-                }
+                columnConstraintParser.generateCodeForPrimaryKey(writer, createSQLBuilder)
+                foreignKeyParser.generateCodeForForeignKey(createSQLBuilder)
+                createSQLBuilder.append(')')
 
                 writer.write("    override val createSQL = \"$createSQLBuilder\"\n")
 
@@ -492,71 +357,4 @@ class ClauseProcessor(
         FullNameCache.BYTE_ARRAY -> "appendAny($elementName, value)"
         else -> null
     }
-
-    /**
-     * Determines the SQLite type declaration for a given property.
-     *
-     * This function resolves the Kotlin type of a property to its corresponding SQLite type
-     * string, handling type aliases and enum classes. The result is used in compile-time
-     * CREATE TABLE statement generation.
-     *
-     * ### Type Resolution Strategy
-     * 1. **Type Aliases**: Resolves to the underlying type, then maps to SQLite type
-     * 2. **Enum Classes**: Maps to SQLite INT type (enums are stored as ordinals)
-     * 3. **Standard Types**: Direct mapping via [FullNameCache.getSQLTypeName]
-     *
-     * ### Primary Key Special Handling
-     * When `isPrimaryKey` is true and the property is of type [Long], the function returns
-     * " INTEGER" instead of " BIGINT" to enable SQLite's rowid aliasing optimization.
-     *
-     * ### Example Mappings
-     * ```kotlin
-     * // Standard type
-     * val age: Int  // → " INT"
-     *
-     * // Type alias
-     * typealias UserId = Long
-     * val id: UserId  // → " BIGINT" (or " INTEGER" if primary key)
-     *
-     * // Enum class
-     * enum class Status { ACTIVE, INACTIVE }
-     * val status: Status  // → " INT"
-     * ```
-     *
-     * @param property The KSP property declaration to analyze
-     * @param isPrimaryKey Whether this property is annotated with [@PrimaryKey]
-     * @return SQLite type declaration string with leading space (e.g., " INT", " TEXT")
-     * @throws IllegalStateException if the property type is not supported by SQLlin
-     *
-     * @see FullNameCache.getSQLTypeName
-     */
-    private fun getSQLiteType(property: KSPropertyDeclaration, isPrimaryKey: Boolean): String {
-        val declaration = property.type.resolve().declaration
-        return when (declaration) {
-            is KSTypeAlias -> {
-                val realDeclaration = declaration.type.resolve().declaration
-                FullNameCache.getSQLTypeName(realDeclaration.typeName, isPrimaryKey) ?: kotlin.run {
-                    if (realDeclaration is KSClassDeclaration && realDeclaration.classKind == ClassKind.ENUM_CLASS)
-                        FullNameCache.getSQLTypeName(FullNameCache.INT, isPrimaryKey)
-                    else
-                        null
-                }
-            }
-            is KSClassDeclaration if declaration.classKind == ClassKind.ENUM_CLASS ->
-                FullNameCache.getSQLTypeName(FullNameCache.INT, isPrimaryKey)
-            else -> FullNameCache.getSQLTypeName(declaration.typeName, isPrimaryKey)
-        } ?: throw IllegalStateException("Hasn't support the type '${declaration.typeName}' yet")
-    }
-
-    /**
-     * Extension property that resolves a property's fully qualified type name.
-     */
-    private inline val KSPropertyDeclaration.typeName
-        get() = type.resolve().declaration.qualifiedName?.asString()
-
-    /**
-     * Extension property that retrieves a declaration's fully qualified type name.
-     */
-    private inline val KSDeclaration.typeName
-        get() = qualifiedName?.asString()
 }

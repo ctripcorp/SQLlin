@@ -103,6 +103,48 @@ class JvmTest {
     @Test
     fun testNotNullConstraint() = commonTest.testNotNullConstraint()
 
+    @Test
+    fun testStringAggregateFunctions() = commonTest.testStringAggregateFunctions()
+
+    @Test
+    fun testIndexOperations() = commonTest.testIndexOperations()
+
+    @Test
+    fun testBlobLengthFunction() = commonTest.testBlobLengthFunction()
+
+    @Test
+    fun testPragmaForeignKeys() = commonTest.testPragmaForeignKeys()
+
+    @Test
+    fun testForeignKeyCascadeDelete() = commonTest.testForeignKeyCascadeDelete()
+
+    @Test
+    fun testForeignKeySetNullDelete() = commonTest.testForeignKeySetNullDelete()
+
+    @Test
+    fun testForeignKeyRestrictDelete() = commonTest.testForeignKeyRestrictDelete()
+
+    @Test
+    fun testCompositeForeignKey() = commonTest.testCompositeForeignKey()
+
+    @Test
+    fun testMultipleForeignKeys() = commonTest.testMultipleForeignKeys()
+
+    @Test
+    fun testForeignKeyCreateSQL() = commonTest.testForeignKeyCreateSQL()
+
+    @Test
+    fun testForeignKeyWithoutPragma() = commonTest.testForeignKeyWithoutPragma()
+
+    @Test
+    fun testDefaultValuesCreateSQL() = commonTest.testDefaultValuesCreateSQL()
+
+    @Test
+    fun testDefaultValuesInsert() = commonTest.testDefaultValuesInsert()
+
+    @Test
+    fun testDefaultValuesWithForeignKey() = commonTest.testDefaultValuesWithForeignKey()
+
     @BeforeTest
     fun setUp() {
         deleteDatabase(path, CommonBasicTest.DATABASE_NAME)

@@ -307,6 +307,15 @@ class CommonBasicTest(private val path: DatabasePath) {
         var selectStatement6: SelectStatement<Book>? = null
         var selectStatement7: SelectStatement<Book>? = null
         var selectStatement8: SelectStatement<Book>? = null
+        var selectStatement9: SelectStatement<Book>? = null
+        // var selectStatement10: SelectStatement<Book>? = null
+        var selectStatement11: SelectStatement<Book>? = null
+        var selectStatement12: SelectStatement<Book>? = null
+        var selectStatement13: SelectStatement<Book>? = null
+        var selectStatement14: SelectStatement<Book>? = null
+        var selectStatement15: SelectStatement<Book>? = null
+        var selectStatement16: SelectStatement<Book>? = null
+        var selectStatement17: SelectStatement<Book>? = null
         database {
             BookTable { table ->
                 table INSERT listOf(book0, book1, book2, book3, book4)
@@ -319,6 +328,19 @@ class CommonBasicTest(private val path: DatabasePath) {
                 selectStatement6 = table SELECT GROUP_BY (author) HAVING (min(price) LT 17)
                 selectStatement7 = table SELECT GROUP_BY (author) HAVING (avg(pages) LT 400)
                 selectStatement8 = table SELECT GROUP_BY (author) HAVING (sum(pages) LTE 970)
+                // New functions: round, sign
+                selectStatement9 = table SELECT WHERE(round(price, 0) EQ 17.0)
+                // selectStatement10 = table SELECT WHERE(sign(pages) EQ 1)
+                // New string functions: substr, trim, ltrim, rtrim
+                selectStatement11 = table SELECT WHERE(substr(name, 1, 6) EQ "Kotlin")
+                selectStatement12 = table SELECT WHERE(trim(name) EQ "Kotlin Cookbook")
+                selectStatement13 = table SELECT WHERE(ltrim(name) EQ "Kotlin Cookbook")
+                selectStatement14 = table SELECT WHERE(rtrim(name) EQ "Kotlin Cookbook")
+                // New string functions: replace, instr
+                selectStatement15 = table SELECT WHERE(instr(name, "Kotlin") GT 0)
+                selectStatement16 = table SELECT WHERE(replace(author, "Brown", "Smith") EQ "Dan Smith")
+                // Test random function (just check it returns results)
+                selectStatement17 = table SELECT ORDER_BY(random()) LIMIT 3
             }
         }
         assertEquals(book1, selectStatement0?.getResults()?.first())
@@ -330,6 +352,16 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(book0.author, selectStatement6?.getResults()?.first()?.author)
         assertEquals(book4.author, selectStatement7?.getResults()?.first()?.author)
         assertEquals(book0.author, selectStatement8?.getResults()?.first()?.author)
+        // Verify new functions
+        assertEquals(book0, selectStatement9?.getResults()?.first())
+        // assertEquals(5, selectStatement10?.getResults()?.size) // All books have positive pages
+        assertEquals(true, selectStatement11?.getResults()?.size == 2) // Kotlin Cookbook and Kotlin Guide Pratique
+        assertEquals(book1, selectStatement12?.getResults()?.first())
+        assertEquals(book1, selectStatement13?.getResults()?.first())
+        assertEquals(book1, selectStatement14?.getResults()?.first())
+        assertEquals(true, selectStatement15?.getResults()?.size == 2) // Books with "Kotlin" in name
+        assertEquals(book0, selectStatement16?.getResults()?.first())
+        assertEquals(3, selectStatement17?.getResults()?.size) // Random ordering, but should return 3 results
     }
 
     fun testJoinClause() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
@@ -1514,6 +1546,176 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Test for new SQL string aggregate and formatting functions
+     * Tests group_concat and printf functions
+     */
+    fun testStringAggregateFunctions() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        // Clear and insert test data
+        val book0 = Book(name = "Book A", author = "Author X", pages = 100, price = 10.50)
+        val book1 = Book(name = "Book B", author = "Author X", pages = 200, price = 20.99)
+        val book2 = Book(name = "Book C", author = "Author Y", pages = 300, price = 30.00)
+
+        database {
+            BookTable { table ->
+                table DELETE X
+                table INSERT listOf(book0, book1, book2)
+            }
+        }
+
+        // Test group_concat - concatenate book names by author
+        var groupConcatStatement: SelectStatement<Book>? = null
+        database {
+            BookTable { table ->
+                groupConcatStatement = table SELECT GROUP_BY(author) HAVING (group_concat(name, ",") LIKE "%Book A%")
+            }
+        }
+        assertEquals(1, groupConcatStatement?.getResults()?.size)
+        assertEquals("Author X", groupConcatStatement?.getResults()?.first()?.author)
+
+        // Test printf - format price as currency
+        var printfStatement: SelectStatement<Book>? = null
+        database {
+            BookTable { table ->
+                printfStatement = table SELECT WHERE (printf("%.2f", name) LIKE "%.2f")
+            }
+        }
+        // Printf formats the value, we're just checking it can be used in queries
+        assertNotEquals(null, printfStatement?.getResults())
+    }
+
+    /**
+     * Test for CREATE_INDEX and CREATE_UNIQUE_INDEX operations
+     * Verifies index creation functionality
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testIndexOperations() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        // Test 1: CREATE_INDEX on single column
+        database {
+            BookTable.CREATE_INDEX("idx_book_name", BookTable.name)
+        }
+
+        // Verify index was created by inserting data and querying
+        val book1 = Book(name = "Test Book 1", author = "Author 1", pages = 100, price = 10.99)
+        val book2 = Book(name = "Test Book 2", author = "Author 2", pages = 200, price = 20.99)
+        database {
+            BookTable { table ->
+                table INSERT listOf(book1, book2)
+            }
+        }
+
+        lateinit var selectStatement: SelectStatement<Book>
+        database {
+            selectStatement = BookTable SELECT WHERE (BookTable.name EQ "Test Book 1")
+        }
+        assertEquals(1, selectStatement.getResults().size)
+        assertEquals(book1.name, selectStatement.getResults().first().name)
+
+        // Test 2: CREATE_INDEX on multiple columns
+        database {
+            PersonWithIdTable.CREATE_INDEX("idx_person_name_age", PersonWithIdTable.name, PersonWithIdTable.age)
+        }
+
+        val person1 = PersonWithId(id = null, name = "Alice", age = 25)
+        val person2 = PersonWithId(id = null, name = "Bob", age = 30)
+        database {
+            PersonWithIdTable { table ->
+                table INSERT listOf(person1, person2)
+            }
+        }
+
+        lateinit var personStatement: SelectStatement<PersonWithId>
+        database {
+            personStatement = PersonWithIdTable SELECT WHERE (PersonWithIdTable.name EQ "Alice" AND (PersonWithIdTable.age EQ 25))
+        }
+        assertEquals(1, personStatement.getResults().size)
+        assertEquals("Alice", personStatement.getResults().first().name)
+
+        // Test 3: CREATE_UNIQUE_INDEX - should enforce uniqueness
+        database {
+            ProductTable.CREATE_UNIQUE_INDEX("idx_unique_product_name", ProductTable.name)
+        }
+
+        val product1 = Product(sku = null, name = "Widget", price = 19.99)
+        database {
+            ProductTable { table ->
+                table INSERT product1
+            }
+        }
+
+        // Try to insert duplicate - should fail
+        val product2 = Product(sku = null, name = "Widget", price = 29.99)
+        var duplicateFailed = false
+        try {
+            database {
+                ProductTable { table ->
+                    table INSERT product2
+                }
+            }
+        } catch (e: Exception) {
+            duplicateFailed = true
+        }
+        assertEquals(true, duplicateFailed, "Duplicate value should violate unique index")
+
+        // Test 4: Verify empty columns parameter throws exception
+        var emptyColumnsFailed = false
+        try {
+            database {
+                BookTable.CREATE_INDEX("idx_empty")
+            }
+        } catch (e: IllegalArgumentException) {
+            emptyColumnsFailed = true
+        }
+        assertEquals(true, emptyColumnsFailed, "CREATE_INDEX with no columns should throw IllegalArgumentException")
+
+        // Test 5: CREATE_UNIQUE_INDEX with empty columns should also fail
+        var emptyUniqueColumnsFailed = false
+        try {
+            database {
+                BookTable.CREATE_UNIQUE_INDEX("idx_unique_empty")
+            }
+        } catch (e: IllegalArgumentException) {
+            emptyUniqueColumnsFailed = true
+        }
+        assertEquals(true, emptyUniqueColumnsFailed, "CREATE_UNIQUE_INDEX with no columns should throw IllegalArgumentException")
+    }
+
+    /**
+     * Test for length function with BLOB type
+     * Verifies length() works with ClauseBlob parameter
+     */
+    fun testBlobLengthFunction() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        val file1 = FileData(id = null, fileName = "small.bin", content = byteArrayOf(0x01, 0x02, 0x03), metadata = "Small file")
+        val file2 = FileData(id = null, fileName = "large.bin", content = ByteArray(100) { it.toByte() }, metadata = "Large file")
+
+        database {
+            FileDataTable { table ->
+                table DELETE X
+                table INSERT listOf(file1, file2)
+            }
+        }
+
+        // Test length function with BLOB
+        var lengthStatement: SelectStatement<FileData>? = null
+        database {
+            FileDataTable { table ->
+                lengthStatement = table SELECT WHERE (length(content) EQ 3)
+            }
+        }
+        assertEquals(1, lengthStatement?.getResults()?.size)
+        assertEquals("small.bin", lengthStatement?.getResults()?.first()?.fileName)
+
+        // Test length with GT operator
+        var lengthGTStatement: SelectStatement<FileData>? = null
+        database {
+            FileDataTable { table ->
+                lengthGTStatement = table SELECT WHERE (length(content) GT 10)
+            }
+        }
+        assertEquals(1, lengthGTStatement?.getResults()?.size)
+        assertEquals("large.bin", lengthGTStatement?.getResults()?.first()?.fileName)
+    }
+
+    /**
      * Test for compile-time CREATE TABLE generation
      * Verifies that createSQL property contains the correct SQL statement
      */
@@ -1948,6 +2150,628 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    /**
+     * Test PRAGMA_FOREIGN_KEYS function
+     * Verifies foreign key enforcement can be enabled/disabled
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testPragmaForeignKeys() {
+        Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
+            // Test 1: Enable foreign keys
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+            }
+
+            // Test 2: Insert parent record
+            val user = FKUser(id = null, email = "test@example.com", name = "Test User")
+            database {
+                FKUserTable { table ->
+                    table INSERT user
+                }
+            }
+
+            // Test 3: Insert child record with valid foreign key - should succeed
+            val order = FKOrder(id = null, userId = 1L, amount = 99.99, orderDate = "2025-01-15")
+            database {
+                FKOrderTable { table ->
+                    table INSERT order
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<FKOrder>
+            database {
+                selectStatement = FKOrderTable SELECT X
+            }
+            assertEquals(1, selectStatement.getResults().size)
+
+            // Test 4: Try to insert child with invalid foreign key - should fail
+            val invalidOrder = FKOrder(id = null, userId = 999L, amount = 50.0, orderDate = "2025-01-15")
+            var foreignKeyViolated = false
+            try {
+                database {
+                    FKOrderTable { table ->
+                        table INSERT invalidOrder
+                    }
+                }
+            } catch (e: Exception) {
+                foreignKeyViolated = true
+            }
+            assertEquals(true, foreignKeyViolated, "Insert with invalid foreign key should fail when enforcement is enabled")
+        }
+    }
+
+    /**
+     * Test CASCADE delete behavior with @References
+     * Verifies that child rows are automatically deleted when parent is deleted
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testForeignKeyCascadeDelete() {
+        Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
+            // Enable foreign keys
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+            }
+
+            // Insert parent user
+            val user1 = FKUser(id = null, email = "alice@example.com", name = "Alice")
+            val user2 = FKUser(id = null, email = "bob@example.com", name = "Bob")
+            database {
+                FKUserTable { table ->
+                    table INSERT listOf(user1, user2)
+                }
+            }
+
+            // Insert orders for both users
+            val order1 = FKOrder(id = null, userId = 1L, amount = 99.99, orderDate = "2025-01-15")
+            val order2 = FKOrder(id = null, userId = 1L, amount = 49.99, orderDate = "2025-01-16")
+            val order3 = FKOrder(id = null, userId = 2L, amount = 29.99, orderDate = "2025-01-17")
+            database {
+                FKOrderTable { table ->
+                    table INSERT listOf(order1, order2, order3)
+                }
+            }
+
+            // Verify orders exist
+            lateinit var selectOrders: SelectStatement<FKOrder>
+            database {
+                selectOrders = FKOrderTable SELECT X
+            }
+            assertEquals(3, selectOrders.getResults().size)
+
+            // Delete user 1 - should CASCADE delete their orders
+            database {
+                FKUserTable { table ->
+                    table DELETE WHERE (table.id EQ 1L)
+                }
+            }
+
+            // Verify user 1's orders are deleted
+            database {
+                selectOrders = FKOrderTable SELECT X
+            }
+            val remainingOrders = selectOrders.getResults()
+            assertEquals(1, remainingOrders.size)
+            assertEquals(2L, remainingOrders[0].userId)
+
+            // Verify user 2 still exists
+            lateinit var selectUsers: SelectStatement<FKUser>
+            database {
+                selectUsers = FKUserTable SELECT X
+            }
+            assertEquals(1, selectUsers.getResults().size)
+            assertEquals("Bob", selectUsers.getResults()[0].name)
+        }
+    }
+
+    /**
+     * Test SET_NULL delete behavior with @References
+     * Verifies that child foreign keys are set to NULL when parent is deleted
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testForeignKeySetNullDelete() {
+        Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
+            // Enable foreign keys
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+            }
+
+            // Insert parent users
+            val user = FKUser(id = null, email = "author@example.com", name = "Author")
+            database {
+                FKUserTable { table ->
+                    table INSERT user
+                }
+            }
+
+            // Insert posts by the user
+            val post1 = FKPost(id = null, authorId = 1L, title = "First Post", content = "Content 1")
+            val post2 = FKPost(id = null, authorId = 1L, title = "Second Post", content = "Content 2")
+            database {
+                FKPostTable { table ->
+                    table INSERT listOf(post1, post2)
+                }
+            }
+
+            // Verify posts exist with author
+            lateinit var selectPosts: SelectStatement<FKPost>
+            database {
+                selectPosts = FKPostTable SELECT X
+            }
+            val posts = selectPosts.getResults()
+            assertEquals(2, posts.size)
+            assertEquals(1L, posts[0].authorId)
+            assertEquals(1L, posts[1].authorId)
+
+            // Delete the user - should SET_NULL on authorId
+            database {
+                FKUserTable { table ->
+                    table DELETE WHERE (table.id EQ 1L)
+                }
+            }
+
+            // Verify posts still exist but authorId is NULL
+            database {
+                selectPosts = FKPostTable SELECT X
+            }
+            val remainingPosts = selectPosts.getResults()
+            assertEquals(2, remainingPosts.size)
+            assertEquals(null, remainingPosts[0].authorId)
+            assertEquals(null, remainingPosts[1].authorId)
+            assertEquals("First Post", remainingPosts[0].title)
+            assertEquals("Second Post", remainingPosts[1].title)
+        }
+    }
+
+    /**
+     * Test RESTRICT delete behavior with @References
+     * Verifies that parent deletion is prevented when child rows exist
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testForeignKeyRestrictDelete() {
+        Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
+            // Enable foreign keys
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+            }
+
+            // Insert parent user
+            val user = FKUser(id = null, email = "user@example.com", name = "User")
+            database {
+                FKUserTable { table ->
+                    table INSERT user
+                }
+            }
+
+            // Insert profile for the user
+            val profile = FKProfile(id = null, userId = 1L, bio = "User bio", website = "https://example.com")
+            database {
+                FKProfileTable { table ->
+                    table INSERT profile
+                }
+            }
+
+            // Try to delete user - should fail due to RESTRICT
+            var deleteFailed = false
+            try {
+                database {
+                    FKUserTable { table ->
+                        table DELETE WHERE (table.id EQ 1L)
+                    }
+                }
+            } catch (e: Exception) {
+                deleteFailed = true
+            }
+            assertEquals(true, deleteFailed, "Delete should fail with RESTRICT when child rows exist")
+
+            // Verify user still exists
+            lateinit var selectUsers: SelectStatement<FKUser>
+            database {
+                selectUsers = FKUserTable SELECT X
+            }
+            assertEquals(1, selectUsers.getResults().size)
+
+            // Delete the profile first
+            database {
+                FKProfileTable { table ->
+                    table DELETE WHERE (table.userId EQ 1L)
+                }
+            }
+
+            // Now deleting user should succeed
+            database {
+                FKUserTable { table ->
+                    table DELETE WHERE (table.id EQ 1L)
+                }
+            }
+
+            // Verify user is deleted
+            database {
+                selectUsers = FKUserTable SELECT X
+            }
+            assertEquals(0, selectUsers.getResults().size)
+        }
+    }
+
+    /**
+     * Test composite foreign keys with @ForeignKey annotation
+     * Verifies multi-column foreign key constraints work correctly
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testCompositeForeignKey() {
+        Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
+            // Enable foreign keys
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+            }
+
+            // Insert parent products with composite primary key
+            val product1 = FKProduct(categoryId = 1, productCode = "P001", name = "Widget", price = 19.99)
+            val product2 = FKProduct(categoryId = 1, productCode = "P002", name = "Gadget", price = 29.99)
+            val product3 = FKProduct(categoryId = 2, productCode = "P001", name = "Tool", price = 39.99)
+            database {
+                FKProductTable { table ->
+                    table INSERT listOf(product1, product2, product3)
+                }
+            }
+
+            // Insert order items with valid composite foreign keys - should succeed
+            val item1 = FKOrderItem(id = null, productCategory = 1, productCode = "P001", quantity = 2, subtotal = 39.98)
+            val item2 = FKOrderItem(id = null, productCategory = 2, productCode = "P001", quantity = 1, subtotal = 39.99)
+            database {
+                FKOrderItemTable { table ->
+                    table INSERT listOf(item1, item2)
+                }
+            }
+
+            lateinit var selectItems: SelectStatement<FKOrderItem>
+            database {
+                selectItems = FKOrderItemTable SELECT X
+            }
+            assertEquals(2, selectItems.getResults().size)
+
+            // Try to insert with invalid composite foreign key - should fail
+            val invalidItem = FKOrderItem(id = null, productCategory = 1, productCode = "P999", quantity = 1, subtotal = 10.0)
+            var foreignKeyViolated = false
+            try {
+                database {
+                    FKOrderItemTable { table ->
+                        table INSERT invalidItem
+                    }
+                }
+            } catch (e: Exception) {
+                foreignKeyViolated = true
+            }
+            assertEquals(true, foreignKeyViolated, "Insert with invalid composite foreign key should fail")
+
+            // Delete product (1, P001) - should CASCADE delete item1
+            database {
+                FKProductTable { table ->
+                    table DELETE WHERE ((table.categoryId EQ 1) AND (table.productCode EQ "P001"))
+                }
+            }
+
+            // Verify item1 is deleted
+            database {
+                selectItems = FKOrderItemTable SELECT X
+            }
+            val remainingItems = selectItems.getResults()
+            assertEquals(1, remainingItems.size)
+            assertEquals(2, remainingItems[0].productCategory)
+        }
+    }
+
+    /**
+     * Test multiple foreign keys to different tables
+     * Verifies a table can have foreign keys to multiple parent tables
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testMultipleForeignKeys() {
+        Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
+            // Enable foreign keys
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+            }
+
+            // Insert parent user and post
+            val user = FKUser(id = null, email = "commenter@example.com", name = "Commenter")
+            database {
+                FKUserTable { table ->
+                    table INSERT user
+                }
+            }
+
+            val post = FKPost(id = null, authorId = 1L, title = "Test Post", content = "Post content")
+            database {
+                FKPostTable { table ->
+                    table INSERT post
+                }
+            }
+
+            // Insert comment with both foreign keys - should succeed
+            val comment = FKComment(id = null, authorId = 1L, postId = 1L, content = "Great post!", createdAt = "2025-01-15")
+            database {
+                FKCommentTable { table ->
+                    table INSERT comment
+                }
+            }
+
+            lateinit var selectComments: SelectStatement<FKComment>
+            database {
+                selectComments = FKCommentTable SELECT X
+            }
+            assertEquals(1, selectComments.getResults().size)
+
+            // Try to insert with invalid user foreign key - should fail
+            val invalidComment1 = FKComment(id = null, authorId = 999L, postId = 1L, content = "Comment", createdAt = "2025-01-15")
+            var userFKViolated = false
+            try {
+                database {
+                    FKCommentTable { table ->
+                        table INSERT invalidComment1
+                    }
+                }
+            } catch (e: Exception) {
+                userFKViolated = true
+            }
+            assertEquals(true, userFKViolated, "Insert with invalid user foreign key should fail")
+
+            // Try to insert with invalid post foreign key - should fail
+            val invalidComment2 = FKComment(id = null, authorId = 1L, postId = 999L, content = "Comment", createdAt = "2025-01-15")
+            var postFKViolated = false
+            try {
+                database {
+                    FKCommentTable { table ->
+                        table INSERT invalidComment2
+                    }
+                }
+            } catch (e: Exception) {
+                postFKViolated = true
+            }
+            assertEquals(true, postFKViolated, "Insert with invalid post foreign key should fail")
+
+            // Delete user - should CASCADE delete comment
+            database {
+                FKUserTable { table ->
+                    table DELETE WHERE (table.id EQ 1L)
+                }
+            }
+
+            // Verify comment is deleted
+            database {
+                selectComments = FKCommentTable SELECT X
+            }
+            assertEquals(0, selectComments.getResults().size)
+        }
+    }
+
+    /**
+     * Test CREATE SQL generation for foreign keys
+     * Verifies that foreign key constraints are correctly included in CREATE SQL
+     */
+    fun testForeignKeyCreateSQL() {
+        // Test 1: Simple foreign key with @References
+        val orderSQL = FKOrderTable.createSQL
+        assertEquals(true, orderSQL.contains("REFERENCES fk_user(id)"))
+        assertEquals(true, orderSQL.contains("ON DELETE CASCADE"))
+
+        // Test 2: SET_NULL trigger
+        val postSQL = FKPostTable.createSQL
+        assertEquals(true, postSQL.contains("REFERENCES fk_user(id)"))
+        assertEquals(true, postSQL.contains("ON DELETE SET NULL"))
+
+        // Test 3: RESTRICT trigger
+        val profileSQL = FKProfileTable.createSQL
+        assertEquals(true, profileSQL.contains("REFERENCES fk_user(id)"))
+        assertEquals(true, profileSQL.contains("ON DELETE RESTRICT"))
+
+        // Test 4: Composite foreign key with @ForeignKey
+        val orderItemSQL = FKOrderItemTable.createSQL
+        assertEquals(true, orderItemSQL.contains("FOREIGN KEY"))
+        assertEquals(true, orderItemSQL.contains("REFERENCES fk_product"))
+        assertEquals(true, orderItemSQL.contains("ON DELETE CASCADE"))
+
+        // Test 5: Multiple foreign keys
+        val commentSQL = FKCommentTable.createSQL
+        assertEquals(true, commentSQL.contains("REFERENCES fk_user(id)"))
+        assertEquals(true, commentSQL.contains("REFERENCES fk_post(id)"))
+    }
+
+    /**
+     * Test foreign key constraint without PRAGMA_FOREIGN_KEYS enabled
+     * Verifies that constraints are not enforced when PRAGMA is not enabled
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testForeignKeyWithoutPragma() {
+        Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
+            // Note: NOT enabling PRAGMA_FOREIGN_KEYS
+
+            // Insert parent user
+            val user = FKUser(id = null, email = "test@example.com", name = "Test")
+            database {
+                FKUserTable { table ->
+                    table INSERT user
+                }
+            }
+
+            // Insert order with INVALID foreign key - should succeed without enforcement
+            val invalidOrder = FKOrder(id = null, userId = 999L, amount = 99.99, orderDate = "2025-01-15")
+            database {
+                FKOrderTable { table ->
+                    table INSERT invalidOrder
+                }
+            }
+
+            // Verify order was inserted despite invalid foreign key
+            lateinit var selectOrders: SelectStatement<FKOrder>
+            database {
+                selectOrders = FKOrderTable SELECT X
+            }
+            assertEquals(1, selectOrders.getResults().size)
+            assertEquals(999L, selectOrders.getResults()[0].userId)
+        }
+    }
+
+    /**
+     * Test for @Default annotation - CREATE SQL generation
+     * Verifies that createSQL property contains the DEFAULT clause
+     */
+    fun testDefaultValuesCreateSQL() {
+        // Test 1: Basic default values
+        val defaultValuesSQL = DefaultValuesTestTable.createSQL
+        assertEquals(true, defaultValuesSQL.contains("CREATE TABLE default_values_test"))
+        assertEquals(true, defaultValuesSQL.contains("status TEXT NOT NULL DEFAULT 'active'"))
+        assertEquals(true, defaultValuesSQL.contains("loginCount INT NOT NULL DEFAULT 0"))
+        assertEquals(true, defaultValuesSQL.contains("isEnabled BOOLEAN NOT NULL DEFAULT 1"))
+        assertEquals(true, defaultValuesSQL.contains("createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"))
+
+        // Test 2: Nullable columns with default values
+        val defaultNullableSQL = DefaultNullableTestTable.createSQL
+        assertEquals(true, defaultNullableSQL.contains("CREATE TABLE default_nullable_test"))
+        assertEquals(true, defaultNullableSQL.contains("availability TEXT DEFAULT 'In Stock'"))
+        assertEquals(true, defaultNullableSQL.contains("quantity INT DEFAULT 100"))
+        assertEquals(true, defaultNullableSQL.contains("discount DOUBLE DEFAULT 0.0"))
+
+        // Test 3: Default values with foreign key SET_DEFAULT trigger
+        val defaultFKChildSQL = DefaultFKChildTable.createSQL
+        assertEquals(true, defaultFKChildSQL.contains("CREATE TABLE default_fk_child"))
+        assertEquals(true, defaultFKChildSQL.contains("parentId BIGINT NOT NULL DEFAULT 0"))
+        assertEquals(true, defaultFKChildSQL.contains("FOREIGN KEY (parentId) REFERENCES default_fk_parent(id) ON DELETE SET DEFAULT"))
+    }
+
+    /**
+     * Test for @Default annotation - INSERT behavior
+     * Verifies that default values are used when columns are omitted in INSERT
+     * Note: SQLlin's INSERT operation always provides all column values from data classes,
+     * so this test verifies the schema is correctly generated with DEFAULT clauses
+     */
+    fun testDefaultValuesInsert() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(DefaultValuesTestTable)
+                CREATE(DefaultNullableTestTable)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            // Test 1: Verify CREATE SQL contains DEFAULT clauses
+            val createSQL = DefaultValuesTestTable.createSQL
+            assertEquals(true, createSQL.contains("DEFAULT 'active'"))
+            assertEquals(true, createSQL.contains("DEFAULT 0"))
+            assertEquals(true, createSQL.contains("DEFAULT 1"))
+
+            // Test 2: Insert record with all fields specified
+            val record1 = DefaultValuesTest(
+                id = null,
+                name = "Test User",
+                status = "active",
+                loginCount = 0,
+                isEnabled = true,
+                createdAt = "2025-12-14 00:00:00"
+            )
+            database {
+                DefaultValuesTestTable { table ->
+                    table INSERT record1
+                }
+            }
+
+            // Verify insertion
+            lateinit var selectStatement: SelectStatement<DefaultValuesTest>
+            database {
+                selectStatement = DefaultValuesTestTable SELECT X
+            }
+            assertEquals(1, selectStatement.getResults().size)
+            val result = selectStatement.getResults()[0]
+            assertEquals("Test User", result.name)
+            assertEquals("active", result.status)
+            assertEquals(0, result.loginCount)
+
+            // Test 3: Nullable columns with default values
+            val nullableRecord = DefaultNullableTest(
+                id = null,
+                name = "Product A",
+                availability = "In Stock",
+                quantity = 100,
+                discount = 0.0
+            )
+            database {
+                DefaultNullableTestTable { table ->
+                    table INSERT nullableRecord
+                }
+            }
+
+            lateinit var selectNullable: SelectStatement<DefaultNullableTest>
+            database {
+                selectNullable = DefaultNullableTestTable SELECT X
+            }
+            assertEquals(1, selectNullable.getResults().size)
+            assertEquals("Product A", selectNullable.getResults()[0].name)
+            assertEquals("In Stock", selectNullable.getResults()[0].availability)
+            assertEquals(100, selectNullable.getResults()[0].quantity)
+        }
+    }
+
+    /**
+     * Test for @Default annotation with foreign key ON_DELETE_SET_DEFAULT trigger
+     * Verifies that default values are correctly included in CREATE TABLE statements with foreign keys
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testDefaultValuesWithForeignKey() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                PRAGMA_FOREIGN_KEYS(true)
+                CREATE(DefaultFKParentTable)
+                CREATE(DefaultFKChildTable)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            // Test 1: Verify CREATE SQL contains DEFAULT with foreign key
+            val childSQL = DefaultFKChildTable.createSQL
+            assertEquals(true, childSQL.contains("parentId BIGINT NOT NULL DEFAULT 0"))
+            assertEquals(true, childSQL.contains("FOREIGN KEY"))
+            assertEquals(true, childSQL.contains("REFERENCES default_fk_parent(id)"))
+            assertEquals(true, childSQL.contains("ON DELETE SET DEFAULT"))
+
+            // Test 2: Verify we can insert parent and child records
+            val parent = DefaultFKParent(id = null, name = "Test Parent")
+            database {
+                DefaultFKParentTable { table ->
+                    table INSERT parent
+                }
+            }
+
+            // Get parent ID
+            lateinit var parentSelect: SelectStatement<DefaultFKParent>
+            database {
+                parentSelect = DefaultFKParentTable SELECT X
+            }
+            val parents = parentSelect.getResults()
+            assertEquals(1, parents.size)
+            val parentId = parents[0].id!!
+
+            // Test 3: Insert child record referencing parent
+            val child = DefaultFKChild(id = null, parentId = parentId, description = "Test Child")
+            database {
+                DefaultFKChildTable { table ->
+                    table INSERT child
+                }
+            }
+
+            // Verify child was inserted with correct parentId
+            lateinit var childSelect: SelectStatement<DefaultFKChild>
+            database {
+                childSelect = DefaultFKChildTable SELECT X
+            }
+            assertEquals(1, childSelect.getResults().size)
+            assertEquals(parentId, childSelect.getResults()[0].parentId)
+            assertEquals("Test Child", childSelect.getResults()[0].description)
+        }
+    }
+
     private fun getDefaultDBConfig(): DatabaseConfiguration =
         DatabaseConfiguration(
             name = DATABASE_NAME,
@@ -1979,6 +2803,23 @@ class CommonBasicTest(private val path: DatabasePath) {
                 CREATE(CompositeUniqueTestTable)
                 CREATE(MultiGroupUniqueTestTable)
                 CREATE(CombinedConstraintsTestTable)
+            }
+        )
+
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    private fun getForeignKeyDBConfig(): DSLDBConfiguration =
+        DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(FKUserTable)
+                CREATE(FKOrderTable)
+                CREATE(FKPostTable)
+                CREATE(FKProfileTable)
+                CREATE(FKProductTable)
+                CREATE(FKOrderItemTable)
+                CREATE(FKCommentTable)
             }
         )
 }

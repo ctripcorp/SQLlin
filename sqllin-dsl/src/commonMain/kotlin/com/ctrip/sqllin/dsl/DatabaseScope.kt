@@ -28,6 +28,7 @@ import com.ctrip.sqllin.dsl.sql.operation.Create
 import com.ctrip.sqllin.dsl.sql.operation.Delete
 import com.ctrip.sqllin.dsl.sql.operation.Drop
 import com.ctrip.sqllin.dsl.sql.operation.Insert
+import com.ctrip.sqllin.dsl.sql.operation.PRAGMA
 import com.ctrip.sqllin.dsl.sql.operation.Select
 import com.ctrip.sqllin.dsl.sql.operation.Update
 import com.ctrip.sqllin.dsl.sql.statement.*
@@ -560,7 +561,7 @@ public class DatabaseScope internal constructor(
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <T> CREATE(table: Table<T>) {
-        val statement = Create.create(table, databaseConnection)
+        val statement = Create.createTable(table, databaseConnection)
         addStatement(statement)
     }
 
@@ -571,6 +572,57 @@ public class DatabaseScope internal constructor(
     @StatementDslMaker
     @JvmName("create")
     public fun <T> Table<T>.CREATE(): Unit = CREATE(this)
+
+    /**
+     * Creates an index on the specified columns of this table.
+     *
+     * Indexes improve query performance by allowing faster lookups on the indexed columns.
+     * However, they also consume additional storage space and may slow down INSERT, UPDATE,
+     * and DELETE operations.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     User::class.table.CREATE_INDEX("idx_user_email", User::email)
+     *     User::class.table.CREATE_INDEX("idx_user_name_age", User::name, User::age)
+     * }
+     * ```
+     *
+     * @param indexName The name of the index to create
+     * @param columns One or more column elements to include in the index
+     * @throws IllegalArgumentException if no columns are specified
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> Table<T>.CREATE_INDEX(indexName: String, vararg columns: ClauseElement) {
+        val statement = Create.createIndex(this, databaseConnection, indexName, *columns)
+        addStatement(statement)
+    }
+
+    /**
+     * Creates a unique index on the specified columns of this table.
+     *
+     * A unique index enforces uniqueness constraints on the indexed columns, preventing
+     * duplicate values. It also improves query performance like a regular index.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     User::class.table.CREATE_UNIQUE_INDEX("idx_unique_email", User::email)
+     *     Product::class.table.CREATE_UNIQUE_INDEX("idx_unique_sku", Product::sku)
+     * }
+     * ```
+     *
+     * @param indexName The name of the unique index to create
+     * @param columns One or more column elements to include in the unique index
+     * @throws IllegalArgumentException if no columns are specified
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> Table<T>.CREATE_UNIQUE_INDEX(indexName: String, vararg columns: ClauseElement) {
+        val statement = Create.createUniqueIndex(this, databaseConnection, indexName, *columns)
+        addStatement(statement)
+    }
 
     // ========== DROP Operations ==========
 
@@ -748,6 +800,52 @@ public class DatabaseScope internal constructor(
     @StatementDslMaker
     public infix fun <T> Table<T>.DROP_COLUMN(column: ClauseElement) {
         val statement = Alert.dropColumn(this, column, databaseConnection)
+        addStatement(statement)
+    }
+
+    /**
+     * Enables or disables foreign key constraint enforcement in SQLite.
+     *
+     * **⚠️ IMPORTANT**: By default, SQLite **does not enforce** foreign key constraints.
+     * You must explicitly enable them using this function before foreign key constraints
+     * will take effect. This setting is per-connection and must be set each time you
+     * open a database connection.
+     *
+     * ### When to Use
+     * - Call this **before** creating tables with foreign key constraints
+     * - Call this at the **beginning** of each database session if you want foreign key enforcement
+     * - Set to `false` if you need to temporarily disable constraints (e.g., during bulk operations)
+     *
+     * ### Example
+     * ```kotlin
+     * database {
+     *     // Enable foreign key enforcement
+     *     PRAGMA_FOREIGN_KEYS(true)
+     *
+     *     // Now foreign key constraints will be enforced
+     *     CREATE(OrderTable)  // Table with foreign key to UserTable
+     *     OrderTable INSERT Order(userId = 999)  // Will fail if user 999 doesn't exist
+     * }
+     * ```
+     *
+     * ### SQLite Behavior
+     * - When enabled (`true`): SQLite enforces all foreign key constraints
+     *   - INSERT/UPDATE operations that violate constraints will fail
+     *   - DELETE operations trigger ON DELETE actions (CASCADE, SET NULL, etc.)
+     * - When disabled (`false`): Foreign key constraints are ignored
+     *   - Constraints are still part of the schema but not enforced
+     *   - Useful for data migration or bulk operations
+     *
+     * @param flag `true` to enable foreign key enforcement, `false` to disable
+     *
+     * @see ForeignKeyGroup
+     * @see ForeignKey
+     * @see References
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun PRAGMA_FOREIGN_KEYS(flag: Boolean) {
+        val statement = PRAGMA.foreignKeys(flag, databaseConnection)
         addStatement(statement)
     }
 }
