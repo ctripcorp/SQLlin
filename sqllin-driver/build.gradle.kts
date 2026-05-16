@@ -1,6 +1,4 @@
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetTree
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import org.jetbrains.kotlin.konan.target.HostManager
 
@@ -16,13 +14,16 @@ val VERSION: String by project
 group = GROUP_ID
 version = VERSION
 
-@OptIn(ExperimentalKotlinGradlePluginApi::class)
 kotlin {
     explicitApi()
     jvmToolchain(libs.versions.jvm.toolchain.get().toInt())
-    androidTarget {
-        publishLibraryVariants("release")
-        instrumentedTestVariant.sourceSetTree.set(KotlinSourceSetTree.test)
+    android {
+        namespace = "com.ctrip.sqllin.driver"
+        compileSdk = libs.versions.android.sdk.compile.get().toInt()
+        minSdk = libs.versions.android.sdk.min.get().toInt()
+        withDeviceTest {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
     }
 
     jvm {
@@ -30,21 +31,17 @@ kotlin {
     }
 
     listOf(
-        iosX64(),
         iosArm64(),
         iosSimulatorArm64(),
 
-        macosX64(),
         macosArm64(),
 
         watchosArm32(),
         watchosArm64(),
-        watchosX64(),
         watchosSimulatorArm64(),
         watchosDeviceArm64(),
 
         tvosArm64(),
-        tvosX64(),
         tvosSimulatorArm64(),
 
         linuxX64(),
@@ -56,7 +53,7 @@ kotlin {
     }
 
     compilerOptions {
-        freeCompilerArgs.addAll("-Xexpect-actual-classes", "-Xcontext-parameters", "-Xnested-type-aliases")
+        freeCompilerArgs.addAll("-Xexpect-actual-classes", "-Xcontext-parameters")
     }
     
     sourceSets {
@@ -73,7 +70,7 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.annotation)
         }
-        androidInstrumentedTest.dependencies {
+        getByName("androidDeviceTest").dependencies {
             implementation(libs.androidx.test.core)
             implementation(libs.androidx.test.runner)
             implementation(libs.androidx.test.rules)
@@ -96,15 +93,6 @@ gradle.taskGraph.whenReady {
                     || it.name.contains("watchos", true)
                     || it.name.contains("tvos", true) -> it.enabled = HostManager.hostIsMac
         }
-    }
-}
-
-android {
-    namespace = "com.ctrip.sqllin.driver"
-    compileSdk = libs.versions.android.sdk.compile.get().toInt()
-    defaultConfig {
-        minSdk = libs.versions.android.sdk.min.get().toInt()
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 }
 

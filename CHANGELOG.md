@@ -2,6 +2,25 @@
 
 - Date format: YYYY-MM-dd
 
+## 2.3.0 / 2026-05-16
+
+### All
+
+* Update `Kotlin`'s version to `2.3.21`
+* Update `AGP`'s version to `9.0.0`, migrated from `com.android.library` plugin to `com.android.kotlin.multiplatform.library`
+* Update `kotlinx.serialization`'s version to `1.11.0`
+* Update `kotlinx.coroutines`'s version to `1.11.0`
+* Fix documentation: Android minimum supported version has been `7.0+` (API 24) since `2.0.0`, the README incorrectly stated `6.0+`
+* **Breaking change**: Drop `iosX64`, `macosX64`, `watchosX64`, and `tvosX64` target support
+
+### sqllin-driver
+
+* Update `sqlite-jdbc`'s version to `3.53.1.0`
+
+### sqllin-processor
+
+* Update `KSP`'s version to `2.3.7`
+
 ## 2.2.0 / 2025-12-15
 
 ### sqllin-dsl

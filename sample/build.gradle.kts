@@ -12,13 +12,14 @@ version = "1.0"
 
 kotlin {
     jvmToolchain(libs.versions.jvm.toolchain.get().toInt())
-    androidTarget {
-        publishLibraryVariants("release")
+    android {
+        namespace = "com.ctrip.sqllin.sample"
+        compileSdk = libs.versions.android.sdk.compile.get().toInt()
+        minSdk = libs.versions.android.sdk.min.get().toInt()
     }
     jvm {
         compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
     }
-    iosX64()
     iosArm64()
     iosSimulatorArm64()
 
@@ -38,14 +39,6 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.core)
             }
         }
-    }
-}
-
-android {
-    namespace = "com.ctrip.sqllin.sample"
-    compileSdk = libs.versions.android.sdk.compile.get().toInt()
-    defaultConfig {
-        minSdk = libs.versions.android.sdk.min.get().toInt()
     }
 }
 

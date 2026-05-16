@@ -4,6 +4,7 @@
 
 * Support FOREIGN KEY DSL (2.2.0 ✅)
 * Support CREATE INDEX DSL (2.2.0 ✅)
+* Support INSERT OR REPLACE
 
 ## Medium Priority
 

@@ -11,7 +11,7 @@ on:
 jobs:
 
   build-on-macos:
-    runs-on: macos-15-intel
+    runs-on: macos-latest
     timeout-minutes: 60
 
     steps:
@@ -71,9 +71,9 @@ jobs:
         with:
           api-level: 36
           target: google_apis
-          arch: x86_64
+          arch: arm64-v8a
           profile: pixel_6
-          emulator-build: 14257411
+          emulator-build: 15368433
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
@@ -84,9 +84,9 @@ jobs:
         with:
           api-level: 36
           target: google_apis
-          arch: x86_64
+          arch: arm64-v8a
           profile: pixel_6
-          emulator-build: 14257411
+          emulator-build: 15368433
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
@@ -232,7 +232,7 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_2
-          emulator-build: 14257411
+          emulator-build: 15368433
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
@@ -245,7 +245,7 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_2
-          emulator-build: 14257411
+          emulator-build: 15368433
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
