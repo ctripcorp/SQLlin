@@ -41,19 +41,19 @@ jobs:
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:assemble -PonCICD
         
-      - name: Run sqllin-driver macOS X64 Tests
+      - name: Run sqllin-driver macOS Arm64 Tests
         run: ./test_driver_macos.sh
 
-      - name: Run sqllin-driver JVM Unit Tests on macOS X64
+      - name: Run sqllin-driver JVM Unit Tests on macOS Arm64
         run: ./test_driver_jvm.sh
 
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:assemble -PonCICD
 
-      - name: Run sqllin-dsl macOS X64 Tests
+      - name: Run sqllin-dsl macOS Arm64 Tests
         run: ./test_dsl_macos.sh
 
-      - name: Run sqllin-dsl JVM Unit Tests on macOS X64
+      - name: Run sqllin-dsl JVM Unit Tests on macOS Arm64
         run: ./test_dsl_jvm.sh
 
       - name: AVD Cache
