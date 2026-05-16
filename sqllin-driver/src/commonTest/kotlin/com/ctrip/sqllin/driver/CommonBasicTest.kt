@@ -91,7 +91,7 @@ class CommonBasicTest(private val path: DatabasePath) {
                 connection.executeInsert(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96, byteArrayOf()))
                 connection.executeInsert(SQL.INSERT_BOOK, arrayOf("The Lost Symbol", "Dan Brown", 510, 19.95, byteArrayOf(1, 2, 3)))
                 connection.executeInsert(SQL.INSERT_BOOK, arrayOf("", "Dan Brown", 454, 16.96, byteArrayOf()))
-                connection.executeInsert(SQL.INSERT_BOOK, arrayOf("The Lost Symbol", null, 510, 19.95, null))
+                connection.executeInsert(SQL.INSERT_BOOK, arrayOf<Any?>("The Lost Symbol", null, 510, 19.95, null))
             }
         }
         val readOnlyConfig = getDefaultDBConfig(true)
@@ -114,13 +114,13 @@ class CommonBasicTest(private val path: DatabasePath) {
         val readWriteConfig = getDefaultDBConfig(false)
         openDatabase(readWriteConfig) {
             it.withTransaction { connection ->
-                connection.executeUpdateDelete(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96))
-                connection.executeUpdateDelete(SQL.INSERT_BOOK, arrayOf("The Lost Symbol", "Dan Brown", 510, 19.95))
+                connection.executeUpdateDelete(SQL.INSERT_BOOK, arrayOf<Any>("The Da Vinci Code", "Dan Brown", 454, 16.96))
+                connection.executeUpdateDelete(SQL.INSERT_BOOK, arrayOf<Any>("The Lost Symbol", "Dan Brown", 510, 19.95))
             }
 
             it.withTransaction { connection ->
-                connection.executeUpdateDelete(SQL.UPDATE_BOOK, arrayOf(18.99, "The Da Vinci Code"))
-                connection.executeUpdateDelete(SQL.UPDATE_BOOK, arrayOf(25.88, "The Lost Symbol"))
+                connection.executeUpdateDelete(SQL.UPDATE_BOOK, arrayOf<Any>(18.99, "The Da Vinci Code"))
+                connection.executeUpdateDelete(SQL.UPDATE_BOOK, arrayOf<Any>(25.88, "The Lost Symbol"))
             }
         }
         val readOnlyConfig = getDefaultDBConfig(true)
@@ -143,8 +143,8 @@ class CommonBasicTest(private val path: DatabasePath) {
         val readWriteConfig = getDefaultDBConfig(false)
         openDatabase(readWriteConfig) {
             it.withTransaction { connection ->
-                connection.executeUpdateDelete(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96))
-                connection.executeUpdateDelete(SQL.INSERT_BOOK, arrayOf("The Lost Symbol", "Dan Brown", 510, 19.95))
+                connection.executeUpdateDelete(SQL.INSERT_BOOK, arrayOf<Any>("The Da Vinci Code", "Dan Brown", 454, 16.96))
+                connection.executeUpdateDelete(SQL.INSERT_BOOK, arrayOf<Any>("The Lost Symbol", "Dan Brown", 510, 19.95))
             }
 
             it.executeUpdateDelete(SQL.DELETE_BOOK, arrayOf(500))
@@ -174,8 +174,8 @@ class CommonBasicTest(private val path: DatabasePath) {
 
             try {
                 it.withTransaction { connection ->
-                    connection.executeUpdateDelete(SQL.UPDATE_BOOK, arrayOf(18.99, "The Da Vinci Code"))
-                    connection.executeUpdateDelete(SQL.UPDATE_BOOK, arrayOf(25.88, "The Lost Symbol"))
+                    connection.executeUpdateDelete(SQL.UPDATE_BOOK, arrayOf<Any>(18.99, "The Da Vinci Code"))
+                    connection.executeUpdateDelete(SQL.UPDATE_BOOK, arrayOf<Any>(25.88, "The Lost Symbol"))
                     throw IllegalStateException("Simulate transaction failed.")
                 }
             } catch (e: IllegalStateException) {
