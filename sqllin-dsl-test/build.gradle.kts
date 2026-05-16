@@ -69,10 +69,13 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
         }
-        getByName("androidDeviceTest").dependencies {
-            implementation(libs.androidx.test.core)
-            implementation(libs.androidx.test.runner)
-            implementation(libs.androidx.test.rules)
+        getByName("androidDeviceTest") {
+            dependsOn(commonTest.get())
+            dependencies {
+                implementation(libs.androidx.test.core)
+                implementation(libs.androidx.test.runner)
+                implementation(libs.androidx.test.rules)
+            }
         }
     }
 }

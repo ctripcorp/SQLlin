@@ -70,10 +70,13 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.annotation)
         }
-        getByName("androidDeviceTest").dependencies {
-            implementation(libs.androidx.test.core)
-            implementation(libs.androidx.test.runner)
-            implementation(libs.androidx.test.rules)
+        getByName("androidDeviceTest") {
+            dependsOn(commonTest.get())
+            dependencies {
+                implementation(libs.androidx.test.core)
+                implementation(libs.androidx.test.runner)
+                implementation(libs.androidx.test.rules)
+            }
         }
         jvmMain.dependencies {
             implementation(libs.sqlite.jdbc)
