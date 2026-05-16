@@ -1,3 +1,3 @@
 #Run sqllin-driver unit tests on macOS
-./gradlew :sqllin-driver:cleanMacosArm64Test
-./gradlew :sqllin-driver:macosArm64Test --stacktrace
+./gradlew :sqllin-driver-test:cleanMacosArm64Test
+./gradlew :sqllin-driver-test:macosArm64Test --stacktrace

@@ -3,6 +3,7 @@ include(":sqllin-driver")
 include(":sqllin-dsl")
 include(":sqllin-processor")
 include(":sqllin-dsl-test")
+include(":sqllin-driver-test")
 include(":sample")
 
 pluginManagement {

@@ -1,3 +1,3 @@
 #Run sqllin-driver unit tests on JVM
-./gradlew :sqllin-driver:cleanJvmTest
-./gradlew :sqllin-driver:jvmTest --stacktrace
+./gradlew :sqllin-driver-test:cleanJvmTest
+./gradlew :sqllin-driver-test:jvmTest --stacktrace

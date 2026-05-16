@@ -1,13 +1,10 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 import org.jetbrains.kotlin.konan.target.HostManager
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
-    alias(libs.plugins.kotlinx.serialization)
     alias(libs.plugins.android.library)
-    alias(libs.plugins.ksp)
 }
 
 version = "1.0"
@@ -15,7 +12,7 @@ version = "1.0"
 kotlin {
     jvmToolchain(libs.versions.jvm.toolchain.get().toInt())
     android {
-        namespace = "com.ctrip.sqllin.dsl.test"
+        namespace = "com.ctrip.sqllin.driver.test"
         compileSdk = libs.versions.android.sdk.compile.get().toInt()
         minSdk = libs.versions.android.sdk.min.get().toInt()
         withDeviceTest {
@@ -50,20 +47,20 @@ kotlin {
     }
 
     compilerOptions {
-        freeCompilerArgs.addAll("-Xexpect-actual-classes", "-Xcontext-parameters", "-Xnested-type-aliases")
+        freeCompilerArgs.addAll("-Xexpect-actual-classes", "-Xcontext-parameters")
     }
-    
+
     sourceSets {
         all {
-            languageSettings.optIn("kotlin.RequiresOptIn")
+            languageSettings {
+                optIn("kotlin.RequiresOptIn")
+            }
         }
         commonMain {
-            kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
             dependencies {
-                implementation(project(":sqllin-dsl"))
-                implementation(libs.kotlinx.serialization)
-                implementation(libs.kotlinx.coroutines.core)
+                implementation(project(":sqllin-driver"))
                 implementation(kotlin("test"))
+                implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.coroutines.test)
             }
         }
@@ -90,7 +87,6 @@ gradle.taskGraph.whenReady {
     }
 }
 
-
 fun KotlinNativeTarget.setupNativeConfig() {
     binaries {
         all {
@@ -99,19 +95,6 @@ fun KotlinNativeTarget.setupNativeConfig() {
                 HostManager.hostIsMingw -> listOf("-Lc:\\msys64\\mingw64\\lib", "-L$rootDir\\libs\\windows", "-lsqlite3")
                 else -> listOf("-lsqlite3")
             }
-        }
-    }
-}
-
-dependencies {
-    add("kspCommonMainMetadata", project(":sqllin-processor"))
-}
-
-afterEvaluate { // WORKAROUND: both register() and named() fail – https://github.com/gradle/gradle/issues/9331
-    tasks {
-        withType<KotlinCompilationTask<*>> {
-            if (name != "kspCommonMainKotlinMetadata")
-                dependsOn("kspCommonMainKotlinMetadata")
         }
     }
 }

@@ -21,9 +21,6 @@ kotlin {
         namespace = "com.ctrip.sqllin.driver"
         compileSdk = libs.versions.android.sdk.compile.get().toInt()
         minSdk = libs.versions.android.sdk.min.get().toInt()
-        withDeviceTest {
-            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        }
     }
 
     jvm {
@@ -62,21 +59,8 @@ kotlin {
                 optIn("kotlin.RequiresOptIn")
             }
         }
-        commonTest.dependencies {
-            implementation(kotlin("test"))
-            implementation(libs.kotlinx.coroutines.core)
-            implementation(libs.kotlinx.coroutines.test)
-        }
         androidMain.dependencies {
             implementation(libs.androidx.annotation)
-        }
-        getByName("androidDeviceTest") {
-            dependsOn(commonTest.get())
-            dependencies {
-                implementation(libs.androidx.test.core)
-                implementation(libs.androidx.test.runner)
-                implementation(libs.androidx.test.rules)
-            }
         }
         jvmMain.dependencies {
             implementation(libs.sqlite.jdbc)

@@ -1,0 +1,1 @@
+/Users/qiaoyuang/.konan/kotlin-native-prebuilt-macos-x86_64-2.3.21/klib/commonized/2.3.21
