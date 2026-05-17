@@ -1,3 +1,4 @@
+import com.android.build.api.dsl.ManagedVirtualDevice.PageAlignment.FORCE_16KB_PAGES
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import org.jetbrains.kotlin.konan.target.HostManager
@@ -24,6 +25,7 @@ kotlin {
                         apiLevel = 37
                         systemImageSource = "google"
                         testedAbi = "arm64-v8a"
+                        pageAlignment = FORCE_16KB_PAGES
                     }
                 }
             }
