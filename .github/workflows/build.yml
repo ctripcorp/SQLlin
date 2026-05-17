@@ -60,7 +60,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Run Android 16 Instrumented Tests
-        run: ./gradlew :sqllin-driver-test:pixel6api36AndroidDeviceTest :sqllin-dsl-test:pixel6api36AndroidDeviceTest --stacktrace
+        run: ./gradlew :sqllin-driver-test:pixelAndroidDeviceTest :sqllin-dsl-test:pixelAndroidDeviceTest --stacktrace
 
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v4

@@ -23,7 +23,7 @@ kotlin {
             instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
             managedDevices {
                 localDevices {
-                    create("pixel10api36") {
+                    create("pixel") {
                         device = "Pixel 10"
                         apiLevel = 36
                         systemImageSource = "google"
