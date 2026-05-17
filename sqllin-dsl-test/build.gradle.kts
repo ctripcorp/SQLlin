@@ -23,16 +23,10 @@ kotlin {
             managedDevices {
                 localDevices {
                     create("pixel6api36") {
-                        device = "Pixel 6"
-                        apiLevel = 36
+                        device = "Pixel 10"
+                        apiLevel = 37
                         systemImageSource = "google"
                         testedAbi = "arm64-v8a"
-                    }
-                    create("pixel2api27") {
-                        device = "Pixel 2"
-                        apiLevel = 27
-                        systemImageSource = "aosp"
-                        testedAbi = "x86_64"
                     }
                 }
             }

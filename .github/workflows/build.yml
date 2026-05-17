@@ -56,6 +56,9 @@ jobs:
       - name: Run sqllin-dsl JVM Unit Tests on macOS Arm64
         run: ./test_dsl_jvm.sh
 
+      - name: Accept Android SDK Licenses
+        run: yes | sdkmanager --licenses || true
+
       - name: Run Android 16 Instrumented Tests
         run: ./gradlew :sqllin-driver-test:pixel6api36AndroidDeviceTest :sqllin-dsl-test:pixel6api36AndroidDeviceTest --stacktrace
 
@@ -182,14 +185,41 @@ jobs:
       - name: Run sqllin-dsl JVM Unit Tests on Linux X64
         run: ./test_dsl_jvm.sh
 
-      - name: Enable KVM Group Permissions
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
+      - name: AVD Cache
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-26
+
+      - name: Create AVD and Generate Snapshot for Caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 26
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          emulator-build: 15368433
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: echo "Generated AVD snapshot for caching."
 
       - name: Run Android 8 Instrumented Tests
-        run: ./gradlew :sqllin-driver-test:pixel2api27AndroidDeviceTest :sqllin-dsl-test:pixel2api27AndroidDeviceTest --stacktrace
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 26
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          emulator-build: 15368433
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: ./test_android.sh
 
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v4
