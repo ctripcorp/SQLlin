@@ -23,11 +23,13 @@ kotlin {
                         device = "Pixel 6"
                         apiLevel = 36
                         systemImageSource = "google"
+                        testedAbi = "arm64-v8a"
                     }
                     create("pixel2api27") {
                         device = "Pixel 2"
                         apiLevel = 27
                         systemImageSource = "aosp"
+                        testedAbi = "x86_64"
                     }
                 }
             }
