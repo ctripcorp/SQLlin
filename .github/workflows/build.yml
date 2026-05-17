@@ -56,8 +56,8 @@ jobs:
       - name: Run sqllin-dsl JVM Unit Tests on macOS Arm64
         run: ./test_dsl_jvm.sh
 
-      - name: Accept Android SDK Licenses
-        run: yes | sdkmanager --licenses || true
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Run Android 16 Instrumented Tests
         run: ./gradlew :sqllin-driver-test:pixel6api36AndroidDeviceTest :sqllin-dsl-test:pixel6api36AndroidDeviceTest --stacktrace
