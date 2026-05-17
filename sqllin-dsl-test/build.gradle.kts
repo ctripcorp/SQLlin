@@ -25,7 +25,7 @@ kotlin {
                 localDevices {
                     create("pixel") {
                         device = "Pixel 10"
-                        apiLevel = 36
+                        apiLevel = 37
                         systemImageSource = "google"
                         testedAbi = "arm64-v8a"
                         pageAlignment = FORCE_16KB_PAGES
