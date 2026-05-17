@@ -23,9 +23,9 @@ kotlin {
             instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
             managedDevices {
                 localDevices {
-                    create("pixel6api36") {
+                    create("pixel10api36") {
                         device = "Pixel 10"
-                        apiLevel = 37
+                        apiLevel = 36
                         systemImageSource = "google"
                         testedAbi = "arm64-v8a"
                         pageAlignment = FORCE_16KB_PAGES
