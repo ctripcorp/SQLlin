@@ -17,16 +17,6 @@ kotlin {
         minSdk = libs.versions.android.sdk.min.get().toInt()
         withDeviceTest {
             instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-            managedDevices {
-                localDevices {
-                    create("pixelCI") {
-                        device = "Pixel 9"
-                        apiLevel = 36
-                        systemImageSource = "google"
-                        testedAbi = "arm64-v8a"
-                    }
-                }
-            }
         }
     }
 
