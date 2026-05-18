@@ -141,7 +141,7 @@ jobs:
             device: pixel_2
           - api-level: 36
             target: google_apis
-            device: pixel_9
+            device: pixel_6
 
     steps:
       - name: Checkout
