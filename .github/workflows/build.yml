@@ -135,7 +135,13 @@ jobs:
     timeout-minutes: 60
     strategy:
       matrix:
-        api-level: [26, 36]
+        include:
+          - api-level: 26
+            target: default
+            device: pixel_2
+          - api-level: 36
+            target: google_apis
+            device: pixel_9
 
     steps:
       - name: Checkout
@@ -189,16 +195,16 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd
+          key: avd-${{ matrix.api-level }}
 
       - name: Create AVD and Generate Snapshot for Caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
-          target: default
+          target: ${{ matrix.target }}
           arch: x86_64
-          profile: pixel_6
+          profile: ${{ matrix.device }}
           emulator-build: 15368433
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
@@ -209,9 +215,9 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
-          target: default
+          target: ${{ matrix.target }}
           arch: x86_64
-          profile: pixel_6
+          profile: ${{ matrix.device }}
           emulator-build: 15368433
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
@@ -221,13 +227,13 @@ jobs:
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v4
         with:
-          name: Test-Reports-Linux-driver
+          name: Test-Reports-Linux-driver-API${{ matrix.api-level }}
           path: sqllin-driver/build/reports
         if: failure()
 
       - name: Upload sqllin-dsl Reports
         uses: actions/upload-artifact@v4
         with:
-          name: Test-Reports-Linux-dsl
+          name: Test-Reports-Linux-dsl-API${{ matrix.api-level }}
           path: sqllin-dsl/build/reports
         if: failure()
