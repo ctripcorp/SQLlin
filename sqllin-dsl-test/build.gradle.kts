@@ -25,7 +25,7 @@ kotlin {
                     create("pixelCI") {
                         device = "Pixel 6"
                         apiLevel = 36
-                        systemImageSource = "aosp-atd"
+                        systemImageSource = "google"
                         testedAbi = "arm64-v8a"
                     }
                 }
@@ -60,7 +60,7 @@ kotlin {
     }
 
     compilerOptions {
-        freeCompilerArgs.addAll("-Xexpect-actual-classes", "-Xcontext-parameters", "-Xnested-type-aliases")
+        freeCompilerArgs.addAll("-Xexpect-actual-classes", "-Xcontext-parameters")
     }
     
     sourceSets {
