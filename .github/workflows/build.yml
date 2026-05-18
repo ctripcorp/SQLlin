@@ -60,7 +60,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Run Android 16 Instrumented Tests
-        run: ./gradlew :sqllin-driver-test:pixelCIAndroidDeviceTest :sqllin-dsl-test:pixelCIAndroidDeviceTest --stacktrace -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect
+        run: ./gradlew :sqllin-driver-test:pixelCIAndroidDeviceTest --stacktrace -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect
 
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v4

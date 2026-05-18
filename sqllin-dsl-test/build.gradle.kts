@@ -23,9 +23,9 @@ kotlin {
             managedDevices {
                 localDevices {
                     create("pixelCI") {
-                        device = "Pixel 6"
+                        device = "Pixel 9"
                         apiLevel = 36
-                        systemImageSource = "google"
+                        systemImageSource = "aosp-atd"
                         testedAbi = "arm64-v8a"
                     }
                 }
