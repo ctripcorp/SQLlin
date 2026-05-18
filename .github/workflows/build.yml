@@ -259,7 +259,7 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: ./gradlew :sqllin-driver-test:connectedAndroidDeviceTest :sqllin-dsl-test:connectedAndroidDeviceTest --stacktrace
+          script: ./gradlew :sqllin-driver-test:connectedAndroidDeviceTest --stacktrace & ./gradlew :sqllin-dsl-test:connectedAndroidDeviceTest --stacktrace
 
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v4
