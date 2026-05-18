@@ -11,7 +11,7 @@ on:
 jobs:
 
   build-on-macos:
-    runs-on: macos-15-intel
+    runs-on: macos-latest
     timeout-minutes: 60
 
     steps:
@@ -41,56 +41,20 @@ jobs:
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:assemble -PonCICD
         
-      - name: Run sqllin-driver macOS X64 Tests
-        run: ./test_driver_macos.sh
+      - name: Run sqllin-driver macOS Arm64 Tests
+        run: ./gradlew :sqllin-driver-test:cleanMacosArm64Test :sqllin-driver-test:macosArm64Test --stacktrace
 
-      - name: Run sqllin-driver JVM Unit Tests on macOS X64
-        run: ./test_driver_jvm.sh
+      - name: Run sqllin-driver JVM Unit Tests on macOS Arm64
+        run: ./gradlew :sqllin-driver-test:cleanJvmTest :sqllin-driver-test:jvmTest --stacktrace
 
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:assemble -PonCICD
 
-      - name: Run sqllin-dsl macOS X64 Tests
-        run: ./test_dsl_macos.sh
+      - name: Run sqllin-dsl macOS Arm64 Tests
+        run: ./gradlew :sqllin-dsl-test:cleanMacosArm64Test :sqllin-dsl-test:macosArm64Test --stacktrace
 
-      - name: Run sqllin-dsl JVM Unit Tests on macOS X64
-        run: ./test_dsl_jvm.sh
-
-      - name: AVD Cache
-        uses: actions/cache@v4
-        id: avd-cache
-        with:
-          path: |
-            ~/.android/avd/*
-            ~/.android/adb*
-          key: avd-36
-
-      - name: Create AVD and Generate Snapshot for Caching
-        if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 36
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          emulator-build: 14257411
-          force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          disable-animations: true
-          script: echo "Generated AVD snapshot for caching."
-
-      - name: Run Android 16 Instrumented Tests
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 36
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          emulator-build: 14257411
-          force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          disable-animations: true
-          script: ./test_android.sh
+      - name: Run sqllin-dsl JVM Unit Tests on macOS Arm64
+        run: ./gradlew :sqllin-dsl-test:cleanJvmTest :sqllin-dsl-test:jvmTest --stacktrace
 
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v4
@@ -135,7 +99,7 @@ jobs:
             ${{ runner.os }}-konan-
 
       - name: Build sqllin-driver
-        run: ./gradlew :sqllin-driver:mingwX64MainKlibrary
+        run: ./gradlew :sqllin-driver:mingwX64MainKlibrary :sqllin-driver:jvmJar
 
       - name: Run sqllin-driver MinGW X64 Tests
         run: ./gradlew :sqllin-driver:cleanMingwX64Test && ./gradlew :sqllin-driver:mingwX64Test --stacktrace
@@ -144,7 +108,7 @@ jobs:
         run: ./gradlew :sqllin-driver:cleanJvmTest && ./gradlew :sqllin-driver:jvmTest --stacktrace
 
       - name: Build sqllin-dsl
-        run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary
+        run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary :sqllin-dsl:jvmJar
 
       - name: Run sqllin-dsl MinGW X64 Tests
         run: ./gradlew :sqllin-dsl-test:cleanMingwX64Test && ./gradlew :sqllin-dsl-test:mingwX64Test --stacktrace
@@ -195,61 +159,25 @@ jobs:
             ${{ runner.os }}-konan-
 
       - name: Build sqllin-driver
-        run: ./gradlew :sqllin-driver:assemble -PonCICD
+        run: ./gradlew :sqllin-driver:linuxX64MainKlibrary :sqllin-driver:jvmJar
 
       - name: Run sqllin-driver Linux X64 Tests
-        run: ./test_driver_linux.sh
+        run: ./gradlew :sqllin-driver-test:cleanLinuxX64Test :sqllin-driver-test:linuxX64Test --stacktrace
 
       - name: Run sqllin-driver JVM Unit Tests on Linux X64
-        run: ./test_driver_jvm.sh
+        run: ./gradlew :sqllin-driver-test:cleanJvmTest :sqllin-driver-test:jvmTest --stacktrace
 
       - name: Build sqllin-processor
         run: ./gradlew :sqllin-processor:assemble
 
       - name: Build sqllin-dsl
-        run: ./gradlew :sqllin-dsl:assemble -PonCICD
+        run: ./gradlew :sqllin-dsl:linuxX64MainKlibrary :sqllin-dsl:jvmJar
 
       - name: Run sqllin-dsl Linux X64 Tests
-        run: ./test_dsl_linux.sh
+        run: ./gradlew :sqllin-dsl-test:cleanLinuxX64Test :sqllin-dsl-test:linuxX64Test --stacktrace
 
       - name: Run sqllin-dsl JVM Unit Tests on Linux X64
-        run: ./test_dsl_jvm.sh
-
-      - name: AVD Cache
-        uses: actions/cache@v4
-        id: avd-cache
-        with:
-          path: |
-            ~/.android/avd/*
-            ~/.android/adb*
-          key: avd-26
-
-      - name: Create AVD and Generate Snapshot for Caching
-        if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 26
-          target: default
-          arch: x86_64
-          profile: pixel_2
-          emulator-build: 14257411
-          force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          disable-animations: true
-          script: echo "Generated AVD snapshot for caching."
-
-      - name: Run Android 8 Instrumented Tests
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 26
-          target: default
-          arch: x86_64
-          profile: pixel_2
-          emulator-build: 14257411
-          force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          disable-animations: true
-          script: ./test_android.sh
+        run: ./gradlew :sqllin-dsl-test:cleanJvmTest :sqllin-dsl-test:jvmTest --stacktrace
 
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v4
@@ -262,5 +190,87 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Test-Reports-Linux-dsl
+          path: sqllin-dsl/build/reports
+        if: failure()
+
+  build-android-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        include:
+          - api-level: 26
+            target: default
+            device: pixel_2
+          - api-level: 36
+            target: google_apis
+            device: pixel_6
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@v3
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Android
+        run: ./gradlew :sqllin-driver:assembleAndroidMain :sqllin-dsl:assembleAndroidMain
+
+      - name: AVD Cache
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ matrix.api-level }}
+
+      - name: Create AVD and Generate Snapshot for Caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: ${{ matrix.target }}
+          arch: x86_64
+          profile: ${{ matrix.device }}
+          emulator-build: 15368433
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: echo "Generated AVD snapshot for caching."
+
+      - name: Run Android Instrumented Tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: ${{ matrix.target }}
+          arch: x86_64
+          profile: ${{ matrix.device }}
+          emulator-build: 15368433
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: ./gradlew :sqllin-driver-test:connectedAndroidDeviceTest --stacktrace & ./gradlew :sqllin-dsl-test:connectedAndroidDeviceTest --stacktrace
+
+      - name: Upload sqllin-driver Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test-Reports-Android-driver-API${{ matrix.api-level }}
+          path: sqllin-driver/build/reports
+        if: failure()
+
+      - name: Upload sqllin-dsl Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test-Reports-Android-dsl-API${{ matrix.api-level }}
           path: sqllin-dsl/build/reports
         if: failure()

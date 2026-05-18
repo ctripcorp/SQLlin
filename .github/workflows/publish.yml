@@ -13,7 +13,7 @@ env:
 jobs:
 
   build-on-macos:
-    runs-on: macos-15-intel
+    runs-on: macos-latest
     timeout-minutes: 60
 
     steps:

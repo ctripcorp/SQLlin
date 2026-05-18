@@ -31,12 +31,12 @@ and deserialization ability is based on [kotlinx.serialization](https://github.c
 SQLlin supports these platforms:
 
 - Multiplatform Common
-- Android (6.0+)
+- Android (7.0+)
 - JVM (Java 11+, since `1.2.0`)
-- iOS (x64, arm64, simulatorArm64)
-- macOS (x64, arm64)
-- watchOS (x64, arm32, arm64, simulatorArm64, deviceArm64)
-- tvOS (x64, arm64, simulatorArm64)
+- iOS (arm64, simulatorArm64)
+- macOS (arm64)
+- watchOS (arm32, arm64, simulatorArm64, deviceArm64)
+- tvOS (arm64, simulatorArm64)
 - Linux (x64, arm64)
 - Windows (mingwX64)
 
