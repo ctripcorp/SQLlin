@@ -25,7 +25,7 @@ kotlin {
                     create("pixelCI") {
                         device = "Pixel 9"
                         apiLevel = 36
-                        systemImageSource = "aosp-atd"
+                        systemImageSource = "google"
                         testedAbi = "arm64-v8a"
                     }
                 }
