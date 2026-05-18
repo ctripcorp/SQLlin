@@ -1,4 +1,3 @@
-import com.android.build.api.dsl.ManagedVirtualDevice.PageAlignment.FORCE_16KB_PAGES
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import org.jetbrains.kotlin.konan.target.HostManager
@@ -20,12 +19,11 @@ kotlin {
             instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
             managedDevices {
                 localDevices {
-                    create("pixel") {
-                        device = "Pixel 10"
+                    create("pixelCI") {
+                        device = "Pixel 6"
                         apiLevel = 36
-                        systemImageSource = "google"
+                        systemImageSource = "aosp-atd"
                         testedAbi = "arm64-v8a"
-                        //pageAlignment = FORCE_16KB_PAGES
                     }
                 }
             }
