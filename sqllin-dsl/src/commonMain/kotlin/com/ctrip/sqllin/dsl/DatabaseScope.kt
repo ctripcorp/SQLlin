@@ -47,6 +47,7 @@ import kotlin.jvm.JvmName
  *
  * Supported operations:
  * - **INSERT**: Add entities to tables
+ * - **INSERT OR REPLACE**: Insert or replace entities on PRIMARY KEY / UNIQUE conflict
  * - **UPDATE**: Modify existing records with SET and WHERE clauses
  * - **DELETE**: Remove records with WHERE clauses
  * - **SELECT**: Query records with WHERE, ORDER BY, LIMIT, GROUP BY, JOIN, and UNION
@@ -252,6 +253,49 @@ public class DatabaseScope internal constructor(
     @StatementDslMaker
     public infix fun <T> Table<T>.INSERT_WITH_ID(entity: T): Unit =
         INSERT_WITH_ID(listOf(entity))
+
+    /**
+     * Inserts multiple entities into the table, replacing any existing rows that conflict on
+     * PRIMARY KEY or UNIQUE constraints.
+     *
+     * When a conflict is detected, the existing row is deleted and the new row is inserted in its
+     * place (`INSERT OR REPLACE INTO ...`). When there is no conflict, the behaviour is identical
+     * to a plain [INSERT].
+     *
+     * The primary key column is always included in the VALUES clause so that SQLite can detect
+     * conflicts. If the primary key field is `null` for a rowid-backed key, SQLite auto-generates
+     * the ID and no conflict can occur by primary key.
+     *
+     * Example:
+     * ```kotlin
+     * val person = PersonWithId(id = 42L, name = "Alice Updated", age = 26)
+     * PersonWithIdTable INSERT_OR_REPLACE person
+     * ```
+     *
+     * @see INSERT for standard inserts with auto-generated IDs
+     */
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_REPLACE(entities: Iterable<T>) {
+        val statement = Insert.insertOrReplace(this, databaseConnection, entities)
+        addStatement(statement)
+    }
+
+    /**
+     * Inserts a single entity into the table, replacing any existing row that conflicts on
+     * PRIMARY KEY or UNIQUE constraints.
+     *
+     * Example:
+     * ```kotlin
+     * val person = PersonWithId(id = 42L, name = "Alice Updated", age = 26)
+     * PersonWithIdTable INSERT_OR_REPLACE person
+     * ```
+     *
+     * @see INSERT_OR_REPLACE for batch inserts with conflict replacement
+     * @see INSERT for standard inserts with auto-generated IDs
+     */
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_REPLACE(entity: T): Unit =
+        INSERT_OR_REPLACE(listOf(entity))
 
     // ========== UPDATE Operations ==========
 
