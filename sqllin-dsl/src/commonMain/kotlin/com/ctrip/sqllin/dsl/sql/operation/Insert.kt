@@ -59,4 +59,15 @@ internal object Insert : Operation {
         }
         return InsertStatement(sql, connection, parameters)
     }
+
+    fun <T> insertOrReplace(table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>): SingleStatement {
+        val parameters = ArrayList<Any?>()
+        val sql = buildString {
+            append("INSERT OR REPLACE INTO ")
+            append(table.tableName)
+            append(' ')
+            encodeEntities2InsertValues(table, this, entities, parameters, isInsertWithId = true)
+        }
+        return InsertStatement(sql, connection, parameters)
+    }
 }

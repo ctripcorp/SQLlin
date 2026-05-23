@@ -633,6 +633,58 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    @OptIn(AdvancedInsertAPI::class)
+    fun testInsertOrReplace() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            // Insert an initial entity with a known ID
+            val original = PersonWithId(id = 100L, name = "Eve", age = 28)
+            database {
+                PersonWithIdTable { table ->
+                    table INSERT_WITH_ID original
+                }
+            }
+
+            lateinit var selectStatement: SelectStatement<PersonWithId>
+            database {
+                selectStatement = PersonWithIdTable SELECT X
+            }
+            assertEquals(1, selectStatement.getResults().size)
+            assertEquals(100L, selectStatement.getResults().first().id)
+            assertEquals("Eve", selectStatement.getResults().first().name)
+
+            // INSERT_OR_REPLACE with the same PK — should replace the existing row
+            val replacement = PersonWithId(id = 100L, name = "Eve Updated", age = 29)
+            database {
+                PersonWithIdTable { table ->
+                    table INSERT_OR_REPLACE replacement
+                }
+            }
+
+            database {
+                selectStatement = PersonWithIdTable SELECT X
+            }
+            val resultsAfterReplace = selectStatement.getResults()
+            assertEquals(1, resultsAfterReplace.size)
+            assertEquals(100L, resultsAfterReplace.first().id)
+            assertEquals("Eve Updated", resultsAfterReplace.first().name)
+            assertEquals(29, resultsAfterReplace.first().age)
+
+            // INSERT_OR_REPLACE with a new entity (null ID) — should insert without conflict
+            val newEntity = PersonWithId(id = null, name = "Frank", age = 35)
+            database {
+                PersonWithIdTable { table ->
+                    table INSERT_OR_REPLACE newEntity
+                }
+            }
+
+            database {
+                selectStatement = PersonWithIdTable SELECT X
+            }
+            assertEquals(2, selectStatement.getResults().size)
+            assertEquals(true, selectStatement.getResults().any { it.name == "Frank" })
+        }
+    }
+
     fun testCreateInDatabaseScope() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             val person = PersonWithId(id = null, name = "Grace", age = 40)

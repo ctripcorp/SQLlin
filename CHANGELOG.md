@@ -2,12 +2,12 @@
 
 - Date format: YYYY-MM-dd
 
-## 2.3.0 / 2026-05-16
+## 2.3.0 / 2026-05-xx
 
 ### All
 
 * Update `Kotlin`'s version to `2.3.21`
-* Update `AGP`'s version to `9.0.0`, migrated from `com.android.library` plugin to `com.android.kotlin.multiplatform.library`
+* Update `AGP`'s version to `9.2.1`, migrated from `com.android.library` plugin to `com.android.kotlin.multiplatform.library`
 * Update `kotlinx.serialization`'s version to `1.11.0`
 * Update `kotlinx.coroutines`'s version to `1.11.0`
 * Fix documentation: Android minimum supported version has been `7.0+` (API 24) since `2.0.0`, the README incorrectly stated `6.0+`
