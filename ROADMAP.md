@@ -1,9 +1,5 @@
 # SQLlin Roadmap
 
-## High Priority
-
-* Support INSERT OR REPLACE
-
 ## Medium Priority
 
 * Support WASM platform DSL
@@ -20,5 +16,6 @@
 
 ## Supported
 
+* Support INSERT OR REPLACE (2.3.0 ✅)
 * Support FOREIGN KEY DSL (2.2.0 ✅)
 * Support CREATE INDEX DSL (2.2.0 ✅)
