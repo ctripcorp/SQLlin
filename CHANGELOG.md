@@ -15,6 +15,8 @@
 
 ### sqllin-dsl
 
+* New DSL API: `DatabaseScope#INSERT_OR_REPLACE` for SQL syntax `INSERT OR REPLACE`
+
 ### sqllin-driver
 
 * Update `sqlite-jdbc`'s version to `3.53.2.1`
