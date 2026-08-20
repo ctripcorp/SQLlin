@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -43,4 +44,11 @@ kotlin {
 
 dependencies {
     add("kspCommonMainMetadata", project(":sqllin-processor"))
+}
+
+afterEvaluate { // WORKAROUND: both register() and named() fail – https://github.com/gradle/gradle/issues/9331
+    tasks {
+        matching { (it is KotlinCompilationTask<*> || it.name.startsWith("ksp")) && it.name != "kspCommonMainKotlinMetadata" }
+            .configureEach { dependsOn("kspCommonMainKotlinMetadata") }
+    }
 }
