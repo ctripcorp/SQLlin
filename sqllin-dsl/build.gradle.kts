@@ -47,7 +47,7 @@ kotlin {
     mingwX64()
 
     compilerOptions {
-        freeCompilerArgs.addAll("-Xexpect-actual-classes", "-Xcontext-parameters")
+        freeCompilerArgs.addAll("-Xexpect-actual-classes")
     }
     
     sourceSets {
