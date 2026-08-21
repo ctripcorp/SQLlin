@@ -78,6 +78,9 @@ class NativeTest {
     fun testInsertWithId() = commonTest.testInsertWithId()
 
     @Test
+    fun testInsertOrReplace() = commonTest.testInsertOrReplace()
+
+    @Test
     fun testCreateInDatabaseScope() = commonTest.testCreateInDatabaseScope()
 
     @Test

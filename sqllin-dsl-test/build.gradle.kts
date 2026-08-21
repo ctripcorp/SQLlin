@@ -50,7 +50,7 @@ kotlin {
     }
 
     compilerOptions {
-        freeCompilerArgs.addAll("-Xexpect-actual-classes", "-Xcontext-parameters")
+        freeCompilerArgs.addAll("-Xexpect-actual-classes")
     }
     
     sourceSets {
@@ -109,9 +109,7 @@ dependencies {
 
 afterEvaluate { // WORKAROUND: both register() and named() fail – https://github.com/gradle/gradle/issues/9331
     tasks {
-        withType<KotlinCompilationTask<*>> {
-            if (name != "kspCommonMainKotlinMetadata")
-                dependsOn("kspCommonMainKotlinMetadata")
-        }
+        matching { (it is KotlinCompilationTask<*> || it.name.startsWith("ksp")) && it.name != "kspCommonMainKotlinMetadata" }
+            .configureEach { dependsOn("kspCommonMainKotlinMetadata") }
     }
 }
