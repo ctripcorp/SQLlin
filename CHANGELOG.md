@@ -2,6 +2,19 @@
 
 - Date format: YYYY-MM-dd
 
+## 2.4.0 / 2026-xx-xx
+
+### All
+
+* Update `Kotlin`'s version to `2.4.20`
+* Update `AGP`'s version to `9.4.0`
+* Migrate the Android instrumented tests to `Robolectric`, they now run on the JVM as host unit tests against `API 26` and `API 37`, and no longer need an emulator
+* Move the `sqllin-driver` tests back into the `sqllin-driver` module's `commonTest`, and remove the `sqllin-driver-test` module
+
+### sqllin-driver
+
+* Update `sqlite-jdbc`'s version to `3.53.4.0`
+
 ## 2.3.0 / 2026-08-20
 
 ### All

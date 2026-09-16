@@ -18,8 +18,8 @@ kotlin {
         namespace = "com.ctrip.sqllin.dsl.test"
         compileSdk = libs.versions.android.sdk.compile.get().toInt()
         minSdk = libs.versions.android.sdk.min.get().toInt()
-        withDeviceTest {
-            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        withHostTest {
+            isIncludeAndroidResources = true
         }
     }
 
@@ -67,12 +67,18 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.test)
             }
         }
-        getByName("androidDeviceTest").dependencies {
+        getByName("androidHostTest").dependencies {
+            implementation(libs.junit)
             implementation(libs.androidx.test.core)
-            implementation(libs.androidx.test.runner)
-            implementation(libs.androidx.test.rules)
+            implementation(libs.robolectric)
         }
     }
+}
+
+// Robolectric reflects into JDK internals when setting up newer Android SDKs,
+// which the module system blocks by default since JDK 17.
+tasks.withType<Test>().matching { it.name == "testAndroidHostTest" }.configureEach {
+    jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
 }
 
 gradle.taskGraph.whenReady {
