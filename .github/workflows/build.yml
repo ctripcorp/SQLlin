@@ -44,10 +44,10 @@ jobs:
         run: ./gradlew :sqllin-driver:assemble -PonCICD
         
       - name: Run sqllin-driver macOS Arm64 Tests
-        run: ./gradlew :sqllin-driver-test:cleanMacosArm64Test :sqllin-driver-test:macosArm64Test --stacktrace
+        run: ./gradlew :sqllin-driver:cleanMacosArm64Test :sqllin-driver:macosArm64Test --stacktrace
 
       - name: Run sqllin-driver JVM Unit Tests on macOS Arm64
-        run: ./gradlew :sqllin-driver-test:cleanJvmTest :sqllin-driver-test:jvmTest --stacktrace
+        run: ./gradlew :sqllin-driver:cleanJvmTest :sqllin-driver:jvmTest --stacktrace
 
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:assemble -PonCICD
@@ -164,10 +164,10 @@ jobs:
         run: ./gradlew :sqllin-driver:linuxX64MainKlibrary :sqllin-driver:jvmJar
 
       - name: Run sqllin-driver Linux X64 Tests
-        run: ./gradlew :sqllin-driver-test:cleanLinuxX64Test :sqllin-driver-test:linuxX64Test --stacktrace
+        run: ./gradlew :sqllin-driver:cleanLinuxX64Test :sqllin-driver:linuxX64Test --stacktrace
 
       - name: Run sqllin-driver JVM Unit Tests on Linux X64
-        run: ./gradlew :sqllin-driver-test:cleanJvmTest :sqllin-driver-test:jvmTest --stacktrace
+        run: ./gradlew :sqllin-driver:cleanJvmTest :sqllin-driver:jvmTest --stacktrace
 
       - name: Build sqllin-processor
         run: ./gradlew :sqllin-processor:assemble
@@ -198,15 +198,6 @@ jobs:
   build-android-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    strategy:
-      matrix:
-        include:
-          - api-level: 26
-            target: default
-            device: pixel_2
-          - api-level: 36
-            target: google_apis
-            device: pixel_6
 
     steps:
       - name: Checkout
@@ -227,52 +218,30 @@ jobs:
       - name: Build Android
         run: ./gradlew :sqllin-driver:assembleAndroidMain :sqllin-dsl:assembleAndroidMain
 
-      - name: AVD Cache
+      - name: Cache Robolectric Android-All Jars
         uses: actions/cache@v4
-        id: avd-cache
         with:
-          path: |
-            ~/.android/avd/*
-            ~/.android/adb*
-          key: avd-${{ matrix.api-level }}
+          path: ~/.m2/repository/org/robolectric
+          key: ${{ runner.os }}-robolectric-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-robolectric-
 
-      - name: Create AVD and Generate Snapshot for Caching
-        if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: ${{ matrix.api-level }}
-          target: ${{ matrix.target }}
-          arch: x86_64
-          profile: ${{ matrix.device }}
-          emulator-build: 15368433
-          force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          disable-animations: true
-          script: echo "Generated AVD snapshot for caching."
+      - name: Run sqllin-driver Android Unit Tests
+        run: ./gradlew :sqllin-driver:testAndroidHostTest --stacktrace
 
-      - name: Run Android Instrumented Tests
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: ${{ matrix.api-level }}
-          target: ${{ matrix.target }}
-          arch: x86_64
-          profile: ${{ matrix.device }}
-          emulator-build: 15368433
-          force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          disable-animations: true
-          script: ./gradlew :sqllin-driver-test:connectedAndroidDeviceTest --stacktrace & ./gradlew :sqllin-dsl-test:connectedAndroidDeviceTest --stacktrace
+      - name: Run sqllin-dsl Android Unit Tests
+        run: ./gradlew :sqllin-dsl-test:testAndroidHostTest --stacktrace
 
       - name: Upload sqllin-driver Reports
         uses: actions/upload-artifact@v4
         with:
-          name: Test-Reports-Android-driver-API${{ matrix.api-level }}
+          name: Test-Reports-Android-driver
           path: sqllin-driver/build/reports
         if: failure()
 
       - name: Upload sqllin-dsl Reports
         uses: actions/upload-artifact@v4
         with:
-          name: Test-Reports-Android-dsl-API${{ matrix.api-level }}
-          path: sqllin-dsl/build/reports
+          name: Test-Reports-Android-dsl
+          path: sqllin-dsl-test/build/reports
         if: failure()
