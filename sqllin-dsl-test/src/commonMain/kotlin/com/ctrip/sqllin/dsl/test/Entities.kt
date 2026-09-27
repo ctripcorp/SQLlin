@@ -124,7 +124,7 @@ data class Product(
 @DBRow("student_with_autoincrement")
 @Serializable
 data class StudentWithAutoincrement(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val studentName: String,
     val grade: Grade,
 )
@@ -140,7 +140,7 @@ data class Enrollment(
 @DBRow("file_data")
 @Serializable
 data class FileData(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val fileName: String,
     val content: ByteArray,
     val metadata: String,
@@ -175,7 +175,7 @@ data class FileData(
 @DBRow("user_account")
 @Serializable
 data class UserAccount(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val username: String,
     val email: String,
     val status: UserStatus,
@@ -189,7 +189,7 @@ data class UserAccount(
 @DBRow("task")
 @Serializable
 data class Task(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val title: String,
     val priority: Priority?,
     val description: String,
@@ -202,7 +202,7 @@ data class Task(
 @DBRow("unique_email_test")
 @Serializable
 data class UniqueEmailTest(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @Unique val email: String,
     val name: String,
 )
@@ -214,7 +214,7 @@ data class UniqueEmailTest(
 @DBRow("collate_nocase_test")
 @Serializable
 data class CollateNoCaseTest(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @CollateNoCase val username: String,
     @CollateNoCase @Unique val email: String,
     val description: String,
@@ -227,7 +227,7 @@ data class CollateNoCaseTest(
 @DBRow("composite_unique_test")
 @Serializable
 data class CompositeUniqueTest(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @CompositeUnique(0) val groupA: String,
     @CompositeUnique(0) val groupB: Int,
     @CompositeUnique(1) val groupC: String,
@@ -242,7 +242,7 @@ data class CompositeUniqueTest(
 @DBRow("multi_group_unique_test")
 @Serializable
 data class MultiGroupUniqueTest(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @CompositeUnique(0, 1) val userId: Int,
     @CompositeUnique(0) val eventType: String,
     @CompositeUnique(1) val timestamp: Long,
@@ -256,7 +256,7 @@ data class MultiGroupUniqueTest(
 @DBRow("combined_constraints_test")
 @Serializable
 data class CombinedConstraintsTest(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @Unique @CollateNoCase val code: String,
     @Unique val serial: String,
     val value: Int,
@@ -272,7 +272,7 @@ data class CombinedConstraintsTest(
 @DBRow("fk_user")
 @Serializable
 data class FKUser(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @Unique val email: String,
     val name: String,
 )
@@ -283,7 +283,7 @@ data class FKUser(
 @DBRow("fk_order")
 @Serializable
 data class FKOrder(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @com.ctrip.sqllin.dsl.annotation.References(
         tableName = "fk_user",
         foreignKeys = ["id"],
@@ -300,7 +300,7 @@ data class FKOrder(
 @DBRow("fk_post")
 @Serializable
 data class FKPost(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @com.ctrip.sqllin.dsl.annotation.References(
         tableName = "fk_user",
         foreignKeys = ["id"],
@@ -317,7 +317,7 @@ data class FKPost(
 @DBRow("fk_profile")
 @Serializable
 data class FKProfile(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @com.ctrip.sqllin.dsl.annotation.References(
         tableName = "fk_user",
         foreignKeys = ["id"],
@@ -351,7 +351,7 @@ data class FKProduct(
     trigger = com.ctrip.sqllin.dsl.annotation.Trigger.ON_DELETE_CASCADE
 )
 data class FKOrderItem(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @com.ctrip.sqllin.dsl.annotation.ForeignKey(group = 0, reference = "categoryId")
     val productCategory: Int,
     @com.ctrip.sqllin.dsl.annotation.ForeignKey(group = 0, reference = "productCode")
@@ -366,7 +366,7 @@ data class FKOrderItem(
 @DBRow("fk_comment")
 @Serializable
 data class FKComment(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @com.ctrip.sqllin.dsl.annotation.References(
         tableName = "fk_user",
         foreignKeys = ["id"],
@@ -394,7 +394,7 @@ data class FKComment(
 @DBRow("default_values_test")
 @Serializable
 data class DefaultValuesTest(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val name: String,
     @com.ctrip.sqllin.dsl.annotation.Default("'active'") val status: String,
     @com.ctrip.sqllin.dsl.annotation.Default("0") val loginCount: Int,
@@ -409,7 +409,7 @@ data class DefaultValuesTest(
 @DBRow("default_nullable_test")
 @Serializable
 data class DefaultNullableTest(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val name: String,
     @com.ctrip.sqllin.dsl.annotation.Default("'In Stock'") val availability: String?,
     @com.ctrip.sqllin.dsl.annotation.Default("100") val quantity: Int?,
@@ -422,7 +422,7 @@ data class DefaultNullableTest(
 @DBRow("default_fk_parent")
 @Serializable
 data class DefaultFKParent(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val name: String,
 )
 
@@ -438,7 +438,7 @@ data class DefaultFKParent(
     trigger = com.ctrip.sqllin.dsl.annotation.Trigger.ON_DELETE_SET_DEFAULT
 )
 data class DefaultFKChild(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @com.ctrip.sqllin.dsl.annotation.ForeignKey(group = 0, reference = "id")
     @com.ctrip.sqllin.dsl.annotation.Default("0")
     val parentId: Long,

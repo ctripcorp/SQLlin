@@ -92,7 +92,7 @@ class ColumnConstraintParser(resolver: Resolver) {
 
         const val PROMPT_CANT_ADD_BOTH_ANNOTATION = "You can't add both @PrimaryKey and @CompositePrimaryKey to the same property."
         const val PROMPT_PRIMARY_KEY_MUST_NOT_NULL = "The primary key must be not-null."
-        const val PROMPT_PRIMARY_KEY_TYPE = """The primary key's type must be Long when you set the the parameter "isAutoincrement = true" in annotation PrimaryKey."""
+        const val PROMPT_PRIMARY_KEY_TYPE = """The primary key's type must be Long when you set the the parameter "autoIncrement = true" in annotation PrimaryKey."""
         const val PROMPT_PRIMARY_KEY_USE_COUNT = "You only could use PrimaryKey to annotate one property in a class."
         const val PROMPT_NO_CASE_MUST_FOR_TEXT = "You only could add annotation @CollateNoCase for a String or Char typed property."
     }
@@ -130,7 +130,7 @@ class ColumnConstraintParser(resolver: Resolver) {
      *
      * #### Primary Key
      * ```kotlin
-     * @PrimaryKey(isAutoincrement = true)
+     * @PrimaryKey(autoIncrement = true)
      * val id: Long?
      * // Generated: id INTEGER PRIMARY KEY AUTOINCREMENT
      * ```

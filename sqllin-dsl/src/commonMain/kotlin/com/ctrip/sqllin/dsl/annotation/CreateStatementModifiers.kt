@@ -44,7 +44,7 @@ package com.ctrip.sqllin.dsl.annotation
  * This creates a standard, user-provided primary key (such as `TEXT PRIMARY KEY`).
  * You must provide a unique, non-null value for this property upon insertion.
  *
- * @property isAutoincrement Indicates whether to append the `AUTOINCREMENT` keyword to the
+ * @property autoIncrement Indicates whether to append the `AUTOINCREMENT` keyword to the
  * `INTEGER PRIMARY KEY` column in the `CREATE TABLE` statement. This enables a stricter
  * auto-incrementing strategy that ensures row IDs are never reused.
  * **Important Note**: This parameter is only meaningful when annotating a property of type `Long?`.
@@ -55,7 +55,7 @@ package com.ctrip.sqllin.dsl.annotation
  */
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.BINARY)
-public annotation class PrimaryKey(val isAutoincrement: Boolean = false)
+public annotation class PrimaryKey(val autoIncrement: Boolean = false)
 
 /**
  * Marks a property as a part of a composite primary key for the table.

@@ -29,7 +29,7 @@ package com.ctrip.sqllin.dsl.sql
  * - [primaryKeyName] contains the column name
  * - [compositePrimaryKeys] is `null`
  * - [isRowId] is `true` if the key is a `Long?` type (maps to SQLite's INTEGER PRIMARY KEY/rowid)
- * - [isAutomaticIncrement] is `true` if `@PrimaryKey(isAutoincrement = true)` was specified
+ * - [isAutomaticIncrement] is `true` if `@PrimaryKey(autoIncrement = true)` was specified
  *
  * **Composite Primary Key:**
  * When a table has multiple primary key columns (marked with `@CompositePrimaryKey`):

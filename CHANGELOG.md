@@ -11,6 +11,10 @@
 * Migrate the Android instrumented tests to `Robolectric`, they now run on the JVM as host unit tests against `API 26` and `API 37`, and no longer need an emulator
 * Move the `sqllin-driver` tests back into the `sqllin-driver` module's `commonTest`, and remove the `sqllin-driver-test` module
 
+### sqllin-dsl
+
+* **Breaking change**: The parameter of annotation `@PrimaryKey` renamed from `isAutoincrement` to `autoIncrement`, aligning it with the name already used in the documentation and with the naming of the other annotations. Call sites using the named argument `@PrimaryKey(isAutoincrement = true)` must be updated to `@PrimaryKey(autoIncrement = true)`; positional usage such as `@PrimaryKey(true)` is unaffected
+
 ### sqllin-driver
 
 * Update `sqlite-jdbc`'s version to `3.53.4.0`

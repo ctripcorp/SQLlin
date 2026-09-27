@@ -289,7 +289,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @Unique val email: String,        // Each email must be unique
     @Unique val username: String,     // Each username must be unique
     val displayName: String,
@@ -319,7 +319,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class Enrollment(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @CompositeUnique(0) val studentId: Int,
     @CompositeUnique(0) val courseId: Int,
     val enrollmentDate: String,
@@ -340,7 +340,7 @@ data class Enrollment(
 @DBRow
 @Serializable
 data class Event(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @CompositeUnique(0, 1) val userId: Int,     // Part of groups 0 and 1
     @CompositeUnique(0) val eventType: String,  // Part of group 0
     @CompositeUnique(1) val timestamp: Long,    // Part of group 1
@@ -373,7 +373,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @CollateNoCase @Unique val email: String,  // Case-insensitive unique email
     @CollateNoCase val username: String,        // Case-insensitive username
     val bio: String,
@@ -403,7 +403,7 @@ You can combine multiple constraint annotations on the same property:
 @DBRow
 @Serializable
 data class Product(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @Unique @CollateNoCase val code: String,  // Unique and case-insensitive
     val name: String,
     val price: Double,
@@ -423,7 +423,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val name: String,
     @Default("'active'") val status: String,              // String default
     @Default("0") val loginCount: Int,                     // Numeric default
@@ -455,7 +455,7 @@ Default values are **required** when using `ON_DELETE_SET_DEFAULT` or `ON_UPDATE
 @DBRow
 @Serializable
 data class Order(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(
         tableName = "User",
         foreignKeys = ["id"],
@@ -544,7 +544,7 @@ enum class UserStatus {
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val username: String,
     val status: UserStatus,         // Stored as 0, 1, 2, or 3
     val priority: Priority?,        // Nullable enum is also supported
@@ -615,7 +615,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val name: String,
     val email: String,
 )
@@ -623,7 +623,7 @@ data class User(
 @DBRow
 @Serializable
 data class Order(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(
         tableName = "User",
         foreignKeys = ["id"],
@@ -672,7 +672,7 @@ data class Product(
     constraintName = "fk_product"
 )
 data class OrderItem(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @ForeignKey(group = 0, reference = "categoryId")
     val productCategory: Int,
     @ForeignKey(group = 0, reference = "productCode")
@@ -700,7 +700,7 @@ Triggers define what happens when a referenced row is deleted or updated. SQLlin
 @DBRow
 @Serializable
 data class Order(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_CASCADE)
     val userId: Long,
     val amount: Double,
@@ -713,7 +713,7 @@ data class Order(
 @DBRow
 @Serializable
 data class Post(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_NULL)
     val authorId: Long?,  // Must be nullable!
     val content: String,
@@ -726,7 +726,7 @@ data class Post(
 @DBRow
 @Serializable
 data class OrderItem(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(tableName = "Order", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_RESTRICT)
     val orderId: Long,
     val productId: Long,
@@ -739,7 +739,7 @@ data class OrderItem(
 @DBRow
 @Serializable
 data class Comment(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_DEFAULT)
     val userId: Long = 0L,  // Default to 0 (anonymous user)
     val content: String,
@@ -774,7 +774,7 @@ A table can have multiple foreign key constraints to different parent tables:
 @ForeignKeyGroup(group = 0, tableName = "User", trigger = Trigger.ON_DELETE_CASCADE)
 @ForeignKeyGroup(group = 1, tableName = "Product", trigger = Trigger.ON_DELETE_RESTRICT)
 data class OrderItem(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @ForeignKey(group = 0, reference = "id") val userId: Long,
     @ForeignKey(group = 1, reference = "id") val productId: Long,
     val quantity: Int,
@@ -794,7 +794,7 @@ Or using `@References`:
 @DBRow
 @Serializable
 data class OrderItem(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_CASCADE)
     val userId: Long,
     @References(tableName = "Product", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_RESTRICT)
@@ -811,7 +811,7 @@ You can optionally name your foreign key constraints for better error messages a
 @DBRow
 @Serializable
 data class Order(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(
         tableName = "User",
         foreignKeys = ["id"],
@@ -846,7 +846,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @Unique val email: String,
     val name: String,
 )
@@ -855,7 +855,7 @@ data class User(
 @DBRow
 @Serializable
 data class Order(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_CASCADE)
     val userId: Long,
     val amount: Double,
@@ -866,7 +866,7 @@ data class Order(
 @DBRow
 @Serializable
 data class Post(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_NULL)
     val authorId: Long?,  // Nullable - posts can exist without author
     val title: String,
