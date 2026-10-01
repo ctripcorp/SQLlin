@@ -151,9 +151,12 @@ class ClauseProcessor(
                     append('(')
                 }
 
-                // Filter out @Transient properties and convert to list for indexed iteration
-                val propertyList = classDeclaration.getAllProperties().filter { classDeclaration ->
-                    !classDeclaration.annotations.any { ksAnnotation -> ksAnnotation.annotationType.resolve().isAssignableFrom(transientName) }
+                // Keep exactly the properties the serializer writes, in its order, as the generated accessors look a column
+                // up by its index in the serializer's descriptor. That leaves out @Transient properties and, because
+                // kotlinx.serialization only serializes properties backed by a field, computed ones like `val x get() = ...`
+                val propertyList = classDeclaration.getAllProperties().filter { property ->
+                    property.hasBackingField &&
+                        !property.annotations.any { ksAnnotation -> ksAnnotation.annotationType.resolve().isAssignableFrom(transientName) }
                 }.toList()
 
                 // Process each property to generate column definitions

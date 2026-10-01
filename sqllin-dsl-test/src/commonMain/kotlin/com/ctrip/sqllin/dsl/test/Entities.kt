@@ -71,7 +71,11 @@ data class Book(
     val author: String,
     val price: Price,
     val pages: PageCount,
-)
+) {
+    // Computed, so kotlinx.serialization doesn't serialize it: it must not become a column, or every INSERT,
+    // which writes only the serialized properties, would leave that column empty
+    val title: String get() = "$name by $author"
+}
 
 @DBRow("category")
 @Serializable

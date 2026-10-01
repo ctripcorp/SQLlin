@@ -1787,6 +1787,9 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(true, studentSQL.contains("CREATE TABLE student_with_autoincrement"))
         assertEquals(true, studentSQL.contains("id INTEGER PRIMARY KEY AUTOINCREMENT"))
 
+        // A computed property isn't serialized, so it must not become a column: Book declares `title` that way
+        assertEquals(false, BookTable.createSQL.contains("title"))
+
         // Test 3: Table with composite primary key
         val enrollmentSQL = EnrollmentTable.createSQL
         assertEquals(true, enrollmentSQL.contains("CREATE TABLE enrollment"))
