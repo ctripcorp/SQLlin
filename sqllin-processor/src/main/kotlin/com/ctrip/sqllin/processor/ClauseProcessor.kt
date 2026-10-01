@@ -206,7 +206,7 @@ class ClauseProcessor(
                     writer.write("    var SetClause<$className>.$propertyName: ${property.typeName}")
                     writer.write(if (isNotNull) "\n" else "?\n")
                     writer.write("        get() = ${getSetClauseGetterValue(property)}\n")
-                    writer.write("        set(value) = ${appendFunction(elementName, property)}\n\n")
+                    writer.write("        set(value) = ${appendFunction(elementName, property, isNotNull)}\n\n")
                 }
 
                 columnConstraintParser.generateCodeForPrimaryKey(writer, createSQLBuilder)
@@ -341,27 +341,30 @@ class ClauseProcessor(
      * Generates the appropriate append function call for SetClause setters.
      * Supports typealiases by resolving them to their underlying types.
      *
-     * For enum types, converts the enum value to its ordinal before appending.
-     * Handles nullable enums with safe-call operator.
+     * For enum types, converts the enum value to its ordinal before appending, with a safe call only
+     * when the enum is nullable.
      *
      * @param elementName The serialized element name
      * @param property The property declaration
+     * @param isNotNull Whether the setter's `value` is non-null, as for the SetClause property it belongs to
      * @return The append function call string, or null if unsupported type
      */
-    private fun appendFunction(elementName: String, property: KSPropertyDeclaration): String? = when (
-        val declaration = property.type.resolve().declaration
-    ) {
-        is KSTypeAlias -> {
-            val realDeclaration = declaration.type.resolve().declaration
-            appendFunctionByTypeName(elementName, realDeclaration.typeName) ?: kotlin.run {
-                if (realDeclaration is KSClassDeclaration && realDeclaration.classKind == ClassKind.ENUM_CLASS)
-                    "appendAny($elementName, value?.ordinal)"
-                else
-                    null
+    private fun appendFunction(elementName: String, property: KSPropertyDeclaration, isNotNull: Boolean): String? {
+        // A safe call on a non-null value is reported as unnecessary, in the module compiling the generated code
+        val appendEnum = "appendAny($elementName, value${if (isNotNull) "" else "?"}.ordinal)"
+        return when (val declaration = property.type.resolve().declaration) {
+            is KSTypeAlias -> {
+                val realDeclaration = declaration.type.resolve().declaration
+                appendFunctionByTypeName(elementName, realDeclaration.typeName) ?: kotlin.run {
+                    if (realDeclaration is KSClassDeclaration && realDeclaration.classKind == ClassKind.ENUM_CLASS)
+                        appendEnum
+                    else
+                        null
+                }
             }
+            is KSClassDeclaration if declaration.classKind == ClassKind.ENUM_CLASS -> appendEnum
+            else -> appendFunctionByTypeName(elementName, declaration.typeName)
         }
-        is KSClassDeclaration if declaration.classKind == ClassKind.ENUM_CLASS -> "appendAny($elementName, value?.ordinal)"
-        else -> appendFunctionByTypeName(elementName, declaration.typeName)
     }
 
     /**

@@ -34,6 +34,7 @@
 * Fix: a computed property of a `@DBRow` class, one without a backing field such as `val title: String get() = ...`, no longer becomes a column. kotlinx.serialization doesn't serialize such a property, but it was given a `NOT NULL` column that `INSERT` never wrote, so every insert failed with `NOT NULL constraint failed`, and an accessor that looked its column up past the end of the serializer's descriptor
 * Fix: a `@DBRow` property of a type no column can hold, such as a `List`, is now a compile-time error naming the property. It used to be skipped silently: left out of `CREATE TABLE` while its serializer still wrote and read it, so `INSERT` and `SELECT` failed at runtime with "no column named", and as the last property it left a trailing comma that made `CREATE TABLE` itself fail. Annotate such a property with `kotlinx.serialization.Transient` to keep it out of the table
 * Fix: the generated table objects no longer produce a `DSL_MARKER_APPLIED_TO_WRONG_TARGET` warning for every column, which Kotlin 2.3.20 and later report in the module that compiles them. Their `@ColumnNameDslMaker` is there for IntelliJ IDEA's DSL highlighting rather than for the compiler's DSL scope control, so the warning is now suppressed on each generated object
+* Fix: the generated `SetClause` setter of a non-null enum column no longer uses a safe call, `value?.ordinal`, which the module compiling the generated code reported as unnecessary. Only a nullable enum column keeps it
 
 ## 2.3.0 / 2026-08-20
 
