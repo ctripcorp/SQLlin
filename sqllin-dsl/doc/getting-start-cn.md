@@ -490,7 +490,7 @@ val status: String
 
 ### 支持的类型
 
-SQLlin 支持以下 Kotlin 类型用于 `@DBRow` 数据类的属性：
+SQLlin 支持以下 Kotlin 类型用于 `@DBRow` 数据类的属性。其他任何类型的属性都会导致编译错误；如果想让这样的属性不进入表中，请为它加上 `kotlinx.serialization.Transient` 注解：
 
 #### 数值类型
 - **整数类型：** `Byte`、`Short`、`Int`、`Long`

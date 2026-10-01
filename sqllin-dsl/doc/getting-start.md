@@ -500,7 +500,7 @@ val status: String
 
 ### Supported Types
 
-SQLlin supports the following Kotlin types for properties in `@DBRow` data classes:
+SQLlin supports the following Kotlin types for properties in `@DBRow` data classes. A property of any other type is a compile-time error; to keep such a property out of the table, annotate it with `kotlinx.serialization.Transient`:
 
 #### Numeric Types
 - **Integer types:** `Byte`, `Short`, `Int`, `Long`
