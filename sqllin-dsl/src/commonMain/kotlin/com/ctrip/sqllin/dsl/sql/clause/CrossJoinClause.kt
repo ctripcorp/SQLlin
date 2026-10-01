@@ -47,5 +47,6 @@ internal class CrossJoinClause<R>(vararg tables: Table<*>) : NaturalJoinClause<R
  *
  * **Warning**: Returns (left rows) × (right rows) results.
  */
+@Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
 public fun <R> CROSS_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = CrossJoinClause(*tables)

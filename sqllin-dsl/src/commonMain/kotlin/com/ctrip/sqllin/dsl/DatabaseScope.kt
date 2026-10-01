@@ -96,7 +96,7 @@ import kotlin.jvm.JvmName
  *
  * @author Yuang Qiao
  */
-@Suppress("UNCHECKED_CAST")
+@Suppress("UNCHECKED_CAST", "DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 public class DatabaseScope internal constructor(
     private val databaseConnection: DatabaseConnection,
     private val enableSimpleSQLLog: Boolean,

@@ -161,6 +161,9 @@ class ClauseProcessor(
                 writer.write("import com.ctrip.sqllin.dsl.sql.PrimaryKeyInfo\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.Table\n\n")
 
+                // The column properties carry @ColumnNameDslMaker for IntelliJ IDEA's DSL highlighting, a target the compiler
+                // flags as having no effect on scope control. This code is compiled in the user's module, so keep it quiet.
+                writer.write("@Suppress(\"DSL_MARKER_APPLIED_TO_WRONG_TARGET\")\n")
                 writer.write("${visibilityModifier}object $objectName : Table<$className>(\"$tableName\") {\n\n")
 
                 writer.write("    override fun kSerializer() = $className.serializer()\n\n")
