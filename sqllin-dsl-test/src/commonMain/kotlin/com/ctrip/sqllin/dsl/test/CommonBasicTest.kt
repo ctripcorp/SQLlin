@@ -551,8 +551,8 @@ class CommonBasicTest(private val path: DatabasePath) {
             assertEquals(30, personResults[1].age)
 
             // Test 2: String primary key
-            val product1 = Product(sku = null, name = "Widget", price = 19.99)
-            val product2 = Product(sku = null, name = "Gadget", price = 29.99)
+            val product1 = Product(sku = "SKU-WIDGET", name = "Widget", price = 19.99)
+            val product2 = Product(sku = "SKU-GADGET", name = "Gadget", price = 29.99)
 
             lateinit var productStatement: SelectStatement<Product>
             database {
@@ -564,8 +564,10 @@ class CommonBasicTest(private val path: DatabasePath) {
 
             val productResults = productStatement.getResults()
             assertEquals(2, productResults.size)
+            assertEquals("SKU-WIDGET", productResults[0].sku)
             assertEquals("Widget", productResults[0].name)
             assertEquals(19.99, productResults[0].price)
+            assertEquals("SKU-GADGET", productResults[1].sku)
             assertEquals("Gadget", productResults[1].name)
             assertEquals(29.99, productResults[1].price)
 
@@ -689,7 +691,7 @@ class CommonBasicTest(private val path: DatabasePath) {
     fun testCreateInDatabaseScope() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             val person = PersonWithId(id = null, name = "Grace", age = 40)
-            val product = Product(sku = null, name = "Thingamajig", price = 49.99)
+            val product = Product(sku = "SKU-THING", name = "Thingamajig", price = 49.99)
 
             lateinit var personStatement: SelectStatement<PersonWithId>
             lateinit var productStatement: SelectStatement<Product>
@@ -1232,6 +1234,60 @@ class CommonBasicTest(private val path: DatabasePath) {
         val age: Age = clause.age
     }
 
+    /**
+     * Covers how a single `@PrimaryKey`'s nullability decides who supplies its value: a `Long?` key is
+     * assigned by the database; a non-null `Long` key is supplied by the caller yet stays a rowid alias;
+     * and a key of any other type is supplied by the caller and declared `NOT NULL`, which SQLite would
+     * otherwise not imply for it.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testPrimaryKeyNullability() {
+        // Both Long keys are rowid aliases; only the non-Long key needs NOT NULL spelled out.
+        assertEquals(true, PersonWithIdTable.createSQL.contains("id INTEGER PRIMARY KEY,"))
+        assertEquals(true, RemoteMovieTable.createSQL.contains("id INTEGER PRIMARY KEY,"))
+        assertEquals(true, ProductTable.createSQL.contains("sku TEXT PRIMARY KEY NOT NULL,"))
+
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            database {
+                CREATE(RemoteMovieTable)
+            }
+
+            // A caller-supplied Long key is written by a plain INSERT rather than left for the database.
+            lateinit var movies: SelectStatement<RemoteMovie>
+            database {
+                RemoteMovieTable { table ->
+                    table INSERT listOf(
+                        RemoteMovie(id = 603, title = "The Matrix"),
+                        RemoteMovie(id = 27205, title = "Inception"),
+                    )
+                    movies = table SELECT ORDER_BY(id to ASC)
+                }
+            }
+            assertEquals(listOf(603L, 27205L), movies.getResults().map { it.id })
+
+            // ...and it is a real primary key: inserting the same ID again is rejected.
+            var duplicateFailed = false
+            try {
+                database {
+                    RemoteMovieTable INSERT RemoteMovie(id = 603, title = "The Matrix Reloaded")
+                }
+            } catch (e: Exception) {
+                duplicateFailed = true
+            }
+            assertEquals(true, duplicateFailed, "A duplicate caller-supplied key should be rejected")
+
+            // A Long? key is still assigned by the database.
+            lateinit var people: SelectStatement<PersonWithId>
+            database {
+                PersonWithIdTable { table ->
+                    table INSERT PersonWithId(id = null, name = "Ivy", age = 21)
+                    people = table SELECT X
+                }
+            }
+            assertNotEquals(null, people.getResults().first().id)
+        }
+    }
+
     fun testStringOperators() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
         // Test 1: Comparison operators (LT, LTE, GT, GTE)
         val book0 = Book(name = "Alice in Wonderland", author = "Lewis Carroll", pages = 200, price = 15.99)
@@ -1633,15 +1689,16 @@ class CommonBasicTest(private val path: DatabasePath) {
             ProductTable.CREATE_UNIQUE_INDEX("idx_unique_product_name", ProductTable.name)
         }
 
-        val product1 = Product(sku = null, name = "Widget", price = 19.99)
+        val product1 = Product(sku = "SKU-WIDGET-1", name = "Widget", price = 19.99)
         database {
             ProductTable { table ->
                 table INSERT product1
             }
         }
 
-        // Try to insert duplicate - should fail
-        val product2 = Product(sku = null, name = "Widget", price = 29.99)
+        // Try to insert duplicate - should fail. The SKU differs on purpose, so the only constraint the
+        // second product can violate is the unique index on 'name'.
+        val product2 = Product(sku = "SKU-WIDGET-2", name = "Widget", price = 29.99)
         var duplicateFailed = false
         try {
             database {

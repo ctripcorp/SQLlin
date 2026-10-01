@@ -220,6 +220,9 @@ public class DatabaseScope internal constructor(
      * the database auto-generate it. For normal inserts where the database should generate IDs
      * automatically, use [INSERT] instead.
      *
+     * This only matters for a `Long?` primary key. If the key is always supplied by the caller,
+     * declare it as a non-null `Long` instead, and a plain [INSERT] writes it.
+     *
      * This function is particularly useful for:
      * - Data migration from another database where you need to preserve existing IDs
      * - Testing scenarios where you need predictable, specific ID values

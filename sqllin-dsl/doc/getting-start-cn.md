@@ -217,11 +217,23 @@ data class Person(
 )
 ```
 
-**重要的类型和可空性规则：**
+**重要的类型和可空性规则：** 属性的可空性决定了主键的值由谁提供。
 
-- **对于自增的 `Long` 主键**：属性**必须**声明为可空类型（`Long?`）。这会映射到 SQLite 的 `INTEGER PRIMARY KEY`，它作为内部 `rowid` 的别名。当插入 `id = null` 的新记录时，SQLite 会自动生成 ID。
+- **`Long?`，由数据库分配**：映射到 SQLite 的 `INTEGER PRIMARY KEY`，它作为内部 `rowid` 的别名。当插入 `id = null` 的新记录时，SQLite 会自动生成 ID。
 
-- **对于其他类型（String、Int 等）**：属性**必须**是非空的。插入时必须提供唯一值：
+- **`Long`，由你提供**：同样映射到 `INTEGER PRIMARY KEY`，因此仍然是 `rowid` 的别名，但每次插入都会写入你提供的值。适用于来自外部的数字主键，例如远端服务分配的 ID：
+
+```kotlin
+@DBRow
+@Serializable
+data class Movie(
+    @PrimaryKey
+    val id: Long,  // Non-nullable, user-provided, still a rowid alias
+    val title: String,
+)
+```
+
+- **其他类型（String、Int 等），由你提供**：属性**必须**是非空的，映射为 `TEXT PRIMARY KEY NOT NULL` 这样的列。除 `Long` 以外任何类型的可空主键都会导致编译错误。插入时必须提供唯一值：
 
 ```kotlin
 @DBRow
@@ -233,7 +245,7 @@ data class User(
 )
 ```
 
-`autoIncrement` 参数启用更严格的自增行为（使用 `AUTOINCREMENT` 关键字），确保行 ID 永远不会被重用。这仅对 `Long?` 属性有意义。
+`autoIncrement` 参数启用更严格的自增行为（使用 `AUTOINCREMENT` 关键字），确保行 ID 永远不会被重用。它要求属性为 `Long?`，这是唯一一种由数据库分配值的主键。
 
 #### 使用 @CompositePrimaryKey 定义组合主键
 

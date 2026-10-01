@@ -227,11 +227,23 @@ data class Person(
 )
 ```
 
-**Important type and nullability rules:**
+**Important type and nullability rules:** the nullability of the property decides who supplies the key's value.
 
-- **For `Long` primary keys with auto-increment**: The property **must** be declared as nullable (`Long?`). This maps to SQLite's `INTEGER PRIMARY KEY` which acts as an alias for the internal `rowid`. When inserting a new record with `id = null`, SQLite automatically generates the ID.
+- **`Long?`, assigned by the database**: This maps to SQLite's `INTEGER PRIMARY KEY`, which acts as an alias for the internal `rowid`. When inserting a new record with `id = null`, SQLite automatically generates the ID.
 
-- **For other types (String, Int, etc.)**: The property **must** be non-nullable. You must provide a unique value when inserting:
+- **`Long`, supplied by you**: This also maps to `INTEGER PRIMARY KEY`, so it is still a `rowid` alias, but every insert writes the value you provide. Use it for numeric keys that come from elsewhere, such as IDs assigned by a remote service:
+
+```kotlin
+@DBRow
+@Serializable
+data class Movie(
+    @PrimaryKey
+    val id: Long,  // Non-nullable, user-provided, still a rowid alias
+    val title: String,
+)
+```
+
+- **Other types (String, Int, etc.), supplied by you**: The property **must** be non-nullable, and maps to a column such as `TEXT PRIMARY KEY NOT NULL`. A nullable primary key of any type other than `Long` is a compile-time error. You must provide a unique value when inserting:
 
 ```kotlin
 @DBRow
@@ -243,7 +255,7 @@ data class User(
 )
 ```
 
-The `autoIncrement` parameter enables stricter auto-incrementing behavior (using `AUTOINCREMENT` keyword), ensuring row IDs are never reused. This is only meaningful for `Long?` properties.
+The `autoIncrement` parameter enables stricter auto-incrementing behavior (using `AUTOINCREMENT` keyword), ensuring row IDs are never reused. It requires a `Long?` property, the only kind of key the database assigns.
 
 #### Composite Primary Key with @CompositePrimaryKey
 

@@ -116,7 +116,7 @@ data class PersonWithId(
 @DBRow("product")
 @Serializable
 data class Product(
-    @PrimaryKey val sku: String?,
+    @PrimaryKey val sku: String,
     val name: String,
     val price: Price,
 )
@@ -506,4 +506,15 @@ data class AlterRenamed(
     @PrimaryKey(autoIncrement = true) val id: Long?,
     val fullName: String,
     val nickname: String?,
+)
+
+/**
+ * A non-null `Long` primary key: supplied by the caller, as an ID assigned by a remote service would
+ * be, yet still an `INTEGER PRIMARY KEY` and so still an alias for SQLite's rowid.
+ */
+@DBRow("remote_movie")
+@Serializable
+data class RemoteMovie(
+    @PrimaryKey val id: Long,
+    val title: String,
 )
