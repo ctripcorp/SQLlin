@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.processor
 
 import com.google.devtools.ksp.getClassDeclarationByName
+import com.google.devtools.ksp.getVisibility
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
@@ -93,6 +94,19 @@ class ClauseProcessor(
             if (classDeclaration.annotations.all { !it.annotationType.resolve().isAssignableFrom(serializableType) })
                 continue // Don't handle the classes that didn't be annotated 'Serializable'
 
+            // The generated table object must not be more visible than the entity it is built for,
+            // otherwise an 'internal' @DBRow class produces a 'public' object that exposes it.
+            val visibility = classDeclaration.getVisibility()
+            if (visibility != Visibility.PUBLIC && visibility != Visibility.INTERNAL) {
+                environment.logger.error(
+                    "The class annotated with '@DBRow' must be 'public' or 'internal', but " +
+                        "'${classDeclaration.simpleName.asString()}' is '${visibility.name.lowercase()}'.",
+                    classDeclaration,
+                )
+                continue
+            }
+            val visibilityModifier = if (visibility == Visibility.INTERNAL) "internal " else ""
+
             val foreignKeyParser = ForeignKeyParser()
             foreignKeyParser.parseGroups(classDeclaration.annotations)
 
@@ -122,7 +136,7 @@ class ClauseProcessor(
                 writer.write("import com.ctrip.sqllin.dsl.sql.PrimaryKeyInfo\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.Table\n\n")
 
-                writer.write("object $objectName : Table<$className>(\"$tableName\") {\n\n")
+                writer.write("${visibilityModifier}object $objectName : Table<$className>(\"$tableName\") {\n\n")
 
                 writer.write("    override fun kSerializer() = $className.serializer()\n\n")
 

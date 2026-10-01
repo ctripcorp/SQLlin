@@ -19,6 +19,10 @@
 
 * Update `sqlite-jdbc`'s version to `3.53.4.0`
 
+### sqllin-processor
+
+* Fix: the visibility of the class annotated with `@DBRow` is now propagated to the generated table object. An `internal` `@DBRow` class used to produce a `public` object, which failed to compile with `EXPOSED_SUPER_CLASS`, `EXPOSED_FUNCTION_RETURN_TYPE` and `EXPOSED_RECEIVER_TYPE`. A `@DBRow` class that is neither `public` nor `internal` is now reported as an error
+
 ## 2.3.0 / 2026-08-20
 
 ### All

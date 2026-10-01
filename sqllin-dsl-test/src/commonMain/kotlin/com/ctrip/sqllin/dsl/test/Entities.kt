@@ -444,3 +444,15 @@ data class DefaultFKChild(
     val parentId: Long,
     val description: String,
 )
+/**
+ * An `internal` entity, used to verify that the processor propagates the entity's visibility
+ * to the generated table object. If it doesn't, the generated `public` object triggers
+ * EXPOSED_SUPER_CLASS, EXPOSED_FUNCTION_RETURN_TYPE and EXPOSED_RECEIVER_TYPE errors, and
+ * this module fails to compile.
+ */
+@DBRow("internal_visibility")
+@Serializable
+internal data class InternalVisibility(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val name: String,
+)
