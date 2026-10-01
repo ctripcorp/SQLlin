@@ -76,7 +76,9 @@ public annotation class PrimaryKey(val autoIncrement: Boolean = false)
  * the [PrimaryKey] annotation on any other property. A table can only have one primary key,
  * which is either a single column or a composite of multiple columns.
  * - All properties annotated with [CompositePrimaryKey] must be of a **non-nullable** type
- * (e.g., `String`, `Int`, `Long`), as primary key columns cannot contain `NULL` values.
+ * (e.g., `String`, `Int`, `Long`), as primary key columns cannot contain `NULL` values. They are
+ * declared `NOT NULL` in the generated table, because SQLite, unlike standard SQL, does not let
+ * `PRIMARY KEY` imply it.
  *
  * @see DBRow
  * @see PrimaryKey

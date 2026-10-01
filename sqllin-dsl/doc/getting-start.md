@@ -280,7 +280,7 @@ data class Enrollment(
 **Important rules:**
 
 - Apply `@CompositePrimaryKey` to **at least two properties** in the same class; annotating only one is a compile-time error, since a single-column primary key is declared with `@PrimaryKey`
-- All properties with `@CompositePrimaryKey` **must be non-nullable**
+- All properties with `@CompositePrimaryKey` **must be non-nullable**, and are declared `NOT NULL` in the generated table
 - You **cannot** mix `@PrimaryKey` and `@CompositePrimaryKey` in the same class - use one or the other
 - The combination of all `@CompositePrimaryKey` properties forms the table's composite primary key
 

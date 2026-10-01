@@ -150,7 +150,7 @@ class ColumnConstraintParser(resolver: Resolver) {
      * ```kotlin
      * @CompositePrimaryKey
      * val userId: Long
-     * // Column: userId BIGINT
+     * // Column: userId BIGINT NOT NULL
      * // Later appended: ,PRIMARY KEY(userId,productId)
      * ```
      *
@@ -172,9 +172,9 @@ class ColumnConstraintParser(resolver: Resolver) {
      *
      * ### Processing Order
      * 1. Determine SQLite type via [getSQLiteType]
-     * 2. Apply PRIMARY KEY constraint if [@PrimaryKey] present, plus NOT NULL unless it is a rowid alias
+     * 2. Apply PRIMARY KEY constraint if [@PrimaryKey] present
      * 3. Collect [@CompositePrimaryKey] columns for table-level constraint
-     * 4. Apply NOT NULL for other non-nullable, non-PK columns
+     * 4. Apply NOT NULL to every non-nullable column except a rowid alias, primary key columns included
      * 5. Apply COLLATE NOCASE if [@CollateNoCase] present
      * 6. Apply UNIQUE if [@Unique] present
      * 7. Collect [@CompositeUnique] groups for table-level constraints
@@ -211,6 +211,9 @@ class ColumnConstraintParser(resolver: Resolver) {
             val type = getSQLiteType(property, isPrimaryKey)
             append(type)
 
+            // Only a Long @PrimaryKey becomes `INTEGER PRIMARY KEY`, an alias of SQLite's rowid
+            val isRowIdAlias = isPrimaryKey && type == " INTEGER"
+
             // Handle @PrimaryKey annotation
             if (isPrimaryKey) {
                 check(!annotationKSType.any { it.isAssignableFrom(compositePrimaryKeyName) }) { PROMPT_CANT_ADD_BOTH_ANNOTATION }
@@ -218,10 +221,8 @@ class ColumnConstraintParser(resolver: Resolver) {
                 isContainsPrimaryKey = true
                 primaryKeyName = propertyName
 
-                // Only a Long key becomes `INTEGER PRIMARY KEY`, an alias of SQLite's rowid, and only a rowid
-                // alias gets its value assigned by the database. Declaring that key nullable is what asks the
-                // database to assign it; any other key is supplied by the caller, so it can't be nullable.
-                val isRowIdAlias = type == " INTEGER"
+                // Only a rowid alias gets its value assigned by the database. Declaring that key nullable is
+                // what asks the database to assign it; any other key is supplied by the caller, so it can't be nullable.
                 check(isNotNull || isRowIdAlias) { PROMPT_NULLABLE_PRIMARY_KEY_MUST_BE_LONG }
                 isGeneratedByDatabase = isRowIdAlias && !isNotNull
 
@@ -234,18 +235,17 @@ class ColumnConstraintParser(resolver: Resolver) {
                     check(isGeneratedByDatabase) { PROMPT_AUTO_INCREMENT_REQUIRES_NULLABLE_LONG }
                     append(" AUTOINCREMENT")
                 }
-
-                // On a rowid table SQLite doesn't let PRIMARY KEY imply NOT NULL, except for a rowid alias
-                if (!isRowIdAlias)
-                    append(" NOT NULL")
             } else if (annotationKSType.any { it.isAssignableFrom(compositePrimaryKeyName) }) {
                 // Handle @CompositePrimaryKey - collect for table-level constraint
                 check(isNotNull) { PROMPT_PRIMARY_KEY_MUST_NOT_NULL }
                 compositePrimaryKeys.add(propertyName)
-            } else if (isNotNull) {
-                // Add NOT NULL constraint for non-nullable, non-PK columns
-                append(" NOT NULL")
             }
+
+            // A rowid alias is the only column SQLite itself keeps from being NULL. On a rowid table, PRIMARY KEY
+            // doesn't imply NOT NULL for any other column, a single key or a part of a composite one alike, so every
+            // other non-null column spells it out.
+            if (isNotNull && !isRowIdAlias)
+                append(" NOT NULL")
 
             // Handle @CollateNoCase annotation - must be on text columns
             if (annotationKSType.any { it.isAssignableFrom(noCaseAnnotationName) }) {

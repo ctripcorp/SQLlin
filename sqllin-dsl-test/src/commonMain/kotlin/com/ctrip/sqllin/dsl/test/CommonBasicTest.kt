@@ -1791,6 +1791,11 @@ class CommonBasicTest(private val path: DatabasePath) {
         val enrollmentSQL = EnrollmentTable.createSQL
         assertEquals(true, enrollmentSQL.contains("CREATE TABLE enrollment"))
         assertEquals(true, enrollmentSQL.contains("PRIMARY KEY(studentId,courseId)"))
+        // SQLite doesn't let a table-level PRIMARY KEY imply NOT NULL, so each key column must declare it
+        assertEquals(true, enrollmentSQL.contains("studentId BIGINT NOT NULL,"))
+        assertEquals(true, enrollmentSQL.contains("courseId BIGINT NOT NULL,"))
+        assertEquals(true, FKProductTable.createSQL.contains("categoryId INT NOT NULL,"))
+        assertEquals(true, FKProductTable.createSQL.contains("productCode TEXT NOT NULL,"))
 
         // Test 4: Table with enum fields (stored as INT)
         val userSQL = UserAccountTable.createSQL
