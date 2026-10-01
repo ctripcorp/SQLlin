@@ -23,7 +23,7 @@ import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.clause.*
-import com.ctrip.sqllin.dsl.sql.operation.Alert
+import com.ctrip.sqllin.dsl.sql.operation.Alter
 import com.ctrip.sqllin.dsl.sql.operation.Create
 import com.ctrip.sqllin.dsl.sql.operation.Delete
 import com.ctrip.sqllin.dsl.sql.operation.Drop
@@ -53,7 +53,7 @@ import kotlin.jvm.JvmName
  * - **SELECT**: Query records with WHERE, ORDER BY, LIMIT, GROUP BY, JOIN, and UNION
  * - **CREATE**: Create tables from data class definitions
  * - **DROP**: Remove tables from the database
- * - **ALERT (ALTER)**: Modify table structures (add columns, rename tables/columns, drop columns)
+ * - **ALTER**: Modify table structures (add columns, rename tables/columns, drop columns)
  *
  * Transaction support:
  * - Use [transaction] to execute multiple statements atomically
@@ -71,7 +71,7 @@ import kotlin.jvm.JvmName
  * // Create and modify table structure
  * database {
  *     CREATE(PersonTable)
- *     PersonTable ALERT_ADD_COLUMN PersonTable.email
+ *     PersonTable ALTER_ADD_COLUMN PersonTable.email
  * }
  *
  * // Modify data, and build a query whose results are read once the scope has exited
@@ -728,7 +728,7 @@ public class DatabaseScope internal constructor(
     @JvmName("drop")
     public fun <T> Table<T>.DROP(): Unit = DROP(this)
 
-    // ========== ALERT (ALTER) Operations ==========
+    // ========== ALTER Operations ==========
 
     /**
      * Adds a new column to an existing table.
@@ -740,7 +740,7 @@ public class DatabaseScope internal constructor(
      * Example:
      * ```kotlin
      * database {
-     *     PersonTable ALERT_ADD_COLUMN email
+     *     PersonTable ALTER_ADD_COLUMN email
      * }
      * ```
      *
@@ -748,8 +748,8 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public infix fun <T> Table<T>.ALERT_ADD_COLUMN(column: ClauseElement) {
-        val statement = Alert.addColumn(this, column, databaseConnection)
+    public infix fun <T> Table<T>.ALTER_ADD_COLUMN(column: ClauseElement) {
+        val statement = Alter.addColumn(this, column, databaseConnection)
         addStatement(statement)
     }
 
@@ -759,7 +759,7 @@ public class DatabaseScope internal constructor(
      * Example:
      * ```kotlin
      * database {
-     *     PersonTable ALERT_RENAME_TABLE_TO NewPersonTable
+     *     PersonTable ALTER_RENAME_TABLE_TO NewPersonTable
      * }
      * ```
      *
@@ -767,8 +767,8 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public infix fun <T> Table<T>.ALERT_RENAME_TABLE_TO(newTable: Table<*>) {
-        val statement = Alert.renameTable(tableName, newTable, databaseConnection)
+    public infix fun <T> Table<T>.ALTER_RENAME_TABLE_TO(newTable: Table<*>) {
+        val statement = Alter.renameTable(tableName, newTable, databaseConnection)
         addStatement(statement)
     }
 
@@ -780,7 +780,7 @@ public class DatabaseScope internal constructor(
      * Example:
      * ```kotlin
      * database {
-     *     "old_person" ALERT_RENAME_TABLE_TO NewPersonTable
+     *     "old_person" ALTER_RENAME_TABLE_TO NewPersonTable
      * }
      * ```
      *
@@ -789,8 +789,8 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public infix fun String.ALERT_RENAME_TABLE_TO(newTable: Table<*>) {
-        val statement = Alert.renameTable(this, newTable, databaseConnection)
+    public infix fun String.ALTER_RENAME_TABLE_TO(newTable: Table<*>) {
+        val statement = Alter.renameTable(this, newTable, databaseConnection)
         addStatement(statement)
     }
 
@@ -813,7 +813,7 @@ public class DatabaseScope internal constructor(
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public fun <T, R : ClauseElement> Table<T>.RENAME_COLUMN(oldColumn: R, newColumn: R) {
-        val statement = Alert.renameColumn(this, oldColumn.valueName, newColumn, databaseConnection)
+        val statement = Alter.renameColumn(this, oldColumn.valueName, newColumn, databaseConnection)
         addStatement(statement)
     }
 
@@ -836,7 +836,7 @@ public class DatabaseScope internal constructor(
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public fun <T> Table<T>.RENAME_COLUMN(oldColumnName: String, newColumn: ClauseElement) {
-        val statement = Alert.renameColumn(this, oldColumnName, newColumn, databaseConnection)
+        val statement = Alter.renameColumn(this, oldColumnName, newColumn, databaseConnection)
         addStatement(statement)
     }
 
@@ -859,7 +859,7 @@ public class DatabaseScope internal constructor(
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <T> Table<T>.DROP_COLUMN(column: ClauseElement) {
-        val statement = Alert.dropColumn(this, column, databaseConnection)
+        val statement = Alter.dropColumn(this, column, databaseConnection)
         addStatement(statement)
     }
 

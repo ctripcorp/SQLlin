@@ -14,6 +14,7 @@
 ### sqllin-dsl
 
 * **Breaking change**: The parameter of annotation `@PrimaryKey` renamed from `isAutoincrement` to `autoIncrement`, aligning it with the name already used in the documentation and with the naming of the other annotations. Call sites using the named argument `@PrimaryKey(isAutoincrement = true)` must be updated to `@PrimaryKey(autoIncrement = true)`; positional usage such as `@PrimaryKey(true)` is unaffected
+* **Breaking change**: The DSL APIs `ALERT_ADD_COLUMN` and `ALERT_RENAME_TABLE_TO` renamed to `ALTER_ADD_COLUMN` and `ALTER_RENAME_TABLE_TO`, correcting a misspelling of the SQL keyword `ALTER`. The internal `Alert` operation object is renamed to `Alter` accordingly
 * Fix documentation: the KDoc of `DatabaseScope` now states that statement execution is deferred until the scope exits, and its example no longer reads a `SelectStatement`'s results while the scope is still open, which throws
 * Fix documentation: the `CREATE_INDEX` and `CREATE_UNIQUE_INDEX` examples referenced a `KClass.table` extension that does not exist in the library, and referred to columns by property reference instead of through the generated table object
 

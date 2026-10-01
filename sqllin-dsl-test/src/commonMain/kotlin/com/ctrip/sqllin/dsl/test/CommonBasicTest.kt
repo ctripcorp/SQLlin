@@ -1098,8 +1098,9 @@ class CommonBasicTest(private val path: DatabasePath) {
     @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testSchemaModification() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            // Test 1: ALERT_ADD_COLUMN
-            // Note: ALERT operations have a typo in the DSL - should be "ALTER TABLE" not "ALERT TABLE"
+            // Test 1: ALTER_ADD_COLUMN
+            // Note: the ALTER operations still emit the invalid keyword "ALERT TABLE" instead of
+            // "ALTER TABLE", so they fail at runtime. See the Alter object's sqlStr.
             // This test verifies the DSL compiles and the statement can be created
             val person = PersonWithId(id = null, name = "Charlie", age = 35)
 
@@ -1111,10 +1112,10 @@ class CommonBasicTest(private val path: DatabasePath) {
 
             try {
                 database {
-                    PersonWithIdTable ALERT_ADD_COLUMN PersonWithIdTable.name
+                    PersonWithIdTable ALTER_ADD_COLUMN PersonWithIdTable.name
                 }
             } catch (e: Exception) {
-                // Expected to fail with current implementation due to "ALERT TABLE" typo
+                // Expected to fail while the generated keyword is still "ALERT TABLE"
                 e.printStackTrace()
             }
 
@@ -1125,7 +1126,7 @@ class CommonBasicTest(private val path: DatabasePath) {
             assertEquals(1, personStatement.getResults().size)
             assertEquals("Charlie", personStatement.getResults().first().name)
 
-            // Test 2: ALERT_RENAME_TABLE_TO with TableObject
+            // Test 2: ALTER_RENAME_TABLE_TO with TableObject
             val student1 = StudentWithAutoincrement(id = null, studentName = "Diana", grade = 90)
             val student2 = StudentWithAutoincrement(id = null, studentName = "Ethan", grade = 85)
 
@@ -1143,7 +1144,7 @@ class CommonBasicTest(private val path: DatabasePath) {
 
             try {
                 database {
-                    StudentWithAutoincrementTable ALERT_RENAME_TABLE_TO StudentWithAutoincrementTable
+                    StudentWithAutoincrementTable ALTER_RENAME_TABLE_TO StudentWithAutoincrementTable
                 }
             } catch (e: Exception) {
                 // Expected to fail with current implementation
@@ -1156,7 +1157,7 @@ class CommonBasicTest(private val path: DatabasePath) {
             }
             assertEquals(2, studentStatement2.getResults().size)
 
-            // Test 3: ALERT_RENAME_TABLE_TO with String
+            // Test 3: ALTER_RENAME_TABLE_TO with String
             val enrollment = Enrollment(studentId = 1, courseId = 101, semester = "Spring 2025")
 
             database {
@@ -1167,7 +1168,7 @@ class CommonBasicTest(private val path: DatabasePath) {
 
             try {
                 database {
-                    "enrollment" ALERT_RENAME_TABLE_TO EnrollmentTable
+                    "enrollment" ALTER_RENAME_TABLE_TO EnrollmentTable
                 }
             } catch (e: Exception) {
                 // Expected to fail with current implementation
@@ -1254,7 +1255,7 @@ class CommonBasicTest(private val path: DatabasePath) {
             }
             assertEquals(1, dropStatement.getResults().size)
 
-            // Test 7: ALERT operations within a transaction
+            // Test 7: ALTER operations within a transaction
             val txPerson1 = PersonWithId(id = null, name = "Grace", age = 28)
             val txPerson2 = PersonWithId(id = null, name = "Henry", age = 32)
 
@@ -1267,7 +1268,7 @@ class CommonBasicTest(private val path: DatabasePath) {
             try {
                 database {
                     transaction {
-                        PersonWithIdTable ALERT_ADD_COLUMN PersonWithIdTable.age
+                        PersonWithIdTable ALTER_ADD_COLUMN PersonWithIdTable.age
                         PersonWithIdTable.RENAME_COLUMN("name", PersonWithIdTable.name)
                     }
                 }

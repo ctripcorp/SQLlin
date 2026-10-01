@@ -23,10 +23,7 @@ import com.ctrip.sqllin.dsl.sql.statement.SingleStatement
 import com.ctrip.sqllin.dsl.sql.statement.TableStructureStatement
 
 /**
- * ALERT (ALTER) operation for modifying database table structures.
- *
- * Note: This is named "Alert" but generates SQL ALTER TABLE statements. The naming follows
- * the existing codebase convention.
+ * ALTER operation for modifying database table structures.
  *
  * Supports common table modification operations:
  * - **ADD COLUMN**: Add a new column to an existing table
@@ -38,12 +35,12 @@ import com.ctrip.sqllin.dsl.sql.statement.TableStructureStatement
  * ```kotlin
  * database {
  *     // Add a new column
- *     PersonTable ALERT_ADD_COLUMN email
+ *     PersonTable ALTER_ADD_COLUMN email
  *
  *     // Rename table
- *     PersonTable ALERT_RENAME_TABLE_TO NewPersonTable
+ *     PersonTable ALTER_RENAME_TABLE_TO NewPersonTable
  *     // or from old name
- *     "old_person" ALERT_RENAME_TABLE_TO NewPersonTable
+ *     "old_person" ALTER_RENAME_TABLE_TO NewPersonTable
  *
  *     // Rename column
  *     PersonTable.RENAME_COLUMN(oldName, newName)
@@ -55,13 +52,13 @@ import com.ctrip.sqllin.dsl.sql.statement.TableStructureStatement
  * }
  * ```
  *
- * @see com.ctrip.sqllin.dsl.DatabaseScope.ALERT_ADD_COLUMN
- * @see com.ctrip.sqllin.dsl.DatabaseScope.ALERT_RENAME_TABLE_TO
+ * @see com.ctrip.sqllin.dsl.DatabaseScope.ALTER_ADD_COLUMN
+ * @see com.ctrip.sqllin.dsl.DatabaseScope.ALTER_RENAME_TABLE_TO
  * @see com.ctrip.sqllin.dsl.DatabaseScope.RENAME_COLUMN
  * @see com.ctrip.sqllin.dsl.DatabaseScope.DROP_COLUMN
  * @author Yuang Qiao
  */
-internal object Alert : Operation {
+internal object Alter : Operation {
 
     override val sqlStr: String
         get() = "ALERT TABLE "

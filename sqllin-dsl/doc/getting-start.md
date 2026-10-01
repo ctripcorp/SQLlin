@@ -158,7 +158,7 @@ val database = Database(
             when (oldVersion) {
                 1 -> {
                     // Example: Add a new column in version 2
-                    PersonTable ALERT_ADD_COLUMN PersonTable.email
+                    PersonTable ALTER_ADD_COLUMN PersonTable.email
                 }
             }
         }
