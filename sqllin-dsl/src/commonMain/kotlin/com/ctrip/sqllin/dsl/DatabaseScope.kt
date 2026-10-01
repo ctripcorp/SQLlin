@@ -643,8 +643,8 @@ public class DatabaseScope internal constructor(
      * Example:
      * ```kotlin
      * database {
-     *     User::class.table.CREATE_INDEX("idx_user_email", User::email)
-     *     User::class.table.CREATE_INDEX("idx_user_name_age", User::name, User::age)
+     *     UserTable.CREATE_INDEX("idx_user_email", UserTable.email)
+     *     UserTable.CREATE_INDEX("idx_user_name_age", UserTable.name, UserTable.age)
      * }
      * ```
      *
@@ -668,8 +668,8 @@ public class DatabaseScope internal constructor(
      * Example:
      * ```kotlin
      * database {
-     *     User::class.table.CREATE_UNIQUE_INDEX("idx_unique_email", User::email)
-     *     Product::class.table.CREATE_UNIQUE_INDEX("idx_unique_sku", Product::sku)
+     *     UserTable.CREATE_UNIQUE_INDEX("idx_unique_email", UserTable.email)
+     *     ProductTable.CREATE_UNIQUE_INDEX("idx_unique_sku", ProductTable.sku)
      * }
      * ```
      *
