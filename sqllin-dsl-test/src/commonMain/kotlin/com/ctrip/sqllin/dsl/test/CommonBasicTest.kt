@@ -20,6 +20,7 @@ import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.DatabasePath
 import com.ctrip.sqllin.dsl.DSLDBConfiguration
 import com.ctrip.sqllin.dsl.Database
+import com.ctrip.sqllin.dsl.DatabaseScope
 import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.X
@@ -1095,197 +1096,128 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    /**
+     * Exercises every ALTER operation as one realistic schema migration.
+     *
+     * 'alter_target' is created in the shape of [AlterBefore] (`id`, `name`, `legacy`) and migrated
+     * to the shape of [AlterAfter] (`id`, `fullName`, `nickname`) by ADD COLUMN, RENAME COLUMN and
+     * DROP COLUMN, then renamed to 'alter_renamed' and back. Every step is verified by reading the
+     * table through the entity matching the shape it should have at that point, so a step that does
+     * not actually run makes the test fail instead of passing quietly.
+     */
     @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testSchemaModification() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            // Test 1: ALTER_ADD_COLUMN
-            // Note: the ALTER operations still emit the invalid keyword "ALERT TABLE" instead of
-            // "ALTER TABLE", so they fail at runtime. See the Alter object's sqlStr.
-            // This test verifies the DSL compiles and the statement can be created
-            val person = PersonWithId(id = null, name = "Charlie", age = 35)
-
             database {
-                PersonWithIdTable { table ->
-                    table INSERT person
+                CREATE(AlterBeforeTable)
+                AlterBeforeTable { table ->
+                    table INSERT AlterBefore(id = null, name = "Charlie", legacy = 7)
                 }
             }
 
+            // Reading the migrated shape must fail first: 'nickname' does not exist yet.
+            assertEquals(
+                true,
+                database.selectFails { AlterAfterTable SELECT X },
+                "'nickname' should not exist before ADD COLUMN",
+            )
+
+            // ADD COLUMN. The receiver must be the table whose serializer declares the new column,
+            // because the column's SQL type is resolved from that descriptor.
+            database {
+                AlterAfterTable ALTER_ADD_COLUMN AlterAfterTable.nickname
+            }
+
+            // RENAME COLUMN, naming the old column by string. Both entities map to 'alter_target'.
+            database {
+                AlterAfterTable.RENAME_COLUMN("name", AlterAfterTable.fullName)
+            }
+
+            // Both steps landed: the table now has 'fullName' and 'nickname', and still 'legacy'.
+            lateinit var withLegacy: SelectStatement<AlterWithLegacy>
+            database {
+                withLegacy = AlterWithLegacyTable SELECT X
+            }
+            assertEquals(1, withLegacy.getResults().size)
+            assertEquals("Charlie", withLegacy.getResults().first().fullName)
+            assertEquals(null, withLegacy.getResults().first().nickname)
+            assertEquals(7, withLegacy.getResults().first().legacy)
+
+            lateinit var migrated: SelectStatement<AlterAfter>
+            database {
+                migrated = AlterAfterTable SELECT X
+            }
+            assertEquals(1, migrated.getResults().size)
+            assertEquals("Charlie", migrated.getResults().first().fullName)
+            assertEquals(null, migrated.getResults().first().nickname)
+
+            // RENAME TO, with a Table receiver, inside a transaction.
+            database {
+                transaction {
+                    AlterAfterTable ALTER_RENAME_TABLE_TO AlterRenamedTable
+                }
+            }
+
+            lateinit var renamed: SelectStatement<AlterRenamed>
+            database {
+                renamed = AlterRenamedTable SELECT X
+            }
+            assertEquals(1, renamed.getResults().size)
+            assertEquals("Charlie", renamed.getResults().first().fullName)
+
+            assertEquals(
+                true,
+                database.selectFails { AlterAfterTable SELECT X },
+                "'alter_target' should not exist after RENAME TO",
+            )
+
+            // RENAME TO again, this time through the String receiver overload, renaming it back.
+            database {
+                "alter_renamed" ALTER_RENAME_TABLE_TO AlterAfterTable
+            }
+
+            lateinit var renamedBack: SelectStatement<AlterAfter>
+            database {
+                renamedBack = AlterAfterTable SELECT X
+            }
+            assertEquals(1, renamedBack.getResults().size)
+            assertEquals("Charlie", renamedBack.getResults().first().fullName)
+
+            // DROP COLUMN last, because it needs SQLite 3.35+ (2021) and the Android framework only
+            // bundles that from API 34 on. Keeping it last means its failure on older SQLite cannot
+            // disturb the steps above. Where it does run, its effect is asserted.
+            var legacyDropped = true
             try {
                 database {
-                    PersonWithIdTable ALTER_ADD_COLUMN PersonWithIdTable.name
+                    AlterBeforeTable DROP_COLUMN AlterBeforeTable.legacy
                 }
             } catch (e: Exception) {
-                // Expected to fail while the generated keyword is still "ALERT TABLE"
-                e.printStackTrace()
+                legacyDropped = false
             }
-
-            lateinit var personStatement: SelectStatement<PersonWithId>
-            database {
-                personStatement = PersonWithIdTable SELECT X
+            if (legacyDropped) {
+                assertEquals(
+                    true,
+                    database.selectFails { AlterWithLegacyTable SELECT X },
+                    "'legacy' should be gone after DROP COLUMN",
+                )
             }
-            assertEquals(1, personStatement.getResults().size)
-            assertEquals("Charlie", personStatement.getResults().first().name)
-
-            // Test 2: ALTER_RENAME_TABLE_TO with TableObject
-            val student1 = StudentWithAutoincrement(id = null, studentName = "Diana", grade = 90)
-            val student2 = StudentWithAutoincrement(id = null, studentName = "Ethan", grade = 85)
-
-            database {
-                StudentWithAutoincrementTable { table ->
-                    table INSERT listOf(student1, student2)
-                }
-            }
-
-            lateinit var studentStatement1: SelectStatement<StudentWithAutoincrement>
-            database {
-                studentStatement1 = StudentWithAutoincrementTable SELECT X
-            }
-            assertEquals(2, studentStatement1.getResults().size)
-
-            try {
-                database {
-                    StudentWithAutoincrementTable ALTER_RENAME_TABLE_TO StudentWithAutoincrementTable
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation
-                e.printStackTrace()
-            }
-
-            lateinit var studentStatement2: SelectStatement<StudentWithAutoincrement>
-            database {
-                studentStatement2 = StudentWithAutoincrementTable SELECT X
-            }
-            assertEquals(2, studentStatement2.getResults().size)
-
-            // Test 3: ALTER_RENAME_TABLE_TO with String
-            val enrollment = Enrollment(studentId = 1, courseId = 101, semester = "Spring 2025")
-
-            database {
-                EnrollmentTable { table ->
-                    table INSERT enrollment
-                }
-            }
-
-            try {
-                database {
-                    "enrollment" ALTER_RENAME_TABLE_TO EnrollmentTable
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation
-                e.printStackTrace()
-            }
-
-            lateinit var enrollmentStatement: SelectStatement<Enrollment>
-            database {
-                enrollmentStatement = EnrollmentTable SELECT X
-            }
-            assertEquals(1, enrollmentStatement.getResults().size)
-            assertEquals("Spring 2025", enrollmentStatement.getResults().first().semester)
-
-            // Test 4: RENAME_COLUMN with ClauseElement
-            val book = Book(name = "Test Book", author = "Test Author", pages = 200, price = 15.99)
-
-            database {
-                BookTable { table ->
-                    table INSERT book
-                }
-            }
-
-            try {
-                database {
-                    BookTable.RENAME_COLUMN(BookTable.name, BookTable.author)
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation
-                e.printStackTrace()
-            }
-
-            lateinit var bookStatement: SelectStatement<Book>
-            database {
-                bookStatement = BookTable SELECT X
-            }
-            assertEquals(1, bookStatement.getResults().size)
-
-            // Test 5: RENAME_COLUMN with String
-            val category = Category(name = "Fiction", code = 100)
-
-            database {
-                CategoryTable { table ->
-                    table INSERT category
-                }
-            }
-
-            try {
-                database {
-                    CategoryTable.RENAME_COLUMN("name", CategoryTable.code)
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation
-                e.printStackTrace()
-            }
-
-            lateinit var categoryStatement: SelectStatement<Category>
-            database {
-                categoryStatement = CategoryTable SELECT X
-            }
-            assertEquals(1, categoryStatement.getResults().size)
-            assertEquals(100, categoryStatement.getResults().first().code)
-
-            // Test 6: DROP_COLUMN
-            val dropPerson = PersonWithId(id = null, name = "Frank", age = 40)
-
-            database {
-                PersonWithIdTable { table ->
-                    table INSERT dropPerson
-                }
-            }
-
-            try {
-                database {
-                    PersonWithIdTable DROP_COLUMN PersonWithIdTable.age
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation or SQLite version
-                e.printStackTrace()
-            }
-
-            lateinit var dropStatement: SelectStatement<PersonWithId>
-            database {
-                dropStatement = PersonWithIdTable SELECT WHERE (PersonWithIdTable.name EQ "Frank")
-            }
-            assertEquals(1, dropStatement.getResults().size)
-
-            // Test 7: ALTER operations within a transaction
-            val txPerson1 = PersonWithId(id = null, name = "Grace", age = 28)
-            val txPerson2 = PersonWithId(id = null, name = "Henry", age = 32)
-
-            database {
-                PersonWithIdTable { table ->
-                    table INSERT listOf(txPerson1, txPerson2)
-                }
-            }
-
-            try {
-                database {
-                    transaction {
-                        PersonWithIdTable ALTER_ADD_COLUMN PersonWithIdTable.age
-                        PersonWithIdTable.RENAME_COLUMN("name", PersonWithIdTable.name)
-                    }
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation
-                e.printStackTrace()
-            }
-
-            lateinit var txStatement: SelectStatement<PersonWithId>
-            database {
-                txStatement = PersonWithIdTable SELECT WHERE (PersonWithIdTable.name EQ "Grace" OR (PersonWithIdTable.name EQ "Henry"))
-            }
-            assertEquals(2, txStatement.getResults().size)
-            assertEquals(true, txStatement.getResults().any { it.name == "Grace" })
-            assertEquals(true, txStatement.getResults().any { it.name == "Henry" })
         }
     }
+
+    /**
+     * Runs [block] in its own database scope and reports whether the query failed. The results are
+     * read as well as executed, because the Android driver's `rawQuery` is lazy: a missing table or
+     * column surfaces only once the cursor is actually read, not when the statement runs.
+     */
+    private fun Database.selectFails(block: DatabaseScope.() -> SelectStatement<*>): Boolean =
+        try {
+            var statement: SelectStatement<*>? = null
+            this.invoke { statement = block() }
+            statement!!.getResults()
+            false
+        } catch (e: Exception) {
+            true
+        }
 
     fun testStringOperators() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
         // Test 1: Comparison operators (LT, LTE, GT, GTE)

@@ -456,3 +456,54 @@ internal data class InternalVisibility(
     @PrimaryKey(autoIncrement = true) val id: Long?,
     val name: String,
 )
+
+/**
+ * The 'alter_target' table in its shape *before* the migration exercised by
+ * `testSchemaModification`: it has `name` and `legacy`, and no `nickname`.
+ */
+@DBRow("alter_target")
+@Serializable
+data class AlterBefore(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val name: String,
+    val legacy: Int,
+)
+
+/**
+ * The same 'alter_target' table in its shape *after* the migration: `nickname` has been added,
+ * `name` has been renamed to `fullName`, and `legacy` has been dropped. Mapping two entities onto
+ * one table name is what lets the test read the table back through whichever shape it should
+ * currently have, so a migration step that silently does nothing fails the test.
+ */
+@DBRow("alter_target")
+@Serializable
+data class AlterAfter(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val fullName: String,
+    val nickname: String?,
+)
+
+/**
+ * The migrated shape plus the `legacy` column, used purely as a probe: selecting it succeeds while
+ * `legacy` is still present and fails once DROP COLUMN has removed it.
+ */
+@DBRow("alter_target")
+@Serializable
+data class AlterWithLegacy(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val fullName: String,
+    val nickname: String?,
+    val legacy: Int,
+)
+
+/**
+ * Supplies the destination table name for the `ALTER_RENAME_TABLE_TO` step; same shape as
+ * [AlterAfter].
+ */
+@DBRow("alter_renamed")
+@Serializable
+data class AlterRenamed(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val fullName: String,
+    val nickname: String?,
+)

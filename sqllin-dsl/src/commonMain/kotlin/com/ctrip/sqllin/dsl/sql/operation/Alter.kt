@@ -61,7 +61,7 @@ import com.ctrip.sqllin.dsl.sql.statement.TableStructureStatement
 internal object Alter : Operation {
 
     override val sqlStr: String
-        get() = "ALERT TABLE "
+        get() = "ALTER TABLE "
 
     private const val ADD_COLUMN = " ADD COLUMN "
     private const val RENAME_TABLE = " RENAME TO "
