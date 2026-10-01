@@ -59,21 +59,37 @@ import kotlin.jvm.JvmName
  * - Use [transaction] to execute multiple statements atomically
  * - Transactions can be nested and are automatically committed or rolled back
  *
+ * **Execution is deferred**: no statement runs until the scope exits. A [SelectStatement] built
+ * inside the scope therefore holds no results while the scope is still open, and calling
+ * `getResults()` on it there throws [IllegalStateException]. Hold the statement in a variable
+ * declared outside the scope and read its results after the scope has exited, as shown below.
+ * For the same reason a query's result cannot inform a write in the same scope: a read-modify-write
+ * has to be split into two scopes.
+ *
  * Example:
  * ```kotlin
+ * // Create and modify table structure
  * database {
- *     // Create and modify table structure
  *     CREATE(PersonTable)
- *     PersonTable ALERT_ADD_COLUMN email
+ *     PersonTable ALERT_ADD_COLUMN PersonTable.email
+ * }
  *
- *     // Data manipulation
- *     transaction {
- *         PersonTable INSERT person
- *         PersonTable UPDATE SET { name = "Alice" } WHERE (age GTE 18)
+ * // Modify data, and build a query whose results are read once the scope has exited
+ * lateinit var adults: SelectStatement<Person>
+ * database {
+ *     PersonTable { table ->
+ *         transaction {
+ *             table INSERT person
+ *             table UPDATE SET { name = "Alice" } WHERE (age GTE 18)
+ *         }
+ *         adults = table SELECT WHERE(age GTE 18) LIMIT 10
  *     }
- *     val adults = PersonTable SELECT WHERE(age GTE 18) LIMIT 10
+ * }
+ * // Every statement above ran when the scope exited, so the results are available only here
+ * val results = adults.getResults()
  *
- *     // Cleanup
+ * // Cleanup
+ * database {
  *     PersonTable.DROP()
  * }
  * ```

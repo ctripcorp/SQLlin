@@ -14,6 +14,7 @@
 ### sqllin-dsl
 
 * **Breaking change**: The parameter of annotation `@PrimaryKey` renamed from `isAutoincrement` to `autoIncrement`, aligning it with the name already used in the documentation and with the naming of the other annotations. Call sites using the named argument `@PrimaryKey(isAutoincrement = true)` must be updated to `@PrimaryKey(autoIncrement = true)`; positional usage such as `@PrimaryKey(true)` is unaffected
+* Fix documentation: the KDoc of `DatabaseScope` now states that statement execution is deferred until the scope exits, and its example no longer reads a `SelectStatement`'s results while the scope is still open, which throws
 
 ### sqllin-driver
 
