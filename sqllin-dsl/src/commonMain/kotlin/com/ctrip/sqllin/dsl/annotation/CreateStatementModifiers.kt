@@ -70,7 +70,8 @@ public annotation class PrimaryKey(val autoIncrement: Boolean = false)
  * will form the table's composite primary key.
  *
  * ### Important Rules
- * - A class can have multiple properties annotated with [CompositePrimaryKey].
+ * - At least two properties must be annotated with [CompositePrimaryKey]; annotating only one is a
+ * compile-time error. A single-column primary key is declared with [PrimaryKey].
  * - If a class uses [CompositePrimaryKey] on any of its properties, it **cannot** also use
  * the [PrimaryKey] annotation on any other property. A table can only have one primary key,
  * which is either a single column or a composite of multiple columns.

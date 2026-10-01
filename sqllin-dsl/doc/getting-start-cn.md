@@ -269,7 +269,7 @@ data class Enrollment(
 
 **重要规则：**
 
-- 你可以在同一个类中对**多个属性**应用 `@CompositePrimaryKey`
+- 必须在同一个类中对**至少两个属性**应用 `@CompositePrimaryKey`；只标注一个会导致编译错误，单列主键应使用 `@PrimaryKey`
 - 所有带有 `@CompositePrimaryKey` 的属性**必须是非空的**
 - 你**不能**在同一个类中混合使用 `@PrimaryKey` 和 `@CompositePrimaryKey` - 只能使用其中一个
 - 所有 `@CompositePrimaryKey` 属性的组合形成表的组合主键

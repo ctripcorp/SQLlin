@@ -71,6 +71,7 @@ import java.io.Writer
  * - AUTOINCREMENT requires a `Long?` key, the only kind of key the database assigns
  * - [@CollateNoCase] can only be applied to String or Char properties
  * - [@CompositePrimaryKey] properties must be non-nullable
+ * - [@CompositePrimaryKey] needs at least two properties; a single-column key uses [@PrimaryKey]
  *
  * @param resolver KSP resolver for looking up annotation types
  *
@@ -95,6 +96,7 @@ class ColumnConstraintParser(resolver: Resolver) {
         const val PROMPT_PRIMARY_KEY_MUST_NOT_NULL = "The primary key must be not-null."
         const val PROMPT_NULLABLE_PRIMARY_KEY_MUST_BE_LONG = "Only a primary key of type Long can be nullable, which leaves its value for the database to assign. A primary key of any other type is supplied by the caller and must be not-null."
         const val PROMPT_AUTO_INCREMENT_REQUIRES_NULLABLE_LONG = """The parameter "autoIncrement = true" in annotation PrimaryKey requires the primary key to be a nullable Long (Long?), the only kind of key whose value the database assigns."""
+        const val PROMPT_COMPOSITE_PRIMARY_KEY_SINGLE_COLUMN = "A composite primary key needs at least two columns. Use @PrimaryKey for a single-column primary key, such as `@PrimaryKey val id: Long` for a numeric key you supply yourself."
         const val PROMPT_PRIMARY_KEY_USE_COUNT = "You only could use PrimaryKey to annotate one property in a class."
         const val PROMPT_NO_CASE_MUST_FOR_TEXT = "You only could add annotation @CollateNoCase for a String or Char typed property."
     }
@@ -349,6 +351,11 @@ class ColumnConstraintParser(resolver: Resolver) {
      * @see com.ctrip.sqllin.dsl.sql.PrimaryKeyInfo
      */
     fun generateCodeForPrimaryKey(writer: Writer, createSQLBuilder: StringBuilder) {
+        // Standard SQL accepts a one-column `PRIMARY KEY(col)`, but @PrimaryKey already declares that key, and does it
+        // better for a Long: it maps to INTEGER, a rowid alias, where this path maps a Long to BIGINT. Only known here,
+        // once every property has been parsed.
+        check(compositePrimaryKeys.size != 1) { PROMPT_COMPOSITE_PRIMARY_KEY_SINGLE_COLUMN }
+
         // Write the override instance for property `primaryKeyInfo`.
         with(writer) {
             if (primaryKeyName == null && compositePrimaryKeys.isEmpty()) {
