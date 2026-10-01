@@ -1219,6 +1219,19 @@ class CommonBasicTest(private val path: DatabasePath) {
             true
         }
 
+    /**
+     * Compile-time check, never called: the generated `SetClause` properties must carry the
+     * nullability the entity declares. [PersonWithId] declares a `Long?` primary key *followed by*
+     * non-null columns, which is the order that used to leak the key's nullability into every later
+     * column. These assignments only compile while `name` and `age` are generated as non-null.
+     */
+    @Suppress("unused", "UNUSED_VARIABLE")
+    private fun checkSetClauseNullability(clause: SetClause<PersonWithId>): Unit = with(PersonWithIdTable) {
+        val id: Long? = clause.id
+        val name: String = clause.name
+        val age: Age = clause.age
+    }
+
     fun testStringOperators() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
         // Test 1: Comparison operators (LT, LTE, GT, GTE)
         val book0 = Book(name = "Alice in Wonderland", author = "Lewis Carroll", pages = 200, price = 15.99)

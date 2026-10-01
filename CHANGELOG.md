@@ -26,6 +26,7 @@
 ### sqllin-processor
 
 * Fix: the visibility of the class annotated with `@DBRow` is now propagated to the generated table object. An `internal` `@DBRow` class used to produce a `public` object, which failed to compile with `EXPOSED_SUPER_CLASS`, `EXPOSED_FUNCTION_RETURN_TYPE` and `EXPOSED_RECEIVER_TYPE`. A `@DBRow` class that is neither `public` nor `internal` is now reported as an error
+* Fix: every `SetClause` property generated for a column declared after a nullable `Long` `@PrimaryKey` was typed nullable regardless of the column's own declaration, so `UPDATE ... SET { column = null }` compiled against `NOT NULL` columns and failed only at runtime. Each property now takes the nullability its own column declares
 
 ## 2.3.0 / 2026-08-20
 

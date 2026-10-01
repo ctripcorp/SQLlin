@@ -182,12 +182,7 @@ class ClauseProcessor(
                     writer.write("        get() = $clauseElementTypeName($elementName, this)\n\n")
                     writer.write("    @ColumnNameDslMaker\n")
                     writer.write("    var SetClause<$className>.$propertyName: ${property.typeName}")
-                    val nullableSymbol = when {
-                        columnConstraintParser.isRowId -> "?\n"
-                        isNotNull -> "\n"
-                        else -> "?\n"
-                    }
-                    writer.write(nullableSymbol)
+                    writer.write(if (isNotNull) "\n" else "?\n")
                     writer.write("        get() = ${getSetClauseGetterValue(property)}\n")
                     writer.write("        set(value) = ${appendFunction(elementName, property)}\n\n")
                 }
