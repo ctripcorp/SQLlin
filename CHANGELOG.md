@@ -21,6 +21,7 @@
 * Fix documentation: the KDoc of `DatabaseScope` now states that statement execution is deferred until the scope exits, and its example no longer reads a `SelectStatement`'s results while the scope is still open, which throws
 * Fix documentation: the `CREATE_INDEX` and `CREATE_UNIQUE_INDEX` examples referenced a `KClass.table` extension that does not exist in the library, and referred to columns by property reference instead of through the generated table object
 * Fix: the SQL string functions added in 2.2.0, `substr`, `trim`, `ltrim`, `rtrim`, `replace`, `instr` and `printf`, now carry the same DSL marker as the other SQL functions, so IntelliJ IDEA highlights their calls the same way
+* Fix documentation: the installation guide now declares the task dependencies the generated code needs, as SQLlin's own builds always did. Without them Gradle fails the build, in particular when another KSP processor runs in the same module. It also states that each generated object is named after its class with a `Table` suffix, not after the table
 
 ### sqllin-driver
 

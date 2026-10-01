@@ -9,6 +9,8 @@
 Add the dependencies of _sqllin-dsl_, _sqllin-driver_ and _sqllin-processor_ into your `build.gradle.kts`: 
 
 ```kotlin
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
+
 plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization")
@@ -45,7 +47,20 @@ dependencies {
     // sqllin-processor
     add("kspCommonMainMetadata", "com.ctrip.kotlin:sqllin-processor:$sqllinVersion")
 }
+
+// The generated code is a source directory of commonMain, so every task that reads it has to run after KSP
+afterEvaluate {
+    tasks {
+        matching { (it is KotlinCompilationTask<*> || it.name.startsWith("ksp")) && it.name != "kspCommonMainKotlinMetadata" }
+            .configureEach { dependsOn("kspCommonMainKotlinMetadata") }
+    }
+}
 ```
+
+The last block is required. The generated table objects are added to `commonMain` as a source directory, so every Kotlin
+compilation reads the output of `kspCommonMainKotlinMetadata`, and so does every other KSP task when your project also runs
+another KSP processor, such as Room or Koin Annotations. Gradle fails the build when a task reads the output of another task
+without depending on it. KSP's own tasks are matched by name, because their types differ between KSP versions.
 
 > Note: If you want to add dependencies of SQLlin into your Kotlin/Native executable program projects, sometimes you need to add the `linkerOpts`
 > of SQLite into your `build.gradle.kts` correctly. You can refer to [issue #48](https://github.com/ctripcorp/SQLlin/issues/48) to get more information.
@@ -200,6 +215,9 @@ column names in the table. But the count of your database entities' properties c
 The `@DBRow`'s param `tableName` represents the table name in Database, please ensure pass
 the correct value. If you don't pass the parameter manually, _sqllin-processor_ will use the class
 name as table name, for example, `Person`'s default table name is "Person".
+
+For each `@DBRow` class, _sqllin-processor_ generates an object named after the class with a `Table` suffix, such as
+`PersonTable` for `Person`, whatever its `tableName` is. That object is what you write SQL against with the DSL.
 
 In _sqllin-dsl_, objects are serialized to SQL and deserialized from cursor depend on _kotlinx.serialization_. So, you also need to add the `@Serializable` onto your data classes. Therefore, if
 you want to ignore some properties when serialization or deserialization and `Table` classes generation, you can annotate your properties with `kotlinx.serialization.Transient`.

@@ -7,6 +7,8 @@
 将 _sqllin-dsl_、_sqllin-driver_ 以及 _sqllin-processor_ 依赖添加到你的 `build.gradle.kts`：
 
 ```kotlin
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
+
 plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization")
@@ -43,7 +45,19 @@ dependencies {
     // sqllin-processor
     add("kspCommonMainMetadata", "com.ctrip.kotlin:sqllin-processor:$sqllinVersion")
 }
+
+// The generated code is a source directory of commonMain, so every task that reads it has to run after KSP
+afterEvaluate {
+    tasks {
+        matching { (it is KotlinCompilationTask<*> || it.name.startsWith("ksp")) && it.name != "kspCommonMainKotlinMetadata" }
+            .configureEach { dependsOn("kspCommonMainKotlinMetadata") }
+    }
+}
 ```
+
+最后一段是必需的。生成的表对象作为 `commonMain` 的源码目录加入工程，因此每个 Kotlin 编译任务都会读取
+`kspCommonMainKotlinMetadata` 的输出；如果你的工程还运行着其他 KSP 处理器（比如 Room 或 Koin Annotations），它们的 KSP 任务也会读取。
+一个任务读取另一个任务的输出却没有声明对它的依赖时，Gradle 会让构建失败。KSP 自己的任务按名字匹配，因为不同 KSP 版本的任务类型不同。
 > 注意：如果你想将 SQLlin 的依赖添加到你的 Kotlin/Native 可执行程序工程，有时你需要正确添加对 SQLite 的 `linkerOpts` 到你的
 > `build.gradle.kts`。你可以参考 [issue #48](https://github.com/ctripcorp/SQLlin/issues/48) 来获取更多信息。
 
@@ -190,6 +204,9 @@ data class Person(
 
 `@DBRow` 的参数 `tableName` 表示数据库中的表名，请确保传入正确的值。如果不手动传入，_sqllin-processor_
 将会使用类名作为表名，比如 `Person` 类的默认表名是"Person"。
+
+对于每个 `@DBRow` 类，_sqllin-processor_ 都会生成一个以类名加 `Table` 后缀命名的对象，比如 `Person` 对应 `PersonTable`，
+与 `tableName` 的取值无关。使用 DSL 编写 SQL 时用的就是这个对象。
 
 在 _sqllin-dsl_ 中，对象序列化为 SQL 语句，或者从游标中反序列化依赖 _kotlinx.serialization_，所以你需要在你的 data class
 上添加 `@Serializable` 注解。因此，如果你想在序列化或反序列化以及 `Table` 类生成的时候忽略某些属性，你可以给你的属性添加 `kotlinx.serialization.Transient` 注解。
