@@ -20,6 +20,7 @@
 * Fix: the ALTER operations emitted the invalid keyword `ALERT TABLE` instead of `ALTER TABLE`, so `ALTER_ADD_COLUMN`, `ALTER_RENAME_TABLE_TO`, `RENAME_COLUMN` and `DROP_COLUMN` all failed at runtime and had never worked. The tests that covered them swallowed the failure, which is why it went unnoticed
 * Fix documentation: the KDoc of `DatabaseScope` now states that statement execution is deferred until the scope exits, and its example no longer reads a `SelectStatement`'s results while the scope is still open, which throws
 * Fix documentation: the `CREATE_INDEX` and `CREATE_UNIQUE_INDEX` examples referenced a `KClass.table` extension that does not exist in the library, and referred to columns by property reference instead of through the generated table object
+* Fix: the SQL string functions added in 2.2.0, `substr`, `trim`, `ltrim`, `rtrim`, `replace`, `instr` and `printf`, now carry the same DSL marker as the other SQL functions, so IntelliJ IDEA highlights their calls the same way
 
 ### sqllin-driver
 
