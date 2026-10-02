@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.processor
 
 import com.google.devtools.ksp.getClassDeclarationByName
+import com.google.devtools.ksp.getVisibility
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
@@ -93,6 +94,19 @@ class ClauseProcessor(
             if (classDeclaration.annotations.all { !it.annotationType.resolve().isAssignableFrom(serializableType) })
                 continue // Don't handle the classes that didn't be annotated 'Serializable'
 
+            // The generated table object must not be more visible than the entity it is built for,
+            // otherwise an 'internal' @DBRow class produces a 'public' object that exposes it.
+            val visibility = classDeclaration.getVisibility()
+            if (visibility != Visibility.PUBLIC && visibility != Visibility.INTERNAL) {
+                environment.logger.error(
+                    "The class annotated with '@DBRow' must be 'public' or 'internal', but " +
+                        "'${classDeclaration.simpleName.asString()}' is '${visibility.name.lowercase()}'.",
+                    classDeclaration,
+                )
+                continue
+            }
+            val visibilityModifier = if (visibility == Visibility.INTERNAL) "internal " else ""
+
             val foreignKeyParser = ForeignKeyParser()
             foreignKeyParser.parseGroups(classDeclaration.annotations)
 
@@ -102,6 +116,31 @@ class ClauseProcessor(
             val tableName = classDeclaration.annotations.find {
                 it.annotationType.resolve().declaration.qualifiedName?.asString() == ANNOTATION_DATABASE_ROW_NAME
             }?.arguments?.firstOrNull()?.value?.takeIf { (it as? String)?.isNotBlank() == true } ?: className
+
+            // Keep exactly the properties the serializer writes, in its order, as the generated accessors look a column
+            // up by its index in the serializer's descriptor. That leaves out @Transient properties and, because
+            // kotlinx.serialization only serializes properties backed by a field, computed ones like `val x get() = ...`
+            val transientName = resolver.getClassDeclarationByName(ANNOTATION_TRANSIENT)!!.asStarProjectedType()
+            val propertyList = classDeclaration.getAllProperties().filter { property ->
+                property.hasBackingField &&
+                    !property.annotations.any { ksAnnotation -> ksAnnotation.annotationType.resolve().isAssignableFrom(transientName) }
+            }.toList()
+
+            // Every stored property needs a column. A property of a type no column can hold used to be skipped silently:
+            // left out of CREATE TABLE while its serializer still wrote and read it, so it only failed at runtime, and as
+            // the last property it left a trailing comma that made CREATE TABLE itself invalid. Report all of them here.
+            val unsupportedProperties = propertyList.filter { getClauseElementTypeStr(it) == null }
+            unsupportedProperties.forEach { property ->
+                environment.logger.error(
+                    "The property '${property.simpleName.asString()}' of '@DBRow' class '$className' has the type " +
+                        "'${property.type.resolve()}', which no column can hold. Supported types are Byte, Short, Int, Long, " +
+                        "Float, Double and their unsigned variants, Boolean, Char, String, ByteArray, enum classes, and type " +
+                        "aliases of these. To keep the property out of the table, annotate it with @kotlinx.serialization.Transient.",
+                    property,
+                )
+            }
+            if (unsupportedProperties.isNotEmpty())
+                continue
 
             val outputStream = environment.codeGenerator.createNewFile(
                 dependencies = classDeclaration.containingFile?.let { Dependencies(true, it) } ?: Dependencies(true),
@@ -122,12 +161,14 @@ class ClauseProcessor(
                 writer.write("import com.ctrip.sqllin.dsl.sql.PrimaryKeyInfo\n")
                 writer.write("import com.ctrip.sqllin.dsl.sql.Table\n\n")
 
-                writer.write("object $objectName : Table<$className>(\"$tableName\") {\n\n")
+                // The column properties carry @ColumnNameDslMaker for IntelliJ IDEA's DSL highlighting, a target the compiler
+                // flags as having no effect on scope control. This code is compiled in the user's module, so keep it quiet.
+                writer.write("@Suppress(\"DSL_MARKER_APPLIED_TO_WRONG_TARGET\")\n")
+                writer.write("${visibilityModifier}object $objectName : Table<$className>(\"$tableName\") {\n\n")
 
                 writer.write("    override fun kSerializer() = $className.serializer()\n\n")
 
                 writer.write("    inline operator fun <R> invoke(block: $objectName.(table: $objectName) -> R): R = this.block(this)\n\n")
-                val transientName = resolver.getClassDeclarationByName(ANNOTATION_TRANSIENT)!!.asStarProjectedType()
 
                 val columnConstraintParser = ColumnConstraintParser(resolver)
 
@@ -137,14 +178,9 @@ class ClauseProcessor(
                     append('(')
                 }
 
-                // Filter out @Transient properties and convert to list for indexed iteration
-                val propertyList = classDeclaration.getAllProperties().filter { classDeclaration ->
-                    !classDeclaration.annotations.any { ksAnnotation -> ksAnnotation.annotationType.resolve().isAssignableFrom(transientName) }
-                }.toList()
-
                 // Process each property to generate column definitions
                 propertyList.forEachIndexed { index, property ->
-                    val clauseElementTypeName = getClauseElementTypeStr(property) ?: return@forEachIndexed
+                    val clauseElementTypeName = checkNotNull(getClauseElementTypeStr(property)) // Rejected above
                     val propertyName = property.simpleName.asString()
                     val elementName = "$className.serializer().descriptor.getElementName($index)"
                     val isNotNull = property.type.resolve().nullability == Nullability.NOT_NULL
@@ -168,14 +204,9 @@ class ClauseProcessor(
                     writer.write("        get() = $clauseElementTypeName($elementName, this)\n\n")
                     writer.write("    @ColumnNameDslMaker\n")
                     writer.write("    var SetClause<$className>.$propertyName: ${property.typeName}")
-                    val nullableSymbol = when {
-                        columnConstraintParser.isRowId -> "?\n"
-                        isNotNull -> "\n"
-                        else -> "?\n"
-                    }
-                    writer.write(nullableSymbol)
+                    writer.write(if (isNotNull) "\n" else "?\n")
                     writer.write("        get() = ${getSetClauseGetterValue(property)}\n")
-                    writer.write("        set(value) = ${appendFunction(elementName, property)}\n\n")
+                    writer.write("        set(value) = ${appendFunction(elementName, property, isNotNull)}\n\n")
                 }
 
                 columnConstraintParser.generateCodeForPrimaryKey(writer, createSQLBuilder)
@@ -310,27 +341,30 @@ class ClauseProcessor(
      * Generates the appropriate append function call for SetClause setters.
      * Supports typealiases by resolving them to their underlying types.
      *
-     * For enum types, converts the enum value to its ordinal before appending.
-     * Handles nullable enums with safe-call operator.
+     * For enum types, converts the enum value to its ordinal before appending, with a safe call only
+     * when the enum is nullable.
      *
      * @param elementName The serialized element name
      * @param property The property declaration
+     * @param isNotNull Whether the setter's `value` is non-null, as for the SetClause property it belongs to
      * @return The append function call string, or null if unsupported type
      */
-    private fun appendFunction(elementName: String, property: KSPropertyDeclaration): String? = when (
-        val declaration = property.type.resolve().declaration
-    ) {
-        is KSTypeAlias -> {
-            val realDeclaration = declaration.type.resolve().declaration
-            appendFunctionByTypeName(elementName, realDeclaration.typeName) ?: kotlin.run {
-                if (realDeclaration is KSClassDeclaration && realDeclaration.classKind == ClassKind.ENUM_CLASS)
-                    "appendAny($elementName, value?.ordinal)"
-                else
-                    null
+    private fun appendFunction(elementName: String, property: KSPropertyDeclaration, isNotNull: Boolean): String? {
+        // A safe call on a non-null value is reported as unnecessary, in the module compiling the generated code
+        val appendEnum = "appendAny($elementName, value${if (isNotNull) "" else "?"}.ordinal)"
+        return when (val declaration = property.type.resolve().declaration) {
+            is KSTypeAlias -> {
+                val realDeclaration = declaration.type.resolve().declaration
+                appendFunctionByTypeName(elementName, realDeclaration.typeName) ?: kotlin.run {
+                    if (realDeclaration is KSClassDeclaration && realDeclaration.classKind == ClassKind.ENUM_CLASS)
+                        appendEnum
+                    else
+                        null
+                }
             }
+            is KSClassDeclaration if declaration.classKind == ClassKind.ENUM_CLASS -> appendEnum
+            else -> appendFunctionByTypeName(elementName, declaration.typeName)
         }
-        is KSClassDeclaration if declaration.classKind == ClassKind.ENUM_CLASS -> "appendAny($elementName, value?.ordinal)"
-        else -> appendFunctionByTypeName(elementName, declaration.typeName)
     }
 
     /**

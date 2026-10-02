@@ -96,7 +96,7 @@ public abstract class Table<T>(
      * @Serializable
      * @DBRow
      * data class User(
-     *     @PrimaryKey(isAutoincrement = true) val id: Long?,
+     *     @PrimaryKey(autoIncrement = true) val id: Long?,
      *     @Unique @CollateNoCase val email: String,
      *     val name: String,
      *     val age: Int

@@ -20,6 +20,7 @@ import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.DatabasePath
 import com.ctrip.sqllin.dsl.DSLDBConfiguration
 import com.ctrip.sqllin.dsl.Database
+import com.ctrip.sqllin.dsl.DatabaseScope
 import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.X
@@ -550,8 +551,8 @@ class CommonBasicTest(private val path: DatabasePath) {
             assertEquals(30, personResults[1].age)
 
             // Test 2: String primary key
-            val product1 = Product(sku = null, name = "Widget", price = 19.99)
-            val product2 = Product(sku = null, name = "Gadget", price = 29.99)
+            val product1 = Product(sku = "SKU-WIDGET", name = "Widget", price = 19.99)
+            val product2 = Product(sku = "SKU-GADGET", name = "Gadget", price = 29.99)
 
             lateinit var productStatement: SelectStatement<Product>
             database {
@@ -563,8 +564,10 @@ class CommonBasicTest(private val path: DatabasePath) {
 
             val productResults = productStatement.getResults()
             assertEquals(2, productResults.size)
+            assertEquals("SKU-WIDGET", productResults[0].sku)
             assertEquals("Widget", productResults[0].name)
             assertEquals(19.99, productResults[0].price)
+            assertEquals("SKU-GADGET", productResults[1].sku)
             assertEquals("Gadget", productResults[1].name)
             assertEquals(29.99, productResults[1].price)
 
@@ -688,7 +691,7 @@ class CommonBasicTest(private val path: DatabasePath) {
     fun testCreateInDatabaseScope() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             val person = PersonWithId(id = null, name = "Grace", age = 40)
-            val product = Product(sku = null, name = "Thingamajig", price = 49.99)
+            val product = Product(sku = "SKU-THING", name = "Thingamajig", price = 49.99)
 
             lateinit var personStatement: SelectStatement<PersonWithId>
             lateinit var productStatement: SelectStatement<Product>
@@ -1095,194 +1098,193 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    /**
+     * Exercises every ALTER operation as one realistic schema migration.
+     *
+     * 'alter_target' is created in the shape of [AlterBefore] (`id`, `name`, `legacy`) and migrated
+     * to the shape of [AlterAfter] (`id`, `fullName`, `nickname`) by ADD COLUMN, RENAME COLUMN and
+     * DROP COLUMN, then renamed to 'alter_renamed' and back. Every step is verified by reading the
+     * table through the entity matching the shape it should have at that point, so a step that does
+     * not actually run makes the test fail instead of passing quietly.
+     */
     @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testSchemaModification() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
-            // Test 1: ALERT_ADD_COLUMN
-            // Note: ALERT operations have a typo in the DSL - should be "ALTER TABLE" not "ALERT TABLE"
-            // This test verifies the DSL compiles and the statement can be created
-            val person = PersonWithId(id = null, name = "Charlie", age = 35)
+            database {
+                CREATE(AlterBeforeTable)
+                AlterBeforeTable { table ->
+                    table INSERT AlterBefore(id = null, name = "Charlie", legacy = 7)
+                }
+            }
 
+            // Reading the migrated shape must fail first: 'nickname' does not exist yet.
+            assertEquals(
+                true,
+                database.selectFails { AlterAfterTable SELECT X },
+                "'nickname' should not exist before ADD COLUMN",
+            )
+
+            // ADD COLUMN. The receiver must be the table whose serializer declares the new column,
+            // because the column's SQL type is resolved from that descriptor.
+            database {
+                AlterAfterTable ALTER_ADD_COLUMN AlterAfterTable.nickname
+            }
+
+            // RENAME COLUMN, naming the old column by string. Both entities map to 'alter_target'.
+            database {
+                AlterAfterTable.RENAME_COLUMN("name", AlterAfterTable.fullName)
+            }
+
+            // Both steps landed: the table now has 'fullName' and 'nickname', and still 'legacy'.
+            lateinit var withLegacy: SelectStatement<AlterWithLegacy>
+            database {
+                withLegacy = AlterWithLegacyTable SELECT X
+            }
+            assertEquals(1, withLegacy.getResults().size)
+            assertEquals("Charlie", withLegacy.getResults().first().fullName)
+            assertEquals(null, withLegacy.getResults().first().nickname)
+            assertEquals(7, withLegacy.getResults().first().legacy)
+
+            lateinit var migrated: SelectStatement<AlterAfter>
+            database {
+                migrated = AlterAfterTable SELECT X
+            }
+            assertEquals(1, migrated.getResults().size)
+            assertEquals("Charlie", migrated.getResults().first().fullName)
+            assertEquals(null, migrated.getResults().first().nickname)
+
+            // RENAME TO, with a Table receiver, inside a transaction.
+            database {
+                transaction {
+                    AlterAfterTable ALTER_RENAME_TABLE_TO AlterRenamedTable
+                }
+            }
+
+            lateinit var renamed: SelectStatement<AlterRenamed>
+            database {
+                renamed = AlterRenamedTable SELECT X
+            }
+            assertEquals(1, renamed.getResults().size)
+            assertEquals("Charlie", renamed.getResults().first().fullName)
+
+            assertEquals(
+                true,
+                database.selectFails { AlterAfterTable SELECT X },
+                "'alter_target' should not exist after RENAME TO",
+            )
+
+            // RENAME TO again, this time through the String receiver overload, renaming it back.
+            database {
+                "alter_renamed" ALTER_RENAME_TABLE_TO AlterAfterTable
+            }
+
+            lateinit var renamedBack: SelectStatement<AlterAfter>
+            database {
+                renamedBack = AlterAfterTable SELECT X
+            }
+            assertEquals(1, renamedBack.getResults().size)
+            assertEquals("Charlie", renamedBack.getResults().first().fullName)
+
+            // DROP COLUMN last, because it needs SQLite 3.35+ (2021) and the Android framework only
+            // bundles that from API 34 on. Keeping it last means its failure on older SQLite cannot
+            // disturb the steps above. Where it does run, its effect is asserted.
+            var legacyDropped = true
+            try {
+                database {
+                    AlterBeforeTable DROP_COLUMN AlterBeforeTable.legacy
+                }
+            } catch (e: Exception) {
+                legacyDropped = false
+            }
+            if (legacyDropped) {
+                assertEquals(
+                    true,
+                    database.selectFails { AlterWithLegacyTable SELECT X },
+                    "'legacy' should be gone after DROP COLUMN",
+                )
+            }
+        }
+    }
+
+    /**
+     * Runs [block] in its own database scope and reports whether the query failed. The results are
+     * read as well as executed, because the Android driver's `rawQuery` is lazy: a missing table or
+     * column surfaces only once the cursor is actually read, not when the statement runs.
+     */
+    private fun Database.selectFails(block: DatabaseScope.() -> SelectStatement<*>): Boolean =
+        try {
+            var statement: SelectStatement<*>? = null
+            this.invoke { statement = block() }
+            statement!!.getResults()
+            false
+        } catch (e: Exception) {
+            true
+        }
+
+    /**
+     * Compile-time check, never called: the generated `SetClause` properties must carry the
+     * nullability the entity declares. [PersonWithId] declares a `Long?` primary key *followed by*
+     * non-null columns, which is the order that used to leak the key's nullability into every later
+     * column. These assignments only compile while `name` and `age` are generated as non-null.
+     */
+    @Suppress("unused", "UNUSED_VARIABLE")
+    private fun checkSetClauseNullability(clause: SetClause<PersonWithId>): Unit = with(PersonWithIdTable) {
+        val id: Long? = clause.id
+        val name: String = clause.name
+        val age: Age = clause.age
+    }
+
+    /**
+     * Covers how a single `@PrimaryKey`'s nullability decides who supplies its value: a `Long?` key is
+     * assigned by the database; a non-null `Long` key is supplied by the caller yet stays a rowid alias;
+     * and a key of any other type is supplied by the caller and declared `NOT NULL`, which SQLite would
+     * otherwise not imply for it.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testPrimaryKeyNullability() {
+        // Both Long keys are rowid aliases; only the non-Long key needs NOT NULL spelled out.
+        assertEquals(true, PersonWithIdTable.createSQL.contains("id INTEGER PRIMARY KEY,"))
+        assertEquals(true, RemoteMovieTable.createSQL.contains("id INTEGER PRIMARY KEY,"))
+        assertEquals(true, ProductTable.createSQL.contains("sku TEXT PRIMARY KEY NOT NULL,"))
+
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            database {
+                CREATE(RemoteMovieTable)
+            }
+
+            // A caller-supplied Long key is written by a plain INSERT rather than left for the database.
+            lateinit var movies: SelectStatement<RemoteMovie>
+            database {
+                RemoteMovieTable { table ->
+                    table INSERT listOf(
+                        RemoteMovie(id = 603, title = "The Matrix"),
+                        RemoteMovie(id = 27205, title = "Inception"),
+                    )
+                    movies = table SELECT ORDER_BY(id to ASC)
+                }
+            }
+            assertEquals(listOf(603L, 27205L), movies.getResults().map { it.id })
+
+            // ...and it is a real primary key: inserting the same ID again is rejected.
+            var duplicateFailed = false
+            try {
+                database {
+                    RemoteMovieTable INSERT RemoteMovie(id = 603, title = "The Matrix Reloaded")
+                }
+            } catch (e: Exception) {
+                duplicateFailed = true
+            }
+            assertEquals(true, duplicateFailed, "A duplicate caller-supplied key should be rejected")
+
+            // A Long? key is still assigned by the database.
+            lateinit var people: SelectStatement<PersonWithId>
             database {
                 PersonWithIdTable { table ->
-                    table INSERT person
+                    table INSERT PersonWithId(id = null, name = "Ivy", age = 21)
+                    people = table SELECT X
                 }
             }
-
-            try {
-                database {
-                    PersonWithIdTable ALERT_ADD_COLUMN PersonWithIdTable.name
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation due to "ALERT TABLE" typo
-                e.printStackTrace()
-            }
-
-            lateinit var personStatement: SelectStatement<PersonWithId>
-            database {
-                personStatement = PersonWithIdTable SELECT X
-            }
-            assertEquals(1, personStatement.getResults().size)
-            assertEquals("Charlie", personStatement.getResults().first().name)
-
-            // Test 2: ALERT_RENAME_TABLE_TO with TableObject
-            val student1 = StudentWithAutoincrement(id = null, studentName = "Diana", grade = 90)
-            val student2 = StudentWithAutoincrement(id = null, studentName = "Ethan", grade = 85)
-
-            database {
-                StudentWithAutoincrementTable { table ->
-                    table INSERT listOf(student1, student2)
-                }
-            }
-
-            lateinit var studentStatement1: SelectStatement<StudentWithAutoincrement>
-            database {
-                studentStatement1 = StudentWithAutoincrementTable SELECT X
-            }
-            assertEquals(2, studentStatement1.getResults().size)
-
-            try {
-                database {
-                    StudentWithAutoincrementTable ALERT_RENAME_TABLE_TO StudentWithAutoincrementTable
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation
-                e.printStackTrace()
-            }
-
-            lateinit var studentStatement2: SelectStatement<StudentWithAutoincrement>
-            database {
-                studentStatement2 = StudentWithAutoincrementTable SELECT X
-            }
-            assertEquals(2, studentStatement2.getResults().size)
-
-            // Test 3: ALERT_RENAME_TABLE_TO with String
-            val enrollment = Enrollment(studentId = 1, courseId = 101, semester = "Spring 2025")
-
-            database {
-                EnrollmentTable { table ->
-                    table INSERT enrollment
-                }
-            }
-
-            try {
-                database {
-                    "enrollment" ALERT_RENAME_TABLE_TO EnrollmentTable
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation
-                e.printStackTrace()
-            }
-
-            lateinit var enrollmentStatement: SelectStatement<Enrollment>
-            database {
-                enrollmentStatement = EnrollmentTable SELECT X
-            }
-            assertEquals(1, enrollmentStatement.getResults().size)
-            assertEquals("Spring 2025", enrollmentStatement.getResults().first().semester)
-
-            // Test 4: RENAME_COLUMN with ClauseElement
-            val book = Book(name = "Test Book", author = "Test Author", pages = 200, price = 15.99)
-
-            database {
-                BookTable { table ->
-                    table INSERT book
-                }
-            }
-
-            try {
-                database {
-                    BookTable.RENAME_COLUMN(BookTable.name, BookTable.author)
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation
-                e.printStackTrace()
-            }
-
-            lateinit var bookStatement: SelectStatement<Book>
-            database {
-                bookStatement = BookTable SELECT X
-            }
-            assertEquals(1, bookStatement.getResults().size)
-
-            // Test 5: RENAME_COLUMN with String
-            val category = Category(name = "Fiction", code = 100)
-
-            database {
-                CategoryTable { table ->
-                    table INSERT category
-                }
-            }
-
-            try {
-                database {
-                    CategoryTable.RENAME_COLUMN("name", CategoryTable.code)
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation
-                e.printStackTrace()
-            }
-
-            lateinit var categoryStatement: SelectStatement<Category>
-            database {
-                categoryStatement = CategoryTable SELECT X
-            }
-            assertEquals(1, categoryStatement.getResults().size)
-            assertEquals(100, categoryStatement.getResults().first().code)
-
-            // Test 6: DROP_COLUMN
-            val dropPerson = PersonWithId(id = null, name = "Frank", age = 40)
-
-            database {
-                PersonWithIdTable { table ->
-                    table INSERT dropPerson
-                }
-            }
-
-            try {
-                database {
-                    PersonWithIdTable DROP_COLUMN PersonWithIdTable.age
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation or SQLite version
-                e.printStackTrace()
-            }
-
-            lateinit var dropStatement: SelectStatement<PersonWithId>
-            database {
-                dropStatement = PersonWithIdTable SELECT WHERE (PersonWithIdTable.name EQ "Frank")
-            }
-            assertEquals(1, dropStatement.getResults().size)
-
-            // Test 7: ALERT operations within a transaction
-            val txPerson1 = PersonWithId(id = null, name = "Grace", age = 28)
-            val txPerson2 = PersonWithId(id = null, name = "Henry", age = 32)
-
-            database {
-                PersonWithIdTable { table ->
-                    table INSERT listOf(txPerson1, txPerson2)
-                }
-            }
-
-            try {
-                database {
-                    transaction {
-                        PersonWithIdTable ALERT_ADD_COLUMN PersonWithIdTable.age
-                        PersonWithIdTable.RENAME_COLUMN("name", PersonWithIdTable.name)
-                    }
-                }
-            } catch (e: Exception) {
-                // Expected to fail with current implementation
-                e.printStackTrace()
-            }
-
-            lateinit var txStatement: SelectStatement<PersonWithId>
-            database {
-                txStatement = PersonWithIdTable SELECT WHERE (PersonWithIdTable.name EQ "Grace" OR (PersonWithIdTable.name EQ "Henry"))
-            }
-            assertEquals(2, txStatement.getResults().size)
-            assertEquals(true, txStatement.getResults().any { it.name == "Grace" })
-            assertEquals(true, txStatement.getResults().any { it.name == "Henry" })
+            assertNotEquals(null, people.getResults().first().id)
         }
     }
 
@@ -1687,15 +1689,16 @@ class CommonBasicTest(private val path: DatabasePath) {
             ProductTable.CREATE_UNIQUE_INDEX("idx_unique_product_name", ProductTable.name)
         }
 
-        val product1 = Product(sku = null, name = "Widget", price = 19.99)
+        val product1 = Product(sku = "SKU-WIDGET-1", name = "Widget", price = 19.99)
         database {
             ProductTable { table ->
                 table INSERT product1
             }
         }
 
-        // Try to insert duplicate - should fail
-        val product2 = Product(sku = null, name = "Widget", price = 29.99)
+        // Try to insert duplicate - should fail. The SKU differs on purpose, so the only constraint the
+        // second product can violate is the unique index on 'name'.
+        val product2 = Product(sku = "SKU-WIDGET-2", name = "Widget", price = 29.99)
         var duplicateFailed = false
         try {
             database {
@@ -1784,10 +1787,18 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(true, studentSQL.contains("CREATE TABLE student_with_autoincrement"))
         assertEquals(true, studentSQL.contains("id INTEGER PRIMARY KEY AUTOINCREMENT"))
 
+        // A computed property isn't serialized, so it must not become a column: Book declares `title` that way
+        assertEquals(false, BookTable.createSQL.contains("title"))
+
         // Test 3: Table with composite primary key
         val enrollmentSQL = EnrollmentTable.createSQL
         assertEquals(true, enrollmentSQL.contains("CREATE TABLE enrollment"))
         assertEquals(true, enrollmentSQL.contains("PRIMARY KEY(studentId,courseId)"))
+        // SQLite doesn't let a table-level PRIMARY KEY imply NOT NULL, so each key column must declare it
+        assertEquals(true, enrollmentSQL.contains("studentId BIGINT NOT NULL,"))
+        assertEquals(true, enrollmentSQL.contains("courseId BIGINT NOT NULL,"))
+        assertEquals(true, FKProductTable.createSQL.contains("categoryId INT NOT NULL,"))
+        assertEquals(true, FKProductTable.createSQL.contains("productCode TEXT NOT NULL,"))
 
         // Test 4: Table with enum fields (stored as INT)
         val userSQL = UserAccountTable.createSQL

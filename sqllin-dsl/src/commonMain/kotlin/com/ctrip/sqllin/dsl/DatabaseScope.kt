@@ -23,7 +23,7 @@ import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.clause.*
-import com.ctrip.sqllin.dsl.sql.operation.Alert
+import com.ctrip.sqllin.dsl.sql.operation.Alter
 import com.ctrip.sqllin.dsl.sql.operation.Create
 import com.ctrip.sqllin.dsl.sql.operation.Delete
 import com.ctrip.sqllin.dsl.sql.operation.Drop
@@ -53,34 +53,50 @@ import kotlin.jvm.JvmName
  * - **SELECT**: Query records with WHERE, ORDER BY, LIMIT, GROUP BY, JOIN, and UNION
  * - **CREATE**: Create tables from data class definitions
  * - **DROP**: Remove tables from the database
- * - **ALERT (ALTER)**: Modify table structures (add columns, rename tables/columns, drop columns)
+ * - **ALTER**: Modify table structures (add columns, rename tables/columns, drop columns)
  *
  * Transaction support:
  * - Use [transaction] to execute multiple statements atomically
  * - Transactions can be nested and are automatically committed or rolled back
  *
+ * **Execution is deferred**: no statement runs until the scope exits. A [SelectStatement] built
+ * inside the scope therefore holds no results while the scope is still open, and calling
+ * `getResults()` on it there throws [IllegalStateException]. Hold the statement in a variable
+ * declared outside the scope and read its results after the scope has exited, as shown below.
+ * For the same reason a query's result cannot inform a write in the same scope: a read-modify-write
+ * has to be split into two scopes.
+ *
  * Example:
  * ```kotlin
+ * // Create and modify table structure
  * database {
- *     // Create and modify table structure
  *     CREATE(PersonTable)
- *     PersonTable ALERT_ADD_COLUMN email
+ *     PersonTable ALTER_ADD_COLUMN PersonTable.email
+ * }
  *
- *     // Data manipulation
- *     transaction {
- *         PersonTable INSERT person
- *         PersonTable UPDATE SET { name = "Alice" } WHERE (age GTE 18)
+ * // Modify data, and build a query whose results are read once the scope has exited
+ * lateinit var adults: SelectStatement<Person>
+ * database {
+ *     PersonTable { table ->
+ *         transaction {
+ *             table INSERT person
+ *             table UPDATE SET { name = "Alice" } WHERE (age GTE 18)
+ *         }
+ *         adults = table SELECT WHERE(age GTE 18) LIMIT 10
  *     }
- *     val adults = PersonTable SELECT WHERE(age GTE 18) LIMIT 10
+ * }
+ * // Every statement above ran when the scope exited, so the results are available only here
+ * val results = adults.getResults()
  *
- *     // Cleanup
+ * // Cleanup
+ * database {
  *     PersonTable.DROP()
  * }
  * ```
  *
  * @author Yuang Qiao
  */
-@Suppress("UNCHECKED_CAST")
+@Suppress("UNCHECKED_CAST", "DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 public class DatabaseScope internal constructor(
     private val databaseConnection: DatabaseConnection,
     private val enableSimpleSQLLog: Boolean,
@@ -203,6 +219,9 @@ public class DatabaseScope internal constructor(
      * Use this function when you need to manually specify the primary key ID instead of letting
      * the database auto-generate it. For normal inserts where the database should generate IDs
      * automatically, use [INSERT] instead.
+     *
+     * This only matters for a `Long?` primary key. If the key is always supplied by the caller,
+     * declare it as a non-null `Long` instead, and a plain [INSERT] writes it.
      *
      * This function is particularly useful for:
      * - Data migration from another database where you need to preserve existing IDs
@@ -627,8 +646,8 @@ public class DatabaseScope internal constructor(
      * Example:
      * ```kotlin
      * database {
-     *     User::class.table.CREATE_INDEX("idx_user_email", User::email)
-     *     User::class.table.CREATE_INDEX("idx_user_name_age", User::name, User::age)
+     *     UserTable.CREATE_INDEX("idx_user_email", UserTable.email)
+     *     UserTable.CREATE_INDEX("idx_user_name_age", UserTable.name, UserTable.age)
      * }
      * ```
      *
@@ -652,8 +671,8 @@ public class DatabaseScope internal constructor(
      * Example:
      * ```kotlin
      * database {
-     *     User::class.table.CREATE_UNIQUE_INDEX("idx_unique_email", User::email)
-     *     Product::class.table.CREATE_UNIQUE_INDEX("idx_unique_sku", Product::sku)
+     *     UserTable.CREATE_UNIQUE_INDEX("idx_unique_email", UserTable.email)
+     *     ProductTable.CREATE_UNIQUE_INDEX("idx_unique_sku", ProductTable.sku)
      * }
      * ```
      *
@@ -712,7 +731,7 @@ public class DatabaseScope internal constructor(
     @JvmName("drop")
     public fun <T> Table<T>.DROP(): Unit = DROP(this)
 
-    // ========== ALERT (ALTER) Operations ==========
+    // ========== ALTER Operations ==========
 
     /**
      * Adds a new column to an existing table.
@@ -724,7 +743,7 @@ public class DatabaseScope internal constructor(
      * Example:
      * ```kotlin
      * database {
-     *     PersonTable ALERT_ADD_COLUMN email
+     *     PersonTable ALTER_ADD_COLUMN email
      * }
      * ```
      *
@@ -732,8 +751,8 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public infix fun <T> Table<T>.ALERT_ADD_COLUMN(column: ClauseElement) {
-        val statement = Alert.addColumn(this, column, databaseConnection)
+    public infix fun <T> Table<T>.ALTER_ADD_COLUMN(column: ClauseElement) {
+        val statement = Alter.addColumn(this, column, databaseConnection)
         addStatement(statement)
     }
 
@@ -743,7 +762,7 @@ public class DatabaseScope internal constructor(
      * Example:
      * ```kotlin
      * database {
-     *     PersonTable ALERT_RENAME_TABLE_TO NewPersonTable
+     *     PersonTable ALTER_RENAME_TABLE_TO NewPersonTable
      * }
      * ```
      *
@@ -751,8 +770,8 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public infix fun <T> Table<T>.ALERT_RENAME_TABLE_TO(newTable: Table<*>) {
-        val statement = Alert.renameTable(tableName, newTable, databaseConnection)
+    public infix fun <T> Table<T>.ALTER_RENAME_TABLE_TO(newTable: Table<*>) {
+        val statement = Alter.renameTable(tableName, newTable, databaseConnection)
         addStatement(statement)
     }
 
@@ -764,7 +783,7 @@ public class DatabaseScope internal constructor(
      * Example:
      * ```kotlin
      * database {
-     *     "old_person" ALERT_RENAME_TABLE_TO NewPersonTable
+     *     "old_person" ALTER_RENAME_TABLE_TO NewPersonTable
      * }
      * ```
      *
@@ -773,8 +792,8 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public infix fun String.ALERT_RENAME_TABLE_TO(newTable: Table<*>) {
-        val statement = Alert.renameTable(this, newTable, databaseConnection)
+    public infix fun String.ALTER_RENAME_TABLE_TO(newTable: Table<*>) {
+        val statement = Alter.renameTable(this, newTable, databaseConnection)
         addStatement(statement)
     }
 
@@ -797,7 +816,7 @@ public class DatabaseScope internal constructor(
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public fun <T, R : ClauseElement> Table<T>.RENAME_COLUMN(oldColumn: R, newColumn: R) {
-        val statement = Alert.renameColumn(this, oldColumn.valueName, newColumn, databaseConnection)
+        val statement = Alter.renameColumn(this, oldColumn.valueName, newColumn, databaseConnection)
         addStatement(statement)
     }
 
@@ -820,7 +839,7 @@ public class DatabaseScope internal constructor(
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public fun <T> Table<T>.RENAME_COLUMN(oldColumnName: String, newColumn: ClauseElement) {
-        val statement = Alert.renameColumn(this, oldColumnName, newColumn, databaseConnection)
+        val statement = Alter.renameColumn(this, oldColumnName, newColumn, databaseConnection)
         addStatement(statement)
     }
 
@@ -843,7 +862,7 @@ public class DatabaseScope internal constructor(
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <T> Table<T>.DROP_COLUMN(column: ClauseElement) {
-        val statement = Alert.dropColumn(this, column, databaseConnection)
+        val statement = Alter.dropColumn(this, column, databaseConnection)
         addStatement(statement)
     }
 
