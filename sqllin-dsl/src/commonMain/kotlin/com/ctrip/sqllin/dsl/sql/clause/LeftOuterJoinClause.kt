@@ -46,7 +46,6 @@ internal class LeftOuterJoinClause<R>(
  * // Returns all users, including those without orders
  * ```
  */
-@Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
 public fun <R> LEFT_OUTER_JOIN(vararg tables: Table<*>): JoinClause<R> = LeftOuterJoinClause(*tables)
 
@@ -76,6 +75,5 @@ internal class NaturalLeftOuterJoinClause<R>(
  * SELECT(user) NATURAL_LEFT_OUTER_JOIN (profile)
  * ```
  */
-@Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
 public fun <R> NATURAL_LEFT_OUTER_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NaturalLeftOuterJoinClause(*tables)

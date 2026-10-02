@@ -9,8 +9,6 @@
 Add the dependencies of _sqllin-dsl_, _sqllin-driver_ and _sqllin-processor_ into your `build.gradle.kts`: 
 
 ```kotlin
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
-
 plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization")
@@ -47,20 +45,7 @@ dependencies {
     // sqllin-processor
     add("kspCommonMainMetadata", "com.ctrip.kotlin:sqllin-processor:$sqllinVersion")
 }
-
-// The generated code is a source directory of commonMain, so every task that reads it has to run after KSP
-afterEvaluate {
-    tasks {
-        matching { (it is KotlinCompilationTask<*> || it.name.startsWith("ksp")) && it.name != "kspCommonMainKotlinMetadata" }
-            .configureEach { dependsOn("kspCommonMainKotlinMetadata") }
-    }
-}
 ```
-
-The last block is required. The generated table objects are added to `commonMain` as a source directory, so every Kotlin
-compilation reads the output of `kspCommonMainKotlinMetadata`, and so does every other KSP task when your project also runs
-another KSP processor, such as Room or Koin Annotations. Gradle fails the build when a task reads the output of another task
-without depending on it. KSP's own tasks are matched by name, because their types differ between KSP versions.
 
 > Note: If you want to add dependencies of SQLlin into your Kotlin/Native executable program projects, sometimes you need to add the `linkerOpts`
 > of SQLite into your `build.gradle.kts` correctly. You can refer to [issue #48](https://github.com/ctripcorp/SQLlin/issues/48) to get more information.
@@ -173,7 +158,7 @@ val database = Database(
             when (oldVersion) {
                 1 -> {
                     // Example: Add a new column in version 2
-                    PersonTable ALTER_ADD_COLUMN PersonTable.email
+                    PersonTable ALERT_ADD_COLUMN PersonTable.email
                 }
             }
         }
@@ -216,9 +201,6 @@ The `@DBRow`'s param `tableName` represents the table name in Database, please e
 the correct value. If you don't pass the parameter manually, _sqllin-processor_ will use the class
 name as table name, for example, `Person`'s default table name is "Person".
 
-For each `@DBRow` class, _sqllin-processor_ generates an object named after the class with a `Table` suffix, such as
-`PersonTable` for `Person`, whatever its `tableName` is. That object is what you write SQL against with the DSL.
-
 In _sqllin-dsl_, objects are serialized to SQL and deserialized from cursor depend on _kotlinx.serialization_. So, you also need to add the `@Serializable` onto your data classes. Therefore, if
 you want to ignore some properties when serialization or deserialization and `Table` classes generation, you can annotate your properties with `kotlinx.serialization.Transient`.
 
@@ -245,23 +227,11 @@ data class Person(
 )
 ```
 
-**Important type and nullability rules:** the nullability of the property decides who supplies the key's value.
+**Important type and nullability rules:**
 
-- **`Long?`, assigned by the database**: This maps to SQLite's `INTEGER PRIMARY KEY`, which acts as an alias for the internal `rowid`. When inserting a new record with `id = null`, SQLite automatically generates the ID.
+- **For `Long` primary keys with auto-increment**: The property **must** be declared as nullable (`Long?`). This maps to SQLite's `INTEGER PRIMARY KEY` which acts as an alias for the internal `rowid`. When inserting a new record with `id = null`, SQLite automatically generates the ID.
 
-- **`Long`, supplied by you**: This also maps to `INTEGER PRIMARY KEY`, so it is still a `rowid` alias, but every insert writes the value you provide. Use it for numeric keys that come from elsewhere, such as IDs assigned by a remote service:
-
-```kotlin
-@DBRow
-@Serializable
-data class Movie(
-    @PrimaryKey
-    val id: Long,  // Non-nullable, user-provided, still a rowid alias
-    val title: String,
-)
-```
-
-- **Other types (String, Int, etc.), supplied by you**: The property **must** be non-nullable, and maps to a column such as `TEXT PRIMARY KEY NOT NULL`. A nullable primary key of any type other than `Long` is a compile-time error. You must provide a unique value when inserting:
+- **For other types (String, Int, etc.)**: The property **must** be non-nullable. You must provide a unique value when inserting:
 
 ```kotlin
 @DBRow
@@ -273,7 +243,7 @@ data class User(
 )
 ```
 
-The `autoIncrement` parameter enables stricter auto-incrementing behavior (using `AUTOINCREMENT` keyword), ensuring row IDs are never reused. It requires a `Long?` property, the only kind of key the database assigns.
+The `autoIncrement` parameter enables stricter auto-incrementing behavior (using `AUTOINCREMENT` keyword), ensuring row IDs are never reused. This is only meaningful for `Long?` properties.
 
 #### Composite Primary Key with @CompositePrimaryKey
 
@@ -297,8 +267,8 @@ data class Enrollment(
 
 **Important rules:**
 
-- Apply `@CompositePrimaryKey` to **at least two properties** in the same class; annotating only one is a compile-time error, since a single-column primary key is declared with `@PrimaryKey`
-- All properties with `@CompositePrimaryKey` **must be non-nullable**, and are declared `NOT NULL` in the generated table
+- You can apply `@CompositePrimaryKey` to **multiple properties** in the same class
+- All properties with `@CompositePrimaryKey` **must be non-nullable**
 - You **cannot** mix `@PrimaryKey` and `@CompositePrimaryKey` in the same class - use one or the other
 - The combination of all `@CompositePrimaryKey` properties forms the table's composite primary key
 
@@ -319,7 +289,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @Unique val email: String,        // Each email must be unique
     @Unique val username: String,     // Each username must be unique
     val displayName: String,
@@ -349,7 +319,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class Enrollment(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @CompositeUnique(0) val studentId: Int,
     @CompositeUnique(0) val courseId: Int,
     val enrollmentDate: String,
@@ -370,7 +340,7 @@ data class Enrollment(
 @DBRow
 @Serializable
 data class Event(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @CompositeUnique(0, 1) val userId: Int,     // Part of groups 0 and 1
     @CompositeUnique(0) val eventType: String,  // Part of group 0
     @CompositeUnique(1) val timestamp: Long,    // Part of group 1
@@ -403,7 +373,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @CollateNoCase @Unique val email: String,  // Case-insensitive unique email
     @CollateNoCase val username: String,        // Case-insensitive username
     val bio: String,
@@ -433,7 +403,7 @@ You can combine multiple constraint annotations on the same property:
 @DBRow
 @Serializable
 data class Product(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @Unique @CollateNoCase val code: String,  // Unique and case-insensitive
     val name: String,
     val price: Double,
@@ -453,7 +423,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     val name: String,
     @Default("'active'") val status: String,              // String default
     @Default("0") val loginCount: Int,                     // Numeric default
@@ -485,7 +455,7 @@ Default values are **required** when using `ON_DELETE_SET_DEFAULT` or `ON_UPDATE
 @DBRow
 @Serializable
 data class Order(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @References(
         tableName = "User",
         foreignKeys = ["id"],
@@ -518,7 +488,7 @@ val status: String
 
 ### Supported Types
 
-SQLlin supports the following Kotlin types for properties in `@DBRow` data classes. A property of any other type is a compile-time error; to keep such a property out of the table, annotate it with `kotlinx.serialization.Transient`:
+SQLlin supports the following Kotlin types for properties in `@DBRow` data classes:
 
 #### Numeric Types
 - **Integer types:** `Byte`, `Short`, `Int`, `Long`
@@ -574,7 +544,7 @@ enum class UserStatus {
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     val username: String,
     val status: UserStatus,         // Stored as 0, 1, 2, or 3
     val priority: Priority?,        // Nullable enum is also supported
@@ -645,7 +615,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     val name: String,
     val email: String,
 )
@@ -653,7 +623,7 @@ data class User(
 @DBRow
 @Serializable
 data class Order(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @References(
         tableName = "User",
         foreignKeys = ["id"],
@@ -702,7 +672,7 @@ data class Product(
     constraintName = "fk_product"
 )
 data class OrderItem(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @ForeignKey(group = 0, reference = "categoryId")
     val productCategory: Int,
     @ForeignKey(group = 0, reference = "productCode")
@@ -730,7 +700,7 @@ Triggers define what happens when a referenced row is deleted or updated. SQLlin
 @DBRow
 @Serializable
 data class Order(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_CASCADE)
     val userId: Long,
     val amount: Double,
@@ -743,7 +713,7 @@ data class Order(
 @DBRow
 @Serializable
 data class Post(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_NULL)
     val authorId: Long?,  // Must be nullable!
     val content: String,
@@ -756,7 +726,7 @@ data class Post(
 @DBRow
 @Serializable
 data class OrderItem(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @References(tableName = "Order", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_RESTRICT)
     val orderId: Long,
     val productId: Long,
@@ -769,7 +739,7 @@ data class OrderItem(
 @DBRow
 @Serializable
 data class Comment(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_DEFAULT)
     val userId: Long = 0L,  // Default to 0 (anonymous user)
     val content: String,
@@ -804,7 +774,7 @@ A table can have multiple foreign key constraints to different parent tables:
 @ForeignKeyGroup(group = 0, tableName = "User", trigger = Trigger.ON_DELETE_CASCADE)
 @ForeignKeyGroup(group = 1, tableName = "Product", trigger = Trigger.ON_DELETE_RESTRICT)
 data class OrderItem(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @ForeignKey(group = 0, reference = "id") val userId: Long,
     @ForeignKey(group = 1, reference = "id") val productId: Long,
     val quantity: Int,
@@ -824,7 +794,7 @@ Or using `@References`:
 @DBRow
 @Serializable
 data class OrderItem(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_CASCADE)
     val userId: Long,
     @References(tableName = "Product", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_RESTRICT)
@@ -841,7 +811,7 @@ You can optionally name your foreign key constraints for better error messages a
 @DBRow
 @Serializable
 data class Order(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @References(
         tableName = "User",
         foreignKeys = ["id"],
@@ -876,7 +846,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @Unique val email: String,
     val name: String,
 )
@@ -885,7 +855,7 @@ data class User(
 @DBRow
 @Serializable
 data class Order(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_CASCADE)
     val userId: Long,
     val amount: Double,
@@ -896,7 +866,7 @@ data class Order(
 @DBRow
 @Serializable
 data class Post(
-    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @PrimaryKey(isAutoincrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_NULL)
     val authorId: Long?,  // Nullable - posts can exist without author
     val title: String,

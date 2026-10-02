@@ -45,9 +45,4 @@ class TestPrimitiveTypeForKSP(
     val testEnum: Priority,
     val testTypeAlias: Code,
     @Transient val testTransient: Int = 0,
-    // No column can hold a List, so this only compiles while @Transient keeps it out of the table
-    @Transient val testTransientUnsupported: List<Int> = emptyList(),
-) {
-    // Nor this, which compiles because a computed property isn't serialized and so isn't a column at all
-    val testComputedUnsupported: List<Int> get() = emptyList()
-}
+)

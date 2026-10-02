@@ -41,7 +41,6 @@ internal class HavingClause<T>(val selectCondition: SelectCondition) : Condition
     override val clauseName: String = "HAVING"
 }
 
-@Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
 public infix fun <T> GroupBySelectStatement<T>.HAVING(condition: SelectCondition): HavingSelectStatement<T> =
     appendToHaving(HavingClause(condition)).also {

@@ -30,36 +30,32 @@ package com.ctrip.sqllin.dsl.annotation
  * Additionally, if a property in the class is marked with [PrimaryKey], the class cannot also use the [CompositePrimaryKey] annotation.
  *
  * ### Type and Nullability Rules
- * The nullability of the property decides who supplies the key's value:
+ * The behavior of this annotation differs based on the type of property it annotates.
+ * The following rules must be followed:
  *
- * - **`Long?`: assigned by the database.**
- * The property maps to an `INTEGER PRIMARY KEY` column, an alias for SQLite's internal `rowid`.
- * Insert an object whose key is `null` and the database assigns the next ID; a plain `INSERT`
- * leaves the column out for that reason.
+ * - **When annotating a `Long` property**:
+ * The property **must** be declared as a nullable type (`Long?`). This triggers a special
+ * SQLite mechanism, mapping the property to an `INTEGER PRIMARY KEY` column, which acts as
+ * an alias for the database's internal `rowid`. This is typically used for auto-incrementing
+ * keys, where the database assigns an ID upon insertion of a new object (when its ID is `null`).
  *
- * - **`Long`: supplied by the caller.**
- * The property still maps to an `INTEGER PRIMARY KEY` column, so it is still an alias for `rowid`,
- * but every `INSERT` writes the value you provide. Use this for a numeric key that comes from
- * elsewhere, such as an ID assigned by a remote service.
+ * - **When annotating all other types (e.g., `String`, `Int`)**:
+ * The property **must** be declared as a non-nullable type (e.g., `String`).
+ * This creates a standard, user-provided primary key (such as `TEXT PRIMARY KEY`).
+ * You must provide a unique, non-null value for this property upon insertion.
  *
- * - **Any other type (e.g. `String`, `Int`): supplied by the caller, and must be non-null.**
- * The property maps to a column such as `TEXT PRIMARY KEY NOT NULL`. A nullable key of any type
- * other than `Long` is a compile-time error, since nothing would ever assign its value. The
- * `NOT NULL` is spelled out because SQLite, unlike standard SQL, does not let `PRIMARY KEY` imply it
- * on such a column.
- *
- * @property autoIncrement Indicates whether to append the `AUTOINCREMENT` keyword to the
+ * @property isAutoincrement Indicates whether to append the `AUTOINCREMENT` keyword to the
  * `INTEGER PRIMARY KEY` column in the `CREATE TABLE` statement. This enables a stricter
  * auto-incrementing strategy that ensures row IDs are never reused.
- * **Important Note**: This parameter requires a property of type `Long?`, the only kind of key the
- * database assigns. Setting it to `true` on any other property is a compile-time error.
+ * **Important Note**: This parameter is only meaningful when annotating a property of type `Long?`.
+ * Setting this to `true` on non-Long properties will result in a compile-time error.
  *
  * @see DBRow
  * @see CompositePrimaryKey
  */
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.BINARY)
-public annotation class PrimaryKey(val autoIncrement: Boolean = false)
+public annotation class PrimaryKey(val isAutoincrement: Boolean = false)
 
 /**
  * Marks a property as a part of a composite primary key for the table.
@@ -70,15 +66,12 @@ public annotation class PrimaryKey(val autoIncrement: Boolean = false)
  * will form the table's composite primary key.
  *
  * ### Important Rules
- * - At least two properties must be annotated with [CompositePrimaryKey]; annotating only one is a
- * compile-time error. A single-column primary key is declared with [PrimaryKey].
+ * - A class can have multiple properties annotated with [CompositePrimaryKey].
  * - If a class uses [CompositePrimaryKey] on any of its properties, it **cannot** also use
  * the [PrimaryKey] annotation on any other property. A table can only have one primary key,
  * which is either a single column or a composite of multiple columns.
  * - All properties annotated with [CompositePrimaryKey] must be of a **non-nullable** type
- * (e.g., `String`, `Int`, `Long`), as primary key columns cannot contain `NULL` values. They are
- * declared `NOT NULL` in the generated table, because SQLite, unlike standard SQL, does not let
- * `PRIMARY KEY` imply it.
+ * (e.g., `String`, `Int`, `Long`), as primary key columns cannot contain `NULL` values.
  *
  * @see DBRow
  * @see PrimaryKey

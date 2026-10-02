@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-@file:Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
-
 package com.ctrip.sqllin.dsl.sql.clause
 
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
