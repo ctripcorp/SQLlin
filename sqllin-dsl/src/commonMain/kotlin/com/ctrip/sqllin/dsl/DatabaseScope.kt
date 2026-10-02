@@ -21,6 +21,7 @@ import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.ProjectedX
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.operation.Alter
@@ -51,7 +52,8 @@ import kotlin.jvm.JvmName
  * - **INSERT OR IGNORE**: Insert entities, skipping those that conflict on PRIMARY KEY / UNIQUE
  * - **UPDATE**: Modify existing records with SET and WHERE clauses
  * - **DELETE**: Remove records with WHERE clauses
- * - **SELECT**: Query records with WHERE, ORDER BY, LIMIT, GROUP BY, JOIN, and UNION
+ * - **SELECT**: Query records with WHERE, ORDER BY, LIMIT, GROUP BY, JOIN, and UNION, into the table's own row type
+ *   or a narrower projection type, such as `PersonTable SELECT WHERE<NameAndAge>(...)`
  * - **CREATE**: Create tables from data class definitions
  * - **DROP**: Remove tables from the database
  * - **ALTER**: Modify table structures (add columns, rename tables/columns, drop columns)
@@ -438,7 +440,7 @@ public class DatabaseScope internal constructor(
     public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(x: X): FinalSelectStatement<T> =
         select(kSerializer(), true)
 
-    public fun <T> Table<T>.select(serializer: KSerializer<T>, isDistinct: Boolean): FinalSelectStatement<T> {
+    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, isDistinct: Boolean): FinalSelectStatement<R> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -463,7 +465,7 @@ public class DatabaseScope internal constructor(
     public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: WhereClause<T>): WhereSelectStatement<T> =
         select(kSerializer(), clause, true)
 
-    public fun <T> Table<T>.select(serializer: KSerializer<T>, clause: WhereClause<T>, isDistinct: Boolean): WhereSelectStatement<T> {
+    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: WhereClause<R>, isDistinct: Boolean): WhereSelectStatement<R> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -486,7 +488,7 @@ public class DatabaseScope internal constructor(
     public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
         select(kSerializer(), clause, true)
 
-    public fun <T> Table<T>.select(serializer: KSerializer<T>, clause: OrderByClause<T>, isDistinct: Boolean): OrderBySelectStatement<T> {
+    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: OrderByClause<R>, isDistinct: Boolean): OrderBySelectStatement<R> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -509,7 +511,7 @@ public class DatabaseScope internal constructor(
     public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: LimitClause<T>): LimitSelectStatement<T> =
         select(kSerializer(), clause, true)
 
-    public fun <T> Table<T>.select(serializer: KSerializer<T>, clause: LimitClause<T>, isDistinct: Boolean): LimitSelectStatement<T> {
+    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: LimitClause<R>, isDistinct: Boolean): LimitSelectStatement<R> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -532,7 +534,7 @@ public class DatabaseScope internal constructor(
     public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
         select(kSerializer(), clause, true)
 
-    public fun <T> Table<T>.select(serializer: KSerializer<T>, clause: GroupByClause<T>, isDistinct: Boolean): GroupBySelectStatement<T> {
+    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: GroupByClause<R>, isDistinct: Boolean): GroupBySelectStatement<R> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -543,6 +545,153 @@ public class DatabaseScope internal constructor(
      * Gets the KSerializer for the reified type parameter.
      */
     public inline fun <reified T> getKSerializer(): KSerializer<T> = EmptySerializersModule().serializer()
+
+    // ========== SELECT with Projection ==========
+    //
+    // These read rows into a type R other than the table's own row type, given to the clause function, as in
+    // `PersonTable SELECT WHERE<NameAndAge>(...)`. R's properties name the columns to select. Each overload taking a
+    // clause has the same JVM signature as its counterpart above, hence its @JvmName.
+
+    /**
+     * Selects all records, reading each into [R], so that only the columns [R]'s properties name are selected.
+     *
+     * Example:
+     * ```kotlin
+     * @Serializable
+     * data class NameAndAge(val name: String, val age: Int)
+     *
+     * val people = PersonTable SELECT X<NameAndAge>()
+     * ```
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit this table: one of its properties isn't a column,
+     * is of a different type from its column, or isn't nullable while its column is
+     */
+    @StatementDslMaker
+    public inline infix fun <T, reified R> Table<T>.SELECT(x: ProjectedX<R>): FinalSelectStatement<R> =
+        select(getKSerializer<R>(), false)
+
+    /**
+     * Selects distinct records, reading each into [R], so that only the columns [R] names are selected and compared.
+     *
+     * Example:
+     * ```kotlin
+     * val authors = BookTable SELECT_DISTINCT X<AuthorOnly>()
+     * ```
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit this table: one of its properties isn't a column,
+     * is of a different type from its column, or isn't nullable while its column is
+     */
+    @StatementDslMaker
+    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(x: ProjectedX<R>): FinalSelectStatement<R> =
+        select(getKSerializer<R>(), true)
+
+    /**
+     * Selects records matching the WHERE clause, reading each into [R].
+     *
+     * Example:
+     * ```kotlin
+     * val adults = PersonTable SELECT WHERE<NameAndAge>(PersonTable.age GTE 18)
+     * ```
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit this table: one of its properties isn't a column,
+     * is of a different type from its column, or isn't nullable while its column is
+     */
+    @JvmName("selectWhereProjection")
+    @StatementDslMaker
+    public inline infix fun <T, reified R> Table<T>.SELECT(clause: WhereClause<R>): WhereSelectStatement<R> =
+        select(getKSerializer<R>(), clause, false)
+
+    /**
+     * Selects distinct records matching the WHERE clause, reading each into [R].
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit this table: one of its properties isn't a column,
+     * is of a different type from its column, or isn't nullable while its column is
+     */
+    @JvmName("selectDistinctWhereProjection")
+    @StatementDslMaker
+    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: WhereClause<R>): WhereSelectStatement<R> =
+        select(getKSerializer<R>(), clause, true)
+
+    /**
+     * Selects records in the order of the ORDER BY clause, reading each into [R].
+     *
+     * Example:
+     * ```kotlin
+     * val byAge = PersonTable SELECT ORDER_BY<NameAndAge>(PersonTable.age to ASC)
+     * ```
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit this table: one of its properties isn't a column,
+     * is of a different type from its column, or isn't nullable while its column is
+     */
+    @JvmName("selectOrderByProjection")
+    @StatementDslMaker
+    public inline infix fun <T, reified R> Table<T>.SELECT(clause: OrderByClause<R>): OrderBySelectStatement<R> =
+        select(getKSerializer<R>(), clause, false)
+
+    /**
+     * Selects distinct records in the order of the ORDER BY clause, reading each into [R].
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit this table: one of its properties isn't a column,
+     * is of a different type from its column, or isn't nullable while its column is
+     */
+    @JvmName("selectDistinctOrderByProjection")
+    @StatementDslMaker
+    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: OrderByClause<R>): OrderBySelectStatement<R> =
+        select(getKSerializer<R>(), clause, true)
+
+    /**
+     * Selects at most as many records as the LIMIT clause allows, reading each into [R].
+     *
+     * Example:
+     * ```kotlin
+     * val firstTen = PersonTable SELECT LIMIT<NameAndAge>(10)
+     * ```
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit this table: one of its properties isn't a column,
+     * is of a different type from its column, or isn't nullable while its column is
+     */
+    @JvmName("selectLimitProjection")
+    @StatementDslMaker
+    public inline infix fun <T, reified R> Table<T>.SELECT(clause: LimitClause<R>): LimitSelectStatement<R> =
+        select(getKSerializer<R>(), clause, false)
+
+    /**
+     * Selects at most as many distinct records as the LIMIT clause allows, reading each into [R].
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit this table: one of its properties isn't a column,
+     * is of a different type from its column, or isn't nullable while its column is
+     */
+    @JvmName("selectDistinctLimitProjection")
+    @StatementDslMaker
+    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: LimitClause<R>): LimitSelectStatement<R> =
+        select(getKSerializer<R>(), clause, true)
+
+    /**
+     * Selects records grouped by the GROUP BY clause, reading each into [R].
+     *
+     * Example:
+     * ```kotlin
+     * val authors = BookTable SELECT GROUP_BY<AuthorOnly>(BookTable.author)
+     * ```
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit this table: one of its properties isn't a column,
+     * is of a different type from its column, or isn't nullable while its column is
+     */
+    @JvmName("selectGroupByProjection")
+    @StatementDslMaker
+    public inline infix fun <T, reified R> Table<T>.SELECT(clause: GroupByClause<R>): GroupBySelectStatement<R> =
+        select(getKSerializer<R>(), clause, false)
+
+    /**
+     * Selects distinct records grouped by the GROUP BY clause, reading each into [R].
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit this table: one of its properties isn't a column,
+     * is of a different type from its column, or isn't nullable while its column is
+     */
+    @JvmName("selectDistinctGroupByProjection")
+    @StatementDslMaker
+    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: GroupByClause<R>): GroupBySelectStatement<R> =
+        select(getKSerializer<R>(), clause, true)
 
     // ========== UNION Operations ==========
 

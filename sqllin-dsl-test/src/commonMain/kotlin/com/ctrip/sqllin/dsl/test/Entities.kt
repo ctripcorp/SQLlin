@@ -522,3 +522,31 @@ data class RemoteMovie(
     @PrimaryKey val id: Long,
     val title: String,
 )
+
+/**
+ * Projections of [Book]: plain @Serializable types rather than tables, whose properties name the columns a SELECT
+ * reads, as in `BookTable SELECT X<BookTitle>()`.
+ */
+@Serializable
+data class BookTitle(val name: String, val author: String)
+
+@Serializable
+data class BookAuthor(val author: String)
+
+/**
+ * A projection of [UserAccount] that reads its nullable `notes` column into a nullable property.
+ */
+@Serializable
+data class UserNotes(val username: String, val notes: String?)
+
+/**
+ * Projections that don't fit their table, each breaking one of the rules a projection is checked against.
+ */
+@Serializable
+data class BookWithIsbn(val name: String, val isbn: String) // 'isbn' isn't a column of book
+
+@Serializable
+data class BookPagesAsText(val pages: String) // 'pages' holds an Int
+
+@Serializable
+data class UserNotesNonNull(val notes: String) // 'notes' is nullable

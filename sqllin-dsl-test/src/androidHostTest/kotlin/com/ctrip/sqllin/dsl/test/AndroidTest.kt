@@ -76,6 +76,9 @@ class AndroidTest {
     fun testInsertOrIgnore() = commonTest.testInsertOrIgnore()
 
     @Test
+    fun testProjection() = commonTest.testProjection()
+
+    @Test
     fun testCreateInDatabaseScope() = commonTest.testCreateInDatabaseScope()
 
     @Test

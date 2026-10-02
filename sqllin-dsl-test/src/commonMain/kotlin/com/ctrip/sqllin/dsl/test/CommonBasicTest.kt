@@ -34,6 +34,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 
 /**
@@ -753,6 +754,100 @@ class CommonBasicTest(private val path: DatabasePath) {
             assertEquals("Spring", enrollments.getResults().first { it.courseId == 101L }.semester)
             assertEquals("Fall", enrollments.getResults().first { it.courseId == 102L }.semester)
         }
+    }
+
+    /**
+     * Covers projection: a SELECT that reads rows into a narrower @Serializable type than the table's own row type,
+     * given to the clause function, as in `X<BookTitle>()` or `WHERE<BookTitle>(...)`. Only the columns that type's
+     * properties name are selected, and a type that doesn't fit the table is rejected while the statement is built.
+     */
+    fun testProjection() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        database {
+            BookTable INSERT listOf(
+                Book(name = "The Da Vinci Code", author = "Dan Brown", price = 16.96, pages = 454),
+                Book(name = "The Lost Symbol", author = "Dan Brown", price = 19.95, pages = 510),
+                Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251),
+            )
+        }
+
+        // No clause: SELECT name,author FROM book, and SELECT DISTINCT author FROM book. Three books but two authors,
+        // which only holds if DISTINCT compares the projected column alone, so nothing else is selected.
+        lateinit var titles: SelectStatement<BookTitle>
+        lateinit var authors: SelectStatement<BookAuthor>
+        database {
+            titles = BookTable SELECT X<BookTitle>()
+            authors = BookTable SELECT_DISTINCT X<BookAuthor>()
+        }
+        assertEquals(3, titles.getResults().size)
+        assertEquals(true, BookTitle("Kotlin Cookbook", "Ken Kousen") in titles.getResults())
+        assertEquals(listOf("Dan Brown", "Ken Kousen"), authors.getResults().map { it.author }.sorted())
+
+        // Each clause can start a projection, and the projection carries through the rest of the chain
+        lateinit var longestByBrown: SelectStatement<BookTitle>
+        lateinit var byPages: SelectStatement<BookTitle>
+        lateinit var firstTwo: SelectStatement<BookTitle>
+        lateinit var grouped: SelectStatement<BookAuthor>
+        database {
+            BookTable { table ->
+                longestByBrown = table SELECT WHERE<BookTitle>(author EQ "Dan Brown") ORDER_BY (pages to DESC) LIMIT 1
+                byPages = table SELECT ORDER_BY<BookTitle>(pages to ASC)
+                firstTwo = table SELECT LIMIT<BookTitle>(2)
+                grouped = table SELECT GROUP_BY<BookAuthor>(author)
+            }
+        }
+        assertEquals(listOf(BookTitle("The Lost Symbol", "Dan Brown")), longestByBrown.getResults())
+        assertEquals(listOf("Kotlin Cookbook", "The Da Vinci Code", "The Lost Symbol"), byPages.getResults().map { it.name })
+        assertEquals(2, firstTwo.getResults().size)
+        assertEquals(listOf("Dan Brown", "Ken Kousen"), grouped.getResults().map { it.author }.sorted())
+
+        // The DISTINCT variant of each clause
+        lateinit var distinctWhere: SelectStatement<BookAuthor>
+        lateinit var distinctOrderBy: SelectStatement<BookAuthor>
+        lateinit var distinctLimit: SelectStatement<BookAuthor>
+        lateinit var distinctGroupBy: SelectStatement<BookAuthor>
+        database {
+            BookTable { table ->
+                distinctWhere = table SELECT_DISTINCT WHERE<BookAuthor>(price GT 10.0)
+                distinctOrderBy = table SELECT_DISTINCT ORDER_BY<BookAuthor>(author to DESC)
+                distinctLimit = table SELECT_DISTINCT LIMIT<BookAuthor>(1)
+                distinctGroupBy = table SELECT_DISTINCT GROUP_BY<BookAuthor>(author)
+            }
+        }
+        assertEquals(2, distinctWhere.getResults().size)
+        assertEquals(listOf("Ken Kousen", "Dan Brown"), distinctOrderBy.getResults().map { it.author })
+        assertEquals(1, distinctLimit.getResults().size)
+        assertEquals(2, distinctGroupBy.getResults().size)
+
+        // A nullable column is read into a nullable property
+        database {
+            UserAccountTable INSERT UserAccount(
+                id = null,
+                username = "ivy",
+                email = "ivy@example.com",
+                status = UserStatus.ACTIVE,
+                priority = Priority.LOW,
+                notes = null,
+            )
+        }
+        lateinit var notes: SelectStatement<UserNotes>
+        database {
+            notes = UserAccountTable SELECT X<UserNotes>()
+        }
+        assertEquals(listOf(UserNotes("ivy", null)), notes.getResults())
+
+        // A type that doesn't fit the table is rejected while the statement is built, before anything runs
+        val notAColumn = assertFailsWith<IllegalArgumentException> {
+            database { BookTable SELECT X<BookWithIsbn>() }
+        }
+        assertEquals(true, notAColumn.message!!.contains("'isbn' isn't a column"))
+        val wrongType = assertFailsWith<IllegalArgumentException> {
+            database { BookTable SELECT WHERE<BookPagesAsText>(BookTable.pages GT 0) }
+        }
+        assertEquals(true, wrongType.message!!.contains("'pages' is a kotlin.String, but the column holds a kotlin.Int"))
+        val notNullable = assertFailsWith<IllegalArgumentException> {
+            database { UserAccountTable SELECT X<UserNotesNonNull>() }
+        }
+        assertEquals(true, notNullable.message!!.contains("column 'notes' is nullable"))
     }
 
     fun testCreateInDatabaseScope() {

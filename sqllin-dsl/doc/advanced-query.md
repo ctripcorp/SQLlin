@@ -157,6 +157,44 @@ fun joinSample() {
 
 The `LEFT_OUTER_JOIN`'s usage is very similar with `INNER_JOIN`, the difference just is their API names.
 
+## Projection
+
+A `SELECT` reads each row into the table's own row type. To read only some of the columns, declare a narrower
+`@Serializable` type whose properties name the columns you want, and give it to the clause function as a type argument:
+
+```kotlin
+@Serializable
+data class PersonName(
+    val name: String,
+)
+
+fun sample() {
+    lateinit var names: SelectStatement<PersonName>
+    lateinit var adultNames: SelectStatement<PersonName>
+    database {
+        PersonTable { table ->
+            // SELECT name FROM person
+            names = table SELECT X<PersonName>()
+            // SELECT name FROM person WHERE age >= ? ORDER BY name LIMIT 10
+            adultNames = table SELECT WHERE<PersonName>(age GTE 18) ORDER_BY name LIMIT 10
+        }
+    }
+}
+```
+
+Like a join's result type, a projection type doesn't need `@DBRow`. It works as the type argument of `X<R>()`,
+`WHERE<R>(...)`, `ORDER_BY<R>(...)`, `LIMIT<R>(...)` and `GROUP_BY<R>(...)`, after both `SELECT` and
+`SELECT_DISTINCT`, and the clauses chained after it keep it. With `SELECT_DISTINCT`, only the projected columns are
+compared, so `table SELECT_DISTINCT X<PersonName>()` gives each name once.
+
+The type argument is required. Without it, a `SELECT` reads the table's own row type, even when its result is assigned
+to a statement of the projection type.
+
+Each property of a projection type has to be a column of the table, of the same type, and nullable if the column is
+nullable, as a `NULL` read into a non-null property would quietly become `0` or an empty string. A projection type that
+breaks one of these rules makes the `SELECT` throw an `IllegalArgumentException` when the statement is built, before it
+runs. Expressions such as `COUNT(*)` can't be projected yet.
+
 ## Finally
 
 You have learned all usages with SQLlin, enjoy it and stay Stay tuned for SQLlin's updates :)

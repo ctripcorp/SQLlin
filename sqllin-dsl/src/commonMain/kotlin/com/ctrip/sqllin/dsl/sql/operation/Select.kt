@@ -22,6 +22,8 @@ import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.compiler.appendDBColumnName
 import com.ctrip.sqllin.dsl.sql.statement.*
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.encoding.CompositeDecoder
 
 /**
  * SELECT operation builder.
@@ -42,60 +44,68 @@ internal object Select : Operation {
      *
      * @return Statement that can be followed by GROUP BY, ORDER BY, or LIMIT
      */
-    fun <T> select(
-        table: Table<T>,
-        clause: WhereClause<T>,
+    fun <R> select(
+        table: Table<*>,
+        clause: WhereClause<R>,
         isDistinct: Boolean,
-        deserializer: DeserializationStrategy<T>,
+        deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
-    ): WhereSelectStatement<T> =
-        WhereSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, clause.selectCondition.parameters)
+    ): WhereSelectStatement<R> {
+        checkProjection(table, deserializer)
+        return WhereSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, clause.selectCondition.parameters)
+    }
 
     /**
      * Builds a SELECT statement with ORDER BY clause.
      *
      * @return Statement that can be followed by LIMIT
      */
-    fun <T> select(
-        table: Table<T>,
-        clause: OrderByClause<T>,
+    fun <R> select(
+        table: Table<*>,
+        clause: OrderByClause<R>,
         isDistinct: Boolean,
-        deserializer: DeserializationStrategy<T>,
+        deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
-    ): OrderBySelectStatement<T> =
-        OrderBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null)
+    ): OrderBySelectStatement<R> {
+        checkProjection(table, deserializer)
+        return OrderBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null)
+    }
 
     /**
      * Builds a SELECT statement with LIMIT clause.
      *
      * @return Statement that can be followed by OFFSET
      */
-    fun <T> select(
-        table: Table<T>,
-        clause: LimitClause<T>,
+    fun <R> select(
+        table: Table<*>,
+        clause: LimitClause<R>,
         isDistinct: Boolean,
-        deserializer: DeserializationStrategy<T>,
+        deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
-    ): LimitSelectStatement<T> =
-        LimitSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null)
+    ): LimitSelectStatement<R> {
+        checkProjection(table, deserializer)
+        return LimitSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null)
+    }
 
     /**
      * Builds a SELECT statement with GROUP BY clause.
      *
      * @return Statement that can be followed by HAVING or ORDER BY
      */
-    fun <T> select(
-        table: Table<T>,
-        clause: GroupByClause<T>,
+    fun <R> select(
+        table: Table<*>,
+        clause: GroupByClause<R>,
         isDistinct: Boolean,
-        deserializer: DeserializationStrategy<T>,
+        deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
-    ): GroupBySelectStatement<T> =
-        GroupBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null)
+    ): GroupBySelectStatement<R> {
+        checkProjection(table, deserializer)
+        return GroupBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null)
+    }
 
     /**
      * Builds a SELECT statement with NATURAL JOIN clause.
@@ -138,6 +148,43 @@ internal object Select : Operation {
             addSelectStatement,
         )
 
+    /**
+     * Checks that [deserializer] can read rows of [table], when it reads them into a type other than the table's
+     * own row type.
+     *
+     * The columns a SELECT reads are the element names of [deserializer]'s descriptor, so a projection type has to
+     * fit the table. Every property must name a column, have that column's type, and be nullable when the column is,
+     * as a NULL read into a non-null property would quietly become `0` or `""`. A mismatch fails here, while the
+     * statement is built, rather than in SQLite or not at all.
+     *
+     * @throws IllegalArgumentException if the projection type doesn't fit the table
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun checkProjection(table: Table<*>, deserializer: DeserializationStrategy<*>) {
+        val columns = table.kSerializer().descriptor
+        val projection = deserializer.descriptor
+        if (projection == columns)
+            return
+        val projectionName = projection.serialName
+        for (index in 0 ..< projection.elementsCount) {
+            val name = projection.getElementName(index)
+            val columnIndex = columns.getElementIndex(name)
+            require(columnIndex != CompositeDecoder.UNKNOWN_NAME) {
+                "Can't select '$projectionName' from table '${table.tableName}': its property '$name' isn't a column of that table."
+            }
+            val column = columns.getElementDescriptor(columnIndex)
+            val property = projection.getElementDescriptor(index)
+            val columnType = column.serialName.removeSuffix("?")
+            val propertyType = property.serialName.removeSuffix("?")
+            require(propertyType == columnType) {
+                "Can't select '$projectionName' from table '${table.tableName}': its property '$name' is a $propertyType, but the column holds a $columnType."
+            }
+            require(property.isNullable || !column.isNullable) {
+                "Can't select '$projectionName' from table '${table.tableName}': column '$name' is nullable, so property '$name' has to be nullable too."
+            }
+        }
+    }
+
     private fun <T> buildSQL(
         table: Table<*>,
         clause: SelectClause<T>,
@@ -160,13 +207,14 @@ internal object Select : Operation {
      *
      * @return Final SELECT statement ready for execution
      */
-    fun <T> select(
-        table: Table<T>,
+    fun <R> select(
+        table: Table<*>,
         isDistinct: Boolean,
-        deserializer: DeserializationStrategy<T>,
+        deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
-    ): FinalSelectStatement<T> {
+    ): FinalSelectStatement<R> {
+        checkProjection(table, deserializer)
         val sql = buildString {
             append(sqlStr)
             if (isDistinct)

@@ -151,6 +151,41 @@ fun joinSample() {
 
 `LEFT_OUTER_JOIN` 的用法与 `INNER_JOIN` 非常相似，不同之处仅仅是它们的 API 名字。
 
+## 投影
+
+`SELECT` 默认把每一行读成表自己的行类型。如果只想读取其中一部分列，可以声明一个更窄的 `@Serializable` 类型，用它的属性名
+指明要读取的列，再把它作为类型参数交给子句函数：
+
+```kotlin
+@Serializable
+data class PersonName(
+    val name: String,
+)
+
+fun sample() {
+    lateinit var names: SelectStatement<PersonName>
+    lateinit var adultNames: SelectStatement<PersonName>
+    database {
+        PersonTable { table ->
+            // SELECT name FROM person
+            names = table SELECT X<PersonName>()
+            // SELECT name FROM person WHERE age >= ? ORDER BY name LIMIT 10
+            adultNames = table SELECT WHERE<PersonName>(age GTE 18) ORDER_BY name LIMIT 10
+        }
+    }
+}
+```
+
+和 Join 的结果类型一样，投影类型不需要 `@DBRow` 注解。它可以作为 `X<R>()`、`WHERE<R>(...)`、`ORDER_BY<R>(...)`、
+`LIMIT<R>(...)` 和 `GROUP_BY<R>(...)` 的类型参数，用在 `SELECT` 和 `SELECT_DISTINCT` 之后，后面链式调用的子句也会沿用它。
+使用 `SELECT_DISTINCT` 时只比较投影出来的列，所以 `table SELECT_DISTINCT X<PersonName>()` 中每个名字只会出现一次。
+
+类型参数必须显式写出。如果不写，`SELECT` 会读成表自己的行类型，即使它的结果被赋值给一个投影类型的语句也是如此。
+
+投影类型的每个属性都必须是这张表的列，类型与列一致，并且当列可空时属性也必须可空，因为把 `NULL` 读进非空属性时，它会被
+悄无声息地读成 `0` 或空字符串。不满足这些规则的投影类型会让 `SELECT` 在构建语句时、执行之前就抛出 `IllegalArgumentException`。
+`COUNT(*)` 这样的表达式目前还不能投影。
+
 ## 最后
 
 你已经学习了所有的 SQLlin 用法，享受你的 SQLlin 的编程旅程并对它的更新保持关注吧 :)
