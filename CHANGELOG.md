@@ -7,7 +7,7 @@
 ### All
 
 * Update `Kotlin`'s version to `2.4.20`
-* Update `AGP`'s version to `9.4.0`
+* Update `AGP`'s version to `9.4.1`
 * Migrate the Android instrumented tests to `Robolectric`, they now run on the JVM as host unit tests against `API 26` and `API 37`, and no longer need an emulator
 * Move the `sqllin-driver` tests back into the `sqllin-driver` module's `commonTest`, and remove the `sqllin-driver-test` module
 
@@ -35,6 +35,7 @@
 
 ### sqllin-processor
 
+* Update `KSP`'s version to `2.3.12`
 * Fix: the visibility of the class annotated with `@DBRow` is now propagated to the generated table object. An `internal` `@DBRow` class used to produce a `public` object, which failed to compile with `EXPOSED_SUPER_CLASS`, `EXPOSED_FUNCTION_RETURN_TYPE` and `EXPOSED_RECEIVER_TYPE`. A `@DBRow` class that is neither `public` nor `internal` is now reported as an error
 * Fix: every `SetClause` property generated for a column declared after a nullable `Long` `@PrimaryKey` was typed nullable regardless of the column's own declaration, so `UPDATE ... SET { column = null }` compiled against `NOT NULL` columns and failed only at runtime. Each property now takes the nullability its own column declares
 * Fix: the columns of a `@CompositePrimaryKey` are now declared `NOT NULL`. SQLite, unlike standard SQL, does not let a table-level `PRIMARY KEY` imply it on a rowid table, so such a key used to accept `NULL`, and any number of rows sharing the same key once a `NULL` was part of it. SQLlin itself could not write those `NULL`s, but anything else writing to the database could, and SQLlin then read them back as `0` or an empty string. This only changes the schema of tables created from now on; an existing table keeps its schema, as SQLite cannot add `NOT NULL` to an existing column
