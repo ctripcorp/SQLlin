@@ -64,6 +64,7 @@ import com.google.devtools.ksp.symbol.KSClassDeclaration
  * - [@ForeignKeyGroup] groups must have unique group numbers
  * - [@ForeignKey] annotations must reference a declared [@ForeignKeyGroup]
  * - Properties with `ON_DELETE_SET_NULL` or `ON_UPDATE_SET_NULL` must be nullable
+ * - Properties with `ON_DELETE_SET_DEFAULT` or `ON_UPDATE_SET_DEFAULT` must declare [@Default]
  * - [@References] foreignKeys array cannot be empty
  * - Foreign key groups must have at least one [@ForeignKey] property
  *
@@ -186,6 +187,8 @@ class ForeignKeyParser {
      * - Ensures `tableName` is not blank
      * - Validates that `foreignKeys` array is not empty
      * - Checks that properties with SET_NULL triggers are nullable
+     * - Checks that properties with SET_DEFAULT triggers declare a default value, wherever the
+     *   [@Default] annotation appears relative to the foreign key one
      * - Verifies that referenced [@ForeignKeyGroup] exists
      *
      * @param createSQLBuilder StringBuilder to append SQL fragments to (for @References only)
@@ -202,6 +205,7 @@ class ForeignKeyParser {
         isNotNull: Boolean,
     ) {
         val columnReferenceEntities = ArrayList<ColumnReferenceEntity>()
+        val setDefaultGroups = ArrayList<Int>()
         var defaultValue = ""
         annotations.forEach { annotation ->
             when (annotation.annotationType.resolve().declaration.qualifiedName?.asString()) {
@@ -249,6 +253,9 @@ class ForeignKeyParser {
                         if ((triggerEnumName == "ON_DELETE_SET_NULL" || triggerEnumName == "ON_UPDATE_SET_NULL") && isNotNull) {
                             throw IllegalArgumentException("Can't use trigger `ON_DELETE_SET_NULL` or `ON_UPDATE_SET_NULL` on a non-null property in foreign key group `$group`.")
                         }
+                        // Checked once all annotations are read: @Default may come after @ForeignKey
+                        if (triggerEnumName == "ON_DELETE_SET_DEFAULT" || triggerEnumName == "ON_UPDATE_SET_DEFAULT")
+                            setDefaultGroups.add(group)
                         columns.add(propertyName)
                         references.add(reference)
                     }
@@ -262,8 +269,15 @@ class ForeignKeyParser {
             }
         }
 
+        // ON ... SET DEFAULT writes the column's default, which is NULL without @Default. That fails on a non-null
+        // column, and on a nullable one it is only ON ... SET NULL spelled differently, so a default is required.
+        val hasDefaultValue = defaultValue.isNotEmpty()
+        setDefaultGroups.forEach { group ->
+            if (!hasDefaultValue)
+                throw IllegalArgumentException("Can't use trigger `ON_DELETE_SET_DEFAULT` or `ON_UPDATE_SET_DEFAULT` on a property without @Default in foreign key group `$group`. Without one the column's default is NULL, which fails on a non-null property and is only `ON_DELETE_SET_NULL` or `ON_UPDATE_SET_NULL` on a nullable one.")
+        }
+
         with(createSQLBuilder) {
-            val hasDefaultValue = defaultValue.isNotEmpty()
             if (hasDefaultValue) {
                 append(" DEFAULT ")
                 append(defaultValue)
@@ -287,7 +301,7 @@ class ForeignKeyParser {
                         "ON DELETE SET NULL", "ON UPDATE SET NULL" ->
                             check(!isNotNull) { "Can't use trigger `ON_DELETE_SET_NULL` or `ON_UPDATE_SET_NULL` on a non-null property." }
                         "ON DELETE SET DEFAULT", "ON UPDATE SET DEFAULT" ->
-                            check(isNotNull || hasDefaultValue) { "The column must be nullable or have a default value when using trigger 'ON DELETE SET DEFAULT' or 'ON UPDATE SET DEFAULT'" }
+                            check(hasDefaultValue) { "Can't use trigger `ON_DELETE_SET_DEFAULT` or `ON_UPDATE_SET_DEFAULT` on a property without @Default. Without one the column's default is NULL, which fails on a non-null property and is only `ON_DELETE_SET_NULL` or `ON_UPDATE_SET_NULL` on a nullable one." }
                     }
                     append(' ')
                     append(it.triggerSQL)

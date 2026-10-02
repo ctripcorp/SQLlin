@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+@file:Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
+
 package com.ctrip.sqllin.dsl.sql.clause
 
 import com.ctrip.sqllin.dsl.annotation.FunctionDslMaker
@@ -221,6 +223,7 @@ public fun <T> Table<T>.length(element: ClauseBlob): ClauseNumber =
  * @param len The length of the substring to extract
  * @return ClauseString representing the extracted substring
  */
+@FunctionDslMaker
 public fun <T> Table<T>.substr(element: ClauseString, start: Int, len: Int): ClauseString =
     ClauseString("substr(${element.valueName},$start,$len)", this, true)
 
@@ -238,6 +241,7 @@ public fun <T> Table<T>.substr(element: ClauseString, start: Int, len: Int): Cla
  * @param element The string to trim
  * @return ClauseString with whitespace removed from both ends
  */
+@FunctionDslMaker
 public fun <T> Table<T>.trim(element: ClauseString): ClauseString =
     ClauseString("trim(${element.valueName})", this, true)
 
@@ -255,6 +259,7 @@ public fun <T> Table<T>.trim(element: ClauseString): ClauseString =
  * @param element The string to trim
  * @return ClauseString with leading whitespace removed
  */
+@FunctionDslMaker
 public fun <T> Table<T>.ltrim(element: ClauseString): ClauseString =
     ClauseString("ltrim(${element.valueName})", this, true)
 
@@ -272,6 +277,7 @@ public fun <T> Table<T>.ltrim(element: ClauseString): ClauseString =
  * @param element The string to trim
  * @return ClauseString with trailing whitespace removed
  */
+@FunctionDslMaker
 public fun <T> Table<T>.rtrim(element: ClauseString): ClauseString =
     ClauseString("rtrim(${element.valueName})", this, true)
 
@@ -291,6 +297,7 @@ public fun <T> Table<T>.rtrim(element: ClauseString): ClauseString =
  * @param new The replacement string
  * @return ClauseString with replacements applied
  */
+@FunctionDslMaker
 public fun <T> Table<T>.replace(element: ClauseString, old: String, new: String): ClauseString =
     ClauseString("replace(${element.valueName},'$old','$new')", this, true)
 
@@ -310,6 +317,7 @@ public fun <T> Table<T>.replace(element: ClauseString, old: String, new: String)
  * @param sub The substring to find
  * @return ClauseNumber representing the position (1-indexed) or 0 if not found
  */
+@FunctionDslMaker
 public fun <T> Table<T>.instr(element: ClauseString, sub: String): ClauseNumber =
     ClauseNumber("instr(${element.valueName},'$sub')", this, true)
 
@@ -329,5 +337,6 @@ public fun <T> Table<T>.instr(element: ClauseString, sub: String): ClauseNumber 
  * @param element The value to format
  * @return ClauseString with the formatted result
  */
+@FunctionDslMaker
 public fun <T> Table<T>.printf(format: String, element: ClauseString): ClauseString =
     ClauseString("printf('$format',${element.valueName})", this, true)

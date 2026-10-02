@@ -34,14 +34,16 @@ import kotlinx.serialization.descriptors.SerialDescriptor
  * ```
  *
  * Handles primary key logic:
- * - For auto-increment `Long?` primary keys, omits the ID column unless [isInsertWithId] is true
- * - For user-provided primary keys or composite keys, includes all columns
+ * - For a `Long?` primary key, whose value the database assigns, omits the ID column unless
+ *   [isInsertWithId] is true
+ * - For a primary key the caller supplies (a non-null `Long`, any other type, or a composite key),
+ *   includes all columns
  *
  * @param table The table definition containing serialization and primary key metadata
  * @param builder StringBuilder to append the SQL to
  * @param values The entities to insert
  * @param parameters Mutable list to collect parameterized query values
- * @param isInsertWithId Whether to include the primary key column for rowid-backed keys
+ * @param isInsertWithId Whether to include the primary key column even when the database would assign it
  */
 internal fun <T> encodeEntities2InsertValues(
     table: Table<T>,
@@ -51,7 +53,7 @@ internal fun <T> encodeEntities2InsertValues(
     isInsertWithId: Boolean,
 ) = with(builder) {
     val isInsertId = table.primaryKeyInfo?.run {
-        !isRowId || isInsertWithId
+        !isGeneratedByDatabase || isInsertWithId
     } ?: true
     val serializer = table.kSerializer()
     append('(')
