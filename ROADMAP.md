@@ -18,6 +18,7 @@
 
 * Support CHECK keyword
 * Support using a query's results within the same transaction, so that a read-modify-write is one transaction
+* Support upsert, `INSERT ... ON CONFLICT (target) DO UPDATE` and `DO NOTHING`, which updates the conflicting row in place where `INSERT OR REPLACE` deletes and re-inserts it
 
 ## Supported
 
