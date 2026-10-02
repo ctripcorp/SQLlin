@@ -688,6 +688,73 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    @OptIn(AdvancedInsertAPI::class)
+    fun testInsertOrIgnore() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            // A conflict on the primary key leaves the existing row exactly as it is, while the entities that
+            // don't conflict are inserted. Seeing the conflict at all depends on the key being written.
+            database {
+                PersonWithIdTable INSERT_WITH_ID PersonWithId(id = 100L, name = "Eve", age = 28)
+            }
+            database {
+                PersonWithIdTable INSERT_OR_IGNORE listOf(
+                    PersonWithId(id = 100L, name = "Eve Updated", age = 29),
+                    PersonWithId(id = 101L, name = "Grace", age = 30),
+                )
+            }
+            lateinit var people: SelectStatement<PersonWithId>
+            database {
+                people = PersonWithIdTable SELECT X
+            }
+            assertEquals(2, people.getResults().size)
+            val eve = people.getResults().first { it.id == 100L }
+            assertEquals("Eve", eve.name)
+            assertEquals(28, eve.age)
+            assertEquals("Grace", people.getResults().first { it.id == 101L }.name)
+
+            // A null ID is still assigned by the database, so it can't conflict on the primary key
+            database {
+                PersonWithIdTable INSERT_OR_IGNORE PersonWithId(id = null, name = "Frank", age = 35)
+            }
+            database {
+                people = PersonWithIdTable SELECT X
+            }
+            assertEquals(3, people.getResults().size)
+            assertNotEquals(null, people.getResults().first { it.name == "Frank" }.id)
+
+            // A conflict on a UNIQUE column other than the key is ignored as well
+            database {
+                UniqueEmailTestTable INSERT UniqueEmailTest(id = null, email = "ivy@example.com", name = "Ivy")
+                UniqueEmailTestTable INSERT_OR_IGNORE UniqueEmailTest(id = null, email = "ivy@example.com", name = "Ivy Again")
+            }
+            lateinit var accounts: SelectStatement<UniqueEmailTest>
+            database {
+                accounts = UniqueEmailTestTable SELECT X
+            }
+            assertEquals(1, accounts.getResults().size)
+            assertEquals("Ivy", accounts.getResults().first().name)
+
+            // With a composite key, inserting a pair again keeps its existing row, other columns included,
+            // which is what tells INSERT_OR_IGNORE apart from INSERT_OR_REPLACE
+            database {
+                EnrollmentTable INSERT Enrollment(studentId = 1, courseId = 101, semester = "Spring")
+            }
+            database {
+                EnrollmentTable INSERT_OR_IGNORE listOf(
+                    Enrollment(studentId = 1, courseId = 101, semester = "Fall"),
+                    Enrollment(studentId = 1, courseId = 102, semester = "Fall"),
+                )
+            }
+            lateinit var enrollments: SelectStatement<Enrollment>
+            database {
+                enrollments = EnrollmentTable SELECT X
+            }
+            assertEquals(2, enrollments.getResults().size)
+            assertEquals("Spring", enrollments.getResults().first { it.courseId == 101L }.semester)
+            assertEquals("Fall", enrollments.getResults().first { it.courseId == 102L }.semester)
+        }
+    }
+
     fun testCreateInDatabaseScope() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             val person = PersonWithId(id = null, name = "Grace", age = 40)

@@ -73,6 +73,9 @@ class AndroidTest {
     fun testInsertOrReplace() = commonTest.testInsertOrReplace()
 
     @Test
+    fun testInsertOrIgnore() = commonTest.testInsertOrIgnore()
+
+    @Test
     fun testCreateInDatabaseScope() = commonTest.testCreateInDatabaseScope()
 
     @Test

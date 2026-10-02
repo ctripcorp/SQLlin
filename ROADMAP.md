@@ -16,6 +16,7 @@
 
 ## Supported
 
+* Support INSERT OR IGNORE (2.4.0 ✅)
 * Support INSERT OR REPLACE (2.3.0 ✅)
 * Support FOREIGN KEY DSL (2.2.0 ✅)
 * Support CREATE INDEX DSL (2.2.0 ✅)

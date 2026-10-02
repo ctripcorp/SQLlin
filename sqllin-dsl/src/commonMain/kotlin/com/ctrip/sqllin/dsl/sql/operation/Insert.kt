@@ -70,4 +70,16 @@ internal object Insert : Operation {
         }
         return InsertStatement(sql, connection, parameters)
     }
+
+    fun <T> insertOrIgnore(table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>): SingleStatement {
+        val parameters = ArrayList<Any?>()
+        val sql = buildString {
+            append("INSERT OR IGNORE INTO ")
+            append(table.tableName)
+            append(' ')
+            // Write the primary key even when the database would assign it, or a conflict on it could never be seen
+            encodeEntities2InsertValues(table, this, entities, parameters, isInsertWithId = true)
+        }
+        return InsertStatement(sql, connection, parameters)
+    }
 }

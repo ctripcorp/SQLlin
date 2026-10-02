@@ -48,6 +48,7 @@ import kotlin.jvm.JvmName
  * Supported operations:
  * - **INSERT**: Add entities to tables
  * - **INSERT OR REPLACE**: Insert or replace entities on PRIMARY KEY / UNIQUE conflict
+ * - **INSERT OR IGNORE**: Insert entities, skipping those that conflict on PRIMARY KEY / UNIQUE
  * - **UPDATE**: Modify existing records with SET and WHERE clauses
  * - **DELETE**: Remove records with WHERE clauses
  * - **SELECT**: Query records with WHERE, ORDER BY, LIMIT, GROUP BY, JOIN, and UNION
@@ -315,6 +316,54 @@ public class DatabaseScope internal constructor(
     @StatementDslMaker
     public infix fun <T> Table<T>.INSERT_OR_REPLACE(entity: T): Unit =
         INSERT_OR_REPLACE(listOf(entity))
+
+    /**
+     * Inserts multiple entities into the table, skipping each one that conflicts with an existing
+     * row on a PRIMARY KEY or UNIQUE constraint (`INSERT OR IGNORE INTO ...`).
+     *
+     * Unlike [INSERT_OR_REPLACE], the existing row is left exactly as it is: it isn't deleted and
+     * re-inserted, so its other columns keep their values. The entities that don't conflict are
+     * inserted as by a plain [INSERT].
+     *
+     * The primary key column is always included in the VALUES clause so that SQLite can detect
+     * conflicts on it. If the primary key field is `null` for a key the database assigns, SQLite
+     * generates the ID and no conflict can occur on the primary key.
+     *
+     * SQLite also skips a row that would violate a NOT NULL constraint, which can't happen for a
+     * non-null property. A FOREIGN KEY violation is not ignored and still fails the statement.
+     *
+     * Example:
+     * ```kotlin
+     * // Leaves the existing row with ID 42 untouched, and inserts the row with ID 43
+     * PersonWithIdTable INSERT_OR_IGNORE listOf(
+     *     PersonWithId(id = 42L, name = "Alice", age = 26),
+     *     PersonWithId(id = 43L, name = "Bob", age = 31),
+     * )
+     * ```
+     *
+     * @see INSERT_OR_REPLACE to replace the conflicting row instead
+     */
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_IGNORE(entities: Iterable<T>) {
+        val statement = Insert.insertOrIgnore(this, databaseConnection, entities)
+        addStatement(statement)
+    }
+
+    /**
+     * Inserts a single entity into the table, unless it conflicts with an existing row on a
+     * PRIMARY KEY or UNIQUE constraint, in which case the existing row is left as it is.
+     *
+     * Example:
+     * ```kotlin
+     * PersonWithIdTable INSERT_OR_IGNORE PersonWithId(id = 42L, name = "Alice", age = 26)
+     * ```
+     *
+     * @see INSERT_OR_IGNORE for batch inserts that skip conflicting entities
+     * @see INSERT_OR_REPLACE to replace the conflicting row instead
+     */
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_IGNORE(entity: T): Unit =
+        INSERT_OR_IGNORE(listOf(entity))
 
     // ========== UPDATE Operations ==========
 
