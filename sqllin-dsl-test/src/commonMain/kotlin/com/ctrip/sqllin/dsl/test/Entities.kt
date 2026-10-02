@@ -22,6 +22,7 @@ import com.ctrip.sqllin.dsl.annotation.CompositeUnique
 import com.ctrip.sqllin.dsl.annotation.DBRow
 import com.ctrip.sqllin.dsl.annotation.PrimaryKey
 import com.ctrip.sqllin.dsl.annotation.Unique
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -550,3 +551,52 @@ data class BookPagesAsText(val pages: String) // 'pages' holds an Int
 
 @Serializable
 data class UserNotesNonNull(val notes: String) // 'notes' is nullable
+
+/**
+ * Result types of SELECTs with result columns, as in `BookTable SELECT listOf(count(X) AS AuthorStats::books)`: the
+ * properties given an expression with AS hold it, and every other property is read from its column.
+ */
+@Serializable
+data class AuthorStats(
+    val author: String, // read from its column
+    val books: Long,
+    val totalPages: Long,
+    val maxPrice: Price,
+    val firstTitle: String,
+)
+
+/**
+ * Aggregates of a whole table, not grouped: all but `count` are NULL when no rows match, so they are nullable.
+ */
+@Serializable
+data class BookTotals(val books: Long, val maxPages: PageCount?, val averagePrice: Double?, val totalPrice: Double?)
+
+@Serializable
+data class BookCount(val books: Long)
+
+/**
+ * Scalar functions of the columns of a book, next to its `name`, which is read from its column.
+ */
+@Serializable
+data class BookFunctions(
+    val name: String,
+    val upperName: String,
+    val nameLength: Long,
+    val roundedPrice: Double,
+    val absPages: PageCount,
+)
+
+@Serializable
+data class StatusStats(val status: UserStatus, val users: Long, val notes: String?, val highestPriority: Priority)
+
+@Serializable
+data class EnabledCount(val enabled: Long?)
+
+/**
+ * Result types that don't fit their query, each breaking one of the rules result columns are checked against.
+ */
+@Serializable
+data class BookCountAndMaxPages(val books: Long, val maxPages: PageCount) // 'maxPages' is NULL when no rows match
+
+@Serializable
+data class RenamedBookCount(@SerialName("total") val books: Long) // 'books' isn't serialized under its own name

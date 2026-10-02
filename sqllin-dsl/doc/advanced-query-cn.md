@@ -184,7 +184,69 @@ fun sample() {
 
 投影类型的每个属性都必须是这张表的列，类型与列一致，并且当列可空时属性也必须可空，因为把 `NULL` 读进非空属性时，它会被
 悄无声息地读成 `0` 或空字符串。不满足这些规则的投影类型会让 `SELECT` 在构建语句时、执行之前就抛出 `IllegalArgumentException`。
-`COUNT(*)` 这样的表达式目前还不能投影。
+要查询 `count(*)` 这样的表达式，请使用结果列。
+
+## 结果列
+
+要查询一个表达式，比如聚合函数，可以用 `AS` 把它交给结果类型的一个属性。结果类型的其余属性和投影一样，从同名的列读取，
+所以只需要列出表达式：单个表达式直接写，多个表达式放进 `listOf`：
+
+```kotlin
+@Serializable
+data class NameStats(
+    val name: String,
+    val people: Long,
+    val maxAge: Int,
+)
+
+@Serializable
+data class PersonCount(
+    val people: Long,
+)
+
+fun sample() {
+    lateinit var stats: SelectStatement<NameStats>
+    lateinit var adults: SelectStatement<PersonCount>
+    database {
+        PersonTable { table ->
+            // SELECT name,count(*) AS people,max(age) AS maxAge FROM person GROUP BY name
+            stats = table SELECT listOf(count(X) AS NameStats::people, max(age) AS NameStats::maxAge) GROUP_BY name
+            // SELECT count(*) AS people FROM person WHERE age >= ?
+            adults = table SELECT (count(X) AS PersonCount::people) WHERE (age GTE 18)
+        }
+    }
+    val adultCount = adults.getResults().single().people
+}
+```
+
+和投影类型一样，结果类型就是普通的 `@Serializable` 类型。单个结果列必须加括号，因为 `SELECT` 和 `AS` 都是中缀函数。
+结果列可以用在 `SELECT` 和 `SELECT_DISTINCT` 之后，后面可以接 `WHERE`、`GROUP_BY`、`ORDER_BY` 和 `LIMIT`。表达式也可以
+占用某一列对应的属性：`table SELECT (upper(name) AS PersonName::name)` 会把所有名字读成大写。
+
+属性的类型必须和表达式的值的类型一致，这一点在编译期检查。所以 `count(X)` 只能交给 `Long` 属性，不能交给 `Int` 或
+`String` 属性：
+
+| 函数 | 值的类型 |
+|---|---|
+| `count`、`length`、`instr`、`random` | `Long` |
+| `avg`、`round` | `Double` |
+| `sum` | 整数列和 Boolean 列为 `Long`，`Float` 和 `Double` 列为 `Double` |
+| `max`、`min`、`abs` | 与它们的列相同 |
+| `upper`、`lower`、`trim`、`ltrim`、`rtrim`、`substr`、`replace`、`printf`、`group_concat` | `String` |
+
+当表达式可能为 `NULL` 时，属性还必须可空，原因和投影相同：
+
+- 可空列的函数可能为 `NULL`，`count` 除外。
+- 没有 `GROUP_BY` 时，即使没有任何行匹配，聚合查询也会返回一行，这一行里除 `count` 以外的聚合函数都是 `NULL`，所有的列也是
+  `NULL`。所以在没有 `GROUP_BY` 的聚合查询中，除了 `count` 对应的属性，其余属性都必须可空，比如要写成 `maxAge: Int?`。
+  有 `GROUP_BY` 时，每个分组都至少有一行，所以只有列可空时，属性才必须可空。
+
+不满足这些规则的结果类型，以及同一个属性被交给了两个表达式的情况，都会让 `SELECT` 在构建语句时、执行之前就抛出
+`IllegalArgumentException`。唯独后面是否还会接 `GROUP_BY`，在构建时还无法得知，所以需要 `GROUP_BY` 的属性会在数据库作用域
+结束时报错，此时作用域中的任何语句都还没有执行。
+
+交给表达式的属性按属性名查找，所以不能用 `@SerialName` 重命名。结果列只能查询单张表：目前还不能和 Join 一起使用，
+也不支持算术运算、`CASE` 和子查询。
 
 ## 最后
 

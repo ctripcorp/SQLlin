@@ -21,15 +21,34 @@ package com.ctrip.sqllin.dsl.sql.clause
 import com.ctrip.sqllin.dsl.annotation.FunctionDslMaker
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.X
+import kotlin.jvm.JvmName
 
 /**
  * SQLite aggregate and scalar functions for use in SELECT clauses.
  *
  * These functions can be used in WHERE, HAVING, ORDER BY, and SELECT expressions.
- * All functions return [ClauseElement] wrappers that can be compared with operators.
+ * All functions return [ClauseElement] wrappers that can be compared with operators,
+ * and selected into a property of a result type with [AS].
+ *
+ * Each function's result has the type of the values SQLite returns for it: `count` and `length` give a `Long`,
+ * `avg` and `round` a `Double`, `sum` a `Long` or a `Double` as its input holds integers or reals, and `max`, `min`
+ * and `abs` the type of their input. Whether the result can be NULL follows SQLite too: an aggregate function other
+ * than `count` is NULL for a group whose values are all NULL, and, without GROUP BY, when no rows match.
  *
  * @author Yuang Qiao
  */
+
+/** An aggregate function of [element] with values of type [V]: NULL when all its values are, or no rows match. */
+private fun <V : Any> Table<*>.numberAggregate(valueName: String, element: ClauseElement<*>): ClauseNumber<V> =
+    ClauseNumber(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = true, isNullOnNoRows = true)
+
+/** A scalar function of [element] with values of type [V]: NULL when [element] is. */
+private fun <V : Any> Table<*>.numberFunction(valueName: String, element: ClauseElement<*>): ClauseNumber<V> =
+    ClauseNumber(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = element.isAggregate, isNullOnNoRows = element.isNullOnNoRows)
+
+/** A scalar function of [element] with `String` values: NULL when [element] is. */
+private fun Table<*>.stringFunction(valueName: String, element: ClauseElement<*>): ClauseString<String> =
+    ClauseString(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = element.isAggregate, isNullOnNoRows = element.isNullOnNoRows)
 
 /**
  * COUNT aggregate function - counts non-NULL values.
@@ -40,8 +59,8 @@ import com.ctrip.sqllin.dsl.sql.X
  * ```
  */
 @FunctionDslMaker
-public fun <T> Table<T>.count(element: ClauseElement): ClauseNumber =
-    ClauseNumber("count(${element.valueName})", this, true)
+public fun <T> Table<T>.count(element: ClauseElement<*>): ClauseNumber<Long> =
+    ClauseNumber("count(${element.valueName})", this, isFunction = true, isNullable = false, isAggregate = true, isNullOnNoRows = false)
 
 /**
  * COUNT(*) aggregate function - counts all rows (including NULLs).
@@ -52,36 +71,98 @@ public fun <T> Table<T>.count(element: ClauseElement): ClauseNumber =
  * ```
  */
 @FunctionDslMaker
-public fun <T> Table<T>.count(x: X): ClauseNumber =
-    ClauseNumber("count(*)", this, true)
+public fun <T> Table<T>.count(x: X): ClauseNumber<Long> =
+    ClauseNumber("count(*)", this, isFunction = true, isNullable = false, isAggregate = true, isNullOnNoRows = false)
 
 /**
- * AVG aggregate function - returns average value.
+ * AVG aggregate function - returns average value, as a `Double`.
  */
 @FunctionDslMaker
-public fun <T> Table<T>.avg(element: ClauseElement): ClauseNumber =
-    ClauseNumber("avg(${element.valueName})", this, true)
+public fun <T> Table<T>.avg(element: ClauseElement<*>): ClauseNumber<Double> =
+    numberAggregate("avg(${element.valueName})", element)
 
 /**
  * SUM aggregate function - returns sum of values.
+ *
+ * The sum of integers is a `Long`, and the sum of reals a `Double`, so there is one overload per column type, and
+ * one for a Boolean column, whose sum counts the `true` values. There is none for `ULong`, as SQLite stores values
+ * above `Long.MAX_VALUE` as negative numbers, which would make the sum wrong.
  */
 @FunctionDslMaker
-public fun <T> Table<T>.sum(element: ClauseElement): ClauseNumber =
-    ClauseNumber("sum(${element.valueName})", this, true)
+@JvmName("sumOfByte")
+public fun <T> Table<T>.sum(element: ClauseNumber<Byte>): ClauseNumber<Long> =
+    numberAggregate("sum(${element.valueName})", element)
+
+/** SUM aggregate function of a `Short` column - returns a `Long`. */
+@FunctionDslMaker
+@JvmName("sumOfShort")
+public fun <T> Table<T>.sum(element: ClauseNumber<Short>): ClauseNumber<Long> =
+    numberAggregate("sum(${element.valueName})", element)
+
+/** SUM aggregate function of an `Int` column - returns a `Long`. */
+@FunctionDslMaker
+@JvmName("sumOfInt")
+public fun <T> Table<T>.sum(element: ClauseNumber<Int>): ClauseNumber<Long> =
+    numberAggregate("sum(${element.valueName})", element)
+
+/** SUM aggregate function of a `Long` column - returns a `Long`. */
+@FunctionDslMaker
+@JvmName("sumOfLong")
+public fun <T> Table<T>.sum(element: ClauseNumber<Long>): ClauseNumber<Long> =
+    numberAggregate("sum(${element.valueName})", element)
+
+/** SUM aggregate function of a `UByte` column - returns a `Long`. */
+@FunctionDslMaker
+@JvmName("sumOfUByte")
+public fun <T> Table<T>.sum(element: ClauseNumber<UByte>): ClauseNumber<Long> =
+    numberAggregate("sum(${element.valueName})", element)
+
+/** SUM aggregate function of a `UShort` column - returns a `Long`. */
+@FunctionDslMaker
+@JvmName("sumOfUShort")
+public fun <T> Table<T>.sum(element: ClauseNumber<UShort>): ClauseNumber<Long> =
+    numberAggregate("sum(${element.valueName})", element)
+
+/** SUM aggregate function of a `UInt` column - returns a `Long`. */
+@FunctionDslMaker
+@JvmName("sumOfUInt")
+public fun <T> Table<T>.sum(element: ClauseNumber<UInt>): ClauseNumber<Long> =
+    numberAggregate("sum(${element.valueName})", element)
+
+/** SUM aggregate function of a `Float` column - returns a `Double`. */
+@FunctionDslMaker
+@JvmName("sumOfFloat")
+public fun <T> Table<T>.sum(element: ClauseNumber<Float>): ClauseNumber<Double> =
+    numberAggregate("sum(${element.valueName})", element)
+
+/** SUM aggregate function of a `Double` column - returns a `Double`. */
+@FunctionDslMaker
+@JvmName("sumOfDouble")
+public fun <T> Table<T>.sum(element: ClauseNumber<Double>): ClauseNumber<Double> =
+    numberAggregate("sum(${element.valueName})", element)
+
+/** SUM aggregate function of a Boolean column - returns the number of `true` values, as a `Long`. */
+@FunctionDslMaker
+public fun <T> Table<T>.sum(element: ClauseBoolean): ClauseNumber<Long> =
+    numberAggregate("sum(${element.valueName})", element)
 
 /**
- * MAX aggregate function - returns maximum value.
+ * MAX aggregate function - returns maximum value, of the same type as [element]: a `max` of an `Int` column is an
+ * `Int`, and of a String column a String.
  */
+@Suppress("UNCHECKED_CAST")
 @FunctionDslMaker
-public fun <T> Table<T>.max(element: ClauseElement): ClauseNumber =
-    ClauseNumber("max(${element.valueName})", this, true)
+public fun <T, E : ClauseElement<*>> Table<T>.max(element: E): E =
+    element.toAggregate("max(${element.valueName})", this) as E
 
 /**
- * MIN aggregate function - returns minimum value.
+ * MIN aggregate function - returns minimum value, of the same type as [element]: a `min` of an `Int` column is an
+ * `Int`, and of a String column a String.
  */
+@Suppress("UNCHECKED_CAST")
 @FunctionDslMaker
-public fun <T> Table<T>.min(element: ClauseElement): ClauseNumber =
-    ClauseNumber("min(${element.valueName})", this, true)
+public fun <T, E : ClauseElement<*>> Table<T>.min(element: E): E =
+    element.toAggregate("min(${element.valueName})", this) as E
 
 /**
  * GROUP_CONCAT aggregate function - concatenates all non-NULL values in a group with a separator.
@@ -100,15 +181,15 @@ public fun <T> Table<T>.min(element: ClauseElement): ClauseNumber =
  * @return ClauseString representing the concatenated result
  */
 @FunctionDslMaker
-public fun <T> Table<T>.group_concat(element: ClauseString, infix: String): ClauseString =
-    ClauseString("group_concat(${element.valueName},'$infix')", this, true)
+public fun <T> Table<T>.group_concat(element: ClauseString<*>, infix: String): ClauseString<String> =
+    ClauseString("group_concat(${element.valueName},'$infix')", this, isFunction = true, isNullable = element.isNullable, isAggregate = true, isNullOnNoRows = true)
 
 /**
- * ABS scalar function - returns absolute value.
+ * ABS scalar function - returns absolute value, of the same type as [element].
  */
 @FunctionDslMaker
-public fun <T> Table<T>.abs(element: ClauseNumber): ClauseNumber =
-    ClauseNumber("abs(${element.valueName})", this, true)
+public fun <T, V : Any> Table<T>.abs(element: ClauseNumber<V>): ClauseNumber<V> =
+    numberFunction("abs(${element.valueName})", element)
 
 /**
  * ROUND scalar function - rounds a number to a specified number of decimal places.
@@ -124,11 +205,11 @@ public fun <T> Table<T>.abs(element: ClauseNumber): ClauseNumber =
  *
  * @param element The numeric value to round
  * @param digits The number of decimal places to round to
- * @return ClauseNumber representing the rounded value
+ * @return ClauseNumber representing the rounded value, a `Double` even for an integer column
  */
 @FunctionDslMaker
-public fun <T> Table<T>.round(element: ClauseNumber, digits: Int): ClauseNumber =
-    ClauseNumber("round(${element.valueName},$digits)", this, true)
+public fun <T> Table<T>.round(element: ClauseNumber<*>, digits: Int): ClauseNumber<Double> =
+    numberFunction("round(${element.valueName},$digits)", element)
 
 /**
  * RANDOM scalar function - returns a pseudo-random integer.
@@ -144,8 +225,8 @@ public fun <T> Table<T>.round(element: ClauseNumber, digits: Int): ClauseNumber 
  * @return ClauseNumber representing the random integer
  */
 @FunctionDslMaker
-public fun <T> Table<T>.random(): ClauseNumber =
-    ClauseNumber("random()", this, true)
+public fun <T> Table<T>.random(): ClauseNumber<Long> =
+    ClauseNumber("random()", this, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = false)
 
 /**
  * SIGN scalar function - returns the sign of a number.
@@ -164,29 +245,29 @@ public fun <T> Table<T>.random(): ClauseNumber =
  * @return ClauseNumber representing -1, 0, or 1
  */
 /* @FunctionDslMaker
- public fun <T> Table<T>.sign(element: ClauseNumber): ClauseNumber =
-    ClauseNumber("sign(${element.valueName})", this, true) */
+ public fun <T> Table<T>.sign(element: ClauseNumber<*>): ClauseNumber<Long> =
+    numberFunction("sign(${element.valueName})", element) */
 
 /**
  * UPPER scalar function - converts string to uppercase.
  */
 @FunctionDslMaker
-public fun <T> Table<T>.upper(element: ClauseString): ClauseString =
-    ClauseString("upper(${element.valueName})", this, true)
+public fun <T> Table<T>.upper(element: ClauseString<*>): ClauseString<String> =
+    stringFunction("upper(${element.valueName})", element)
 
 /**
  * LOWER scalar function - converts string to lowercase.
  */
 @FunctionDslMaker
-public fun <T> Table<T>.lower(element: ClauseString): ClauseString =
-    ClauseString("lower(${element.valueName})", this, true)
+public fun <T> Table<T>.lower(element: ClauseString<*>): ClauseString<String> =
+    stringFunction("lower(${element.valueName})", element)
 
 /**
  * LENGTH scalar function - returns string/blob length in bytes.
  */
 @FunctionDslMaker
-public fun <T> Table<T>.length(element: ClauseString): ClauseNumber =
-    ClauseNumber("length(${element.valueName})", this, true)
+public fun <T> Table<T>.length(element: ClauseString<*>): ClauseNumber<Long> =
+    numberFunction("length(${element.valueName})", element)
 
 /**
  * LENGTH scalar function - returns the length of a BLOB in bytes.
@@ -203,8 +284,8 @@ public fun <T> Table<T>.length(element: ClauseString): ClauseNumber =
  * @return ClauseNumber representing the length in bytes
  */
 @FunctionDslMaker
-public fun <T> Table<T>.length(element: ClauseBlob): ClauseNumber =
-    ClauseNumber("length(${element.valueName})", this, true)
+public fun <T> Table<T>.length(element: ClauseBlob): ClauseNumber<Long> =
+    numberFunction("length(${element.valueName})", element)
 
 /**
  * SUBSTR scalar function - extracts a substring from a string.
@@ -224,8 +305,8 @@ public fun <T> Table<T>.length(element: ClauseBlob): ClauseNumber =
  * @return ClauseString representing the extracted substring
  */
 @FunctionDslMaker
-public fun <T> Table<T>.substr(element: ClauseString, start: Int, len: Int): ClauseString =
-    ClauseString("substr(${element.valueName},$start,$len)", this, true)
+public fun <T> Table<T>.substr(element: ClauseString<*>, start: Int, len: Int): ClauseString<String> =
+    stringFunction("substr(${element.valueName},$start,$len)", element)
 
 /**
  * TRIM scalar function - removes leading and trailing whitespace from a string.
@@ -242,8 +323,8 @@ public fun <T> Table<T>.substr(element: ClauseString, start: Int, len: Int): Cla
  * @return ClauseString with whitespace removed from both ends
  */
 @FunctionDslMaker
-public fun <T> Table<T>.trim(element: ClauseString): ClauseString =
-    ClauseString("trim(${element.valueName})", this, true)
+public fun <T> Table<T>.trim(element: ClauseString<*>): ClauseString<String> =
+    stringFunction("trim(${element.valueName})", element)
 
 /**
  * LTRIM scalar function - removes leading (left) whitespace from a string.
@@ -260,8 +341,8 @@ public fun <T> Table<T>.trim(element: ClauseString): ClauseString =
  * @return ClauseString with leading whitespace removed
  */
 @FunctionDslMaker
-public fun <T> Table<T>.ltrim(element: ClauseString): ClauseString =
-    ClauseString("ltrim(${element.valueName})", this, true)
+public fun <T> Table<T>.ltrim(element: ClauseString<*>): ClauseString<String> =
+    stringFunction("ltrim(${element.valueName})", element)
 
 /**
  * RTRIM scalar function - removes trailing (right) whitespace from a string.
@@ -278,8 +359,8 @@ public fun <T> Table<T>.ltrim(element: ClauseString): ClauseString =
  * @return ClauseString with trailing whitespace removed
  */
 @FunctionDslMaker
-public fun <T> Table<T>.rtrim(element: ClauseString): ClauseString =
-    ClauseString("rtrim(${element.valueName})", this, true)
+public fun <T> Table<T>.rtrim(element: ClauseString<*>): ClauseString<String> =
+    stringFunction("rtrim(${element.valueName})", element)
 
 /**
  * REPLACE scalar function - replaces all occurrences of a substring with another string.
@@ -298,8 +379,8 @@ public fun <T> Table<T>.rtrim(element: ClauseString): ClauseString =
  * @return ClauseString with replacements applied
  */
 @FunctionDslMaker
-public fun <T> Table<T>.replace(element: ClauseString, old: String, new: String): ClauseString =
-    ClauseString("replace(${element.valueName},'$old','$new')", this, true)
+public fun <T> Table<T>.replace(element: ClauseString<*>, old: String, new: String): ClauseString<String> =
+    stringFunction("replace(${element.valueName},'$old','$new')", element)
 
 /**
  * INSTR scalar function - finds the first occurrence of a substring.
@@ -318,8 +399,8 @@ public fun <T> Table<T>.replace(element: ClauseString, old: String, new: String)
  * @return ClauseNumber representing the position (1-indexed) or 0 if not found
  */
 @FunctionDslMaker
-public fun <T> Table<T>.instr(element: ClauseString, sub: String): ClauseNumber =
-    ClauseNumber("instr(${element.valueName},'$sub')", this, true)
+public fun <T> Table<T>.instr(element: ClauseString<*>, sub: String): ClauseNumber<Long> =
+    numberFunction("instr(${element.valueName},'$sub')", element)
 
 /**
  * PRINTF scalar function - formats a string according to a format specification.
@@ -338,5 +419,5 @@ public fun <T> Table<T>.instr(element: ClauseString, sub: String): ClauseNumber 
  * @return ClauseString with the formatted result
  */
 @FunctionDslMaker
-public fun <T> Table<T>.printf(format: String, element: ClauseString): ClauseString =
-    ClauseString("printf('$format',${element.valueName})", this, true)
+public fun <T> Table<T>.printf(format: String, element: ClauseString<*>): ClauseString<String> =
+    stringFunction("printf('$format',${element.valueName})", element)

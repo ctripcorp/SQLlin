@@ -193,7 +193,72 @@ to a statement of the projection type.
 Each property of a projection type has to be a column of the table, of the same type, and nullable if the column is
 nullable, as a `NULL` read into a non-null property would quietly become `0` or an empty string. A projection type that
 breaks one of these rules makes the `SELECT` throw an `IllegalArgumentException` when the statement is built, before it
-runs. Expressions such as `COUNT(*)` can't be projected yet.
+runs. To select expressions such as `count(*)`, use result columns.
+
+## Result Columns
+
+To select an expression, such as an aggregate function, give it a property of the result type with `AS`. Every other
+property of the result type is read from its column, as in a projection, so only the expressions are listed: one alone,
+or several in a `listOf`:
+
+```kotlin
+@Serializable
+data class NameStats(
+    val name: String,
+    val people: Long,
+    val maxAge: Int,
+)
+
+@Serializable
+data class PersonCount(
+    val people: Long,
+)
+
+fun sample() {
+    lateinit var stats: SelectStatement<NameStats>
+    lateinit var adults: SelectStatement<PersonCount>
+    database {
+        PersonTable { table ->
+            // SELECT name,count(*) AS people,max(age) AS maxAge FROM person GROUP BY name
+            stats = table SELECT listOf(count(X) AS NameStats::people, max(age) AS NameStats::maxAge) GROUP_BY name
+            // SELECT count(*) AS people FROM person WHERE age >= ?
+            adults = table SELECT (count(X) AS PersonCount::people) WHERE (age GTE 18)
+        }
+    }
+    val adultCount = adults.getResults().single().people
+}
+```
+
+Like a projection type, a result type is a plain `@Serializable` type. A single result column has to be put in
+parentheses, as `SELECT` and `AS` are both infix functions. Result columns work after `SELECT` and `SELECT_DISTINCT`, and
+can be followed by `WHERE`, `GROUP_BY`, `ORDER_BY` and `LIMIT`. An expression can take the property of a column, too:
+`table SELECT (upper(name) AS PersonName::name)` reads every name in upper case.
+
+The property has to have the type of the expression's values, which is checked at compile time. So `count(X)` goes into
+a `Long` property, not an `Int` or a `String` one:
+
+| Function | Type of its values |
+|---|---|
+| `count`, `length`, `instr`, `random` | `Long` |
+| `avg`, `round` | `Double` |
+| `sum` | `Long` for a column of integers or Booleans, `Double` for a `Float` or `Double` column |
+| `max`, `min`, `abs` | the type of their column |
+| `upper`, `lower`, `trim`, `ltrim`, `rtrim`, `substr`, `replace`, `printf`, `group_concat` | `String` |
+
+The property also has to be nullable when its expression can be `NULL`, for the same reason as in a projection:
+
+- A function of a nullable column can be `NULL`, except `count`.
+- Without `GROUP_BY`, an aggregate query returns one row even when no rows match, in which every aggregate function except
+  `count` is `NULL`, and so is every column. So in an aggregate query without `GROUP_BY`, every property but those of
+  `count` has to be nullable, as `maxAge: Int?` would be. With `GROUP_BY`, every group has rows, so a property only has to
+  be nullable when its column is.
+
+A result type that breaks one of these rules makes the `SELECT` throw an `IllegalArgumentException` when the statement is
+built, before it runs, as does a property given two expressions. Only whether `GROUP_BY` follows can't be known yet then,
+so a property that needs it is reported when the database scope ends, before any statement of the scope runs.
+
+A property given an expression is found by its name, so it can't be renamed with `@SerialName`. Result columns select from
+a single table: they can't be used with a join yet, nor can arithmetic, `CASE` or subqueries.
 
 ## Finally
 

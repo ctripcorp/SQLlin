@@ -51,6 +51,7 @@ internal class UnionSelectStatementGroup<T> : StatementContainer {
             check(statementList.size > 1) { "Please write at least two 'select' statements on 'UNION' scope" }
             val unionKeyWord = if (isUnionAll) " UNION ALL " else " UNION "
             statementList.forEachIndexed { index, statement ->
+                statement.checkComplete()
                 append(statement.sqlStr)
                 if (parameters == null)
                     parameters = statement.parameters
@@ -69,6 +70,7 @@ internal class UnionSelectStatementGroup<T> : StatementContainer {
                 connection = connection,
                 container = container,
                 parameters,
+                ungroupedError = null,
             )
         }
     }

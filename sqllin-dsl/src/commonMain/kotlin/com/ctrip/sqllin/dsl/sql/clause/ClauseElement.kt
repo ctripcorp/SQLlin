@@ -37,15 +37,38 @@ import com.ctrip.sqllin.dsl.sql.Table
  * - GROUP BY columns
  * - SET assignments
  * - JOIN USING clauses
+ * - Result columns, as in `count(X) AS AuthorStats::books`
  *
+ * An element knows what it reads into, so a [ResultColumn] can only put it into a property that can hold it: the type
+ * of its values, and whether it can be NULL.
+ *
+ * @param V The type of the element's values, not counting NULL: `Int` for an `Int` or `Int?` column, `Long` for
+ * `count(*)`, `Double` for `avg(...)`
  * @property valueName The column name or function expression
  * @property table The table this element belongs to
  * @property isFunction Whether this represents a function call (e.g., COUNT, SUM)
+ * @property isNullable Whether the element can be NULL: for a column, whether the column is nullable, and for an
+ * aggregate function, whether it can be NULL for a group of rows, as `sum` of a nullable column is when all its
+ * values in the group are NULL
+ * @property isAggregate Whether the element is or contains an aggregate function, which makes a query that selects it
+ * an aggregate query
+ * @property isNullOnNoRows Whether the element is NULL when an aggregate query without GROUP BY matches no rows. Such a
+ * query still returns one row, in which a column, and every aggregate function except `count`, is NULL.
  *
  * @author Yuang Qiao
  */
-public sealed class ClauseElement(
+public sealed class ClauseElement<V : Any>(
     internal val valueName: String,
     internal val table: Table<*>,
     internal val isFunction: Boolean,
-)
+    internal val isNullable: Boolean,
+    internal val isAggregate: Boolean,
+    internal val isNullOnNoRows: Boolean,
+) {
+
+    /**
+     * Creates the element of an aggregate function of this element that has values of the same type, as `max` and
+     * `min` do.
+     */
+    internal abstract fun toAggregate(valueName: String, table: Table<*>): ClauseElement<V>
+}

@@ -693,6 +693,83 @@ public class DatabaseScope internal constructor(
     public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: GroupByClause<R>): GroupBySelectStatement<R> =
         select(getKSerializer<R>(), clause, true)
 
+    // ========== SELECT with Result Columns ==========
+    //
+    // These select expressions, such as aggregate functions, into properties of a result type R with AS, as in
+    // `BookTable SELECT listOf(count(X) AS AuthorStats::books)`. Every other property of R is read from its column.
+
+    /**
+     * Selects [column] into its property of [R], and every other property of [R] from its column.
+     *
+     * Example:
+     * ```kotlin
+     * @Serializable
+     * data class BookCount(val books: Long)
+     *
+     * val total = BookTable SELECT (BookTable.count(X) AS BookCount::books)
+     * // SELECT count(*) AS books FROM book
+     * ```
+     *
+     * Can be followed by WHERE, GROUP BY, ORDER BY, or LIMIT.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the query: an expression can be NULL while its property isn't
+     * nullable, or a property without an expression doesn't fit its column, as for [X]. A property that can only be
+     * non-null in a group of GROUP BY is reported when the scope ends, before anything runs, if no GROUP BY follows.
+     */
+    @StatementDslMaker
+    public inline infix fun <T, reified R> Table<T>.SELECT(column: ResultColumn<R>): ResultColumnSelectStatement<R> =
+        select(getKSerializer<R>(), listOf(column), false)
+
+    /**
+     * Selects [column] into its property of [R], and every other property of [R] from its column, returning distinct
+     * rows.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the query, as for [SELECT]
+     */
+    @StatementDslMaker
+    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(column: ResultColumn<R>): ResultColumnSelectStatement<R> =
+        select(getKSerializer<R>(), listOf(column), true)
+
+    /**
+     * Selects each of [columns] into its property of [R], and every other property of [R] from its column.
+     *
+     * Example:
+     * ```kotlin
+     * @Serializable
+     * data class AuthorStats(val author: String, val books: Long, val totalPages: Long)
+     *
+     * val stats = BookTable { table ->
+     *     table SELECT listOf(count(X) AS AuthorStats::books, sum(pages) AS AuthorStats::totalPages) GROUP_BY author
+     * }
+     * // SELECT author,count(*) AS books,sum(pages) AS totalPages FROM book GROUP BY author
+     * ```
+     *
+     * Can be followed by WHERE, GROUP BY, ORDER BY, or LIMIT.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the query, as for [SELECT], or [columns] give a property two
+     * expressions, or none at all
+     */
+    @StatementDslMaker
+    public inline infix fun <T, reified R> Table<T>.SELECT(columns: Iterable<ResultColumn<R>>): ResultColumnSelectStatement<R> =
+        select(getKSerializer<R>(), columns, false)
+
+    /**
+     * Selects each of [columns] into its property of [R], and every other property of [R] from its column, returning
+     * distinct rows.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the query, as for [SELECT]
+     */
+    @StatementDslMaker
+    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(columns: Iterable<ResultColumn<R>>): ResultColumnSelectStatement<R> =
+        select(getKSerializer<R>(), columns, true)
+
+    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, columns: Iterable<ResultColumn<R>>, isDistinct: Boolean): ResultColumnSelectStatement<R> {
+        val container = getSelectStatementGroup()
+        val statement = Select.select(this, columns, isDistinct, serializer, databaseConnection, container)
+        addSelectStatement(statement)
+        return statement
+    }
+
     // ========== UNION Operations ==========
 
     private val unionSelectStatementGroupStack by lazy { ArrayDeque<UnionSelectStatementGroup<*>>() }
@@ -855,7 +932,7 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public fun <T> Table<T>.CREATE_INDEX(indexName: String, vararg columns: ClauseElement) {
+    public fun <T> Table<T>.CREATE_INDEX(indexName: String, vararg columns: ClauseElement<*>) {
         val statement = Create.createIndex(this, databaseConnection, indexName, *columns)
         addStatement(statement)
     }
@@ -880,7 +957,7 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public fun <T> Table<T>.CREATE_UNIQUE_INDEX(indexName: String, vararg columns: ClauseElement) {
+    public fun <T> Table<T>.CREATE_UNIQUE_INDEX(indexName: String, vararg columns: ClauseElement<*>) {
         val statement = Create.createUniqueIndex(this, databaseConnection, indexName, *columns)
         addStatement(statement)
     }
@@ -949,7 +1026,7 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public infix fun <T> Table<T>.ALTER_ADD_COLUMN(column: ClauseElement) {
+    public infix fun <T> Table<T>.ALTER_ADD_COLUMN(column: ClauseElement<*>) {
         val statement = Alter.addColumn(this, column, databaseConnection)
         addStatement(statement)
     }
@@ -1013,7 +1090,7 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public fun <T, R : ClauseElement> Table<T>.RENAME_COLUMN(oldColumn: R, newColumn: R) {
+    public fun <T, R : ClauseElement<*>> Table<T>.RENAME_COLUMN(oldColumn: R, newColumn: R) {
         val statement = Alter.renameColumn(this, oldColumn.valueName, newColumn, databaseConnection)
         addStatement(statement)
     }
@@ -1036,7 +1113,7 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public fun <T> Table<T>.RENAME_COLUMN(oldColumnName: String, newColumn: ClauseElement) {
+    public fun <T> Table<T>.RENAME_COLUMN(oldColumnName: String, newColumn: ClauseElement<*>) {
         val statement = Alter.renameColumn(this, oldColumnName, newColumn, databaseConnection)
         addStatement(statement)
     }
@@ -1059,7 +1136,7 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public infix fun <T> Table<T>.DROP_COLUMN(column: ClauseElement) {
+    public infix fun <T> Table<T>.DROP_COLUMN(column: ClauseElement<*>) {
         val statement = Alter.dropColumn(this, column, databaseConnection)
         addStatement(statement)
     }

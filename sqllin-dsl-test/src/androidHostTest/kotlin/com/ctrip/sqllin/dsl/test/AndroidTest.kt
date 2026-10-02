@@ -79,6 +79,12 @@ class AndroidTest {
     fun testProjection() = commonTest.testProjection()
 
     @Test
+    fun testResultColumns() = commonTest.testResultColumns()
+
+    @Test
+    fun testResultColumnChecks() = commonTest.testResultColumnChecks()
+
+    @Test
     fun testCreateInDatabaseScope() = commonTest.testCreateInDatabaseScope()
 
     @Test
