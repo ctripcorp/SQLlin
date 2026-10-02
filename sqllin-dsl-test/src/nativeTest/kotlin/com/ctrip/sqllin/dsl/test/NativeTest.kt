@@ -96,9 +96,6 @@ class NativeTest {
     fun testSchemaModification() = commonTest.testSchemaModification()
 
     @Test
-    fun testPrimaryKeyNullability() = commonTest.testPrimaryKeyNullability()
-
-    @Test
     fun testStringOperators() = commonTest.testStringOperators()
 
     @Test

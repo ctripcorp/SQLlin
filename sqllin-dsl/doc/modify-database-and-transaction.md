@@ -7,7 +7,7 @@ we start to learn how to write SQL statements with SQLlin.
 
 ## Table Structure Operations
 
-SQLlin provides type-safe DSL operations for managing table structures: CREATE, DROP, and ALTER.
+SQLlin provides type-safe DSL operations for managing table structures: CREATE, DROP, and ALTER (referred to as ALERT in the API).
 
 ### CREATE - Creating Tables
 
@@ -64,7 +64,7 @@ fun sample() {
 
 ### ALTER - Modifying Table Structure
 
-SQLlin provides several ALTER operations for modifying existing table structures:
+SQLlin provides several ALTER (ALERT) operations for modifying existing table structures:
 
 #### Add Column
 
@@ -81,7 +81,7 @@ data class Person(
 
 fun sample() {
     database {
-        PersonTable ALTER_ADD_COLUMN PersonTable.email
+        PersonTable ALERT_ADD_COLUMN PersonTable.email
     }
 }
 ```
@@ -94,10 +94,10 @@ Rename an existing table to a new name:
 fun sample() {
     database {
         // Rename using Table object
-        PersonTable ALTER_RENAME_TABLE_TO NewPersonTable
+        PersonTable ALERT_RENAME_TABLE_TO NewPersonTable
 
         // Or rename using old table name as String
-        "old_person" ALTER_RENAME_TABLE_TO NewPersonTable
+        "old_person" ALERT_RENAME_TABLE_TO NewPersonTable
     }
 }
 ```
@@ -152,7 +152,7 @@ val database = Database(
             when (oldVersion) {
                 1 -> {
                     // Upgrade from version 1 to 2
-                    PersonTable ALTER_ADD_COLUMN PersonTable.email
+                    PersonTable ALERT_ADD_COLUMN PersonTable.email
                     CREATE(AddressTable)
                 }
             }

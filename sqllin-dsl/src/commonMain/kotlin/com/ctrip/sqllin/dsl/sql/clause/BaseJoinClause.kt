@@ -65,17 +65,14 @@ public sealed class NaturalJoinClause<R>(vararg tables: Table<*>) : BaseJoinClau
  */
 public sealed class JoinClause<R>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables)
 
-@Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
 public infix fun <R> JoinStatementWithoutCondition<R>.ON(condition: SelectCondition): JoinSelectStatement<R> =
     convertToJoinSelectStatement(condition)
 
-@Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
 public inline infix fun <R> JoinStatementWithoutCondition<R>.USING(clauseElement: ClauseElement): JoinSelectStatement<R> =
     USING(listOf(clauseElement))
 
-@Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
 public infix fun <R> JoinStatementWithoutCondition<R>.USING(clauseElements: Iterable<ClauseElement>): JoinSelectStatement<R> =
     convertToJoinSelectStatement(clauseElements)

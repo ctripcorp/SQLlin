@@ -4,7 +4,7 @@
 
 ## 表结构操作
 
-SQLlin 提供了用于管理表结构的类型安全 DSL 操作：CREATE、DROP 和 ALTER。
+SQLlin 提供了用于管理表结构的类型安全 DSL 操作：CREATE、DROP 和 ALTER（在 API 中称为 ALERT）。
 
 ### CREATE - 创建表
 
@@ -61,7 +61,7 @@ fun sample() {
 
 ### ALTER - 修改表结构
 
-SQLlin 提供了多种 ALTER 操作来修改现有的表结构：
+SQLlin 提供了多种 ALTER（ALERT）操作来修改现有的表结构：
 
 #### 添加列
 
@@ -78,7 +78,7 @@ data class Person(
 
 fun sample() {
     database {
-        PersonTable ALTER_ADD_COLUMN PersonTable.email
+        PersonTable ALERT_ADD_COLUMN PersonTable.email
     }
 }
 ```
@@ -91,10 +91,10 @@ fun sample() {
 fun sample() {
     database {
         // Rename using Table object
-        PersonTable ALTER_RENAME_TABLE_TO NewPersonTable
+        PersonTable ALERT_RENAME_TABLE_TO NewPersonTable
 
         // Or rename using old table name as String
-        "old_person" ALTER_RENAME_TABLE_TO NewPersonTable
+        "old_person" ALERT_RENAME_TABLE_TO NewPersonTable
     }
 }
 ```
@@ -149,7 +149,7 @@ val database = Database(
             when (oldVersion) {
                 1 -> {
                     // Upgrade from version 1 to 2
-                    PersonTable ALTER_ADD_COLUMN PersonTable.email
+                    PersonTable ALERT_ADD_COLUMN PersonTable.email
                     CREATE(AddressTable)
                 }
             }
