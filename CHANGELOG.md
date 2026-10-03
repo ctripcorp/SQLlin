@@ -2,7 +2,7 @@
 
 - Date format: YYYY-MM-dd
 
-## 2.4.0 / 2026-xx-xx
+## 2.4.0 / 2026-10-03
 
 ### All
 
