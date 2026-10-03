@@ -24,6 +24,7 @@ import com.ctrip.sqllin.dsl.DatabaseScope
 import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.X
+import com.ctrip.sqllin.dsl.sql.withName
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.ASC
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
@@ -34,6 +35,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 
 /**
@@ -685,6 +688,615 @@ class CommonBasicTest(private val path: DatabasePath) {
             }
             assertEquals(2, selectStatement.getResults().size)
             assertEquals(true, selectStatement.getResults().any { it.name == "Frank" })
+        }
+    }
+
+    @OptIn(AdvancedInsertAPI::class)
+    fun testInsertOrIgnore() {
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            // A conflict on the primary key leaves the existing row exactly as it is, while the entities that
+            // don't conflict are inserted. Seeing the conflict at all depends on the key being written.
+            database {
+                PersonWithIdTable INSERT_WITH_ID PersonWithId(id = 100L, name = "Eve", age = 28)
+            }
+            database {
+                PersonWithIdTable INSERT_OR_IGNORE listOf(
+                    PersonWithId(id = 100L, name = "Eve Updated", age = 29),
+                    PersonWithId(id = 101L, name = "Grace", age = 30),
+                )
+            }
+            lateinit var people: SelectStatement<PersonWithId>
+            database {
+                people = PersonWithIdTable SELECT X
+            }
+            assertEquals(2, people.getResults().size)
+            val eve = people.getResults().first { it.id == 100L }
+            assertEquals("Eve", eve.name)
+            assertEquals(28, eve.age)
+            assertEquals("Grace", people.getResults().first { it.id == 101L }.name)
+
+            // A null ID is still assigned by the database, so it can't conflict on the primary key
+            database {
+                PersonWithIdTable INSERT_OR_IGNORE PersonWithId(id = null, name = "Frank", age = 35)
+            }
+            database {
+                people = PersonWithIdTable SELECT X
+            }
+            assertEquals(3, people.getResults().size)
+            assertNotEquals(null, people.getResults().first { it.name == "Frank" }.id)
+
+            // A conflict on a UNIQUE column other than the key is ignored as well
+            database {
+                UniqueEmailTestTable INSERT UniqueEmailTest(id = null, email = "ivy@example.com", name = "Ivy")
+                UniqueEmailTestTable INSERT_OR_IGNORE UniqueEmailTest(id = null, email = "ivy@example.com", name = "Ivy Again")
+            }
+            lateinit var accounts: SelectStatement<UniqueEmailTest>
+            database {
+                accounts = UniqueEmailTestTable SELECT X
+            }
+            assertEquals(1, accounts.getResults().size)
+            assertEquals("Ivy", accounts.getResults().first().name)
+
+            // With a composite key, inserting a pair again keeps its existing row, other columns included,
+            // which is what tells INSERT_OR_IGNORE apart from INSERT_OR_REPLACE
+            database {
+                EnrollmentTable INSERT Enrollment(studentId = 1, courseId = 101, semester = "Spring")
+            }
+            database {
+                EnrollmentTable INSERT_OR_IGNORE listOf(
+                    Enrollment(studentId = 1, courseId = 101, semester = "Fall"),
+                    Enrollment(studentId = 1, courseId = 102, semester = "Fall"),
+                )
+            }
+            lateinit var enrollments: SelectStatement<Enrollment>
+            database {
+                enrollments = EnrollmentTable SELECT X
+            }
+            assertEquals(2, enrollments.getResults().size)
+            assertEquals("Spring", enrollments.getResults().first { it.courseId == 101L }.semester)
+            assertEquals("Fall", enrollments.getResults().first { it.courseId == 102L }.semester)
+        }
+    }
+
+    /**
+     * Covers projection: a SELECT that reads rows into a narrower @Serializable type than the table's own row type,
+     * given to the clause function, as in `X<BookTitle>()` or `WHERE<BookTitle>(...)`. Only the columns that type's
+     * properties name are selected, and a type that doesn't fit the table is rejected while the statement is built.
+     */
+    fun testProjection() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        database {
+            BookTable INSERT listOf(
+                Book(name = "The Da Vinci Code", author = "Dan Brown", price = 16.96, pages = 454),
+                Book(name = "The Lost Symbol", author = "Dan Brown", price = 19.95, pages = 510),
+                Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251),
+            )
+        }
+
+        // No clause: SELECT name,author FROM book, and SELECT DISTINCT author FROM book. Three books but two authors,
+        // which only holds if DISTINCT compares the projected column alone, so nothing else is selected.
+        lateinit var titles: SelectStatement<BookTitle>
+        lateinit var authors: SelectStatement<BookAuthor>
+        database {
+            titles = BookTable SELECT X<BookTitle>()
+            authors = BookTable SELECT_DISTINCT X<BookAuthor>()
+        }
+        assertEquals(3, titles.getResults().size)
+        assertEquals(true, BookTitle("Kotlin Cookbook", "Ken Kousen") in titles.getResults())
+        assertEquals(listOf("Dan Brown", "Ken Kousen"), authors.getResults().map { it.author }.sorted())
+
+        // Each clause can start a projection, and the projection carries through the rest of the chain
+        lateinit var longestByBrown: SelectStatement<BookTitle>
+        lateinit var byPages: SelectStatement<BookTitle>
+        lateinit var firstTwo: SelectStatement<BookTitle>
+        lateinit var grouped: SelectStatement<BookAuthor>
+        database {
+            BookTable { table ->
+                longestByBrown = table SELECT WHERE<BookTitle>(author EQ "Dan Brown") ORDER_BY (pages to DESC) LIMIT 1
+                byPages = table SELECT ORDER_BY<BookTitle>(pages to ASC)
+                firstTwo = table SELECT LIMIT<BookTitle>(2)
+                grouped = table SELECT GROUP_BY<BookAuthor>(author)
+            }
+        }
+        assertEquals(listOf(BookTitle("The Lost Symbol", "Dan Brown")), longestByBrown.getResults())
+        assertEquals(listOf("Kotlin Cookbook", "The Da Vinci Code", "The Lost Symbol"), byPages.getResults().map { it.name })
+        assertEquals(2, firstTwo.getResults().size)
+        assertEquals(listOf("Dan Brown", "Ken Kousen"), grouped.getResults().map { it.author }.sorted())
+
+        // The DISTINCT variant of each clause
+        lateinit var distinctWhere: SelectStatement<BookAuthor>
+        lateinit var distinctOrderBy: SelectStatement<BookAuthor>
+        lateinit var distinctLimit: SelectStatement<BookAuthor>
+        lateinit var distinctGroupBy: SelectStatement<BookAuthor>
+        database {
+            BookTable { table ->
+                distinctWhere = table SELECT_DISTINCT WHERE<BookAuthor>(price GT 10.0)
+                distinctOrderBy = table SELECT_DISTINCT ORDER_BY<BookAuthor>(author to DESC)
+                distinctLimit = table SELECT_DISTINCT LIMIT<BookAuthor>(1)
+                distinctGroupBy = table SELECT_DISTINCT GROUP_BY<BookAuthor>(author)
+            }
+        }
+        assertEquals(2, distinctWhere.getResults().size)
+        assertEquals(listOf("Ken Kousen", "Dan Brown"), distinctOrderBy.getResults().map { it.author })
+        assertEquals(1, distinctLimit.getResults().size)
+        assertEquals(2, distinctGroupBy.getResults().size)
+
+        // A nullable column is read into a nullable property
+        database {
+            UserAccountTable INSERT UserAccount(
+                id = null,
+                username = "ivy",
+                email = "ivy@example.com",
+                status = UserStatus.ACTIVE,
+                priority = Priority.LOW,
+                notes = null,
+            )
+        }
+        lateinit var notes: SelectStatement<UserNotes>
+        database {
+            notes = UserAccountTable SELECT X<UserNotes>()
+        }
+        assertEquals(listOf(UserNotes("ivy", null)), notes.getResults())
+
+        // A type that doesn't fit the table is rejected while the statement is built, before anything runs
+        val notAColumn = assertFailsWith<IllegalArgumentException> {
+            database { BookTable SELECT X<BookWithIsbn>() }
+        }
+        assertEquals(true, notAColumn.message!!.contains("'isbn' isn't a column"))
+        val wrongType = assertFailsWith<IllegalArgumentException> {
+            database { BookTable SELECT WHERE<BookPagesAsText>(BookTable.pages GT 0) }
+        }
+        assertEquals(true, wrongType.message!!.contains("'pages' is a kotlin.String, but the column holds a kotlin.Int"))
+        val notNullable = assertFailsWith<IllegalArgumentException> {
+            database { UserAccountTable SELECT X<UserNotesNonNull>() }
+        }
+        assertEquals(true, notNullable.message!!.contains("column 'notes' is nullable"))
+    }
+
+    /**
+     * Covers result columns: expressions, such as aggregate functions, selected into properties of a result type with
+     * AS, as in `table SELECT listOf(count(X) AS AuthorStats::books)`, while every other property is read from its
+     * column. Each function reads into the type of the values SQLite returns for it, and NULL into a nullable property.
+     */
+    fun testResultColumns() = Database(getResultColumnDBConfig()).databaseAutoClose { database ->
+        // Not grouped, an aggregate query returns one row even when no rows match: count is 0, and the others NULL
+        lateinit var noTotals: SelectStatement<BookTotals>
+        database {
+            BookTable { table ->
+                noTotals = table SELECT listOf(
+                    count(X) AS BookTotals::books,
+                    max(pages) AS BookTotals::maxPages,
+                    avg(price) AS BookTotals::averagePrice,
+                    sum(price) AS BookTotals::totalPrice,
+                )
+            }
+        }
+        assertEquals(listOf(BookTotals(books = 0, maxPages = null, averagePrice = null, totalPrice = null)), noTotals.getResults())
+
+        database {
+            BookTable INSERT listOf(
+                Book(name = "The Da Vinci Code", author = "Dan Brown", price = 16.96, pages = 454),
+                Book(name = "The Lost Symbol", author = "Dan Brown", price = 19.95, pages = 510),
+                Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251),
+            )
+        }
+
+        // A group of GROUP BY always has rows, so aggregates of NOT NULL columns are non-null in it. 'author' has no
+        // expression, so it is read from its column: SELECT author,count(*) AS books,... FROM book GROUP BY author
+        lateinit var stats: SelectStatement<AuthorStats>
+        lateinit var totals: SelectStatement<BookTotals>
+        lateinit var bookCount: SelectStatement<BookCount>
+        database {
+            BookTable { table ->
+                stats = table SELECT listOf(
+                    count(X) AS AuthorStats::books,
+                    sum(pages) AS AuthorStats::totalPages,
+                    max(price) AS AuthorStats::maxPrice,
+                    min(name) AS AuthorStats::firstTitle,
+                ) GROUP_BY author ORDER_BY (author to ASC)
+                totals = table SELECT listOf(
+                    count(X) AS BookTotals::books,
+                    max(pages) AS BookTotals::maxPages,
+                    avg(price) AS BookTotals::averagePrice,
+                    sum(price) AS BookTotals::totalPrice,
+                )
+                bookCount = table SELECT (count(X) AS BookCount::books)
+            }
+        }
+        assertEquals(
+            listOf(
+                AuthorStats("Dan Brown", books = 2, totalPages = 964, maxPrice = 19.95, firstTitle = "The Da Vinci Code"),
+                AuthorStats("Ken Kousen", books = 1, totalPages = 251, maxPrice = 37.72, firstTitle = "Kotlin Cookbook"),
+            ),
+            stats.getResults(),
+        )
+        val total = totals.getResults().single()
+        assertEquals(3L, total.books)
+        assertEquals(510, total.maxPages)
+        assertEquals(74.63 / 3, total.averagePrice!!, 1e-9)
+        assertEquals(74.63, total.totalPrice!!, 1e-9)
+        assertEquals(3L, bookCount.getResults().single().books)
+
+        // The clauses that can follow result columns, and those that follow them
+        lateinit var prolific: SelectStatement<AuthorStats>
+        lateinit var cheap: SelectStatement<BookCount>
+        lateinit var secondMostBooks: SelectStatement<AuthorStats>
+        lateinit var kotlinBook: SelectStatement<BookFunctions>
+        lateinit var shortestBook: SelectStatement<BookFunctions>
+        lateinit var upperAuthors: SelectStatement<BookAuthor>
+        database {
+            BookTable { table ->
+                prolific = table SELECT listOf(
+                    count(X) AS AuthorStats::books,
+                    sum(pages) AS AuthorStats::totalPages,
+                    max(price) AS AuthorStats::maxPrice,
+                    min(name) AS AuthorStats::firstTitle,
+                ) WHERE (price LT 30.0) GROUP_BY author HAVING (count(X) GT 1)
+                cheap = table SELECT (count(X) AS BookCount::books) WHERE (price LT 20.0)
+                secondMostBooks = table SELECT listOf(
+                    count(X) AS AuthorStats::books,
+                    sum(pages) AS AuthorStats::totalPages,
+                    max(price) AS AuthorStats::maxPrice,
+                    min(name) AS AuthorStats::firstTitle,
+                ) GROUP_BY author ORDER_BY (count(X) to DESC) LIMIT 1 OFFSET 1
+                kotlinBook = table SELECT listOf(
+                    upper(name) AS BookFunctions::upperName,
+                    length(name) AS BookFunctions::nameLength,
+                    round(price, 0) AS BookFunctions::roundedPrice,
+                    abs(pages) AS BookFunctions::absPages,
+                ) WHERE (author EQ "Ken Kousen")
+                shortestBook = table SELECT listOf(
+                    upper(name) AS BookFunctions::upperName,
+                    length(name) AS BookFunctions::nameLength,
+                    round(price, 0) AS BookFunctions::roundedPrice,
+                    abs(pages) AS BookFunctions::absPages,
+                ) ORDER_BY (pages to ASC) LIMIT 1
+                // An expression can take the place of the column of the same name
+                upperAuthors = table SELECT_DISTINCT (upper(author) AS BookAuthor::author)
+            }
+        }
+        assertEquals(
+            listOf(AuthorStats("Dan Brown", books = 2, totalPages = 964, maxPrice = 19.95, firstTitle = "The Da Vinci Code")),
+            prolific.getResults(),
+        )
+        assertEquals(2L, cheap.getResults().single().books)
+        assertEquals(listOf("Ken Kousen"), secondMostBooks.getResults().map { it.author })
+        val functions = BookFunctions("Kotlin Cookbook", upperName = "KOTLIN COOKBOOK", nameLength = 15, roundedPrice = 38.0, absPages = 251)
+        assertEquals(listOf(functions), kotlinBook.getResults())
+        assertEquals(listOf(functions), shortestBook.getResults())
+        assertEquals(listOf("DAN BROWN", "KEN KOUSEN"), upperAuthors.getResults().map { it.author }.sorted())
+
+        // An aggregate of a nullable column is NULL for a group whose values are all NULL, and max of an enum column
+        // is an entry of that enum
+        database {
+            UserAccountTable INSERT listOf(
+                UserAccount(id = null, username = "ann", email = "ann@example.com", status = UserStatus.ACTIVE, priority = Priority.LOW, notes = null),
+                UserAccount(id = null, username = "bob", email = "bob@example.com", status = UserStatus.ACTIVE, priority = Priority.HIGH, notes = "vip"),
+                UserAccount(id = null, username = "cat", email = "cat@example.com", status = UserStatus.INACTIVE, priority = Priority.MEDIUM, notes = null),
+            )
+        }
+        lateinit var byStatus: SelectStatement<StatusStats>
+        database {
+            UserAccountTable { table ->
+                byStatus = table SELECT listOf(
+                    count(X) AS StatusStats::users,
+                    group_concat(notes, ",") AS StatusStats::notes,
+                    max(priority) AS StatusStats::highestPriority,
+                ) GROUP_BY status ORDER_BY (status to ASC)
+            }
+        }
+        assertEquals(
+            listOf(
+                StatusStats(UserStatus.ACTIVE, users = 2, notes = "vip", highestPriority = Priority.HIGH),
+                StatusStats(UserStatus.INACTIVE, users = 1, notes = null, highestPriority = Priority.MEDIUM),
+            ),
+            byStatus.getResults(),
+        )
+
+        // sum of a Boolean column counts its true values
+        database {
+            DefaultValuesTestTable INSERT listOf(true, false, true).mapIndexed { index, isEnabled ->
+                DefaultValuesTest(id = null, name = "row$index", status = "active", loginCount = 0, isEnabled = isEnabled, createdAt = "2026-10-02")
+            }
+        }
+        lateinit var enabled: SelectStatement<EnabledCount>
+        database {
+            DefaultValuesTestTable { table ->
+                enabled = table SELECT (sum(isEnabled) AS EnabledCount::enabled)
+            }
+        }
+        assertEquals(2L, enabled.getResults().single().enabled)
+    }
+
+    /**
+     * Covers how result columns are checked against their result type. Most of it is checked while the statement is
+     * built: a property has to be serialized under its own name, get one expression at most, and be nullable when its
+     * expression can be NULL in a row or a group. Whether a property can be NULL because an aggregate query isn't
+     * grouped depends on whether GROUP BY follows, so that is checked when the scope ends, before any statement runs.
+     */
+    fun testResultColumnChecks() = Database(getResultColumnDBConfig()).databaseAutoClose { database ->
+        // Checked while the statement is built
+        val nullInGroup = assertFailsWith<IllegalArgumentException> {
+            database {
+                UserAccountTable { table ->
+                    table SELECT (group_concat(notes, ",") AS UserNotesNonNull::notes) GROUP_BY status
+                }
+            }
+        }
+        assertEquals(true, nullInGroup.message!!.contains("'group_concat(notes,',')' can be NULL, so property 'notes' has to be nullable"))
+        val twice = assertFailsWith<IllegalArgumentException> {
+            database {
+                BookTable { table ->
+                    table SELECT listOf(count(X) AS BookCount::books, count(name) AS BookCount::books)
+                }
+            }
+        }
+        assertEquals(true, twice.message!!.contains("'books' is given more than one expression"))
+        val renamed = assertFailsWith<IllegalArgumentException> {
+            database { BookTable { table -> table SELECT (count(X) AS RenamedBookCount::books) } }
+        }
+        assertEquals(true, renamed.message!!.contains("doesn't serialize its property 'books' under that name"))
+        val none = assertFailsWith<IllegalArgumentException> {
+            database { BookTable SELECT emptyList<ResultColumn<BookCount>>() }
+        }
+        assertEquals(true, none.message!!.contains("no result columns"))
+        val otherTable = assertFailsWith<IllegalArgumentException> {
+            database { BookTable SELECT (UserAccountTable.username AS BookAuthor::author) }
+        }
+        assertEquals(true, otherTable.message!!.contains("belongs to table 'user_account'"))
+        val notAColumn = assertFailsWith<IllegalArgumentException> {
+            database { BookTable { table -> table SELECT (upper(name) AS BookWithIsbn::name) } }
+        }
+        assertEquals(true, notAColumn.message!!.contains("'isbn' isn't a column"))
+
+        // Checked when the scope ends. Without GROUP BY, 'maxPages' would be NULL when no rows match, while 'books',
+        // a count, would be 0. Nothing in the scope runs, not even the INSERT before it.
+        val ungrouped = assertFailsWith<IllegalArgumentException> {
+            database {
+                BookTable INSERT Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251)
+                BookTable { table ->
+                    table SELECT listOf(count(X) AS BookCountAndMaxPages::books, max(pages) AS BookCountAndMaxPages::maxPages)
+                }
+            }
+        }
+        assertEquals(true, ungrouped.message!!.contains("without GROUP BY"))
+        assertEquals(true, ungrouped.message!!.contains("'maxPages'"))
+        assertEquals(false, ungrouped.message!!.contains("'books'"))
+        // A column is NULL in that row as well, and the check follows the statement through the clauses after it
+        val ungroupedColumn = assertFailsWith<IllegalArgumentException> {
+            database {
+                BookTable { table ->
+                    table SELECT listOf(
+                        count(X) AS AuthorStats::books,
+                        sum(pages) AS AuthorStats::totalPages,
+                        max(price) AS AuthorStats::maxPrice,
+                        min(name) AS AuthorStats::firstTitle,
+                    ) WHERE (price GT 0.0) ORDER_BY (pages to ASC) LIMIT 1
+                }
+            }
+        }
+        assertEquals(true, ungroupedColumn.message!!.contains("'author'"))
+        // In a transaction too
+        val inTransaction = assertFailsWith<IllegalArgumentException> {
+            database {
+                transaction {
+                    BookTable INSERT Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251)
+                    BookTable { table ->
+                        table SELECT listOf(count(X) AS BookCountAndMaxPages::books, max(pages) AS BookCountAndMaxPages::maxPages)
+                    }
+                }
+            }
+        }
+        assertEquals(true, inTransaction.message!!.contains("without GROUP BY"))
+        lateinit var bookCount: SelectStatement<BookCount>
+        database {
+            BookTable { table -> bookCount = table SELECT (count(X) AS BookCount::books) }
+        }
+        assertEquals(0L, bookCount.getResults().single().books)
+
+        // GROUP BY settles it, after WHERE as well
+        lateinit var grouped: SelectStatement<BookCountAndMaxPages>
+        database {
+            BookTable INSERT Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251)
+            BookTable { table ->
+                grouped = table SELECT listOf(
+                    count(X) AS BookCountAndMaxPages::books,
+                    max(pages) AS BookCountAndMaxPages::maxPages,
+                ) WHERE (price GT 0.0) GROUP_BY author
+            }
+        }
+        assertEquals(listOf(BookCountAndMaxPages(books = 1, maxPages = 251)), grouped.getResults())
+    }
+
+    /**
+     * Compile-time check, never called: each function reads into the type of the values SQLite returns for it, which
+     * is what lets AS select it only into a property of that type.
+     */
+    @Suppress("unused", "UNUSED_VARIABLE")
+    private fun checkFunctionResultTypes(): Unit = BookTable { table ->
+        val countAll: ClauseNumber<Long> = count(X)
+        val countColumn: ClauseNumber<Long> = count(name)
+        val sumOfInt: ClauseNumber<Long> = sum(pages)
+        val sumOfDouble: ClauseNumber<Double> = sum(price)
+        val sumOfBoolean: ClauseNumber<Long> = DefaultValuesTestTable.sum(DefaultValuesTestTable.isEnabled)
+        val average: ClauseNumber<Double> = avg(pages)
+        val maxOfInt: ClauseNumber<PageCount> = max(pages)
+        val minOfString: ClauseString<String> = min(name)
+        val maxOfEnum: ClauseEnum<UserStatus> = UserAccountTable.max(UserAccountTable.status)
+        val absolute: ClauseNumber<PageCount> = abs(pages)
+        val rounded: ClauseNumber<Double> = round(pages, 1)
+        val randomNumber: ClauseNumber<Long> = random()
+        val upperCase: ClauseString<String> = upper(name)
+        val nameLength: ClauseNumber<Long> = length(name)
+        val position: ClauseNumber<Long> = instr(name, "a")
+        val concatenated: ClauseString<String> = group_concat(name, ",")
+    }
+
+    /**
+     * Covers `INSERT INTO ... SELECT`: `INSERT`, `INSERT_OR_IGNORE` and `INSERT_OR_REPLACE` given a SELECT of the
+     * table's row type insert the rows it returns, and the SELECT no longer runs on its own. The target is a copy of a
+     * table made with `withName`.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testInsertSelect() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        val bookCopy = BookTable.withName("book_copy")
+        assertEquals(true, bookCopy.createSQL.startsWith("CREATE TABLE book_copy("))
+        assertEquals(BookTable.createSQL.substringAfter('('), bookCopy.createSQL.substringAfter('('))
+
+        // Copy the rows a WHERE selects, its parameter included. The SELECT is part of the INSERT now, so it doesn't
+        // run by itself and has no results of its own.
+        lateinit var source: SelectStatement<Book>
+        database {
+            CREATE(bookCopy)
+            CREATE(AuthorBookCountTable)
+            BookTable INSERT listOf(
+                Book(name = "The Da Vinci Code", author = "Dan Brown", price = 16.96, pages = 454),
+                Book(name = "The Lost Symbol", author = "Dan Brown", price = 19.95, pages = 510),
+                Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251),
+            )
+            source = BookTable SELECT WHERE(BookTable.price LT 30.0)
+            bookCopy INSERT source
+        }
+        assertFailsWith<IllegalStateException> { source.getResults() }
+        lateinit var copied: SelectStatement<Book>
+        database {
+            copied = bookCopy SELECT X
+        }
+        assertEquals(listOf("The Da Vinci Code", "The Lost Symbol"), copied.getResults().map { it.name }.sorted())
+
+        // Result columns produce rows of another table's type: here a table of aggregates
+        lateinit var counts: SelectStatement<AuthorBookCount>
+        database {
+            BookTable { table ->
+                AuthorBookCountTable INSERT (table SELECT (count(X) AS AuthorBookCount::books) GROUP_BY author)
+            }
+            counts = AuthorBookCountTable SELECT X
+        }
+        assertEquals(
+            listOf(AuthorBookCount("Dan Brown", 2), AuthorBookCount("Ken Kousen", 1)),
+            counts.getResults().sortedBy { it.author },
+        )
+        // The SELECT is checked when it becomes part of the INSERT: without GROUP BY, 'author' would be NULL when no
+        // rows match
+        val ungrouped = assertFailsWith<IllegalArgumentException> {
+            database {
+                BookTable { table ->
+                    AuthorBookCountTable INSERT (table SELECT (count(X) AS AuthorBookCount::books))
+                }
+            }
+        }
+        assertEquals(true, ungrouped.message!!.contains("without GROUP BY"))
+
+        // On a conflict with the primary key, INSERT fails, INSERT_OR_IGNORE keeps the row, and INSERT_OR_REPLACE
+        // replaces it. The key is copied as it is selected.
+        val personCopy = PersonWithIdTable.withName("person_copy")
+        database {
+            CREATE(personCopy)
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "Ann", age = 30),
+                PersonWithId(id = null, name = "Bob", age = 40),
+            )
+            personCopy INSERT (PersonWithIdTable SELECT WHERE(PersonWithIdTable.name EQ "Ann"))
+        }
+        assertFails {
+            database { personCopy INSERT (PersonWithIdTable SELECT X) }
+        }
+        lateinit var afterIgnore: SelectStatement<PersonWithId>
+        database {
+            PersonWithIdTable { table ->
+                table UPDATE SET { age = 31 } WHERE (name EQ "Ann")
+            }
+            personCopy INSERT_OR_IGNORE (PersonWithIdTable SELECT X)
+            afterIgnore = personCopy SELECT X
+        }
+        assertEquals(listOf("Ann" to 30, "Bob" to 40), afterIgnore.getResults().map { it.name to it.age }.sortedBy { it.first })
+        lateinit var afterReplace: SelectStatement<PersonWithId>
+        lateinit var people: SelectStatement<PersonWithId>
+        database {
+            PersonWithIdTable { table ->
+                personCopy INSERT_OR_REPLACE (table SELECT listOf(upper(name) AS PersonWithId::name))
+            }
+            afterReplace = personCopy SELECT X
+            people = PersonWithIdTable SELECT X
+        }
+        assertEquals(listOf("ANN" to 31, "BOB" to 40), afterReplace.getResults().map { it.name to it.age }.sortedBy { it.first })
+        assertEquals(people.getResults().map { it.id }.sortedBy { it }, afterReplace.getResults().map { it.id }.sortedBy { it })
+    }
+
+    /**
+     * Covers rebuilding a table in a migration, for a change `ALTER TABLE` can't make: the new structure is created
+     * under a temporary name with `withName`, filled with `INSERT INTO ... SELECT` from the old one, which is dropped,
+     * and renamed to the table's name. Renaming the new table rather than the old one leaves the foreign keys of other
+     * tables pointing at the rebuilt table.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testTableRebuild() {
+        val version1 = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(RebuildPersonV1Table)
+                CREATE(RebuildPetTable)
+            },
+        )
+        Database(version1).databaseAutoClose { database ->
+            database {
+                RebuildPersonV1Table INSERT listOf(
+                    RebuildPersonV1(id = null, name = "Ann", legacy = 1),
+                    RebuildPersonV1(id = null, name = "Bob", legacy = 2),
+                )
+                RebuildPetTable INSERT RebuildPet(id = 1, ownerId = 1)
+            }
+        }
+
+        val version2 = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 2,
+            create = {
+                CREATE(RebuildPersonTable)
+                CREATE(RebuildPetTable)
+            },
+            upgrade = { oldVersion, _ ->
+                if (oldVersion < 2) {
+                    val newPerson = RebuildPersonTable.withName("rebuild_person_new")
+                    CREATE(newPerson)
+                    RebuildPersonV1Table { table ->
+                        newPerson INSERT (table SELECT (name AS RebuildPerson::fullName))
+                    }
+                    DROP(RebuildPersonV1Table)
+                    "rebuild_person_new" ALTER_RENAME_TABLE_TO RebuildPersonTable
+                }
+            },
+        )
+        Database(version2).databaseAutoClose { database ->
+            // The rows and their keys are kept, under the new structure, and 'legacy' is gone
+            lateinit var people: SelectStatement<RebuildPerson>
+            database {
+                people = RebuildPersonTable SELECT X
+            }
+            assertEquals(listOf(RebuildPerson(1, "Ann"), RebuildPerson(2, "Bob")), people.getResults().sortedBy { it.id })
+            assertEquals(true, database.selectFails { RebuildPersonV1Table SELECT X })
+
+            // The new constraint holds
+            assertFails {
+                database { RebuildPersonTable INSERT RebuildPerson(id = null, fullName = "Ann") }
+            }
+
+            // The pet's foreign key still points at 'rebuild_person': an existing owner is accepted and a missing one
+            // rejected. Had the reference followed a renamed table, both would fail.
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+                RebuildPetTable INSERT RebuildPet(id = 2, ownerId = 2)
+            }
+            assertFails {
+                database { RebuildPetTable INSERT RebuildPet(id = 3, ownerId = 99) }
+            }
+            lateinit var pets: SelectStatement<RebuildPet>
+            database {
+                pets = RebuildPetTable SELECT X
+            }
+            assertEquals(listOf(1L, 2L), pets.getResults().map { it.id }.sorted())
         }
     }
 
@@ -1635,6 +2247,86 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
         // Printf formats the value, we're just checking it can be used in queries
         assertNotEquals(null, printfStatement?.getResults())
+    }
+
+    /**
+     * Covers the string arguments of `replace`, `instr`, `printf` and `group_concat`, which are written into the SQL
+     * as literals: a `'` in one is part of the string, so it neither breaks the statement nor changes what it does.
+     */
+    fun testFunctionStringArguments() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        database {
+            BookTable INSERT listOf(
+                Book(name = "It's Kotlin", author = "Pat O'Brien", price = 10.0, pages = 100),
+                Book(name = "Plain Title", author = "Sam Lee", price = 20.0, pages = 200),
+            )
+        }
+        lateinit var replaced: SelectStatement<Book>
+        lateinit var withQuote: SelectStatement<Book>
+        lateinit var injected: SelectStatement<Book>
+        lateinit var names: SelectStatement<BookNames>
+        lateinit var labels: SelectStatement<BookLabel>
+        database {
+            BookTable { table ->
+                replaced = table SELECT WHERE(replace(name, "It's", "It is") EQ "It is Kotlin")
+                withQuote = table SELECT WHERE(instr(author, "'") GT 0)
+                // Before the fix, this ended the literal and made the condition true for every row
+                injected = table SELECT WHERE(instr(name, "zzz') + 1 + ('") GT 0)
+                names = table SELECT (group_concat(name, "' ") AS BookNames::names)
+                labels = table SELECT (printf("it's %s", name) AS BookLabel::label) ORDER_BY (name to ASC)
+            }
+        }
+        assertEquals(listOf("It's Kotlin"), replaced.getResults().map { it.name })
+        assertEquals(listOf("Pat O'Brien"), withQuote.getResults().map { it.author })
+        assertEquals(0, injected.getResults().size)
+        assertEquals(listOf("It's Kotlin", "Plain Title"), names.getResults().single().names!!.split("' ").sorted())
+        assertEquals(listOf("it's It's Kotlin", "it's Plain Title"), labels.getResults().map { it.label })
+    }
+
+    /**
+     * Covers comparing two elements when one or both are functions: a column is qualified by its table's name, and a
+     * function is written as it is, as `book.length(name)` isn't SQL.
+     */
+    fun testFunctionComparisons() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        database {
+            BookTable INSERT listOf(
+                Book(name = "Short", author = "Ann", price = 10.0, pages = 3),
+                Book(name = "A Longer Title", author = "Ann", price = 20.0, pages = 300),
+                Book(name = "Equal", author = "Bob", price = 30.0, pages = 5),
+            )
+            UserAccountTable INSERT listOf(
+                UserAccount(id = null, username = "ann", email = "ann@example.com", status = UserStatus.ACTIVE, priority = Priority.LOW, notes = null),
+                UserAccount(id = null, username = "bob", email = "bob@example.com", status = UserStatus.ACTIVE, priority = Priority.HIGH, notes = null),
+                UserAccount(id = null, username = "cat", email = "cat@example.com", status = UserStatus.INACTIVE, priority = Priority.MEDIUM, notes = null),
+            )
+        }
+        lateinit var functionToColumn: SelectStatement<Book>
+        lateinit var columnToFunction: SelectStatement<Book>
+        lateinit var functionToFunction: SelectStatement<BookAuthor>
+        lateinit var strings: SelectStatement<Book>
+        lateinit var enums: SelectStatement<StatusStats>
+        database {
+            BookTable { table ->
+                // Names longer than their page count
+                functionToColumn = table SELECT WHERE(length(name) GT pages)
+                columnToFunction = table SELECT WHERE(pages EQ length(name))
+                // Authors whose books differ in length
+                functionToFunction = table SELECT GROUP_BY<BookAuthor>(author) HAVING (max(pages) GT min(pages))
+                strings = table SELECT WHERE(upper(author) NEQ author)
+            }
+            UserAccountTable { table ->
+                // Statuses whose users differ in priority
+                enums = table SELECT listOf(
+                    count(X) AS StatusStats::users,
+                    group_concat(notes, ",") AS StatusStats::notes,
+                    max(priority) AS StatusStats::highestPriority,
+                ) GROUP_BY status HAVING (max(priority) NEQ min(priority))
+            }
+        }
+        assertEquals(listOf("Short"), functionToColumn.getResults().map { it.name })
+        assertEquals(listOf("Equal"), columnToFunction.getResults().map { it.name })
+        assertEquals(listOf("Ann"), functionToFunction.getResults().map { it.author })
+        assertEquals(3, strings.getResults().size)
+        assertEquals(listOf(UserStatus.ACTIVE), enums.getResults().map { it.status })
     }
 
     /**
@@ -2866,6 +3558,19 @@ class CommonBasicTest(private val path: DatabasePath) {
                 CREATE(CompositeUniqueTestTable)
                 CREATE(MultiGroupUniqueTestTable)
                 CREATE(CombinedConstraintsTestTable)
+            }
+        )
+
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    private fun getResultColumnDBConfig(): DSLDBConfiguration =
+        DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(BookTable)
+                CREATE(UserAccountTable)
+                CREATE(DefaultValuesTestTable)
             }
         )
 

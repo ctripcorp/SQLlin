@@ -36,12 +36,12 @@ package com.ctrip.sqllin.dsl.annotation
 internal annotation class StatementDslMaker
 
 /**
- * DSL marker that highlights SQL keywords, such as `X` and the `ASC` and `DESC` ordering, in IntelliJ IDEA.
+ * DSL marker that highlights SQL keywords, such as `X`, `X<R>()` and the `ASC` and `DESC` ordering, in IntelliJ IDEA.
  *
  * @author Yuang Qiao
  */
 @DslMarker
-@Target(AnnotationTarget.CLASS, AnnotationTarget.PROPERTY)
+@Target(AnnotationTarget.CLASS, AnnotationTarget.PROPERTY, AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.BINARY)
 internal annotation class KeyWordDslMaker
 

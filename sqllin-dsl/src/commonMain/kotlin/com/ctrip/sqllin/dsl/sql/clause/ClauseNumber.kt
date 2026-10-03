@@ -35,13 +35,29 @@ import com.ctrip.sqllin.dsl.sql.Table
  * - `inIterable`: IN (?, ?, ...) - all values parameterized
  * - `between`: BETWEEN ? AND ? - both boundaries parameterized
  *
+ * @param V The type of the element's values: `Int` for an `Int` column, `Long` for `count(*)`, `Double` for `avg(...)`
+ *
  * @author Yuang Qiao
  */
-public class ClauseNumber(
+public class ClauseNumber<V : Any> internal constructor(
     valueName: String,
     table: Table<*>,
-    isFunction: Boolean = false,
-) : ClauseElement(valueName, table, isFunction) {
+    isFunction: Boolean,
+    isNullable: Boolean,
+    isAggregate: Boolean,
+    isNullOnNoRows: Boolean,
+) : ClauseElement<V>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows) {
+
+    /**
+     * Creates the element of a column, as the code generated for a table does.
+     *
+     * @param isNullable Whether the column is nullable
+     */
+    public constructor(valueName: String, table: Table<*>, isNullable: Boolean) :
+        this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
+
+    override fun toAggregate(valueName: String, table: Table<*>): ClauseNumber<V> =
+        ClauseNumber(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true)
 
     /**
      * Less than (<) comparison using parameterized binding.
@@ -54,7 +70,7 @@ public class ClauseNumber(
     internal infix fun lt(number: Number): SelectCondition = appendNumber("<?", number)
 
     /** Less than (<) - compare against another column/function */
-    internal infix fun lt(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber("<", clauseNumber)
+    internal infix fun lt(clauseNumber: ClauseNumber<*>): SelectCondition = appendClauseNumber("<", clauseNumber)
 
     /**
      * Less than or equal (<=) comparison using parameterized binding.
@@ -67,7 +83,7 @@ public class ClauseNumber(
     internal infix fun lte(number: Number): SelectCondition = appendNumber("<=?", number)
 
     /** Less than or equal (<=) - compare against another column/function */
-    internal infix fun lte(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber("<=", clauseNumber)
+    internal infix fun lte(clauseNumber: ClauseNumber<*>): SelectCondition = appendClauseNumber("<=", clauseNumber)
 
     /**
      * Equals (=) comparison using parameterized binding, or IS NULL for null values.
@@ -80,7 +96,7 @@ public class ClauseNumber(
     internal infix fun eq(number: Number?): SelectCondition = appendNullableNumber("=", " IS NULL", number)
 
     /** Equals (=) - compare against another column/function */
-    internal infix fun eq(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber("=", clauseNumber)
+    internal infix fun eq(clauseNumber: ClauseNumber<*>): SelectCondition = appendClauseNumber("=", clauseNumber)
 
     /**
      * Not equals (!=) comparison using parameterized binding, or IS NOT NULL for null values.
@@ -93,7 +109,7 @@ public class ClauseNumber(
     internal infix fun neq(number: Number?): SelectCondition = appendNullableNumber("!=", " IS NOT NULL", number)
 
     /** Not equals (!=) - compare against another column/function */
-    internal infix fun neq(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber("!=", clauseNumber)
+    internal infix fun neq(clauseNumber: ClauseNumber<*>): SelectCondition = appendClauseNumber("!=", clauseNumber)
 
     /**
      * Greater than (>) comparison using parameterized binding.
@@ -106,7 +122,7 @@ public class ClauseNumber(
     internal infix fun gt(number: Number): SelectCondition = appendNumber(">?", number)
 
     /** Greater than (>) - compare against another column/function */
-    internal infix fun gt(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber(">", clauseNumber)
+    internal infix fun gt(clauseNumber: ClauseNumber<*>): SelectCondition = appendClauseNumber(">", clauseNumber)
 
     /**
      * Greater than or equal (>=) comparison using parameterized binding.
@@ -119,7 +135,7 @@ public class ClauseNumber(
     internal infix fun gte(number: Number): SelectCondition = appendNumber(">=?", number)
 
     /** Greater than or equal (>=) - compare against another column/function */
-    internal infix fun gte(clauseNumber: ClauseNumber): SelectCondition = appendClauseNumber(">=", clauseNumber)
+    internal infix fun gte(clauseNumber: ClauseNumber<*>): SelectCondition = appendClauseNumber(">=", clauseNumber)
 
     /**
      * IN operator - checks if value is in the given set.
@@ -202,21 +218,17 @@ public class ClauseNumber(
         return SelectCondition(builder.toString(), parameters)
     }
 
-    private fun appendClauseNumber(symbol: String, clauseNumber: ClauseNumber): SelectCondition {
+    private fun appendClauseNumber(symbol: String, clauseNumber: ClauseNumber<*>): SelectCondition {
         val sql = buildString {
-            append(table.tableName)
-            append('.')
-            append(valueName)
+            appendSQL(this)
             append(symbol)
-            append(clauseNumber.table.tableName)
-            append('.')
-            append(clauseNumber.valueName)
+            clauseNumber.appendSQL(this)
         }
         return SelectCondition(sql, null)
     }
 
     override fun hashCode(): Int = valueName.hashCode() + table.tableName.hashCode()
-    override fun equals(other: Any?): Boolean = (other as? ClauseNumber)?.let {
+    override fun equals(other: Any?): Boolean = (other as? ClauseNumber<*>)?.let {
         it.valueName == valueName && it.table.tableName == table.tableName
     } ?: false
 }

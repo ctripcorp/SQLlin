@@ -22,12 +22,15 @@ import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.compiler.appendDBColumnName
 import com.ctrip.sqllin.dsl.sql.statement.*
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.CompositeDecoder
 
 /**
  * SELECT operation builder.
  *
  * Constructs SELECT statements by combining table information with clauses (WHERE, ORDER BY,
- * LIMIT, GROUP BY, JOIN). Creates the appropriate statement type based on which clauses are
+ * LIMIT, GROUP BY, JOIN) or result columns. Creates the appropriate statement type based on which clauses are
  * initially provided, enforcing compile-time clause ordering through the statement hierarchy.
  *
  * @author Yuang Qiao
@@ -42,60 +45,68 @@ internal object Select : Operation {
      *
      * @return Statement that can be followed by GROUP BY, ORDER BY, or LIMIT
      */
-    fun <T> select(
-        table: Table<T>,
-        clause: WhereClause<T>,
+    fun <R> select(
+        table: Table<*>,
+        clause: WhereClause<R>,
         isDistinct: Boolean,
-        deserializer: DeserializationStrategy<T>,
+        deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
-    ): WhereSelectStatement<T> =
-        WhereSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, clause.selectCondition.parameters)
+    ): WhereSelectStatement<R> {
+        checkProjection(table, deserializer)
+        return WhereSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, clause.selectCondition.parameters, null)
+    }
 
     /**
      * Builds a SELECT statement with ORDER BY clause.
      *
      * @return Statement that can be followed by LIMIT
      */
-    fun <T> select(
-        table: Table<T>,
-        clause: OrderByClause<T>,
+    fun <R> select(
+        table: Table<*>,
+        clause: OrderByClause<R>,
         isDistinct: Boolean,
-        deserializer: DeserializationStrategy<T>,
+        deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
-    ): OrderBySelectStatement<T> =
-        OrderBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null)
+    ): OrderBySelectStatement<R> {
+        checkProjection(table, deserializer)
+        return OrderBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null)
+    }
 
     /**
      * Builds a SELECT statement with LIMIT clause.
      *
      * @return Statement that can be followed by OFFSET
      */
-    fun <T> select(
-        table: Table<T>,
-        clause: LimitClause<T>,
+    fun <R> select(
+        table: Table<*>,
+        clause: LimitClause<R>,
         isDistinct: Boolean,
-        deserializer: DeserializationStrategy<T>,
+        deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
-    ): LimitSelectStatement<T> =
-        LimitSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null)
+    ): LimitSelectStatement<R> {
+        checkProjection(table, deserializer)
+        return LimitSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null)
+    }
 
     /**
      * Builds a SELECT statement with GROUP BY clause.
      *
      * @return Statement that can be followed by HAVING or ORDER BY
      */
-    fun <T> select(
-        table: Table<T>,
-        clause: GroupByClause<T>,
+    fun <R> select(
+        table: Table<*>,
+        clause: GroupByClause<R>,
         isDistinct: Boolean,
-        deserializer: DeserializationStrategy<T>,
+        deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
-    ): GroupBySelectStatement<T> =
-        GroupBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null)
+    ): GroupBySelectStatement<R> {
+        checkProjection(table, deserializer)
+        return GroupBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null)
+    }
 
     /**
      * Builds a SELECT statement with NATURAL JOIN clause.
@@ -112,7 +123,7 @@ internal object Select : Operation {
         connection: DatabaseConnection,
         container: StatementContainer,
     ) : JoinSelectStatement<R> =
-        JoinSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null)
+        JoinSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null)
 
     /**
      * Builds a SELECT statement with JOIN clause (requires ON or USING).
@@ -138,6 +149,165 @@ internal object Select : Operation {
             addSelectStatement,
         )
 
+    /**
+     * Checks that [deserializer] can read rows of [table], when it reads them into a type other than the table's
+     * own row type.
+     *
+     * The columns a SELECT reads are the element names of [deserializer]'s descriptor, so a projection type has to
+     * fit the table. Every property must name a column, have that column's type, and be nullable when the column is,
+     * as a NULL read into a non-null property would quietly become `0` or `""`. A mismatch fails here, while the
+     * statement is built, rather than in SQLite or not at all.
+     *
+     * @throws IllegalArgumentException if the projection type doesn't fit the table
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun checkProjection(table: Table<*>, deserializer: DeserializationStrategy<*>) {
+        val columns = table.kSerializer().descriptor
+        val projection = deserializer.descriptor
+        if (projection == columns)
+            return
+        for (index in 0 ..< projection.elementsCount)
+            checkColumnProperty(table, columns, projection, index)
+    }
+
+    /**
+     * Checks that property [index] of [projection] can be read from the column of [table] it names, as described by
+     * [checkProjection].
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun checkColumnProperty(table: Table<*>, columns: SerialDescriptor, projection: SerialDescriptor, index: Int) {
+        val projectionName = projection.serialName
+        val name = projection.getElementName(index)
+        val columnIndex = columns.getElementIndex(name)
+        require(columnIndex != CompositeDecoder.UNKNOWN_NAME) {
+            "Can't select '$projectionName' from table '${table.tableName}': its property '$name' isn't a column of that table."
+        }
+        val column = columns.getElementDescriptor(columnIndex)
+        val property = projection.getElementDescriptor(index)
+        val columnType = column.serialName.removeSuffix("?")
+        val propertyType = property.serialName.removeSuffix("?")
+        require(propertyType == columnType) {
+            "Can't select '$projectionName' from table '${table.tableName}': its property '$name' is a $propertyType, but the column holds a $columnType."
+        }
+        require(property.isNullable || !column.isNullable) {
+            "Can't select '$projectionName' from table '${table.tableName}': column '$name' is nullable, so property '$name' has to be nullable too."
+        }
+    }
+
+    /**
+     * Builds a SELECT statement with result columns: expressions selected into properties of the result type with
+     * `AS`, while every other property is read from its column.
+     *
+     * Generates SQL in the format: `SELECT column, expression AS property, ... FROM table`, in the order of the result
+     * type's properties.
+     *
+     * @return Statement that can be followed by WHERE, GROUP BY, ORDER BY, or LIMIT
+     */
+    fun <R> select(
+        table: Table<*>,
+        resultColumns: Iterable<ResultColumn<R>>,
+        isDistinct: Boolean,
+        deserializer: DeserializationStrategy<R>,
+        connection: DatabaseConnection,
+        container: StatementContainer,
+    ): ResultColumnSelectStatement<R> {
+        val expressions = checkResultColumns(table, resultColumns, deserializer)
+        val projection = deserializer.descriptor
+        val sql = buildString {
+            append(sqlStr)
+            if (isDistinct)
+                append("DISTINCT ")
+            for (index in 0 ..< projection.elementsCount) {
+                if (index > 0)
+                    append(',')
+                val name = projection.getElementName(index)
+                expressions[name]?.let {
+                    append(it.valueName)
+                    append(" AS ")
+                }
+                append(name)
+            }
+            append(" FROM ")
+            append(table.tableName)
+        }
+        return ResultColumnSelectStatement(sql, deserializer, connection, container, null, ungroupedError(table, expressions, deserializer))
+    }
+
+    /**
+     * Checks that [resultColumns] fit the result type of [deserializer], and returns their expressions by the names of
+     * the properties they are selected into.
+     *
+     * Every result column has to name a property that is serialized under its own name, which is how the result is
+     * read, and no property can be given two expressions. A property given an expression has to be nullable when the
+     * expression can be NULL in a row, or in a group of GROUP BY. Every other property is read from its column, and
+     * is checked as [checkProjection] does. Whether a property has to be nullable because the query isn't grouped is
+     * left to [ungroupedError].
+     *
+     * @throws IllegalArgumentException if the result columns don't fit the result type
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun <R> checkResultColumns(
+        table: Table<*>,
+        resultColumns: Iterable<ResultColumn<R>>,
+        deserializer: DeserializationStrategy<R>,
+    ): Map<String, ClauseElement<*>> {
+        val projection = deserializer.descriptor
+        val projectionName = projection.serialName
+        val expressions = HashMap<String, ClauseElement<*>>()
+        for (resultColumn in resultColumns) {
+            val name = resultColumn.propertyName
+            val index = projection.getElementIndex(name)
+            require(index != CompositeDecoder.UNKNOWN_NAME) {
+                "Can't select '$projectionName' from table '${table.tableName}': it doesn't serialize its property '$name' under that name. The property may be @Transient or computed, or renamed with @SerialName, which a property given an expression with AS can't be."
+            }
+            require(name !in expressions) {
+                "Can't select '$projectionName' from table '${table.tableName}': its property '$name' is given more than one expression."
+            }
+            val element = resultColumn.element
+            require(element.table.tableName == table.tableName) {
+                "Can't select '$projectionName' from table '${table.tableName}': the expression '${element.valueName}' of property '$name' belongs to table '${element.table.tableName}'."
+            }
+            require(!element.isNullable || projection.getElementDescriptor(index).isNullable) {
+                "Can't select '$projectionName' from table '${table.tableName}': '${element.valueName}' can be NULL, so property '$name' has to be nullable."
+            }
+            expressions[name] = element
+        }
+        require(expressions.isNotEmpty()) {
+            "Can't select '$projectionName' from table '${table.tableName}' with no result columns. To select columns only, use X<$projectionName>()."
+        }
+        val columns = table.kSerializer().descriptor
+        for (index in 0 ..< projection.elementsCount)
+            if (projection.getElementName(index) !in expressions)
+                checkColumnProperty(table, columns, projection, index)
+        return expressions
+    }
+
+    /**
+     * Returns the error to report if the statement isn't grouped with GROUP BY, or null if it can do without.
+     *
+     * A query that selects an aggregate function is an aggregate query, and without GROUP BY, SQLite returns one row
+     * for it even when no rows match. In that row, every column and every aggregate function except `count` is NULL,
+     * so the properties that hold them have to be nullable, unless the query is grouped: then each group has rows.
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun ungroupedError(
+        table: Table<*>,
+        expressions: Map<String, ClauseElement<*>>,
+        deserializer: DeserializationStrategy<*>,
+    ): String? {
+        if (expressions.values.none { it.isAggregate })
+            return null
+        val projection = deserializer.descriptor
+        val nonNullProperties = (0 ..< projection.elementsCount).filter { index ->
+            !projection.getElementDescriptor(index).isNullable &&
+                expressions[projection.getElementName(index)]?.isNullOnNoRows != false
+        }.map { projection.getElementName(it) }
+        if (nonNullProperties.isEmpty())
+            return null
+        val properties = nonNullProperties.joinToString { "'$it'" }
+        return "Can't select '${projection.serialName}' from table '${table.tableName}' without GROUP BY: an aggregate query that isn't grouped returns one row even when no rows match, in which $properties would be NULL. Make them nullable, or append GROUP BY."
+    }
+
     private fun <T> buildSQL(
         table: Table<*>,
         clause: SelectClause<T>,
@@ -160,13 +330,14 @@ internal object Select : Operation {
      *
      * @return Final SELECT statement ready for execution
      */
-    fun <T> select(
-        table: Table<T>,
+    fun <R> select(
+        table: Table<*>,
         isDistinct: Boolean,
-        deserializer: DeserializationStrategy<T>,
+        deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
-    ): FinalSelectStatement<T> {
+    ): FinalSelectStatement<R> {
+        checkProjection(table, deserializer)
         val sql = buildString {
             append(sqlStr)
             if (isDistinct)
@@ -175,6 +346,6 @@ internal object Select : Operation {
             append(" FROM ")
             append(table.tableName)
         }
-        return FinalSelectStatement(sql, deserializer, connection, container, null)
+        return FinalSelectStatement(sql, deserializer, connection, container, null, null)
     }
 }

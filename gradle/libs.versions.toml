@@ -1,11 +1,11 @@
 [versions]
 
 kotlin = "2.4.20"
-agp = "9.4.0"
-ksp = "2.3.11"
+agp = "9.4.1"
+ksp = "2.3.12"
 serialization = "1.11.0"
 coroutines = "1.11.0"
-androidx-annotation = "1.10.0"
+androidx-annotation = "1.11.0"
 androidx-test = "1.7.0"
 robolectric = "4.17"
 junit = "4.13.2"

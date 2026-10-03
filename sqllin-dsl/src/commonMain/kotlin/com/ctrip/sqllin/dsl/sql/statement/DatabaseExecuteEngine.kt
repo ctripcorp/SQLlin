@@ -46,7 +46,20 @@ internal class DatabaseExecuteEngine(
         statementList.add(statement)
     }
 
+    override infix fun removeStatement(statement: SingleStatement) {
+        statementList.remove(statement)
+    }
+
     fun executeAllStatement() {
+        // Some checks can only run once a statement is complete, which it is now. Run all of them first, so that a
+        // failing one runs nothing.
+        statementList.forEach {
+            when (it) {
+                is SelectStatement<*> -> it.checkComplete()
+                is TransactionStatementsGroup -> it.checkComplete()
+                else -> Unit
+            }
+        }
         statementList.forEach {
             when (it) {
                 is SingleStatement -> {

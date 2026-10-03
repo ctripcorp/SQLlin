@@ -201,7 +201,7 @@ class ClauseProcessor(
                     // Write 'SelectClause' code.
                     writer.write("    @ColumnNameDslMaker\n")
                     writer.write("    val $propertyName\n")
-                    writer.write("        get() = $clauseElementTypeName($elementName, this)\n\n")
+                    writer.write("        get() = $clauseElementTypeName($elementName, this, ${!isNotNull})\n\n")
                     writer.write("    @ColumnNameDslMaker\n")
                     writer.write("    var SetClause<$className>.$propertyName: ${property.typeName}")
                     writer.write(if (isNotNull) "\n" else "?\n")
@@ -227,10 +227,13 @@ class ClauseProcessor(
      * Handles three categories:
      * - **Typealiases**: Resolves to underlying type and maps to appropriate clause type
      * - **Enum classes**: Maps to `ClauseEnum<EnumType>` for type-safe enum operations
-     * - **Standard types**: Maps to ClauseNumber, ClauseString, ClauseBoolean, or ClauseBlob
+     * - **Standard types**: Maps to `ClauseNumber<Type>`, `ClauseString<Type>`, ClauseBoolean, or ClauseBlob
+     *
+     * The type argument is the property's type without nullability, as an element knows the type of its values, so
+     * that `AS` only selects it into a property of that type.
      *
      * @param property The property declaration to analyze
-     * @return The clause type name (ClauseNumber, ClauseString, ClauseBoolean, ClauseBlob, ClauseEnum), or null if unsupported
+     * @return The clause type (such as `ClauseNumber<kotlin.Int>` or `ClauseEnum<com.example.Status>`), or null if unsupported
      */
     private fun getClauseElementTypeStr(property: KSPropertyDeclaration): String? = when (
         val declaration = property.type.resolve().declaration
@@ -252,15 +255,15 @@ class ClauseProcessor(
      * Maps a fully qualified type name to its corresponding clause element type.
      *
      * Supports primitive types and their unsigned variants:
-     * - Numeric types (Byte, Short, Int, Long, Float, Double, UByte, UShort, UInt, ULong) → ClauseNumber
-     * - Text types (Char, String) → ClauseString
+     * - Numeric types (Byte, Short, Int, Long, Float, Double, UByte, UShort, UInt, ULong) → `ClauseNumber<Type>`
+     * - Text types (Char, String) → `ClauseString<Type>`
      * - Boolean → ClauseBoolean
      * - ByteArray → ClauseBlob
      *
      * Note: Enum types are handled separately by [getClauseElementTypeStr].
      *
      * @param typeName The fully qualified type name to map
-     * @return The clause type name (ClauseNumber, ClauseString, ClauseBoolean, ClauseBlob), or null if unsupported
+     * @return The clause type (such as `ClauseNumber<kotlin.Int>`), or null if unsupported
      */
     private fun getClauseElementTypeStrByTypeName(typeName: String?): String? = when (typeName) {
         FullNameCache.INT,
@@ -272,10 +275,10 @@ class ClauseProcessor(
         FullNameCache.UINT,
         FullNameCache.ULONG,
         FullNameCache.USHORT,
-        FullNameCache.UBYTE, -> "ClauseNumber"
+        FullNameCache.UBYTE, -> "ClauseNumber<$typeName>"
 
         FullNameCache.CHAR,
-        FullNameCache.STRING, -> "ClauseString"
+        FullNameCache.STRING, -> "ClauseString<$typeName>"
 
         FullNameCache.BOOLEAN -> "ClauseBoolean"
 

@@ -22,6 +22,7 @@ import com.ctrip.sqllin.dsl.annotation.CompositeUnique
 import com.ctrip.sqllin.dsl.annotation.DBRow
 import com.ctrip.sqllin.dsl.annotation.PrimaryKey
 import com.ctrip.sqllin.dsl.annotation.Unique
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -521,4 +522,124 @@ data class AlterRenamed(
 data class RemoteMovie(
     @PrimaryKey val id: Long,
     val title: String,
+)
+
+/**
+ * Projections of [Book]: plain @Serializable types rather than tables, whose properties name the columns a SELECT
+ * reads, as in `BookTable SELECT X<BookTitle>()`.
+ */
+@Serializable
+data class BookTitle(val name: String, val author: String)
+
+@Serializable
+data class BookAuthor(val author: String)
+
+/**
+ * A projection of [UserAccount] that reads its nullable `notes` column into a nullable property.
+ */
+@Serializable
+data class UserNotes(val username: String, val notes: String?)
+
+/**
+ * Projections that don't fit their table, each breaking one of the rules a projection is checked against.
+ */
+@Serializable
+data class BookWithIsbn(val name: String, val isbn: String) // 'isbn' isn't a column of book
+
+@Serializable
+data class BookPagesAsText(val pages: String) // 'pages' holds an Int
+
+@Serializable
+data class UserNotesNonNull(val notes: String) // 'notes' is nullable
+
+/**
+ * Result types of SELECTs with result columns, as in `BookTable SELECT listOf(count(X) AS AuthorStats::books)`: the
+ * properties given an expression with AS hold it, and every other property is read from its column.
+ */
+@Serializable
+data class AuthorStats(
+    val author: String, // read from its column
+    val books: Long,
+    val totalPages: Long,
+    val maxPrice: Price,
+    val firstTitle: String,
+)
+
+/**
+ * Aggregates of a whole table, not grouped: all but `count` are NULL when no rows match, so they are nullable.
+ */
+@Serializable
+data class BookTotals(val books: Long, val maxPages: PageCount?, val averagePrice: Double?, val totalPrice: Double?)
+
+@Serializable
+data class BookCount(val books: Long)
+
+/**
+ * Scalar functions of the columns of a book, next to its `name`, which is read from its column.
+ */
+@Serializable
+data class BookFunctions(
+    val name: String,
+    val upperName: String,
+    val nameLength: Long,
+    val roundedPrice: Double,
+    val absPages: PageCount,
+)
+
+@Serializable
+data class StatusStats(val status: UserStatus, val users: Long, val notes: String?, val highestPriority: Priority)
+
+@Serializable
+data class EnabledCount(val enabled: Long?)
+
+@Serializable
+data class BookNames(val names: String?)
+
+@Serializable
+data class BookLabel(val label: String)
+
+/**
+ * Result types that don't fit their query, each breaking one of the rules result columns are checked against.
+ */
+@Serializable
+data class BookCountAndMaxPages(val books: Long, val maxPages: PageCount) // 'maxPages' is NULL when no rows match
+
+@Serializable
+data class RenamedBookCount(@SerialName("total") val books: Long) // 'books' isn't serialized under its own name
+
+/**
+ * A table of aggregates, filled with `INSERT INTO ... SELECT` from a grouped query of [Book].
+ */
+@DBRow("author_book_count")
+@Serializable
+data class AuthorBookCount(val author: String, val books: Long)
+
+/**
+ * The `rebuild_person` table before and after a rebuild, which renames `name` to `fullName`, makes it unique, a change
+ * `ALTER TABLE` can't make, and drops `legacy`.
+ */
+@DBRow("rebuild_person")
+@Serializable
+data class RebuildPersonV1(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val name: String,
+    val legacy: Int,
+)
+
+@DBRow("rebuild_person")
+@Serializable
+data class RebuildPerson(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @Unique val fullName: String,
+)
+
+/**
+ * References `rebuild_person`, so its foreign key shows whether the rebuild left the reference in place.
+ */
+@DBRow("rebuild_pet")
+@Serializable
+data class RebuildPet(
+    @PrimaryKey val id: Long,
+    @com.ctrip.sqllin.dsl.annotation.References(tableName = "rebuild_person", foreignKeys = ["id"])
+    val ownerId: Long,
 )

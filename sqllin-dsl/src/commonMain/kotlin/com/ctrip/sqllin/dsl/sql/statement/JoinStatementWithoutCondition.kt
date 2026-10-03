@@ -52,7 +52,7 @@ public class JoinStatementWithoutCondition<R> internal constructor(
      * @param clauseElements Column elements to join on (must not be empty)
      * @return Completed JOIN statement that can accept further clauses
      */
-    internal infix fun convertToJoinSelectStatement(clauseElements: Iterable<ClauseElement>): JoinSelectStatement<R> {
+    internal infix fun convertToJoinSelectStatement(clauseElements: Iterable<ClauseElement<*>>): JoinSelectStatement<R> {
         val iterator = clauseElements.iterator()
         require(iterator.hasNext()) { "Param 'clauseElements' must not be empty!!!" }
         val sql = buildString {
@@ -65,7 +65,7 @@ public class JoinStatementWithoutCondition<R> internal constructor(
             }
             append(')')
         }
-        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, null)
+        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, null, null)
         addSelectStatement(joinStatement)
         return joinStatement
     }
@@ -85,7 +85,7 @@ public class JoinStatementWithoutCondition<R> internal constructor(
             append(" ON ")
             append(condition.conditionSQL)
         }
-        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, condition.parameters)
+        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, condition.parameters, null)
         addSelectStatement(joinStatement)
         return joinStatement
     }

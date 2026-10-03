@@ -9,7 +9,7 @@ fun sample() {
     database {
         PersonTable { table ->
              table SELECT WHERE(abs(age) LTE 5)
-             table SELECT GROUP_BY(name) HAVING (count(X) > 2)
+             table SELECT GROUP_BY(name) HAVING (count(X) GT 2)
         }
     }
 }
@@ -20,31 +20,34 @@ fun sample() {
 
 > **聚合函数**: `count`, `max`, `min`, `avg`, `sum`, `group_concat`
 >
-> **数值函数**: `abs`, `round`, `random`, `sign`
+> **数值函数**: `abs`, `round`, `random`
 >
 > **字符串函数**: `upper`, `lower`, `length`, `substr`, `trim`, `ltrim`, `rtrim`, `replace`, `instr`, `printf`
 
 `count` 函数有一个不同点，它可以接收一个 `X` 作为参数用于表示 SQL 中的 `count(*)`， 如前面的示例所示。
 
-SQLlin 当前只支持在条件语句中使用函数。我们将会考虑在未来的版本中支持在 _SELECT_ 关键字后使用函数。现在，
-如果你有类似的需求，你可以使用 *[Kotlin 集合 API](https://kotlinlang.org/docs/collection-aggregate.html)* 来处理查询结果：
+要在 _SELECT_ 关键字之后使用函数，可以用 `AS` 把它们交给结果类型的属性：
 
 ```kotlin
+@Serializable
+data class NameStats(
+    val name: String,
+    val people: Long,
+    val maxAge: Int,
+)
+
 fun sample() {
-    lateinit var selectStatement: SelectStatement<Person>
+    lateinit var stats: SelectStatement<NameStats>
     database {
         PersonTable { table ->
-             selectStatement = table SELECT X
+            // SELECT name,count(*) AS people,max(age) AS maxAge FROM person GROUP BY name
+            stats = table SELECT listOf(count(X) AS NameStats::people, max(age) AS NameStats::maxAge) GROUP_BY name
         }
     }
-    // Get the max value
-    selectStatement.getResult().maxOrNull()
-    // Get the min value
-    selectStatement.getResult().minOrNull()
-    // Get the count of query results
-    selectStatement.getResult().count()
-    // ......
 }
 ```
+
+每个函数的结果都具有 SQLite 为它返回的值的类型，比如 `count` 为 `Long`，`avg` 为 `Double`，`AS` 只能把它交给这个类型的属性。
+结果列的详细用法请见[《高级查询》](advanced-query-cn.md#结果列)。
 
 最后，让我们来学习[《高级查询》](advanced-query-cn.md)吧。

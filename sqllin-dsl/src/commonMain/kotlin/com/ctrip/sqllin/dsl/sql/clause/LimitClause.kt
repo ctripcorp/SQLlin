@@ -72,6 +72,12 @@ public infix fun <T> JoinSelectStatement<T>.LIMIT(count: Int): LimitSelectStatem
         container changeLastStatement it
     }
 
+@StatementDslMaker
+public infix fun <T> ResultColumnSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
+    appendToLimit(LimitClause(count)).also {
+        container changeLastStatement it
+    }
+
 /**
  * OFFSET clause for skipping rows in a SELECT query (pagination).
  *

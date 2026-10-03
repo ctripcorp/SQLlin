@@ -42,10 +42,25 @@ import com.ctrip.sqllin.dsl.sql.Table
  *
  * @author Yuang Qiao
  */
-public class ClauseBlob(
+public class ClauseBlob internal constructor(
     valueName: String,
     table: Table<*>,
-) : ClauseElement(valueName, table, false) {
+    isFunction: Boolean,
+    isNullable: Boolean,
+    isAggregate: Boolean,
+    isNullOnNoRows: Boolean,
+) : ClauseElement<ByteArray>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows) {
+
+    /**
+     * Creates the element of a column, as the code generated for a table does.
+     *
+     * @param isNullable Whether the column is nullable
+     */
+    public constructor(valueName: String, table: Table<*>, isNullable: Boolean) :
+        this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
+
+    override fun toAggregate(valueName: String, table: Table<*>): ClauseBlob =
+        ClauseBlob(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true)
 
     /**
      * Creates an equality comparison condition (=).
@@ -153,8 +168,10 @@ public class ClauseBlob(
 
     private fun appendNullableBlob(notNullSymbol: String, nullSymbol: String, blob: ByteArray?): SelectCondition {
         val sql = buildString {
-            append(table.tableName)
-            append('.')
+            if (!isFunction) {
+                append(table.tableName)
+                append('.')
+            }
             append(valueName)
             if (blob == null) {
                 append(nullSymbol)
@@ -168,8 +185,10 @@ public class ClauseBlob(
 
     private fun appendBlob(symbol: String, blob: ByteArray): SelectCondition {
         val sql = buildString {
-            append(table.tableName)
-            append('.')
+            if (!isFunction) {
+                append(table.tableName)
+                append('.')
+            }
             append(valueName)
             append(symbol)
         }
@@ -178,15 +197,11 @@ public class ClauseBlob(
 
     private fun appendClauseBlob(symbol: String, clauseBlob: ClauseBlob): SelectCondition {
         val sql = buildString {
-            append(table.tableName)
-            append('.')
-            append(valueName)
+            appendSQL(this)
             append(' ')
             append(symbol)
             append(' ')
-            append(clauseBlob.table.tableName)
-            append('.')
-            append(clauseBlob.valueName)
+            clauseBlob.appendSQL(this)
         }
         return SelectCondition(sql, null)
     }
@@ -204,8 +219,10 @@ public class ClauseBlob(
         val parameters = blobs.toMutableList<Any?>()
         require(parameters.isNotEmpty()) { "Param 'blobs' must not be empty!!!" }
         val sql = buildString {
-            append(table.tableName)
-            append('.')
+            if (!isFunction) {
+                append(table.tableName)
+                append('.')
+            }
             append(valueName)
             append(" IN (")
 
@@ -228,8 +245,10 @@ public class ClauseBlob(
      */
     internal infix fun between(range: Pair<ByteArray, ByteArray>): SelectCondition {
         val sql = buildString {
-            append(table.tableName)
-            append('.')
+            if (!isFunction) {
+                append(table.tableName)
+                append('.')
+            }
             append(valueName)
             append(" BETWEEN ? AND ?")
         }

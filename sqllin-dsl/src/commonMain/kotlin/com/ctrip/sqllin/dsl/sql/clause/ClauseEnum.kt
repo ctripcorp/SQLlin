@@ -23,7 +23,8 @@ import com.ctrip.sqllin.dsl.sql.Table
  *
  * Enables type-safe enum comparisons in WHERE, HAVING, and other conditional clauses.
  * Enums are stored as integers (ordinal values) in SQLite and automatically converted
- * during serialization/deserialization.
+ * during serialization/deserialization. `max` and `min` of an enum column are elements
+ * of the same enum type.
  *
  * Available operators:
  * - `lt`: Less than (<) - compares ordinal values
@@ -59,10 +60,25 @@ import com.ctrip.sqllin.dsl.sql.Table
  *
  * @author Yuang Qiao
  */
-public class ClauseEnum<T : Enum<T>>(
+public class ClauseEnum<T : Enum<T>> internal constructor(
     valueName: String,
     table: Table<*>,
-) : ClauseElement(valueName, table, false) {
+    isFunction: Boolean,
+    isNullable: Boolean,
+    isAggregate: Boolean,
+    isNullOnNoRows: Boolean,
+) : ClauseElement<T>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows) {
+
+    /**
+     * Creates the element of a column, as the code generated for a table does.
+     *
+     * @param isNullable Whether the column is nullable
+     */
+    public constructor(valueName: String, table: Table<*>, isNullable: Boolean) :
+        this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
+
+    override fun toAggregate(valueName: String, table: Table<*>): ClauseEnum<T> =
+        ClauseEnum(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true)
 
     /**
      * Less than (<) comparison using the enum's ordinal value.
@@ -195,8 +211,10 @@ public class ClauseEnum<T : Enum<T>>(
      */
     private fun appendEnum(symbol: String, entry: T): SelectCondition {
         val sql = buildString {
-            append(table.tableName)
-            append('.')
+            if (!isFunction) {
+                append(table.tableName)
+                append('.')
+            }
             append(valueName)
             append(symbol)
         }
@@ -216,8 +234,10 @@ public class ClauseEnum<T : Enum<T>>(
      */
     private fun appendNullableEnum(notNullSymbol: String, nullSymbol: String, entry: T?): SelectCondition {
         val builder = StringBuilder()
-        builder.append(table.tableName)
-        builder.append('.')
+        if (!isFunction) {
+            builder.append(table.tableName)
+            builder.append('.')
+        }
         builder.append(valueName)
         val parameters = if (entry == null){
             builder.append(nullSymbol)
@@ -234,7 +254,8 @@ public class ClauseEnum<T : Enum<T>>(
      * Builds a comparison condition between two enum columns.
      *
      * Generates SQL: `table1.column1<symbol>table2.column2` with no parameters.
-     * Both columns are referenced directly in the SQL without binding.
+     * Both columns are referenced directly in the SQL without binding; a function,
+     * such as `max(column)`, is written as it is.
      *
      * @param symbol The comparison operator (e.g., "<", "=", ">=")
      * @param clauseEnum The enum column to compare against
@@ -242,13 +263,9 @@ public class ClauseEnum<T : Enum<T>>(
      */
     private fun appendClauseEnum(symbol: String, clauseEnum: ClauseEnum<T>): SelectCondition {
         val sql = buildString {
-            append(table.tableName)
-            append('.')
-            append(valueName)
+            appendSQL(this)
             append(symbol)
-            append(clauseEnum.table.tableName)
-            append('.')
-            append(clauseEnum.valueName)
+            clauseEnum.appendSQL(this)
         }
         return SelectCondition(sql, null)
     }

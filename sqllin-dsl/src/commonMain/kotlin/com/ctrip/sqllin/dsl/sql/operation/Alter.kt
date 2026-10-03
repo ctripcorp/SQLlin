@@ -78,7 +78,7 @@ internal object Alter : Operation {
      * @param connection The database connection for executing the statement
      * @return A [TableStructureStatement] representing the ADD COLUMN operation
      */
-    fun addColumn(table: Table<*>, newColumn: ClauseElement, connection: DatabaseConnection): SingleStatement {
+    fun addColumn(table: Table<*>, newColumn: ClauseElement<*>, connection: DatabaseConnection): SingleStatement {
         val sql = buildString {
             append(sqlStr)
             append(table.tableName)
@@ -123,7 +123,7 @@ internal object Alter : Operation {
      * @param connection The database connection for executing the statement
      * @return A [TableStructureStatement] representing the RENAME COLUMN operation
      */
-    fun renameColumn(table: Table<*>, oldName: String, newColumn: ClauseElement, connection: DatabaseConnection): SingleStatement {
+    fun renameColumn(table: Table<*>, oldName: String, newColumn: ClauseElement<*>, connection: DatabaseConnection): SingleStatement {
         val sql = buildString {
             append(sqlStr)
             append(table.tableName)
@@ -145,7 +145,7 @@ internal object Alter : Operation {
      * @param connection The database connection for executing the statement
      * @return A [TableStructureStatement] representing the DROP COLUMN operation
      */
-    fun dropColumn(table: Table<*>, column: ClauseElement, connection: DatabaseConnection): SingleStatement {
+    fun dropColumn(table: Table<*>, column: ClauseElement<*>, connection: DatabaseConnection): SingleStatement {
         val sql = buildString {
             append(sqlStr)
             append(table.tableName)

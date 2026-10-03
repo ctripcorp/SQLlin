@@ -12,7 +12,7 @@ fun sample() {
     database {
         PersonTable { table ->
              table SELECT WHERE(abs(age) LTE 5)
-             table SELECT GROUP_BY(name) HAVING (count(X) > 2)
+             table SELECT GROUP_BY(name) HAVING (count(X) GT 2)
         }
     }
 }
@@ -24,33 +24,36 @@ a `ClauseElement` as the result. The functions supported by SQLlin are as follow
 
 > **Aggregate functions**: `count`, `max`, `min`, `avg`, `sum`, `group_concat`
 >
-> **Numeric functions**: `abs`, `round`, `random`, `sign`
+> **Numeric functions**: `abs`, `round`, `random`
 >
 > **String functions**: `upper`, `lower`, `length`, `substr`, `trim`, `ltrim`, `rtrim`, `replace`, `instr`, `printf`
 
 The `count` function has a different point, it could receive `X` as parameter be used for representing `count(*)` in SQL, as shown in the
 example above.
 
-SQLlin only supports using functions in conditions now. We will consider supporting using functions after the _SELECT_ keyword in
-future versions. Now, if you have similar demands, you can use
-[Kotlin Collections API](https://kotlinlang.org/docs/collection-aggregate.html) to handle query results:
+To use functions after the _SELECT_ keyword, select them into properties of a result type with `AS`:
 
 ```kotlin
+@Serializable
+data class NameStats(
+    val name: String,
+    val people: Long,
+    val maxAge: Int,
+)
+
 fun sample() {
-    lateinit var selectStatement: SelectStatement<Person>
+    lateinit var stats: SelectStatement<NameStats>
     database {
         PersonTable { table ->
-             selectStatement = table SELECT X
+            // SELECT name,count(*) AS people,max(age) AS maxAge FROM person GROUP BY name
+            stats = table SELECT listOf(count(X) AS NameStats::people, max(age) AS NameStats::maxAge) GROUP_BY name
         }
     }
-    // Get the max value
-    selectStatement.getResult().maxOrNull()
-    // Get the min value
-    selectStatement.getResult().minOrNull()
-    // Get the count of query results
-    selectStatement.getResult().count()
-    // ......
 }
 ```
+
+Each function's result has the type of the values SQLite returns for it, such as `Long` for `count` and `Double` for
+`avg`, and `AS` only selects it into a property of that type. [Advanced Query](advanced-query.md#result-columns) describes
+result columns in detail.
 
 Finally, let's learn [Advanced Query](advanced-query.md).

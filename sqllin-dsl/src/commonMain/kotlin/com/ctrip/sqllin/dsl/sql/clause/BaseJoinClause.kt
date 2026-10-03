@@ -72,10 +72,10 @@ public infix fun <R> JoinStatementWithoutCondition<R>.ON(condition: SelectCondit
 
 @Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
-public inline infix fun <R> JoinStatementWithoutCondition<R>.USING(clauseElement: ClauseElement): JoinSelectStatement<R> =
+public inline infix fun <R> JoinStatementWithoutCondition<R>.USING(clauseElement: ClauseElement<*>): JoinSelectStatement<R> =
     USING(listOf(clauseElement))
 
 @Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
-public infix fun <R> JoinStatementWithoutCondition<R>.USING(clauseElements: Iterable<ClauseElement>): JoinSelectStatement<R> =
+public infix fun <R> JoinStatementWithoutCondition<R>.USING(clauseElements: Iterable<ClauseElement<*>>): JoinSelectStatement<R> =
     convertToJoinSelectStatement(clauseElements)
