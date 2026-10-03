@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+@file:Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
+
 package com.ctrip.sqllin.dsl.sql.clause
 
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
@@ -66,6 +68,12 @@ public infix fun <T> HavingSelectStatement<T>.LIMIT(count: Int): LimitSelectStat
 
 @StatementDslMaker
 public infix fun <T> JoinSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
+    appendToLimit(LimitClause(count)).also {
+        container changeLastStatement it
+    }
+
+@StatementDslMaker
+public infix fun <T> ResultColumnSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
         container changeLastStatement it
     }

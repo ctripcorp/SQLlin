@@ -65,11 +65,13 @@ import java.io.Writer
  *
  * ### Validation Rules
  * - Cannot use both [@PrimaryKey] and [@CompositePrimaryKey] on the same property
- * - Primary key properties must be nullable (SQLite rowid aliasing requirement)
+ * - A [@PrimaryKey] may be nullable only when it is a `Long`: a `Long?` key is left for the database
+ *   to assign, while a non-null `Long` or a key of any other type is supplied by the caller
  * - Only one [@PrimaryKey] annotation allowed per table
- * - AUTOINCREMENT requires Long type (mapped to INTEGER in SQLite)
+ * - AUTOINCREMENT requires a `Long?` key, the only kind of key the database assigns
  * - [@CollateNoCase] can only be applied to String or Char properties
  * - [@CompositePrimaryKey] properties must be non-nullable
+ * - [@CompositePrimaryKey] needs at least two properties; a single-column key uses [@PrimaryKey]
  *
  * @param resolver KSP resolver for looking up annotation types
  *
@@ -92,7 +94,9 @@ class ColumnConstraintParser(resolver: Resolver) {
 
         const val PROMPT_CANT_ADD_BOTH_ANNOTATION = "You can't add both @PrimaryKey and @CompositePrimaryKey to the same property."
         const val PROMPT_PRIMARY_KEY_MUST_NOT_NULL = "The primary key must be not-null."
-        const val PROMPT_PRIMARY_KEY_TYPE = """The primary key's type must be Long when you set the the parameter "isAutoincrement = true" in annotation PrimaryKey."""
+        const val PROMPT_NULLABLE_PRIMARY_KEY_MUST_BE_LONG = "Only a primary key of type Long can be nullable, which leaves its value for the database to assign. A primary key of any other type is supplied by the caller and must be not-null."
+        const val PROMPT_AUTO_INCREMENT_REQUIRES_NULLABLE_LONG = """The parameter "autoIncrement = true" in annotation PrimaryKey requires the primary key to be a nullable Long (Long?), the only kind of key whose value the database assigns."""
+        const val PROMPT_COMPOSITE_PRIMARY_KEY_SINGLE_COLUMN = "A composite primary key needs at least two columns. Use @PrimaryKey for a single-column primary key, such as `@PrimaryKey val id: Long` for a numeric key you supply yourself."
         const val PROMPT_PRIMARY_KEY_USE_COUNT = "You only could use PrimaryKey to annotate one property in a class."
         const val PROMPT_NO_CASE_MUST_FOR_TEXT = "You only could add annotation @CollateNoCase for a String or Char typed property."
     }
@@ -105,8 +109,7 @@ class ColumnConstraintParser(resolver: Resolver) {
     // Primary key tracking for metadata generation
     private var primaryKeyName: String? = null
     private var isAutomaticIncrement = false
-    var isRowId = false
-        private set
+    private var isGeneratedByDatabase = false
     private val compositePrimaryKeys = ArrayList<String>()
     private var isContainsPrimaryKey = false
 
@@ -130,16 +133,24 @@ class ColumnConstraintParser(resolver: Resolver) {
      *
      * #### Primary Key
      * ```kotlin
-     * @PrimaryKey(isAutoincrement = true)
-     * val id: Long?
+     * @PrimaryKey(autoIncrement = true)
+     * val id: Long?     // assigned by the database
      * // Generated: id INTEGER PRIMARY KEY AUTOINCREMENT
+     *
+     * @PrimaryKey
+     * val id: Long      // supplied by the caller, still a rowid alias
+     * // Generated: id INTEGER PRIMARY KEY
+     *
+     * @PrimaryKey
+     * val sku: String   // supplied by the caller
+     * // Generated: sku TEXT PRIMARY KEY NOT NULL
      * ```
      *
      * #### Composite Primary Key
      * ```kotlin
      * @CompositePrimaryKey
      * val userId: Long
-     * // Column: userId BIGINT
+     * // Column: userId BIGINT NOT NULL
      * // Later appended: ,PRIMARY KEY(userId,productId)
      * ```
      *
@@ -163,7 +174,7 @@ class ColumnConstraintParser(resolver: Resolver) {
      * 1. Determine SQLite type via [getSQLiteType]
      * 2. Apply PRIMARY KEY constraint if [@PrimaryKey] present
      * 3. Collect [@CompositePrimaryKey] columns for table-level constraint
-     * 4. Apply NOT NULL for non-nullable, non-PK columns
+     * 4. Apply NOT NULL to every non-nullable column except a rowid alias, primary key columns included
      * 5. Apply COLLATE NOCASE if [@CollateNoCase] present
      * 6. Apply UNIQUE if [@Unique] present
      * 7. Collect [@CompositeUnique] groups for table-level constraints
@@ -173,7 +184,7 @@ class ColumnConstraintParser(resolver: Resolver) {
      * - Sets [primaryKeyName] for single-column primary keys
      * - Adds to [compositePrimaryKeys] for composite primary keys
      * - Populates [compositeUniqueColumns] for composite unique constraints
-     * - Updates [isAutomaticIncrement] and [isRowId] flags
+     * - Updates [isAutomaticIncrement] and [isGeneratedByDatabase] flags
      *
      * @param createSQLBuilder StringBuilder to append column definition and constraints to
      * @param property The property declaration to process
@@ -200,33 +211,41 @@ class ColumnConstraintParser(resolver: Resolver) {
             val type = getSQLiteType(property, isPrimaryKey)
             append(type)
 
+            // Only a Long @PrimaryKey becomes `INTEGER PRIMARY KEY`, an alias of SQLite's rowid
+            val isRowIdAlias = isPrimaryKey && type == " INTEGER"
+
             // Handle @PrimaryKey annotation
             if (isPrimaryKey) {
                 check(!annotationKSType.any { it.isAssignableFrom(compositePrimaryKeyName) }) { PROMPT_CANT_ADD_BOTH_ANNOTATION }
-                check(!isNotNull) { PROMPT_PRIMARY_KEY_MUST_NOT_NULL }
                 check(!isContainsPrimaryKey) { PROMPT_PRIMARY_KEY_USE_COUNT }
                 isContainsPrimaryKey = true
                 primaryKeyName = propertyName
+
+                // Only a rowid alias gets its value assigned by the database. Declaring that key nullable is
+                // what asks the database to assign it; any other key is supplied by the caller, so it can't be nullable.
+                check(isNotNull || isRowIdAlias) { PROMPT_NULLABLE_PRIMARY_KEY_MUST_BE_LONG }
+                isGeneratedByDatabase = isRowIdAlias && !isNotNull
 
                 append(" PRIMARY KEY")
 
                 isAutomaticIncrement = property.annotations.find {
                     it.annotationType.resolve().declaration.qualifiedName?.asString() == ANNOTATION_PRIMARY_KEY
                 }?.arguments?.firstOrNull()?.value as? Boolean ?: false
-                val isLong = type == " INTEGER" || type == " BIGINT"
                 if (isAutomaticIncrement) {
-                    check(isLong) { PROMPT_PRIMARY_KEY_TYPE }
+                    check(isGeneratedByDatabase) { PROMPT_AUTO_INCREMENT_REQUIRES_NULLABLE_LONG }
                     append(" AUTOINCREMENT")
                 }
-                isRowId = isLong
             } else if (annotationKSType.any { it.isAssignableFrom(compositePrimaryKeyName) }) {
                 // Handle @CompositePrimaryKey - collect for table-level constraint
                 check(isNotNull) { PROMPT_PRIMARY_KEY_MUST_NOT_NULL }
                 compositePrimaryKeys.add(propertyName)
-            } else if (isNotNull) {
-                // Add NOT NULL constraint for non-nullable, non-PK columns
-                append(" NOT NULL")
             }
+
+            // A rowid alias is the only column SQLite itself keeps from being NULL. On a rowid table, PRIMARY KEY
+            // doesn't imply NOT NULL for any other column, a single key or a part of a composite one alike, so every
+            // other non-null column spells it out.
+            if (isNotNull && !isRowIdAlias)
+                append(" NOT NULL")
 
             // Handle @CollateNoCase annotation - must be on text columns
             if (annotationKSType.any { it.isAssignableFrom(noCaseAnnotationName) }) {
@@ -286,7 +305,7 @@ class ColumnConstraintParser(resolver: Resolver) {
      * override val primaryKeyInfo = PrimaryKeyInfo(
      *     primaryKeyName = "id",
      *     isAutomaticIncrement = true,
-     *     isRowId = true,
+     *     isGeneratedByDatabase = true,
      *     compositePrimaryKeys = null,
      * )
      * ```
@@ -296,7 +315,7 @@ class ColumnConstraintParser(resolver: Resolver) {
      * override val primaryKeyInfo = PrimaryKeyInfo(
      *     primaryKeyName = null,
      *     isAutomaticIncrement = false,
-     *     isRowId = false,
+     *     isGeneratedByDatabase = false,
      *     compositePrimaryKeys = listOf(
      *         "userId",
      *         "productId",
@@ -321,7 +340,7 @@ class ColumnConstraintParser(resolver: Resolver) {
      * This method reads state accumulated by [parseProperty]:
      * - [primaryKeyName]: Name of single-column primary key (if any)
      * - [isAutomaticIncrement]: Whether AUTOINCREMENT is enabled
-     * - [isRowId]: Whether the primary key can serve as SQLite rowid alias
+     * - [isGeneratedByDatabase]: Whether the database assigns the primary key's value
      * - [compositePrimaryKeys]: List of columns in composite primary key
      * - [compositeUniqueColumns]: Map of group number to columns for UNIQUE constraints
      *
@@ -332,6 +351,11 @@ class ColumnConstraintParser(resolver: Resolver) {
      * @see com.ctrip.sqllin.dsl.sql.PrimaryKeyInfo
      */
     fun generateCodeForPrimaryKey(writer: Writer, createSQLBuilder: StringBuilder) {
+        // Standard SQL accepts a one-column `PRIMARY KEY(col)`, but @PrimaryKey already declares that key, and does it
+        // better for a Long: it maps to INTEGER, a rowid alias, where this path maps a Long to BIGINT. Only known here,
+        // once every property has been parsed.
+        check(compositePrimaryKeys.size != 1) { PROMPT_COMPOSITE_PRIMARY_KEY_SINGLE_COLUMN }
+
         // Write the override instance for property `primaryKeyInfo`.
         with(writer) {
             if (primaryKeyName == null && compositePrimaryKeys.isEmpty()) {
@@ -344,7 +368,7 @@ class ColumnConstraintParser(resolver: Resolver) {
                     write("        primaryKeyName = \"$primaryKeyName\",\n")
                 }
                 write("        isAutomaticIncrement = $isAutomaticIncrement,\n")
-                write("        isRowId = $isRowId,\n")
+                write("        isGeneratedByDatabase = $isGeneratedByDatabase,\n")
                 if (compositePrimaryKeys.isEmpty()) {
                     write("        compositePrimaryKeys = null,\n")
                 } else {

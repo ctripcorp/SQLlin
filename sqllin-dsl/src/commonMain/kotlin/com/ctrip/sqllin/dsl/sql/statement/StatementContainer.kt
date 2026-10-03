@@ -21,7 +21,8 @@ package com.ctrip.sqllin.dsl.sql.statement
  *
  * Used by statement builders (e.g., UPDATE, JOIN) to replace or update the last statement
  * in a collection when DSL operations refine or extend it. For example, when an UPDATE
- * statement adds a WHERE clause, it replaces the initial UPDATE statement.
+ * statement adds a WHERE clause, it replaces the initial UPDATE statement. A SELECT that
+ * becomes part of an `INSERT INTO ... SELECT` is removed, as it no longer runs on its own.
  *
  * Implementations:
  * - [DatabaseExecuteEngine]: Executes standalone statements
@@ -30,7 +31,7 @@ package com.ctrip.sqllin.dsl.sql.statement
  *
  * @author Yuang Qiao
  */
-internal fun interface StatementContainer {
+internal interface StatementContainer {
 
     /**
      * Replaces the most recently added statement with a modified version.
@@ -38,4 +39,9 @@ internal fun interface StatementContainer {
      * Used when DSL operations progressively build up a statement (e.g., adding WHERE to UPDATE).
      */
     infix fun changeLastStatement(statement: SingleStatement)
+
+    /**
+     * Removes [statement] if this container holds it, wherever it is.
+     */
+    infix fun removeStatement(statement: SingleStatement)
 }

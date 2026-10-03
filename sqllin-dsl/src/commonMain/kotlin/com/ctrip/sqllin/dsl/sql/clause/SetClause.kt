@@ -81,5 +81,6 @@ public class SetClause<T> : Clause<T> {
     }.toString()
 }
 
+@Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
 public inline fun <T> SET(block: SetClause<T>.() -> Unit): SetClause<T> = SetClause<T>().apply(block)

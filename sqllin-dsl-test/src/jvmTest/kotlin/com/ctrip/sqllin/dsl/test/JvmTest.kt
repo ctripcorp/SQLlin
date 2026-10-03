@@ -65,6 +65,24 @@ class JvmTest {
     fun testInsertOrReplace() = commonTest.testInsertOrReplace()
 
     @Test
+    fun testInsertOrIgnore() = commonTest.testInsertOrIgnore()
+
+    @Test
+    fun testProjection() = commonTest.testProjection()
+
+    @Test
+    fun testResultColumns() = commonTest.testResultColumns()
+
+    @Test
+    fun testResultColumnChecks() = commonTest.testResultColumnChecks()
+
+    @Test
+    fun testInsertSelect() = commonTest.testInsertSelect()
+
+    @Test
+    fun testTableRebuild() = commonTest.testTableRebuild()
+
+    @Test
     fun testCreateInDatabaseScope() = commonTest.testCreateInDatabaseScope()
 
     @Test
@@ -78,6 +96,9 @@ class JvmTest {
 
     @Test
     fun testSchemaModification() = commonTest.testSchemaModification()
+
+    @Test
+    fun testPrimaryKeyNullability() = commonTest.testPrimaryKeyNullability()
 
     @Test
     fun testStringOperators() = commonTest.testStringOperators()
@@ -108,6 +129,12 @@ class JvmTest {
 
     @Test
     fun testStringAggregateFunctions() = commonTest.testStringAggregateFunctions()
+
+    @Test
+    fun testFunctionStringArguments() = commonTest.testFunctionStringArguments()
+
+    @Test
+    fun testFunctionComparisons() = commonTest.testFunctionComparisons()
 
     @Test
     fun testIndexOperations() = commonTest.testIndexOperations()

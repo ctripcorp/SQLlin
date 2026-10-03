@@ -157,6 +157,109 @@ fun joinSample() {
 
 The `LEFT_OUTER_JOIN`'s usage is very similar with `INNER_JOIN`, the difference just is their API names.
 
+## Projection
+
+A `SELECT` reads each row into the table's own row type. To read only some of the columns, declare a narrower
+`@Serializable` type whose properties name the columns you want, and give it to the clause function as a type argument:
+
+```kotlin
+@Serializable
+data class PersonName(
+    val name: String,
+)
+
+fun sample() {
+    lateinit var names: SelectStatement<PersonName>
+    lateinit var adultNames: SelectStatement<PersonName>
+    database {
+        PersonTable { table ->
+            // SELECT name FROM person
+            names = table SELECT X<PersonName>()
+            // SELECT name FROM person WHERE age >= ? ORDER BY name LIMIT 10
+            adultNames = table SELECT WHERE<PersonName>(age GTE 18) ORDER_BY name LIMIT 10
+        }
+    }
+}
+```
+
+Like a join's result type, a projection type doesn't need `@DBRow`. It works as the type argument of `X<R>()`,
+`WHERE<R>(...)`, `ORDER_BY<R>(...)`, `LIMIT<R>(...)` and `GROUP_BY<R>(...)`, after both `SELECT` and
+`SELECT_DISTINCT`, and the clauses chained after it keep it. With `SELECT_DISTINCT`, only the projected columns are
+compared, so `table SELECT_DISTINCT X<PersonName>()` gives each name once.
+
+The type argument is required. Without it, a `SELECT` reads the table's own row type, even when its result is assigned
+to a statement of the projection type.
+
+Each property of a projection type has to be a column of the table, of the same type, and nullable if the column is
+nullable, as a `NULL` read into a non-null property would quietly become `0` or an empty string. A projection type that
+breaks one of these rules makes the `SELECT` throw an `IllegalArgumentException` when the statement is built, before it
+runs. To select expressions such as `count(*)`, use result columns.
+
+## Result Columns
+
+To select an expression, such as an aggregate function, give it a property of the result type with `AS`. Every other
+property of the result type is read from its column, as in a projection, so only the expressions are listed: one alone,
+or several in a `listOf`:
+
+```kotlin
+@Serializable
+data class NameStats(
+    val name: String,
+    val people: Long,
+    val maxAge: Int,
+)
+
+@Serializable
+data class PersonCount(
+    val people: Long,
+)
+
+fun sample() {
+    lateinit var stats: SelectStatement<NameStats>
+    lateinit var adults: SelectStatement<PersonCount>
+    database {
+        PersonTable { table ->
+            // SELECT name,count(*) AS people,max(age) AS maxAge FROM person GROUP BY name
+            stats = table SELECT listOf(count(X) AS NameStats::people, max(age) AS NameStats::maxAge) GROUP_BY name
+            // SELECT count(*) AS people FROM person WHERE age >= ?
+            adults = table SELECT (count(X) AS PersonCount::people) WHERE (age GTE 18)
+        }
+    }
+    val adultCount = adults.getResults().single().people
+}
+```
+
+Like a projection type, a result type is a plain `@Serializable` type. A single result column has to be put in
+parentheses, as `SELECT` and `AS` are both infix functions. Result columns work after `SELECT` and `SELECT_DISTINCT`, and
+can be followed by `WHERE`, `GROUP_BY`, `ORDER_BY` and `LIMIT`. An expression can take the property of a column, too:
+`table SELECT (upper(name) AS PersonName::name)` reads every name in upper case.
+
+The property has to have the type of the expression's values, which is checked at compile time. So `count(X)` goes into
+a `Long` property, not an `Int` or a `String` one:
+
+| Function | Type of its values |
+|---|---|
+| `count`, `length`, `instr`, `random` | `Long` |
+| `avg`, `round` | `Double` |
+| `sum` | `Long` for a column of integers or Booleans, `Double` for a `Float` or `Double` column |
+| `max`, `min`, `abs` | the type of their column |
+| `upper`, `lower`, `trim`, `ltrim`, `rtrim`, `substr`, `replace`, `printf`, `group_concat` | `String` |
+
+The property also has to be nullable when its expression can be `NULL`, for the same reason as in a projection:
+
+- A function of a nullable column can be `NULL`, except `count`.
+- Without `GROUP_BY`, an aggregate query returns one row even when no rows match, in which every aggregate function except
+  `count` is `NULL`, and so is every column. So in an aggregate query without `GROUP_BY`, every property but those of
+  `count` has to be nullable, as `maxAge: Int?` would be. With `GROUP_BY`, every group has rows, so a property only has to
+  be nullable when its column is.
+
+A result type that breaks one of these rules makes the `SELECT` throw an `IllegalArgumentException` when the statement is
+built, before it runs, as does a property given two expressions. Only whether `GROUP_BY` follows can't be known yet then,
+so a property that needs it is reported when the database scope ends, before any statement of the scope runs.
+
+A property given an expression is found by its name, so it can't be renamed with `@SerialName`. Result columns select from
+a single table: they can't be used with a join yet, nor can arithmetic, `CASE` or subqueries.
+
 ## Finally
 
 You have learned all usages with SQLlin, enjoy it and stay Stay tuned for SQLlin's updates :)

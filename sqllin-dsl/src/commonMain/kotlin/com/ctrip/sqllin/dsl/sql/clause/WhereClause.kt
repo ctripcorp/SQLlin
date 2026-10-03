@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
+@file:Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
+
 package com.ctrip.sqllin.dsl.sql.clause
 
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.statement.JoinSelectStatement
+import com.ctrip.sqllin.dsl.sql.statement.ResultColumnSelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.UpdateDeleteStatement
 import com.ctrip.sqllin.dsl.sql.statement.UpdateStatementWithoutWhereClause
 import com.ctrip.sqllin.dsl.sql.statement.WhereSelectStatement
@@ -53,6 +56,12 @@ public fun <T> WHERE(condition: SelectCondition): WhereClause<T> = WhereClause(c
 
 @StatementDslMaker
 public infix fun <T> JoinSelectStatement<T>.WHERE(condition: SelectCondition): WhereSelectStatement<T> =
+    appendToWhere(WhereClause(condition)).also {
+        container changeLastStatement it
+    }
+
+@StatementDslMaker
+public infix fun <T> ResultColumnSelectStatement<T>.WHERE(condition: SelectCondition): WhereSelectStatement<T> =
     appendToWhere(WhereClause(condition)).also {
         container changeLastStatement it
     }

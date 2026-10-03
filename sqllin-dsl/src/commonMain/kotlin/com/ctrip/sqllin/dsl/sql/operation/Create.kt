@@ -62,7 +62,7 @@ internal object Create : Operation {
      * @return CREATE INDEX statement ready for execution
      * @throws IllegalArgumentException if no columns are specified
      */
-    fun <T> createIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement): SingleStatement {
+    fun <T> createIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>): SingleStatement {
         require(columns.isNotEmpty()) { "You must create an index for at least one column." }
         return createIndex(INDEX, table, connection, indexName, *columns)
     }
@@ -81,7 +81,7 @@ internal object Create : Operation {
      * @return CREATE UNIQUE INDEX statement ready for execution
      * @throws IllegalArgumentException if no columns are specified
      */
-    fun <T> createUniqueIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement): SingleStatement {
+    fun <T> createUniqueIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>): SingleStatement {
         require(columns.isNotEmpty()) { "You must create an index for at least one column." }
         return createIndex(UNIQUE_INDEX, table, connection, indexName, *columns)
     }
@@ -99,7 +99,7 @@ internal object Create : Operation {
      * @return CREATE INDEX statement ready for execution
      * @throws IllegalArgumentException if no columns are specified
      */
-    private fun <T> createIndex(prefix: String, table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement): SingleStatement {
+    private fun <T> createIndex(prefix: String, table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>): SingleStatement {
         val sql = buildString {
             append(sqlStr)
             append(prefix)

@@ -2,25 +2,27 @@ package com.ctrip.sqllin.dsl.test
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.internal.runner.junit4.AndroidJUnit4ClassRunner
-import androidx.test.platform.app.InstrumentationRegistry
 import com.ctrip.sqllin.driver.toDatabasePath
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
- * Android instrumented test
+ * Android unit test that runs on the JVM via Robolectric. The `sdk` levels cover both
+ * the `SQLiteDatabase.OpenParams` code path (Android P and above) and the legacy one.
  * @author Yuang Qiao
  */
 
-@RunWith(AndroidJUnit4ClassRunner::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [26, 37])
 class AndroidTest {
 
-    private val commonTest = CommonBasicTest(
-        ApplicationProvider.getApplicationContext<Context>().toDatabasePath()
-    )
+    private val context = ApplicationProvider.getApplicationContext<Context>()
+
+    private val commonTest = CommonBasicTest(context.toDatabasePath())
 
     @Test
     fun testInsert() = commonTest.testInsert()
@@ -71,6 +73,24 @@ class AndroidTest {
     fun testInsertOrReplace() = commonTest.testInsertOrReplace()
 
     @Test
+    fun testInsertOrIgnore() = commonTest.testInsertOrIgnore()
+
+    @Test
+    fun testProjection() = commonTest.testProjection()
+
+    @Test
+    fun testResultColumns() = commonTest.testResultColumns()
+
+    @Test
+    fun testResultColumnChecks() = commonTest.testResultColumnChecks()
+
+    @Test
+    fun testInsertSelect() = commonTest.testInsertSelect()
+
+    @Test
+    fun testTableRebuild() = commonTest.testTableRebuild()
+
+    @Test
     fun testCreateInDatabaseScope() = commonTest.testCreateInDatabaseScope()
 
     @Test
@@ -84,6 +104,9 @@ class AndroidTest {
 
     @Test
     fun testSchemaModification() = commonTest.testSchemaModification()
+
+    @Test
+    fun testPrimaryKeyNullability() = commonTest.testPrimaryKeyNullability()
 
     @Test
     fun testStringOperators() = commonTest.testStringOperators()
@@ -114,6 +137,12 @@ class AndroidTest {
 
     @Test
     fun testStringAggregateFunctions() = commonTest.testStringAggregateFunctions()
+
+    @Test
+    fun testFunctionStringArguments() = commonTest.testFunctionStringArguments()
+
+    @Test
+    fun testFunctionComparisons() = commonTest.testFunctionComparisons()
 
     @Test
     fun testIndexOperations() = commonTest.testIndexOperations()
@@ -156,13 +185,11 @@ class AndroidTest {
 
     @Before
     fun setUp() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase(CommonBasicTest.DATABASE_NAME)
     }
 
     @After
     fun setDown() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase(CommonBasicTest.DATABASE_NAME)
     }
 }

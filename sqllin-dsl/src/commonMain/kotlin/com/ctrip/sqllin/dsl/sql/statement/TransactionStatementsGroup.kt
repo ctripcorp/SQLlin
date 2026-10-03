@@ -42,6 +42,19 @@ internal class TransactionStatementsGroup(
         statementList.add(statement)
     }
 
+    override infix fun removeStatement(statement: SingleStatement) {
+        statementList.remove(statement)
+    }
+
+    /**
+     * Checks that every statement of the transaction is complete, before any of them runs.
+     *
+     * @see SelectStatement.checkComplete
+     */
+    fun checkComplete() = statementList.forEach {
+        (it as? SelectStatement<*>)?.checkComplete()
+    }
+
     override fun execute() = databaseConnection.withTransaction {
         statementList.forEach {
             if (enableSimpleSQLLog)

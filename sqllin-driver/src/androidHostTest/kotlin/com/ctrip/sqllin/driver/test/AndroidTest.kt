@@ -18,24 +18,26 @@ package com.ctrip.sqllin.driver.test
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.internal.runner.junit4.AndroidJUnit4ClassRunner
-import androidx.test.platform.app.InstrumentationRegistry
 import com.ctrip.sqllin.driver.toDatabasePath
-import org.junit.After
-import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import kotlin.test.AfterTest
+import kotlin.test.Test
 
 /**
- * Android instrumented test
+ * Android unit test that runs on the JVM via Robolectric. The `sdk` levels cover both
+ * the `SQLiteDatabase.OpenParams` code path (Android P and above) and the legacy one.
  * @author Yuang Qiao
  */
 
-@RunWith(AndroidJUnit4ClassRunner::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [26, 37])
 class AndroidTest {
 
-    private val commonTest = CommonBasicTest(
-        ApplicationProvider.getApplicationContext<Context>().toDatabasePath()
-    )
+    private val context = ApplicationProvider.getApplicationContext<Context>()
+
+    private val commonTest = CommonBasicTest(context.toDatabasePath())
 
     @Test
     fun testCreateAndUpgrade() = commonTest.testCreateAndUpgrade()
@@ -55,9 +57,8 @@ class AndroidTest {
     @Test
     fun testConcurrency() = commonTest.testConcurrency()
 
-    @After
+    @AfterTest
     fun setDown() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase(SQL.DATABASE_NAME)
     }
 }

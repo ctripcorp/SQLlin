@@ -16,10 +16,17 @@
 
 package com.ctrip.sqllin.dsl.annotation
 
+/*
+ * These DSL markers exist for IntelliJ IDEA, which gives a call to any function or property annotated with a
+ * @DslMarker annotation one of its four DSL highlighting styles. They are applied to functions and properties
+ * for that reason, and so don't provide the compiler's DSL scope control, which @DslMarker only gives when
+ * applied to types. The compiler reports DSL_MARKER_APPLIED_TO_WRONG_TARGET for that use, so it's suppressed
+ * wherever these annotations are applied.
+ */
+
 /**
- * DSL marker for SQL statement functions to prevent implicit receiver nesting.
- *
- * Applied to top-level SQL statement functions (SELECT, INSERT, UPDATE, DELETE).
+ * DSL marker that highlights calls to SQL statement functions (SELECT, INSERT, UPDATE, DELETE, WHERE, ...) in
+ * IntelliJ IDEA.
  *
  * @author Yuang Qiao
  */
@@ -29,21 +36,17 @@ package com.ctrip.sqllin.dsl.annotation
 internal annotation class StatementDslMaker
 
 /**
- * DSL marker for SQL keyword classes and properties to prevent implicit receiver nesting.
- *
- * Applied to SQL keyword constructs (WHERE, ORDER BY, etc.) and their properties.
+ * DSL marker that highlights SQL keywords, such as `X`, `X<R>()` and the `ASC` and `DESC` ordering, in IntelliJ IDEA.
  *
  * @author Yuang Qiao
  */
 @DslMarker
-@Target(AnnotationTarget.CLASS, AnnotationTarget.PROPERTY)
+@Target(AnnotationTarget.CLASS, AnnotationTarget.PROPERTY, AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.BINARY)
 internal annotation class KeyWordDslMaker
 
 /**
- * DSL marker for SQL function builders to prevent implicit receiver nesting.
- *
- * Applied to SQL function builder functions (aggregate functions, etc.).
+ * DSL marker that highlights calls to SQL functions (aggregate, numeric and string functions) in IntelliJ IDEA.
  *
  * @author Yuang Qiao
  */
@@ -53,7 +56,7 @@ internal annotation class KeyWordDslMaker
 internal annotation class FunctionDslMaker
 
 /**
- * DSL marker for generated column name properties.
+ * DSL marker that highlights the generated column properties in IntelliJ IDEA.
  *
  * This annotation is applied by sqllin-processor to generated table column properties.
  * **Do not use this annotation manually** - it is intended for code generation only.

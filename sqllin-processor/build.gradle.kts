@@ -3,8 +3,8 @@ plugins {
     alias(libs.plugins.vanniktech.maven.publish)
 }
 
-val GROUP_ID: String by project
-val VERSION: String by project
+val GROUP_ID = project.property("GROUP_ID") as String
+val VERSION = project.property("VERSION") as String
 
 group = GROUP_ID
 version = VERSION
@@ -36,29 +36,29 @@ mavenPublishing {
     pom {
         name.set(artifactId)
         description.set("KSP code be used to generate the database column properties")
-        val githubURL: String by project
+        val githubURL = project.property("githubURL") as String
         url.set(githubURL)
         licenses {
             license {
-                val licenseName: String by project
+                val licenseName = project.property("licenseName") as String
                 name.set(licenseName)
-                val licenseURL: String by project
+                val licenseURL = project.property("licenseURL") as String
                 url.set(licenseURL)
             }
         }
         developers {
             developer {
-                val developerID: String by project
+                val developerID = project.property("developerID") as String
                 id.set(developerID)
-                val developerName: String by project
+                val developerName = project.property("developerName") as String
                 name.set(developerName)
-                val developerEmail: String by project
+                val developerEmail = project.property("developerEmail") as String
                 email.set(developerEmail)
             }
         }
         scm {
             url.set(githubURL)
-            val scmURL: String by project
+            val scmURL = project.property("scmURL") as String
             connection.set(scmURL)
             developerConnection.set(scmURL)
         }

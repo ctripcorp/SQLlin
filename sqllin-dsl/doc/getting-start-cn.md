@@ -7,6 +7,8 @@
 将 _sqllin-dsl_、_sqllin-driver_ 以及 _sqllin-processor_ 依赖添加到你的 `build.gradle.kts`：
 
 ```kotlin
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
+
 plugins {
     kotlin("multiplatform")
     kotlin("plugin.serialization")
@@ -43,7 +45,19 @@ dependencies {
     // sqllin-processor
     add("kspCommonMainMetadata", "com.ctrip.kotlin:sqllin-processor:$sqllinVersion")
 }
+
+// The generated code is a source directory of commonMain, so every task that reads it has to run after KSP
+afterEvaluate {
+    tasks {
+        matching { (it is KotlinCompilationTask<*> || it.name.startsWith("ksp")) && it.name != "kspCommonMainKotlinMetadata" }
+            .configureEach { dependsOn("kspCommonMainKotlinMetadata") }
+    }
+}
 ```
+
+最后一段是必需的。生成的表对象作为 `commonMain` 的源码目录加入工程，因此每个 Kotlin 编译任务都会读取
+`kspCommonMainKotlinMetadata` 的输出；如果你的工程还运行着其他 KSP 处理器（比如 Room 或 Koin Annotations），它们的 KSP 任务也会读取。
+一个任务读取另一个任务的输出却没有声明对它的依赖时，Gradle 会让构建失败。KSP 自己的任务按名字匹配，因为不同 KSP 版本的任务类型不同。
 > 注意：如果你想将 SQLlin 的依赖添加到你的 Kotlin/Native 可执行程序工程，有时你需要正确添加对 SQLite 的 `linkerOpts` 到你的
 > `build.gradle.kts`。你可以参考 [issue #48](https://github.com/ctripcorp/SQLlin/issues/48) 来获取更多信息。
 
@@ -150,7 +164,7 @@ val database = Database(
             when (oldVersion) {
                 1 -> {
                     // Example: Add a new column in version 2
-                    PersonTable ALERT_ADD_COLUMN PersonTable.email
+                    PersonTable ALTER_ADD_COLUMN PersonTable.email
                 }
             }
         }
@@ -191,6 +205,9 @@ data class Person(
 `@DBRow` 的参数 `tableName` 表示数据库中的表名，请确保传入正确的值。如果不手动传入，_sqllin-processor_
 将会使用类名作为表名，比如 `Person` 类的默认表名是"Person"。
 
+对于每个 `@DBRow` 类，_sqllin-processor_ 都会生成一个以类名加 `Table` 后缀命名的对象，比如 `Person` 对应 `PersonTable`，
+与 `tableName` 的取值无关。使用 DSL 编写 SQL 时用的就是这个对象。
+
 在 _sqllin-dsl_ 中，对象序列化为 SQL 语句，或者从游标中反序列化依赖 _kotlinx.serialization_，所以你需要在你的 data class
 上添加 `@Serializable` 注解。因此，如果你想在序列化或反序列化以及 `Table` 类生成的时候忽略某些属性，你可以给你的属性添加 `kotlinx.serialization.Transient` 注解。
 
@@ -217,11 +234,23 @@ data class Person(
 )
 ```
 
-**重要的类型和可空性规则：**
+**重要的类型和可空性规则：** 属性的可空性决定了主键的值由谁提供。
 
-- **对于自增的 `Long` 主键**：属性**必须**声明为可空类型（`Long?`）。这会映射到 SQLite 的 `INTEGER PRIMARY KEY`，它作为内部 `rowid` 的别名。当插入 `id = null` 的新记录时，SQLite 会自动生成 ID。
+- **`Long?`，由数据库分配**：映射到 SQLite 的 `INTEGER PRIMARY KEY`，它作为内部 `rowid` 的别名。当插入 `id = null` 的新记录时，SQLite 会自动生成 ID。
 
-- **对于其他类型（String、Int 等）**：属性**必须**是非空的。插入时必须提供唯一值：
+- **`Long`，由你提供**：同样映射到 `INTEGER PRIMARY KEY`，因此仍然是 `rowid` 的别名，但每次插入都会写入你提供的值。适用于来自外部的数字主键，例如远端服务分配的 ID：
+
+```kotlin
+@DBRow
+@Serializable
+data class Movie(
+    @PrimaryKey
+    val id: Long,  // Non-nullable, user-provided, still a rowid alias
+    val title: String,
+)
+```
+
+- **其他类型（String、Int 等），由你提供**：属性**必须**是非空的，映射为 `TEXT PRIMARY KEY NOT NULL` 这样的列。除 `Long` 以外任何类型的可空主键都会导致编译错误。插入时必须提供唯一值：
 
 ```kotlin
 @DBRow
@@ -233,7 +262,7 @@ data class User(
 )
 ```
 
-`autoIncrement` 参数启用更严格的自增行为（使用 `AUTOINCREMENT` 关键字），确保行 ID 永远不会被重用。这仅对 `Long?` 属性有意义。
+`autoIncrement` 参数启用更严格的自增行为（使用 `AUTOINCREMENT` 关键字），确保行 ID 永远不会被重用。它要求属性为 `Long?`，这是唯一一种由数据库分配值的主键。
 
 #### 使用 @CompositePrimaryKey 定义组合主键
 
@@ -257,8 +286,8 @@ data class Enrollment(
 
 **重要规则：**
 
-- 你可以在同一个类中对**多个属性**应用 `@CompositePrimaryKey`
-- 所有带有 `@CompositePrimaryKey` 的属性**必须是非空的**
+- 必须在同一个类中对**至少两个属性**应用 `@CompositePrimaryKey`；只标注一个会导致编译错误，单列主键应使用 `@PrimaryKey`
+- 所有带有 `@CompositePrimaryKey` 的属性**必须是非空的**，并在生成的表中声明为 `NOT NULL`
 - 你**不能**在同一个类中混合使用 `@PrimaryKey` 和 `@CompositePrimaryKey` - 只能使用其中一个
 - 所有 `@CompositePrimaryKey` 属性的组合形成表的组合主键
 
@@ -279,7 +308,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @Unique val email: String,        // Each email must be unique
     @Unique val username: String,     // Each username must be unique
     val displayName: String,
@@ -309,7 +338,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class Enrollment(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @CompositeUnique(0) val studentId: Int,
     @CompositeUnique(0) val courseId: Int,
     val enrollmentDate: String,
@@ -330,7 +359,7 @@ data class Enrollment(
 @DBRow
 @Serializable
 data class Event(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @CompositeUnique(0, 1) val userId: Int,     // Part of groups 0 and 1
     @CompositeUnique(0) val eventType: String,  // Part of group 0
     @CompositeUnique(1) val timestamp: Long,    // Part of group 1
@@ -363,7 +392,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @CollateNoCase @Unique val email: String,  // Case-insensitive unique email
     @CollateNoCase val username: String,        // Case-insensitive username
     val bio: String,
@@ -393,7 +422,7 @@ data class User(
 @DBRow
 @Serializable
 data class Product(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @Unique @CollateNoCase val code: String,  // Unique and case-insensitive
     val name: String,
     val price: Double,
@@ -413,7 +442,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val name: String,
     @Default("'active'") val status: String,              // String default
     @Default("0") val loginCount: Int,                     // Numeric default
@@ -445,7 +474,7 @@ data class User(
 @DBRow
 @Serializable
 data class Order(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(
         tableName = "User",
         foreignKeys = ["id"],
@@ -478,7 +507,7 @@ val status: String
 
 ### 支持的类型
 
-SQLlin 支持以下 Kotlin 类型用于 `@DBRow` 数据类的属性：
+SQLlin 支持以下 Kotlin 类型用于 `@DBRow` 数据类的属性。其他任何类型的属性都会导致编译错误；如果想让这样的属性不进入表中，请为它加上 `kotlinx.serialization.Transient` 注解：
 
 #### 数值类型
 - **整数类型：** `Byte`、`Short`、`Int`、`Long`
@@ -534,7 +563,7 @@ enum class UserStatus {
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val username: String,
     val status: UserStatus,         // Stored as 0, 1, 2, or 3
     val priority: Priority?,        // Nullable enum is also supported
@@ -605,7 +634,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val name: String,
     val email: String,
 )
@@ -613,7 +642,7 @@ data class User(
 @DBRow
 @Serializable
 data class Order(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(
         tableName = "User",
         foreignKeys = ["id"],
@@ -662,7 +691,7 @@ data class Product(
     constraintName = "fk_product"
 )
 data class OrderItem(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @ForeignKey(group = 0, reference = "categoryId")
     val productCategory: Int,
     @ForeignKey(group = 0, reference = "productCode")
@@ -690,7 +719,7 @@ data class OrderItem(
 @DBRow
 @Serializable
 data class Order(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_CASCADE)
     val userId: Long,
     val amount: Double,
@@ -703,7 +732,7 @@ data class Order(
 @DBRow
 @Serializable
 data class Post(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_NULL)
     val authorId: Long?,  // Must be nullable!
     val content: String,
@@ -716,7 +745,7 @@ data class Post(
 @DBRow
 @Serializable
 data class OrderItem(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(tableName = "Order", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_RESTRICT)
     val orderId: Long,
     val productId: Long,
@@ -729,7 +758,7 @@ data class OrderItem(
 @DBRow
 @Serializable
 data class Comment(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_DEFAULT)
     val userId: Long = 0L,  // Default to 0 (anonymous user)
     val content: String,
@@ -764,7 +793,7 @@ UPDATE 操作也有相同的操作：
 @ForeignKeyGroup(group = 0, tableName = "User", trigger = Trigger.ON_DELETE_CASCADE)
 @ForeignKeyGroup(group = 1, tableName = "Product", trigger = Trigger.ON_DELETE_RESTRICT)
 data class OrderItem(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @ForeignKey(group = 0, reference = "id") val userId: Long,
     @ForeignKey(group = 1, reference = "id") val productId: Long,
     val quantity: Int,
@@ -784,7 +813,7 @@ data class OrderItem(
 @DBRow
 @Serializable
 data class OrderItem(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_CASCADE)
     val userId: Long,
     @References(tableName = "Product", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_RESTRICT)
@@ -801,7 +830,7 @@ data class OrderItem(
 @DBRow
 @Serializable
 data class Order(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(
         tableName = "User",
         foreignKeys = ["id"],
@@ -836,7 +865,7 @@ import kotlinx.serialization.Serializable
 @DBRow
 @Serializable
 data class User(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @Unique val email: String,
     val name: String,
 )
@@ -845,7 +874,7 @@ data class User(
 @DBRow
 @Serializable
 data class Order(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_CASCADE)
     val userId: Long,
     val amount: Double,
@@ -856,7 +885,7 @@ data class Order(
 @DBRow
 @Serializable
 data class Post(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @References(tableName = "User", foreignKeys = ["id"], trigger = Trigger.ON_DELETE_SET_NULL)
     val authorId: Long?,  // Nullable - posts can exist without author
     val title: String,

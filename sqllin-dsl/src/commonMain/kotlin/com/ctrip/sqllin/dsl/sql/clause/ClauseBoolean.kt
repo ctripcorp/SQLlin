@@ -28,10 +28,25 @@ import com.ctrip.sqllin.dsl.sql.Table
  *
  * @author Yuang Qiao
  */
-public class ClauseBoolean(
+public class ClauseBoolean internal constructor(
     valueName: String,
     table: Table<*>,
-) : ClauseElement(valueName, table, false) {
+    isFunction: Boolean,
+    isNullable: Boolean,
+    isAggregate: Boolean,
+    isNullOnNoRows: Boolean,
+) : ClauseElement<Boolean>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows) {
+
+    /**
+     * Creates the element of a column, as the code generated for a table does.
+     *
+     * @param isNullable Whether the column is nullable
+     */
+    public constructor(valueName: String, table: Table<*>, isNullable: Boolean) :
+        this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
+
+    override fun toAggregate(valueName: String, table: Table<*>): ClauseBoolean =
+        ClauseBoolean(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true)
 
     /**
      * Creates a condition comparing this Boolean column/function to a value.
@@ -47,8 +62,10 @@ public class ClauseBoolean(
      */
     internal infix fun _is(bool: Boolean?): SelectCondition {
         val sql = buildString {
-            append(table.tableName)
-            append('.')
+            if (!isFunction) {
+                append(table.tableName)
+                append('.')
+            }
             append(valueName)
             append(
                 when {
@@ -82,8 +99,10 @@ public class ClauseBoolean(
      */
     internal infix fun _isNot(bool: Boolean?): SelectCondition {
         val sql = buildString {
-            append(table.tableName)
-            append('.')
+            if (!isFunction) {
+                append(table.tableName)
+                append('.')
+            }
             append(valueName)
             append(
                 when {

@@ -38,3 +38,24 @@ import com.ctrip.sqllin.dsl.annotation.KeyWordDslMaker
  */
 @KeyWordDslMaker
 public object X
+
+/**
+ * Selects every row like [X], but reads each into [R] rather than into the table's own row type, so that only the
+ * columns [R]'s properties name are selected.
+ *
+ * Example:
+ * ```kotlin
+ * // SELECT name,age FROM PersonTable
+ * val people = PersonTable SELECT X<NameAndAge>()
+ * ```
+ *
+ * @see ProjectedX
+ */
+@Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
+@KeyWordDslMaker
+public fun <R> X(): ProjectedX<R> = ProjectedX()
+
+/**
+ * The selector of every row, [X], carrying the type [R] that a SELECT reads rows into. Created by `X<R>()`.
+ */
+public class ProjectedX<R> internal constructor()

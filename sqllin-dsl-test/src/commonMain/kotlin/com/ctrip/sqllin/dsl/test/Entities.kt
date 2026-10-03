@@ -22,6 +22,7 @@ import com.ctrip.sqllin.dsl.annotation.CompositeUnique
 import com.ctrip.sqllin.dsl.annotation.DBRow
 import com.ctrip.sqllin.dsl.annotation.PrimaryKey
 import com.ctrip.sqllin.dsl.annotation.Unique
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -71,7 +72,11 @@ data class Book(
     val author: String,
     val price: Price,
     val pages: PageCount,
-)
+) {
+    // Computed, so kotlinx.serialization doesn't serialize it: it must not become a column, or every INSERT,
+    // which writes only the serialized properties, would leave that column empty
+    val title: String get() = "$name by $author"
+}
 
 @DBRow("category")
 @Serializable
@@ -116,7 +121,7 @@ data class PersonWithId(
 @DBRow("product")
 @Serializable
 data class Product(
-    @PrimaryKey val sku: String?,
+    @PrimaryKey val sku: String,
     val name: String,
     val price: Price,
 )
@@ -124,7 +129,7 @@ data class Product(
 @DBRow("student_with_autoincrement")
 @Serializable
 data class StudentWithAutoincrement(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val studentName: String,
     val grade: Grade,
 )
@@ -140,7 +145,7 @@ data class Enrollment(
 @DBRow("file_data")
 @Serializable
 data class FileData(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val fileName: String,
     val content: ByteArray,
     val metadata: String,
@@ -175,7 +180,7 @@ data class FileData(
 @DBRow("user_account")
 @Serializable
 data class UserAccount(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val username: String,
     val email: String,
     val status: UserStatus,
@@ -189,7 +194,7 @@ data class UserAccount(
 @DBRow("task")
 @Serializable
 data class Task(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val title: String,
     val priority: Priority?,
     val description: String,
@@ -202,7 +207,7 @@ data class Task(
 @DBRow("unique_email_test")
 @Serializable
 data class UniqueEmailTest(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @Unique val email: String,
     val name: String,
 )
@@ -214,7 +219,7 @@ data class UniqueEmailTest(
 @DBRow("collate_nocase_test")
 @Serializable
 data class CollateNoCaseTest(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @CollateNoCase val username: String,
     @CollateNoCase @Unique val email: String,
     val description: String,
@@ -227,7 +232,7 @@ data class CollateNoCaseTest(
 @DBRow("composite_unique_test")
 @Serializable
 data class CompositeUniqueTest(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @CompositeUnique(0) val groupA: String,
     @CompositeUnique(0) val groupB: Int,
     @CompositeUnique(1) val groupC: String,
@@ -242,7 +247,7 @@ data class CompositeUniqueTest(
 @DBRow("multi_group_unique_test")
 @Serializable
 data class MultiGroupUniqueTest(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @CompositeUnique(0, 1) val userId: Int,
     @CompositeUnique(0) val eventType: String,
     @CompositeUnique(1) val timestamp: Long,
@@ -256,7 +261,7 @@ data class MultiGroupUniqueTest(
 @DBRow("combined_constraints_test")
 @Serializable
 data class CombinedConstraintsTest(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @Unique @CollateNoCase val code: String,
     @Unique val serial: String,
     val value: Int,
@@ -272,7 +277,7 @@ data class CombinedConstraintsTest(
 @DBRow("fk_user")
 @Serializable
 data class FKUser(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @Unique val email: String,
     val name: String,
 )
@@ -283,7 +288,7 @@ data class FKUser(
 @DBRow("fk_order")
 @Serializable
 data class FKOrder(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @com.ctrip.sqllin.dsl.annotation.References(
         tableName = "fk_user",
         foreignKeys = ["id"],
@@ -300,7 +305,7 @@ data class FKOrder(
 @DBRow("fk_post")
 @Serializable
 data class FKPost(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @com.ctrip.sqllin.dsl.annotation.References(
         tableName = "fk_user",
         foreignKeys = ["id"],
@@ -317,7 +322,7 @@ data class FKPost(
 @DBRow("fk_profile")
 @Serializable
 data class FKProfile(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @com.ctrip.sqllin.dsl.annotation.References(
         tableName = "fk_user",
         foreignKeys = ["id"],
@@ -351,7 +356,7 @@ data class FKProduct(
     trigger = com.ctrip.sqllin.dsl.annotation.Trigger.ON_DELETE_CASCADE
 )
 data class FKOrderItem(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @com.ctrip.sqllin.dsl.annotation.ForeignKey(group = 0, reference = "categoryId")
     val productCategory: Int,
     @com.ctrip.sqllin.dsl.annotation.ForeignKey(group = 0, reference = "productCode")
@@ -366,7 +371,7 @@ data class FKOrderItem(
 @DBRow("fk_comment")
 @Serializable
 data class FKComment(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @com.ctrip.sqllin.dsl.annotation.References(
         tableName = "fk_user",
         foreignKeys = ["id"],
@@ -394,7 +399,7 @@ data class FKComment(
 @DBRow("default_values_test")
 @Serializable
 data class DefaultValuesTest(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val name: String,
     @com.ctrip.sqllin.dsl.annotation.Default("'active'") val status: String,
     @com.ctrip.sqllin.dsl.annotation.Default("0") val loginCount: Int,
@@ -409,7 +414,7 @@ data class DefaultValuesTest(
 @DBRow("default_nullable_test")
 @Serializable
 data class DefaultNullableTest(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val name: String,
     @com.ctrip.sqllin.dsl.annotation.Default("'In Stock'") val availability: String?,
     @com.ctrip.sqllin.dsl.annotation.Default("100") val quantity: Int?,
@@ -422,7 +427,7 @@ data class DefaultNullableTest(
 @DBRow("default_fk_parent")
 @Serializable
 data class DefaultFKParent(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     val name: String,
 )
 
@@ -438,9 +443,203 @@ data class DefaultFKParent(
     trigger = com.ctrip.sqllin.dsl.annotation.Trigger.ON_DELETE_SET_DEFAULT
 )
 data class DefaultFKChild(
-    @PrimaryKey(isAutoincrement = true) val id: Long?,
+    @PrimaryKey(autoIncrement = true) val id: Long?,
     @com.ctrip.sqllin.dsl.annotation.ForeignKey(group = 0, reference = "id")
     @com.ctrip.sqllin.dsl.annotation.Default("0")
     val parentId: Long,
     val description: String,
+)
+/**
+ * An `internal` entity, used to verify that the processor propagates the entity's visibility
+ * to the generated table object. If it doesn't, the generated `public` object triggers
+ * EXPOSED_SUPER_CLASS, EXPOSED_FUNCTION_RETURN_TYPE and EXPOSED_RECEIVER_TYPE errors, and
+ * this module fails to compile.
+ */
+@DBRow("internal_visibility")
+@Serializable
+internal data class InternalVisibility(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val name: String,
+)
+
+/**
+ * The 'alter_target' table in its shape *before* the migration exercised by
+ * `testSchemaModification`: it has `name` and `legacy`, and no `nickname`.
+ */
+@DBRow("alter_target")
+@Serializable
+data class AlterBefore(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val name: String,
+    val legacy: Int,
+)
+
+/**
+ * The same 'alter_target' table in its shape *after* the migration: `nickname` has been added,
+ * `name` has been renamed to `fullName`, and `legacy` has been dropped. Mapping two entities onto
+ * one table name is what lets the test read the table back through whichever shape it should
+ * currently have, so a migration step that silently does nothing fails the test.
+ */
+@DBRow("alter_target")
+@Serializable
+data class AlterAfter(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val fullName: String,
+    val nickname: String?,
+)
+
+/**
+ * The migrated shape plus the `legacy` column, used purely as a probe: selecting it succeeds while
+ * `legacy` is still present and fails once DROP COLUMN has removed it.
+ */
+@DBRow("alter_target")
+@Serializable
+data class AlterWithLegacy(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val fullName: String,
+    val nickname: String?,
+    val legacy: Int,
+)
+
+/**
+ * Supplies the destination table name for the `ALTER_RENAME_TABLE_TO` step; same shape as
+ * [AlterAfter].
+ */
+@DBRow("alter_renamed")
+@Serializable
+data class AlterRenamed(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val fullName: String,
+    val nickname: String?,
+)
+
+/**
+ * A non-null `Long` primary key: supplied by the caller, as an ID assigned by a remote service would
+ * be, yet still an `INTEGER PRIMARY KEY` and so still an alias for SQLite's rowid.
+ */
+@DBRow("remote_movie")
+@Serializable
+data class RemoteMovie(
+    @PrimaryKey val id: Long,
+    val title: String,
+)
+
+/**
+ * Projections of [Book]: plain @Serializable types rather than tables, whose properties name the columns a SELECT
+ * reads, as in `BookTable SELECT X<BookTitle>()`.
+ */
+@Serializable
+data class BookTitle(val name: String, val author: String)
+
+@Serializable
+data class BookAuthor(val author: String)
+
+/**
+ * A projection of [UserAccount] that reads its nullable `notes` column into a nullable property.
+ */
+@Serializable
+data class UserNotes(val username: String, val notes: String?)
+
+/**
+ * Projections that don't fit their table, each breaking one of the rules a projection is checked against.
+ */
+@Serializable
+data class BookWithIsbn(val name: String, val isbn: String) // 'isbn' isn't a column of book
+
+@Serializable
+data class BookPagesAsText(val pages: String) // 'pages' holds an Int
+
+@Serializable
+data class UserNotesNonNull(val notes: String) // 'notes' is nullable
+
+/**
+ * Result types of SELECTs with result columns, as in `BookTable SELECT listOf(count(X) AS AuthorStats::books)`: the
+ * properties given an expression with AS hold it, and every other property is read from its column.
+ */
+@Serializable
+data class AuthorStats(
+    val author: String, // read from its column
+    val books: Long,
+    val totalPages: Long,
+    val maxPrice: Price,
+    val firstTitle: String,
+)
+
+/**
+ * Aggregates of a whole table, not grouped: all but `count` are NULL when no rows match, so they are nullable.
+ */
+@Serializable
+data class BookTotals(val books: Long, val maxPages: PageCount?, val averagePrice: Double?, val totalPrice: Double?)
+
+@Serializable
+data class BookCount(val books: Long)
+
+/**
+ * Scalar functions of the columns of a book, next to its `name`, which is read from its column.
+ */
+@Serializable
+data class BookFunctions(
+    val name: String,
+    val upperName: String,
+    val nameLength: Long,
+    val roundedPrice: Double,
+    val absPages: PageCount,
+)
+
+@Serializable
+data class StatusStats(val status: UserStatus, val users: Long, val notes: String?, val highestPriority: Priority)
+
+@Serializable
+data class EnabledCount(val enabled: Long?)
+
+@Serializable
+data class BookNames(val names: String?)
+
+@Serializable
+data class BookLabel(val label: String)
+
+/**
+ * Result types that don't fit their query, each breaking one of the rules result columns are checked against.
+ */
+@Serializable
+data class BookCountAndMaxPages(val books: Long, val maxPages: PageCount) // 'maxPages' is NULL when no rows match
+
+@Serializable
+data class RenamedBookCount(@SerialName("total") val books: Long) // 'books' isn't serialized under its own name
+
+/**
+ * A table of aggregates, filled with `INSERT INTO ... SELECT` from a grouped query of [Book].
+ */
+@DBRow("author_book_count")
+@Serializable
+data class AuthorBookCount(val author: String, val books: Long)
+
+/**
+ * The `rebuild_person` table before and after a rebuild, which renames `name` to `fullName`, makes it unique, a change
+ * `ALTER TABLE` can't make, and drops `legacy`.
+ */
+@DBRow("rebuild_person")
+@Serializable
+data class RebuildPersonV1(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val name: String,
+    val legacy: Int,
+)
+
+@DBRow("rebuild_person")
+@Serializable
+data class RebuildPerson(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @Unique val fullName: String,
+)
+
+/**
+ * References `rebuild_person`, so its foreign key shows whether the rebuild left the reference in place.
+ */
+@DBRow("rebuild_pet")
+@Serializable
+data class RebuildPet(
+    @PrimaryKey val id: Long,
+    @com.ctrip.sqllin.dsl.annotation.References(tableName = "rebuild_person", foreignKeys = ["id"])
+    val ownerId: Long,
 )

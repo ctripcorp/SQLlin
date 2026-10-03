@@ -77,7 +77,7 @@ public class InsertStatement internal constructor(
 }
 
 /**
- * CREATE, DROP, ALERT statement (final form).
+ * CREATE, DROP, ALTER statement (final form).
  *
  * Represents a complete CREATE TABLE operation. Does not support parameterized queries
  * since DDL statements use direct SQL execution.

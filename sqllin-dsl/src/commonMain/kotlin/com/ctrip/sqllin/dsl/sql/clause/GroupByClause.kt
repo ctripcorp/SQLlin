@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 
+@file:Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
+
 package com.ctrip.sqllin.dsl.sql.clause
 
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.statement.GroupBySelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.JoinSelectStatement
+import com.ctrip.sqllin.dsl.sql.statement.ResultColumnSelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.WhereSelectStatement
 
 /**
@@ -35,7 +38,7 @@ import com.ctrip.sqllin.dsl.sql.statement.WhereSelectStatement
  *
  * @author Yuang Qiao
  */
-public class GroupByClause<T> internal constructor(private val columnNames: Iterable<ClauseElement>) : SelectClause<T> {
+public class GroupByClause<T> internal constructor(private val columnNames: Iterable<ClauseElement<*>>) : SelectClause<T> {
 
     override val clauseStr: String
         get() = buildString {
@@ -54,29 +57,40 @@ public class GroupByClause<T> internal constructor(private val columnNames: Iter
  * Creates a GROUP BY clause for aggregating rows.
  */
 @StatementDslMaker
-public fun <T> GROUP_BY(vararg elements: ClauseElement): GroupByClause<T> = GroupByClause(elements.toList())
+public fun <T> GROUP_BY(vararg elements: ClauseElement<*>): GroupByClause<T> = GroupByClause(elements.toList())
 
 @StatementDslMaker
-public infix fun <T> WhereSelectStatement<T>.GROUP_BY(element: ClauseElement): GroupBySelectStatement<T> =
+public infix fun <T> WhereSelectStatement<T>.GROUP_BY(element: ClauseElement<*>): GroupBySelectStatement<T> =
     appendToGroupBy(GroupByClause(listOf(element))).also {
         container changeLastStatement it
     }
 
 @StatementDslMaker
-public infix fun <T> WhereSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement>): GroupBySelectStatement<T> {
+public infix fun <T> WhereSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement<*>>): GroupBySelectStatement<T> {
     val statement = appendToGroupBy(GroupByClause(elements))
     container changeLastStatement statement
     return statement
 }
 
 @StatementDslMaker
-public infix fun <T> JoinSelectStatement<T>.GROUP_BY(element: ClauseElement): GroupBySelectStatement<T> =
+public infix fun <T> JoinSelectStatement<T>.GROUP_BY(element: ClauseElement<*>): GroupBySelectStatement<T> =
     appendToGroupBy(GroupByClause(listOf(element))).also {
         container changeLastStatement it
     }
 
 @StatementDslMaker
-public infix fun <T> JoinSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement>): GroupBySelectStatement<T> {
+public infix fun <T> JoinSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement<*>>): GroupBySelectStatement<T> {
+    val statement = appendToGroupBy(GroupByClause(elements))
+    container changeLastStatement statement
+    return statement
+}
+
+@StatementDslMaker
+public infix fun <T> ResultColumnSelectStatement<T>.GROUP_BY(element: ClauseElement<*>): GroupBySelectStatement<T> =
+    GROUP_BY(listOf(element))
+
+@StatementDslMaker
+public infix fun <T> ResultColumnSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement<*>>): GroupBySelectStatement<T> {
     val statement = appendToGroupBy(GroupByClause(elements))
     container changeLastStatement statement
     return statement

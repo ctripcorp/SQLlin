@@ -30,14 +30,14 @@ import kotlinx.serialization.modules.SerializersModule
  * parameterized VALUES clauses. All values (including null, numbers, strings, ByteArray, etc.)
  * are converted to `?` placeholders and collected in [parameters] for safe execution.
  *
- * Automatically skips the primary key field if [primaryKeyName] is provided, allowing
- * database auto-increment to generate the value.
+ * Leaves out the primary key field named [primaryKeyName] when [isInsertId] is `false`, so that the
+ * database assigns its value.
  *
  * Example output: `(?, ?, ?)` with parameters: ["John", 30, byteArray]
  *
  * @param parameters Mutable list to accumulate parameter values
  * @param primaryKeyName Name of primary key field to skip, or null to include all fields
- * @param isInsertId whether ignore encoding the special primary key that represents rowid in SQLite
+ * @param isInsertId Whether to encode the primary key field; `false` leaves it for the database to assign
  *
  * @author Yuang Qiao
  */

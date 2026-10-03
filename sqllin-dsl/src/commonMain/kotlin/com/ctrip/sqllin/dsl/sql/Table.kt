@@ -96,7 +96,7 @@ public abstract class Table<T>(
      * @Serializable
      * @DBRow
      * data class User(
-     *     @PrimaryKey(isAutoincrement = true) val id: Long?,
+     *     @PrimaryKey(autoIncrement = true) val id: Long?,
      *     @Unique @CollateNoCase val email: String,
      *     val name: String,
      *     val age: Int
@@ -119,4 +119,53 @@ public abstract class Table<T>(
      * @see com.ctrip.sqllin.dsl.annotation.CollateNoCase
      */
     public abstract val createSQL: String
+}
+
+/**
+ * Returns a table with the structure of this one under another [name], as needed to rebuild a table.
+ *
+ * SQLite's `ALTER TABLE` can only rename a table, and add, rename or drop a column; dropping one needs SQLite 3.35,
+ * which Android only has from API 34 on. Any other change, such as adding a constraint or changing the primary key,
+ * rebuilds the table: create the new structure under a temporary name, copy the rows with `INSERT INTO ... SELECT`,
+ * drop the old table, and rename the new one:
+ * ```kotlin
+ * val newPerson = PersonTable.withName("person_new")
+ * CREATE(newPerson)
+ * newPerson INSERT (PersonV1Table SELECT listOf(PersonV1Table.name AS Person::fullName))
+ * DROP(PersonV1Table)
+ * "person_new" ALTER_RENAME_TABLE_TO PersonTable
+ * ```
+ * Here `PersonV1` is a `@DBRow` class that keeps the old structure, under the same table name as `Person`.
+ *
+ * Rename the new table, not the old one: renaming a table also renames the references to it in other tables'
+ * foreign keys, with SQLite's default settings, so the references would follow the old table and be left pointing
+ * at a table that no longer exists once it's dropped.
+ *
+ * The returned table has no column properties, as those of this table name this table. It is meant for statements
+ * on the table as a whole: `CREATE`, `INSERT`, `DROP` and `ALTER_RENAME_TABLE_TO`.
+ *
+ * @param name The name of the returned table
+ * @return A table with this table's columns, constraints and row type, named [name]
+ */
+public fun <T> Table<T>.withName(name: String): Table<T> = NamedTable(this, name)
+
+/**
+ * A table with the structure of [table] under another name.
+ */
+private class NamedTable<T>(private val table: Table<T>, name: String) : Table<T>(name) {
+
+    init {
+        require(name.isNotBlank()) { "The name of a table can't be blank." }
+    }
+
+    override fun kSerializer(): KSerializer<T> = table.kSerializer()
+
+    override val primaryKeyInfo: PrimaryKeyInfo?
+        get() = table.primaryKeyInfo
+
+    override val createSQL: String = run {
+        val prefix = "CREATE TABLE ${table.tableName}("
+        check(table.createSQL.startsWith(prefix)) { "The CREATE TABLE statement of table '${table.tableName}' doesn't start with '$prefix'." }
+        "CREATE TABLE $name(${table.createSQL.substring(prefix.length)}"
+    }
 }

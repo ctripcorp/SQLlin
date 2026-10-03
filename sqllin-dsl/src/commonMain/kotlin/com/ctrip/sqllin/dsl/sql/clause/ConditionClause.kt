@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+@file:Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
+
 package com.ctrip.sqllin.dsl.sql.clause
 
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
@@ -46,123 +48,123 @@ public sealed class ConditionClause<T>(private val selectCondition: SelectCondit
 
 // Less than, <
 @StatementDslMaker
-public infix fun ClauseNumber.LT(number: Number): SelectCondition = lt(number)
+public infix fun ClauseNumber<*>.LT(number: Number): SelectCondition = lt(number)
 
 // Less than, append to ClauseNumber
 @StatementDslMaker
-public infix fun ClauseNumber.LT(clauseNumber: ClauseNumber): SelectCondition = lt(clauseNumber)
+public infix fun ClauseNumber<*>.LT(clauseNumber: ClauseNumber<*>): SelectCondition = lt(clauseNumber)
 
 // Less than or equal to, <=
 @StatementDslMaker
-public infix fun ClauseNumber.LTE(number: Number): SelectCondition = lte(number)
+public infix fun ClauseNumber<*>.LTE(number: Number): SelectCondition = lte(number)
 
 // Less than or equal to, append to ClauseNumber
 @StatementDslMaker
-public infix fun ClauseNumber.LTE(clauseNumber: ClauseNumber): SelectCondition = lte(clauseNumber)
+public infix fun ClauseNumber<*>.LTE(clauseNumber: ClauseNumber<*>): SelectCondition = lte(clauseNumber)
 
 // Equals, ==
 @StatementDslMaker
-public infix fun ClauseNumber.EQ(number: Number?): SelectCondition = eq(number)
+public infix fun ClauseNumber<*>.EQ(number: Number?): SelectCondition = eq(number)
 
 // Equals, append to ClauseNumber
 @StatementDslMaker
-public infix fun ClauseNumber.EQ(clauseNumber: ClauseNumber): SelectCondition = eq(clauseNumber)
+public infix fun ClauseNumber<*>.EQ(clauseNumber: ClauseNumber<*>): SelectCondition = eq(clauseNumber)
 
 // Not equal to, !=
 @StatementDslMaker
-public infix fun ClauseNumber.NEQ(number: Number?): SelectCondition = neq(number)
+public infix fun ClauseNumber<*>.NEQ(number: Number?): SelectCondition = neq(number)
 
 // Not equal to, append to ClauseNumber
 @StatementDslMaker
-public infix fun ClauseNumber.NEQ(clauseNumber: ClauseNumber): SelectCondition = neq(clauseNumber)
+public infix fun ClauseNumber<*>.NEQ(clauseNumber: ClauseNumber<*>): SelectCondition = neq(clauseNumber)
 
 // Greater than, >
 @StatementDslMaker
-public infix fun ClauseNumber.GT(number: Number): SelectCondition = gt(number)
+public infix fun ClauseNumber<*>.GT(number: Number): SelectCondition = gt(number)
 
 // Greater than, append to ClauseNumber
 @StatementDslMaker
-public infix fun ClauseNumber.GT(clauseNumber: ClauseNumber): SelectCondition = gt(clauseNumber)
+public infix fun ClauseNumber<*>.GT(clauseNumber: ClauseNumber<*>): SelectCondition = gt(clauseNumber)
 
 // Greater than or equal to, >=
 @StatementDslMaker
-public infix fun ClauseNumber.GTE(number: Number): SelectCondition = gte(number)
+public infix fun ClauseNumber<*>.GTE(number: Number): SelectCondition = gte(number)
 
 // Greater than or equal to, append to ClauseNumber
 @StatementDslMaker
-public infix fun ClauseNumber.GTE(clauseNumber: ClauseNumber): SelectCondition = gte(clauseNumber)
+public infix fun ClauseNumber<*>.GTE(clauseNumber: ClauseNumber<*>): SelectCondition = gte(clauseNumber)
 
 // If the 'number' in the 'numbers'
 @StatementDslMaker
-public infix fun ClauseNumber.IN(numbers: Iterable<Number>): SelectCondition = inIterable(numbers)
+public infix fun ClauseNumber<*>.IN(numbers: Iterable<Number>): SelectCondition = inIterable(numbers)
 
 // If the 'number' between the 'range'
 @StatementDslMaker
-public infix fun ClauseNumber.BETWEEN(range: LongRange): SelectCondition = between(range)
+public infix fun ClauseNumber<*>.BETWEEN(range: LongRange): SelectCondition = between(range)
 
 // Equals, ==
 @StatementDslMaker
-public infix fun ClauseString.EQ(str: String?): SelectCondition = eq(str)
+public infix fun ClauseString<*>.EQ(str: String?): SelectCondition = eq(str)
 
 // Equals, append another ClauseString
 @StatementDslMaker
-public infix fun ClauseString.EQ(clauseString: ClauseString): SelectCondition = eq(clauseString)
+public infix fun ClauseString<*>.EQ(clauseString: ClauseString<*>): SelectCondition = eq(clauseString)
 
 // Not equals to, !=
 @StatementDslMaker
-public infix fun ClauseString.NEQ(str: String?): SelectCondition = neq(str)
+public infix fun ClauseString<*>.NEQ(str: String?): SelectCondition = neq(str)
 
 // Not equals to, append another ClauseString
 @StatementDslMaker
-public infix fun ClauseString.NEQ(clauseString: ClauseString): SelectCondition = neq(clauseString)
+public infix fun ClauseString<*>.NEQ(clauseString: ClauseString<*>): SelectCondition = neq(clauseString)
 
 // SQL LIKE operator
 @StatementDslMaker
-public infix fun ClauseString.LIKE(regex: String): SelectCondition = like(regex)
+public infix fun ClauseString<*>.LIKE(regex: String): SelectCondition = like(regex)
 
 // SQL GLOB operator
 @StatementDslMaker
-public infix fun ClauseString.GLOB(regex: String): SelectCondition = glob(regex)
+public infix fun ClauseString<*>.GLOB(regex: String): SelectCondition = glob(regex)
 
 // Less than, <
 @StatementDslMaker
-public infix fun ClauseString.LT(str: String): SelectCondition = lt(str)
+public infix fun ClauseString<*>.LT(str: String): SelectCondition = lt(str)
 
 // Less than, append to ClauseString
 @StatementDslMaker
-public infix fun ClauseString.LT(clauseString: ClauseString): SelectCondition = lt(clauseString)
+public infix fun ClauseString<*>.LT(clauseString: ClauseString<*>): SelectCondition = lt(clauseString)
 
 // Less than or equal to, <=
 @StatementDslMaker
-public infix fun ClauseString.LTE(str: String): SelectCondition = lte(str)
+public infix fun ClauseString<*>.LTE(str: String): SelectCondition = lte(str)
 
 // Less than or equal to, append to ClauseString
 @StatementDslMaker
-public infix fun ClauseString.LTE(clauseString: ClauseString): SelectCondition = lte(clauseString)
+public infix fun ClauseString<*>.LTE(clauseString: ClauseString<*>): SelectCondition = lte(clauseString)
 
 // Greater than, >
 @StatementDslMaker
-public infix fun ClauseString.GT(str: String): SelectCondition = gt(str)
+public infix fun ClauseString<*>.GT(str: String): SelectCondition = gt(str)
 
 // Greater than, append to ClauseString
 @StatementDslMaker
-public infix fun ClauseString.GT(clauseString: ClauseString): SelectCondition = gt(clauseString)
+public infix fun ClauseString<*>.GT(clauseString: ClauseString<*>): SelectCondition = gt(clauseString)
 
 // Greater than or equal to, >=
 @StatementDslMaker
-public infix fun ClauseString.GTE(str: String): SelectCondition = gte(str)
+public infix fun ClauseString<*>.GTE(str: String): SelectCondition = gte(str)
 
 // Greater than or equal to, append to ClauseString
 @StatementDslMaker
-public infix fun ClauseString.GTE(clauseString: ClauseString): SelectCondition = gte(clauseString)
+public infix fun ClauseString<*>.GTE(clauseString: ClauseString<*>): SelectCondition = gte(clauseString)
 
 // If the 'string' in the 'strings'
 @StatementDslMaker
-public infix fun ClauseString.IN(strings: Iterable<String>): SelectCondition = inIterable(strings)
+public infix fun ClauseString<*>.IN(strings: Iterable<String>): SelectCondition = inIterable(strings)
 
 // If the 'string' between the 'range'
 @StatementDslMaker
-public infix fun ClauseString.BETWEEN(range: Pair<String, String>): SelectCondition = between(range)
+public infix fun ClauseString<*>.BETWEEN(range: Pair<String, String>): SelectCondition = between(range)
 
 // Less than, <
 @StatementDslMaker

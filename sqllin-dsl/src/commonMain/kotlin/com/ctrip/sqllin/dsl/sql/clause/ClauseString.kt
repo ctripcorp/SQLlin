@@ -36,25 +36,41 @@ import com.ctrip.sqllin.dsl.sql.Table
  * - `like`: LIKE pattern matching (case-insensitive, supports % and _ wildcards)
  * - `glob`: GLOB pattern matching (case-sensitive, supports * and ? wildcards)
  *
+ * @param V The type of the element's values: `String`, or `Char` for a `Char` column
+ *
  * @author Yuang Qiao
  */
-public class ClauseString(
+public class ClauseString<V : Any> internal constructor(
     valueName: String,
     table: Table<*>,
-    isFunction: Boolean = false,
-) : ClauseElement(valueName, table, isFunction) {
+    isFunction: Boolean,
+    isNullable: Boolean,
+    isAggregate: Boolean,
+    isNullOnNoRows: Boolean,
+) : ClauseElement<V>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows) {
+
+    /**
+     * Creates the element of a column, as the code generated for a table does.
+     *
+     * @param isNullable Whether the column is nullable
+     */
+    public constructor(valueName: String, table: Table<*>, isNullable: Boolean) :
+        this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
+
+    override fun toAggregate(valueName: String, table: Table<*>): ClauseString<V> =
+        ClauseString(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true)
 
     /** Equals (=), or IS NULL if value is null */
     internal infix fun eq(str: String?): SelectCondition = appendNullableString("=", " IS NULL", str)
 
     /** Equals (=) - compare against another column/function */
-    internal infix fun eq(clauseString: ClauseString): SelectCondition = appendClauseString("=", clauseString)
+    internal infix fun eq(clauseString: ClauseString<*>): SelectCondition = appendClauseString("=", clauseString)
 
     /** Not equals (!=), or IS NOT NULL if value is null */
     internal infix fun neq(str: String?): SelectCondition = appendNullableString("!=", " IS NOT NULL", str)
 
     /** Not equals (!=) - compare against another column/function */
-    internal infix fun neq(clauseString: ClauseString): SelectCondition = appendClauseString("!=", clauseString)
+    internal infix fun neq(clauseString: ClauseString<*>): SelectCondition = appendClauseString("!=", clauseString)
 
     /**
      * Creates a less than comparison condition (<).
@@ -70,7 +86,7 @@ public class ClauseString(
      * @param clauseString The String column/function to compare against
      * @return Condition expression comparing two String columns
      */
-    internal infix fun lt(clauseString: ClauseString): SelectCondition = appendClauseString("<", clauseString)
+    internal infix fun lt(clauseString: ClauseString<*>): SelectCondition = appendClauseString("<", clauseString)
 
     /**
      * Creates a less than or equal to comparison condition (<=).
@@ -86,7 +102,7 @@ public class ClauseString(
      * @param clauseString The String column/function to compare against
      * @return Condition expression comparing two String columns
      */
-    internal infix fun lte(clauseString: ClauseString): SelectCondition = appendClauseString("<=", clauseString)
+    internal infix fun lte(clauseString: ClauseString<*>): SelectCondition = appendClauseString("<=", clauseString)
 
     /**
      * Creates a greater than comparison condition (>).
@@ -102,7 +118,7 @@ public class ClauseString(
      * @param clauseString The String column/function to compare against
      * @return Condition expression comparing two String columns
      */
-    internal infix fun gt(clauseString: ClauseString): SelectCondition = appendClauseString(">", clauseString)
+    internal infix fun gt(clauseString: ClauseString<*>): SelectCondition = appendClauseString(">", clauseString)
 
     /**
      * Creates a greater than or equal to comparison condition (>=).
@@ -118,7 +134,7 @@ public class ClauseString(
      * @param clauseString The String column/function to compare against
      * @return Condition expression comparing two String columns
      */
-    internal infix fun gte(clauseString: ClauseString): SelectCondition = appendClauseString(">=", clauseString)
+    internal infix fun gte(clauseString: ClauseString<*>): SelectCondition = appendClauseString(">=", clauseString)
 
     /**
      * LIKE operator - case-insensitive pattern matching.
@@ -179,17 +195,13 @@ public class ClauseString(
         return SelectCondition(sql, mutableListOf(str))
     }
 
-    private fun appendClauseString(symbol: String, clauseString: ClauseString): SelectCondition {
+    private fun appendClauseString(symbol: String, clauseString: ClauseString<*>): SelectCondition {
         val sql = buildString {
-            append(table.tableName)
-            append('.')
-            append(valueName)
+            appendSQL(this)
             append(' ')
             append(symbol)
             append(' ')
-            append(clauseString.table.tableName)
-            append('.')
-            append(clauseString.valueName)
+            clauseString.appendSQL(this)
         }
         return SelectCondition(sql, null)
     }
@@ -244,7 +256,7 @@ public class ClauseString(
     }
 
     override fun hashCode(): Int = valueName.hashCode() + table.tableName.hashCode()
-    override fun equals(other: Any?): Boolean = (other as? ClauseString)?.let {
+    override fun equals(other: Any?): Boolean = (other as? ClauseString<*>)?.let {
         it.valueName == valueName && it.table.tableName == table.tableName
     } ?: false
 }
