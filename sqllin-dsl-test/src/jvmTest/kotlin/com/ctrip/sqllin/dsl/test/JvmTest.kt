@@ -134,6 +134,9 @@ class JvmTest {
     fun testFunctionStringArguments() = commonTest.testFunctionStringArguments()
 
     @Test
+    fun testFunctionComparisons() = commonTest.testFunctionComparisons()
+
+    @Test
     fun testIndexOperations() = commonTest.testIndexOperations()
 
     @Test

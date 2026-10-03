@@ -197,15 +197,11 @@ public class ClauseBlob internal constructor(
 
     private fun appendClauseBlob(symbol: String, clauseBlob: ClauseBlob): SelectCondition {
         val sql = buildString {
-            append(table.tableName)
-            append('.')
-            append(valueName)
+            appendSQL(this)
             append(' ')
             append(symbol)
             append(' ')
-            append(clauseBlob.table.tableName)
-            append('.')
-            append(clauseBlob.valueName)
+            clauseBlob.appendSQL(this)
         }
         return SelectCondition(sql, null)
     }

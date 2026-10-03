@@ -220,13 +220,9 @@ public class ClauseNumber<V : Any> internal constructor(
 
     private fun appendClauseNumber(symbol: String, clauseNumber: ClauseNumber<*>): SelectCondition {
         val sql = buildString {
-            append(table.tableName)
-            append('.')
-            append(valueName)
+            appendSQL(this)
             append(symbol)
-            append(clauseNumber.table.tableName)
-            append('.')
-            append(clauseNumber.valueName)
+            clauseNumber.appendSQL(this)
         }
         return SelectCondition(sql, null)
     }

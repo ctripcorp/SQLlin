@@ -197,15 +197,11 @@ public class ClauseString<V : Any> internal constructor(
 
     private fun appendClauseString(symbol: String, clauseString: ClauseString<*>): SelectCondition {
         val sql = buildString {
-            append(table.tableName)
-            append('.')
-            append(valueName)
+            appendSQL(this)
             append(' ')
             append(symbol)
             append(' ')
-            append(clauseString.table.tableName)
-            append('.')
-            append(clauseString.valueName)
+            clauseString.appendSQL(this)
         }
         return SelectCondition(sql, null)
     }

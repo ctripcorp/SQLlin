@@ -2283,6 +2283,53 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers comparing two elements when one or both are functions: a column is qualified by its table's name, and a
+     * function is written as it is, as `book.length(name)` isn't SQL.
+     */
+    fun testFunctionComparisons() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        database {
+            BookTable INSERT listOf(
+                Book(name = "Short", author = "Ann", price = 10.0, pages = 3),
+                Book(name = "A Longer Title", author = "Ann", price = 20.0, pages = 300),
+                Book(name = "Equal", author = "Bob", price = 30.0, pages = 5),
+            )
+            UserAccountTable INSERT listOf(
+                UserAccount(id = null, username = "ann", email = "ann@example.com", status = UserStatus.ACTIVE, priority = Priority.LOW, notes = null),
+                UserAccount(id = null, username = "bob", email = "bob@example.com", status = UserStatus.ACTIVE, priority = Priority.HIGH, notes = null),
+                UserAccount(id = null, username = "cat", email = "cat@example.com", status = UserStatus.INACTIVE, priority = Priority.MEDIUM, notes = null),
+            )
+        }
+        lateinit var functionToColumn: SelectStatement<Book>
+        lateinit var columnToFunction: SelectStatement<Book>
+        lateinit var functionToFunction: SelectStatement<BookAuthor>
+        lateinit var strings: SelectStatement<Book>
+        lateinit var enums: SelectStatement<StatusStats>
+        database {
+            BookTable { table ->
+                // Names longer than their page count
+                functionToColumn = table SELECT WHERE(length(name) GT pages)
+                columnToFunction = table SELECT WHERE(pages EQ length(name))
+                // Authors whose books differ in length
+                functionToFunction = table SELECT GROUP_BY<BookAuthor>(author) HAVING (max(pages) GT min(pages))
+                strings = table SELECT WHERE(upper(author) NEQ author)
+            }
+            UserAccountTable { table ->
+                // Statuses whose users differ in priority
+                enums = table SELECT listOf(
+                    count(X) AS StatusStats::users,
+                    group_concat(notes, ",") AS StatusStats::notes,
+                    max(priority) AS StatusStats::highestPriority,
+                ) GROUP_BY status HAVING (max(priority) NEQ min(priority))
+            }
+        }
+        assertEquals(listOf("Short"), functionToColumn.getResults().map { it.name })
+        assertEquals(listOf("Equal"), columnToFunction.getResults().map { it.name })
+        assertEquals(listOf("Ann"), functionToFunction.getResults().map { it.author })
+        assertEquals(3, strings.getResults().size)
+        assertEquals(listOf(UserStatus.ACTIVE), enums.getResults().map { it.status })
+    }
+
+    /**
      * Test for CREATE_INDEX and CREATE_UNIQUE_INDEX operations
      * Verifies index creation functionality
      */

@@ -254,7 +254,8 @@ public class ClauseEnum<T : Enum<T>> internal constructor(
      * Builds a comparison condition between two enum columns.
      *
      * Generates SQL: `table1.column1<symbol>table2.column2` with no parameters.
-     * Both columns are referenced directly in the SQL without binding.
+     * Both columns are referenced directly in the SQL without binding; a function,
+     * such as `max(column)`, is written as it is.
      *
      * @param symbol The comparison operator (e.g., "<", "=", ">=")
      * @param clauseEnum The enum column to compare against
@@ -262,13 +263,9 @@ public class ClauseEnum<T : Enum<T>> internal constructor(
      */
     private fun appendClauseEnum(symbol: String, clauseEnum: ClauseEnum<T>): SelectCondition {
         val sql = buildString {
-            append(table.tableName)
-            append('.')
-            append(valueName)
+            appendSQL(this)
             append(symbol)
-            append(clauseEnum.table.tableName)
-            append('.')
-            append(clauseEnum.valueName)
+            clauseEnum.appendSQL(this)
         }
         return SelectCondition(sql, null)
     }

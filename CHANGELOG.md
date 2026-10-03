@@ -31,6 +31,7 @@
 * Fix: the SQL string functions added in 2.2.0, `substr`, `trim`, `ltrim`, `rtrim`, `replace`, `instr` and `printf`, now carry the same DSL marker as the other SQL functions, so IntelliJ IDEA highlights their calls the same way
 * Fix documentation: the installation guide now declares the task dependencies the generated code needs, as SQLlin's own builds always did. Without them Gradle fails the build, in particular when another KSP processor runs in the same module. It also states that each generated object is named after its class with a `Table` suffix, not after the table
 * Fix: the string arguments of `replace`, `instr`, `printf` and `group_concat` were put into the SQL between single quotes without escaping, so a `'` in one broke the statement, and a crafted one could change what the statement does, such as making a condition true for every row. A `'` is now escaped as `''`, the only escape SQLite has in a string literal, so any string stays a literal
+* Fix: a comparison between two elements, such as `length(name) GT pages` or `HAVING (max(pages) GT min(pages))`, qualified both with their table's name even when one was a function, producing invalid SQL such as `book.length(name)`. A function is now written as it is
 
 ### sqllin-driver
 

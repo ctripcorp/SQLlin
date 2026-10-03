@@ -71,4 +71,16 @@ public sealed class ClauseElement<V : Any>(
      * `min` do.
      */
     internal abstract fun toAggregate(valueName: String, table: Table<*>): ClauseElement<V>
+
+    /**
+     * Appends this element as SQL to [builder]: a column qualified by its table's name, so that it can be told apart
+     * from a column of another table, and a function as it is, as a function call can't be qualified.
+     */
+    internal fun appendSQL(builder: StringBuilder) {
+        if (!isFunction) {
+            builder.append(table.tableName)
+            builder.append('.')
+        }
+        builder.append(valueName)
+    }
 }
