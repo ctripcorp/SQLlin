@@ -3,6 +3,7 @@
 ## High Priority
 
 * Support observable queries that return a `Flow` re-emitting whenever the tables they read change, e.g. to invalidate a Paging source
+* Support UNION of SELECTs whose result type isn't the table's row type, such as projections, result columns and joins. `UNION` is typed by the table's row type but reads the rows into its first SELECT's result type, so using the results of such a union fails with a `ClassCastException`
 
 ## Medium Priority
 
