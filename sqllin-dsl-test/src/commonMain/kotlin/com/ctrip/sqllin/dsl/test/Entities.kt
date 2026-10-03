@@ -592,6 +592,12 @@ data class StatusStats(val status: UserStatus, val users: Long, val notes: Strin
 @Serializable
 data class EnabledCount(val enabled: Long?)
 
+@Serializable
+data class BookNames(val names: String?)
+
+@Serializable
+data class BookLabel(val label: String)
+
 /**
  * Result types that don't fit their query, each breaking one of the rules result columns are checked against.
  */

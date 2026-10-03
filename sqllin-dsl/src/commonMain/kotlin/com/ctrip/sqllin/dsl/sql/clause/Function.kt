@@ -51,6 +51,12 @@ private fun Table<*>.stringFunction(valueName: String, element: ClauseElement<*>
     ClauseString(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = element.isAggregate, isNullOnNoRows = element.isNullOnNoRows)
 
 /**
+ * Writes [string] as a SQL string literal. The only character SQLite escapes in one is `'`, by doubling it, so this
+ * keeps any string a literal: a `'` in it can't end the literal and turn the rest into SQL.
+ */
+private fun sqlString(string: String): String = "'${string.replace("'", "''")}'"
+
+/**
  * COUNT aggregate function - counts non-NULL values.
  *
  * Usage:
@@ -182,7 +188,7 @@ public fun <T, E : ClauseElement<*>> Table<T>.min(element: E): E =
  */
 @FunctionDslMaker
 public fun <T> Table<T>.group_concat(element: ClauseString<*>, infix: String): ClauseString<String> =
-    ClauseString("group_concat(${element.valueName},'$infix')", this, isFunction = true, isNullable = element.isNullable, isAggregate = true, isNullOnNoRows = true)
+    ClauseString("group_concat(${element.valueName},${sqlString(infix)})", this, isFunction = true, isNullable = element.isNullable, isAggregate = true, isNullOnNoRows = true)
 
 /**
  * ABS scalar function - returns absolute value, of the same type as [element].
@@ -380,7 +386,7 @@ public fun <T> Table<T>.rtrim(element: ClauseString<*>): ClauseString<String> =
  */
 @FunctionDslMaker
 public fun <T> Table<T>.replace(element: ClauseString<*>, old: String, new: String): ClauseString<String> =
-    stringFunction("replace(${element.valueName},'$old','$new')", element)
+    stringFunction("replace(${element.valueName},${sqlString(old)},${sqlString(new)})", element)
 
 /**
  * INSTR scalar function - finds the first occurrence of a substring.
@@ -400,7 +406,7 @@ public fun <T> Table<T>.replace(element: ClauseString<*>, old: String, new: Stri
  */
 @FunctionDslMaker
 public fun <T> Table<T>.instr(element: ClauseString<*>, sub: String): ClauseNumber<Long> =
-    numberFunction("instr(${element.valueName},'$sub')", element)
+    numberFunction("instr(${element.valueName},${sqlString(sub)})", element)
 
 /**
  * PRINTF scalar function - formats a string according to a format specification.
@@ -420,4 +426,4 @@ public fun <T> Table<T>.instr(element: ClauseString<*>, sub: String): ClauseNumb
  */
 @FunctionDslMaker
 public fun <T> Table<T>.printf(format: String, element: ClauseString<*>): ClauseString<String> =
-    stringFunction("printf('$format',${element.valueName})", element)
+    stringFunction("printf(${sqlString(format)},${element.valueName})", element)

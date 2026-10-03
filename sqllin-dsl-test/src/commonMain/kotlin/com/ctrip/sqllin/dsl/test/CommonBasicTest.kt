@@ -2250,6 +2250,39 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers the string arguments of `replace`, `instr`, `printf` and `group_concat`, which are written into the SQL
+     * as literals: a `'` in one is part of the string, so it neither breaks the statement nor changes what it does.
+     */
+    fun testFunctionStringArguments() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        database {
+            BookTable INSERT listOf(
+                Book(name = "It's Kotlin", author = "Pat O'Brien", price = 10.0, pages = 100),
+                Book(name = "Plain Title", author = "Sam Lee", price = 20.0, pages = 200),
+            )
+        }
+        lateinit var replaced: SelectStatement<Book>
+        lateinit var withQuote: SelectStatement<Book>
+        lateinit var injected: SelectStatement<Book>
+        lateinit var names: SelectStatement<BookNames>
+        lateinit var labels: SelectStatement<BookLabel>
+        database {
+            BookTable { table ->
+                replaced = table SELECT WHERE(replace(name, "It's", "It is") EQ "It is Kotlin")
+                withQuote = table SELECT WHERE(instr(author, "'") GT 0)
+                // Before the fix, this ended the literal and made the condition true for every row
+                injected = table SELECT WHERE(instr(name, "zzz') + 1 + ('") GT 0)
+                names = table SELECT (group_concat(name, "' ") AS BookNames::names)
+                labels = table SELECT (printf("it's %s", name) AS BookLabel::label) ORDER_BY (name to ASC)
+            }
+        }
+        assertEquals(listOf("It's Kotlin"), replaced.getResults().map { it.name })
+        assertEquals(listOf("Pat O'Brien"), withQuote.getResults().map { it.author })
+        assertEquals(0, injected.getResults().size)
+        assertEquals(listOf("It's Kotlin", "Plain Title"), names.getResults().single().names!!.split("' ").sorted())
+        assertEquals(listOf("it's It's Kotlin", "it's Plain Title"), labels.getResults().map { it.label })
+    }
+
+    /**
      * Test for CREATE_INDEX and CREATE_UNIQUE_INDEX operations
      * Verifies index creation functionality
      */

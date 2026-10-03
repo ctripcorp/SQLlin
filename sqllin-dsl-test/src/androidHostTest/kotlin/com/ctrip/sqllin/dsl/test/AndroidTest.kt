@@ -139,6 +139,9 @@ class AndroidTest {
     fun testStringAggregateFunctions() = commonTest.testStringAggregateFunctions()
 
     @Test
+    fun testFunctionStringArguments() = commonTest.testFunctionStringArguments()
+
+    @Test
     fun testIndexOperations() = commonTest.testIndexOperations()
 
     @Test
