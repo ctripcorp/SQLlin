@@ -127,7 +127,7 @@ fun sample() {
 }
 ```
 
-**⚠️ 警告**：DROP COLUMN 会永久删除列及其所有数据。请注意，SQLite 的 DROP COLUMN 支持是在 3.35.0 版本中添加的，因此较旧的 SQLite 版本可能需要重建表。
+**⚠️ 警告**：DROP COLUMN 会永久删除列及其所有数据。请注意，SQLite 的 DROP COLUMN 支持是在 3.35.0 版本中添加的，Android 要到 API 34 才具备，因此较旧的 SQLite 版本需要[重建表](#重建表)。
 
 ### 在 DSLDBConfiguration 中使用结构操作
 
@@ -157,6 +157,60 @@ val database = Database(
     )
 )
 ```
+
+### 重建表
+
+SQLite 的 `ALTER TABLE` 只能重命名表，以及添加、重命名、删除列。其他改动，比如添加约束、把列改成 `NOT NULL`、更换主键，
+都需要重建表：用临时名创建新结构的表，用 `INSERT INTO ... SELECT` 把数据拷过去，删除旧表，再把新表改名。在 SQLite 低于
+3.35 的环境中删除列也是这样做，在 Android 上就是 API 34 以下。
+
+要从旧表读取数据，需要保留一个描述旧结构的 `@DBRow` 类，表名不变。`withName` 用来给新结构起一个临时名：
+
+```kotlin
+import com.ctrip.sqllin.dsl.sql.withName
+
+@DBRow("person")
+@Serializable
+data class PersonV1(        // 版本 1 中 'person' 的结构
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val name: String,
+    val legacy: Int,
+)
+
+@DBRow("person")
+@Serializable
+data class Person(          // 版本 2 起的结构
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @Unique val fullName: String,
+)
+
+val database = Database(
+    DSLDBConfiguration(
+        // ...
+        version = 2,
+        upgrade = { oldVersion, newVersion ->
+            if (oldVersion < 2) {
+                val newPerson = PersonTable.withName("person_new")
+                CREATE(newPerson)
+                PersonV1Table { table ->
+                    // INSERT INTO person_new(id,fullName) SELECT id,name AS fullName FROM person
+                    newPerson INSERT (table SELECT (name AS Person::fullName))
+                }
+                DROP(PersonV1Table)
+                "person_new" ALTER_RENAME_TABLE_TO PersonTable
+            }
+        }
+    )
+)
+```
+
+要重命名的是新表，而不是旧表。在 SQLite 的默认设置下，重命名一张表时，其他表外键中对它的引用也会跟着改名，所以如果先重命名
+旧表，这些引用就会跟着旧表走，等旧表被删除后，它们就指向了一张不存在的表。索引会随旧表一起删除，所以要在重建后的表上重新创建。
+
+`withName` 返回的表与原表有相同的列、约束和行类型，但没有列属性，因为那些属性指向的是原表。它用于针对整张表的语句：
+`CREATE`、`INSERT`、`DROP` 和 `ALTER_RENAME_TABLE_TO`。
+
+数据的转换由 `SELECT` 完成，可以使用投影或结果列，详见[《高级查询》](advanced-query-cn.md)。转换值类型、替换 `NULL` 的函数目前还不支持。
 
 ## 插入
 
@@ -197,6 +251,23 @@ fun sample() {
 ```
 
 _INSERT_ 语句可以直接插入对象，你可以一次插入一个或多个对象。
+
+`INSERT_OR_IGNORE` 会跳过与表中已有行冲突的对象，`INSERT_OR_REPLACE` 则会替换那一行。它们接受的参数与 `INSERT` 相同。
+
+_INSERT_ 还可以插入一条 _SELECT_ 返回的行，就像 `INSERT INTO ... SELECT` 那样，前提是这条 _SELECT_ 读出的是这张表的行类型。
+这些行可以来自任意一张表，借助投影或结果列：
+
+```kotlin
+fun sample() {
+    database {
+        // INSERT INTO person_archive(id,name,age) SELECT id,name,age FROM person WHERE age > ?
+        PersonArchiveTable INSERT (PersonTable SELECT WHERE<PersonArchive>(PersonTable.age GT 60))
+    }
+}
+```
+
+这条 _SELECT_ 会成为 _INSERT_ 的一部分，所以它不再单独执行，也无法读取它的结果。主键按查询出的值原样拷贝。
+`INSERT_OR_IGNORE` 和 `INSERT_OR_REPLACE` 同样可以接受 _SELECT_。
 
 ## 删除
 

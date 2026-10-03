@@ -130,7 +130,7 @@ fun sample() {
 }
 ```
 
-**⚠️ WARNING**: DROP COLUMN permanently deletes the column and all its data. Note that SQLite's DROP COLUMN support was added in version 3.35.0, so older SQLite versions may require table recreation.
+**⚠️ WARNING**: DROP COLUMN permanently deletes the column and all its data. Note that SQLite's DROP COLUMN support was added in version 3.35.0, which Android only has from API 34 on, so older SQLite versions require [rebuilding the table](#rebuilding-a-table).
 
 ### Using Structure Operations with DSLDBConfiguration
 
@@ -160,6 +160,66 @@ val database = Database(
     )
 )
 ```
+
+### Rebuilding a Table
+
+SQLite's `ALTER TABLE` can only rename a table, and add, rename or drop a column. Any other change, such as adding a
+constraint, making a column `NOT NULL` or changing the primary key, needs the table to be rebuilt: create the new
+structure under a temporary name, copy the rows into it with `INSERT INTO ... SELECT`, drop the old table, and rename
+the new one. That is also how to drop a column where SQLite is older than 3.35, which on Android means below API 34.
+
+To select from the old table, keep a `@DBRow` class with its old structure, under the same table name. `withName`
+gives the new structure a temporary name:
+
+```kotlin
+import com.ctrip.sqllin.dsl.sql.withName
+
+@DBRow("person")
+@Serializable
+data class PersonV1(        // the structure of 'person' in version 1
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val name: String,
+    val legacy: Int,
+)
+
+@DBRow("person")
+@Serializable
+data class Person(          // the structure from version 2 on
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @Unique val fullName: String,
+)
+
+val database = Database(
+    DSLDBConfiguration(
+        // ...
+        version = 2,
+        upgrade = { oldVersion, newVersion ->
+            if (oldVersion < 2) {
+                val newPerson = PersonTable.withName("person_new")
+                CREATE(newPerson)
+                PersonV1Table { table ->
+                    // INSERT INTO person_new(id,fullName) SELECT id,name AS fullName FROM person
+                    newPerson INSERT (table SELECT (name AS Person::fullName))
+                }
+                DROP(PersonV1Table)
+                "person_new" ALTER_RENAME_TABLE_TO PersonTable
+            }
+        }
+    )
+)
+```
+
+Rename the new table, not the old one. Renaming a table also renames the references to it in the foreign keys of
+other tables, with SQLite's default settings, so the references would follow the old table, and be left pointing at a
+table that no longer exists once it is dropped. Indexes are dropped with the old table, so create them again on the
+rebuilt one.
+
+The table `withName` returns has the columns, constraints and row type of the original, but no column properties, as
+those name the original table. It is meant for statements on the table as a whole: `CREATE`, `INSERT`, `DROP` and
+`ALTER_RENAME_TABLE_TO`.
+
+The rows are converted by the `SELECT`, with a projection or with result columns, as described in
+[Advanced Query](advanced-query.md). Functions to convert a value's type, or to replace a `NULL`, aren't available yet.
 
 ## Insert
 
@@ -204,6 +264,24 @@ fun sample() {
 ```
 
 The _INSERT_ statements could insert objects directly. You can insert one or multiple objects once.
+
+`INSERT_OR_IGNORE` skips the objects that conflict with a row already in the table, and `INSERT_OR_REPLACE` replaces
+that row. They take the same arguments as `INSERT`.
+
+_INSERT_ can also insert the rows a _SELECT_ returns, as `INSERT INTO ... SELECT` does, if the _SELECT_ reads rows of the
+table's type. They can come from any table, through a projection or result columns:
+
+```kotlin
+fun sample() {
+    database {
+        // INSERT INTO person_archive(id,name,age) SELECT id,name,age FROM person WHERE age > ?
+        PersonArchiveTable INSERT (PersonTable SELECT WHERE<PersonArchive>(PersonTable.age GT 60))
+    }
+}
+```
+
+The _SELECT_ becomes part of the _INSERT_, so it no longer runs on its own, and its results can't be read. The primary
+key is copied as it is selected. `INSERT_OR_IGNORE` and `INSERT_OR_REPLACE` take a _SELECT_ as well.
 
 ## Delete
 

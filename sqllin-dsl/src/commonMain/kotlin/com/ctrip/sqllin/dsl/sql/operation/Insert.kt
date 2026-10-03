@@ -19,7 +19,9 @@ package com.ctrip.sqllin.dsl.sql.operation
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.sql.statement.SingleStatement
 import com.ctrip.sqllin.dsl.sql.statement.InsertStatement
+import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
 import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.compiler.appendDBColumnName
 import com.ctrip.sqllin.dsl.sql.compiler.encodeEntities2InsertValues
 
 /**
@@ -81,5 +83,35 @@ internal object Insert : Operation {
             encodeEntities2InsertValues(table, this, entities, parameters, isInsertWithId = true)
         }
         return InsertStatement(sql, connection, parameters)
+    }
+
+    /**
+     * Builds an INSERT statement that inserts the rows [select] returns.
+     *
+     * Generates SQL in the format:
+     * ```
+     * INSERT INTO table_name (column1, column2, ...) SELECT ...
+     * ```
+     *
+     * The columns are the properties of [select]'s result type, the table's row type, in the order the SELECT
+     * selects them, so every column gets a value, the primary key included.
+     *
+     * @param insert The keywords that start the statement: `INSERT INTO `, `INSERT OR IGNORE INTO ` or
+     * `INSERT OR REPLACE INTO `
+     * @param table The table to insert into
+     * @param connection Database connection for execution
+     * @param select The SELECT whose rows are inserted
+     * @return INSERT statement ready for execution
+     */
+    fun <T> insert(insert: String, table: Table<T>, connection: DatabaseConnection, select: SelectStatement<T>): SingleStatement {
+        val sql = buildString {
+            append(insert)
+            append(table.tableName)
+            append('(')
+            appendDBColumnName(select.deserializer.descriptor)
+            append(") ")
+            append(select.sqlStr)
+        }
+        return InsertStatement(sql, connection, select.parameters?.toMutableList())
     }
 }

@@ -22,6 +22,7 @@
 
 ## Supported
 
+* Support INSERT INTO ... SELECT (2.4.0 ✅)
 * Support SQL functions in SELECT results (2.4.0 ✅)
 * Support SELECT projection (2.4.0 ✅)
 * Support INSERT OR IGNORE (2.4.0 ✅)

@@ -42,6 +42,10 @@ internal class TransactionStatementsGroup(
         statementList.add(statement)
     }
 
+    override infix fun removeStatement(statement: SingleStatement) {
+        statementList.remove(statement)
+    }
+
     /**
      * Checks that every statement of the transaction is complete, before any of them runs.
      *

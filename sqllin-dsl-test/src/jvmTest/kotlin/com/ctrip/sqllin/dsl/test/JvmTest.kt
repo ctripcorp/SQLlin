@@ -77,6 +77,12 @@ class JvmTest {
     fun testResultColumnChecks() = commonTest.testResultColumnChecks()
 
     @Test
+    fun testInsertSelect() = commonTest.testInsertSelect()
+
+    @Test
+    fun testTableRebuild() = commonTest.testTableRebuild()
+
+    @Test
     fun testCreateInDatabaseScope() = commonTest.testCreateInDatabaseScope()
 
     @Test

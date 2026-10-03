@@ -24,6 +24,7 @@ import com.ctrip.sqllin.dsl.DatabaseScope
 import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.X
+import com.ctrip.sqllin.dsl.sql.withName
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.ASC
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
@@ -34,6 +35,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 
@@ -1127,6 +1129,175 @@ class CommonBasicTest(private val path: DatabasePath) {
         val nameLength: ClauseNumber<Long> = length(name)
         val position: ClauseNumber<Long> = instr(name, "a")
         val concatenated: ClauseString<String> = group_concat(name, ",")
+    }
+
+    /**
+     * Covers `INSERT INTO ... SELECT`: `INSERT`, `INSERT_OR_IGNORE` and `INSERT_OR_REPLACE` given a SELECT of the
+     * table's row type insert the rows it returns, and the SELECT no longer runs on its own. The target is a copy of a
+     * table made with `withName`.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testInsertSelect() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        val bookCopy = BookTable.withName("book_copy")
+        assertEquals(true, bookCopy.createSQL.startsWith("CREATE TABLE book_copy("))
+        assertEquals(BookTable.createSQL.substringAfter('('), bookCopy.createSQL.substringAfter('('))
+
+        // Copy the rows a WHERE selects, its parameter included. The SELECT is part of the INSERT now, so it doesn't
+        // run by itself and has no results of its own.
+        lateinit var source: SelectStatement<Book>
+        database {
+            CREATE(bookCopy)
+            CREATE(AuthorBookCountTable)
+            BookTable INSERT listOf(
+                Book(name = "The Da Vinci Code", author = "Dan Brown", price = 16.96, pages = 454),
+                Book(name = "The Lost Symbol", author = "Dan Brown", price = 19.95, pages = 510),
+                Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251),
+            )
+            source = BookTable SELECT WHERE(BookTable.price LT 30.0)
+            bookCopy INSERT source
+        }
+        assertFailsWith<IllegalStateException> { source.getResults() }
+        lateinit var copied: SelectStatement<Book>
+        database {
+            copied = bookCopy SELECT X
+        }
+        assertEquals(listOf("The Da Vinci Code", "The Lost Symbol"), copied.getResults().map { it.name }.sorted())
+
+        // Result columns produce rows of another table's type: here a table of aggregates
+        lateinit var counts: SelectStatement<AuthorBookCount>
+        database {
+            BookTable { table ->
+                AuthorBookCountTable INSERT (table SELECT (count(X) AS AuthorBookCount::books) GROUP_BY author)
+            }
+            counts = AuthorBookCountTable SELECT X
+        }
+        assertEquals(
+            listOf(AuthorBookCount("Dan Brown", 2), AuthorBookCount("Ken Kousen", 1)),
+            counts.getResults().sortedBy { it.author },
+        )
+        // The SELECT is checked when it becomes part of the INSERT: without GROUP BY, 'author' would be NULL when no
+        // rows match
+        val ungrouped = assertFailsWith<IllegalArgumentException> {
+            database {
+                BookTable { table ->
+                    AuthorBookCountTable INSERT (table SELECT (count(X) AS AuthorBookCount::books))
+                }
+            }
+        }
+        assertEquals(true, ungrouped.message!!.contains("without GROUP BY"))
+
+        // On a conflict with the primary key, INSERT fails, INSERT_OR_IGNORE keeps the row, and INSERT_OR_REPLACE
+        // replaces it. The key is copied as it is selected.
+        val personCopy = PersonWithIdTable.withName("person_copy")
+        database {
+            CREATE(personCopy)
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "Ann", age = 30),
+                PersonWithId(id = null, name = "Bob", age = 40),
+            )
+            personCopy INSERT (PersonWithIdTable SELECT WHERE(PersonWithIdTable.name EQ "Ann"))
+        }
+        assertFails {
+            database { personCopy INSERT (PersonWithIdTable SELECT X) }
+        }
+        lateinit var afterIgnore: SelectStatement<PersonWithId>
+        database {
+            PersonWithIdTable { table ->
+                table UPDATE SET { age = 31 } WHERE (name EQ "Ann")
+            }
+            personCopy INSERT_OR_IGNORE (PersonWithIdTable SELECT X)
+            afterIgnore = personCopy SELECT X
+        }
+        assertEquals(listOf("Ann" to 30, "Bob" to 40), afterIgnore.getResults().map { it.name to it.age }.sortedBy { it.first })
+        lateinit var afterReplace: SelectStatement<PersonWithId>
+        lateinit var people: SelectStatement<PersonWithId>
+        database {
+            PersonWithIdTable { table ->
+                personCopy INSERT_OR_REPLACE (table SELECT listOf(upper(name) AS PersonWithId::name))
+            }
+            afterReplace = personCopy SELECT X
+            people = PersonWithIdTable SELECT X
+        }
+        assertEquals(listOf("ANN" to 31, "BOB" to 40), afterReplace.getResults().map { it.name to it.age }.sortedBy { it.first })
+        assertEquals(people.getResults().map { it.id }.sortedBy { it }, afterReplace.getResults().map { it.id }.sortedBy { it })
+    }
+
+    /**
+     * Covers rebuilding a table in a migration, for a change `ALTER TABLE` can't make: the new structure is created
+     * under a temporary name with `withName`, filled with `INSERT INTO ... SELECT` from the old one, which is dropped,
+     * and renamed to the table's name. Renaming the new table rather than the old one leaves the foreign keys of other
+     * tables pointing at the rebuilt table.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testTableRebuild() {
+        val version1 = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(RebuildPersonV1Table)
+                CREATE(RebuildPetTable)
+            },
+        )
+        Database(version1).databaseAutoClose { database ->
+            database {
+                RebuildPersonV1Table INSERT listOf(
+                    RebuildPersonV1(id = null, name = "Ann", legacy = 1),
+                    RebuildPersonV1(id = null, name = "Bob", legacy = 2),
+                )
+                RebuildPetTable INSERT RebuildPet(id = 1, ownerId = 1)
+            }
+        }
+
+        val version2 = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 2,
+            create = {
+                CREATE(RebuildPersonTable)
+                CREATE(RebuildPetTable)
+            },
+            upgrade = { oldVersion, _ ->
+                if (oldVersion < 2) {
+                    val newPerson = RebuildPersonTable.withName("rebuild_person_new")
+                    CREATE(newPerson)
+                    RebuildPersonV1Table { table ->
+                        newPerson INSERT (table SELECT (name AS RebuildPerson::fullName))
+                    }
+                    DROP(RebuildPersonV1Table)
+                    "rebuild_person_new" ALTER_RENAME_TABLE_TO RebuildPersonTable
+                }
+            },
+        )
+        Database(version2).databaseAutoClose { database ->
+            // The rows and their keys are kept, under the new structure, and 'legacy' is gone
+            lateinit var people: SelectStatement<RebuildPerson>
+            database {
+                people = RebuildPersonTable SELECT X
+            }
+            assertEquals(listOf(RebuildPerson(1, "Ann"), RebuildPerson(2, "Bob")), people.getResults().sortedBy { it.id })
+            assertEquals(true, database.selectFails { RebuildPersonV1Table SELECT X })
+
+            // The new constraint holds
+            assertFails {
+                database { RebuildPersonTable INSERT RebuildPerson(id = null, fullName = "Ann") }
+            }
+
+            // The pet's foreign key still points at 'rebuild_person': an existing owner is accepted and a missing one
+            // rejected. Had the reference followed a renamed table, both would fail.
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+                RebuildPetTable INSERT RebuildPet(id = 2, ownerId = 2)
+            }
+            assertFails {
+                database { RebuildPetTable INSERT RebuildPet(id = 3, ownerId = 99) }
+            }
+            lateinit var pets: SelectStatement<RebuildPet>
+            database {
+                pets = RebuildPetTable SELECT X
+            }
+            assertEquals(listOf(1L, 2L), pets.getResults().map { it.id }.sorted())
+        }
     }
 
     fun testCreateInDatabaseScope() {

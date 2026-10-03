@@ -367,6 +367,63 @@ public class DatabaseScope internal constructor(
     public infix fun <T> Table<T>.INSERT_OR_IGNORE(entity: T): Unit =
         INSERT_OR_IGNORE(listOf(entity))
 
+    // ========== INSERT INTO ... SELECT ==========
+    //
+    // These insert the rows a SELECT returns, as in `PersonTable INSERT (PersonV1Table SELECT X<Person>())`. The
+    // SELECT's result type is the table's row type, so every column gets a value, the primary key included.
+
+    /**
+     * Inserts the rows [select] returns, as the SQL `INSERT INTO table SELECT ...` does.
+     *
+     * [select] reads rows of this table's type, from any table: a projection or result columns turn the rows of
+     * another table into them. It becomes part of this statement, so it no longer runs on its own, and its
+     * `getResults` can't be called. The primary key is copied as it is selected.
+     *
+     * This is how a table is rebuilt, for a change `ALTER TABLE` can't make, such as adding a constraint or
+     * changing the primary key, or dropping a column on SQLite older than 3.35:
+     * ```kotlin
+     * val newPerson = PersonTable.withName("person_new")
+     * CREATE(newPerson)
+     * newPerson INSERT (PersonV1Table SELECT listOf(PersonV1Table.name AS Person::fullName))
+     * DROP(PersonV1Table)
+     * "person_new" ALTER_RENAME_TABLE_TO PersonTable
+     * ```
+     *
+     * @throws IllegalArgumentException if [select] is incomplete, as an aggregate query that needs GROUP BY
+     */
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT(select: SelectStatement<T>): Unit =
+        insert("INSERT INTO ", select)
+
+    /**
+     * Inserts the rows [select] returns, skipping those that violate a constraint, as the SQL
+     * `INSERT OR IGNORE INTO table SELECT ...` does.
+     *
+     * @see INSERT
+     * @see INSERT_OR_IGNORE
+     */
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_IGNORE(select: SelectStatement<T>): Unit =
+        insert("INSERT OR IGNORE INTO ", select)
+
+    /**
+     * Inserts the rows [select] returns, replacing the rows they conflict with, as the SQL
+     * `INSERT OR REPLACE INTO table SELECT ...` does.
+     *
+     * @see INSERT
+     * @see INSERT_OR_REPLACE
+     */
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_REPLACE(select: SelectStatement<T>): Unit =
+        insert("INSERT OR REPLACE INTO ", select)
+
+    private fun <T> Table<T>.insert(insert: String, select: SelectStatement<T>) {
+        select.checkComplete()
+        select.container removeStatement select
+        val statement = Insert.insert(insert, this, databaseConnection, select)
+        addStatement(statement)
+    }
+
     // ========== UPDATE Operations ==========
 
     /**

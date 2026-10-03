@@ -600,3 +600,40 @@ data class BookCountAndMaxPages(val books: Long, val maxPages: PageCount) // 'ma
 
 @Serializable
 data class RenamedBookCount(@SerialName("total") val books: Long) // 'books' isn't serialized under its own name
+
+/**
+ * A table of aggregates, filled with `INSERT INTO ... SELECT` from a grouped query of [Book].
+ */
+@DBRow("author_book_count")
+@Serializable
+data class AuthorBookCount(val author: String, val books: Long)
+
+/**
+ * The `rebuild_person` table before and after a rebuild, which renames `name` to `fullName`, makes it unique, a change
+ * `ALTER TABLE` can't make, and drops `legacy`.
+ */
+@DBRow("rebuild_person")
+@Serializable
+data class RebuildPersonV1(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val name: String,
+    val legacy: Int,
+)
+
+@DBRow("rebuild_person")
+@Serializable
+data class RebuildPerson(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @Unique val fullName: String,
+)
+
+/**
+ * References `rebuild_person`, so its foreign key shows whether the rebuild left the reference in place.
+ */
+@DBRow("rebuild_pet")
+@Serializable
+data class RebuildPet(
+    @PrimaryKey val id: Long,
+    @com.ctrip.sqllin.dsl.annotation.References(tableName = "rebuild_person", foreignKeys = ["id"])
+    val ownerId: Long,
+)

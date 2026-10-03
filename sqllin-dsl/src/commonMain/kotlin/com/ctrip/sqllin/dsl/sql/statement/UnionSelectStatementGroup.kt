@@ -35,6 +35,10 @@ internal class UnionSelectStatementGroup<T> : StatementContainer {
         statementList.add(selectStatement)
     }
 
+    override infix fun removeStatement(statement: SingleStatement) {
+        statementList.remove(statement)
+    }
+
     /**
      * Combines all accumulated SELECT statements into a single UNION query.
      *
