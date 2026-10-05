@@ -2,56 +2,74 @@
 
 我们已经学习了基础查询和在条件查询中使用 SQL 函数。现在我们来学习一些更高级的查询技巧。
 
-## Union
+## 组合查询
 
-_UNION_ 操作符用于合并两个查询结果相同的 _SELECT_ 语句。
-
-在 SQL 中，*UNION* 操作符位于两个 _SELECT_ 语句中间，但是在 SQLlin 中，我们使用一个高阶函数来实现 *UNION*：
+组合查询把两条 _SELECT_ 语句的结果行合并起来，对应 SQL 的 `UNION`、`UNION ALL`、`INTERSECT` 和 `EXCEPT`。在 SQLlin 中，
+它们是写在两条语句之间的中缀函数，写法和 SQL 一样。它们是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`：
 
 ```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
 fun sample() {
     lateinit var selectStatement: SelectStatement<Person>
     database {
         PersonTable { table ->
-            selectStatement = UNION {
-                table SELECT WHERE (age GTE 5)
-                table SELECT WHERE (length(name) LTE 8)
-            }
+            // SELECT name,age FROM person WHERE age < ? UNION SELECT name,age FROM person WHERE age >= ?
+            selectStatement = (table SELECT WHERE(age LT 18)) UNION (table SELECT WHERE(age GTE 65))
         }
     }
 }
 ```
 
-你只需要将你的 _SELECT_ 语句写在 `UNION {...}` 块内部。 `UNION {...}`  块内部至少要有两个 _SELECT_
-语句，否则你将会在运行时得到一个 `IllegalStateException` 异常。
+`UNION` 合并结果并去重，`UNION_ALL` 保留重复行，`INTERSECT` 只保留两条语句都返回的行，`EXCEPT` 保留第一条语句返回、而第二条
+语句没有返回的行。每条 _SELECT_ 都要加括号，因为 _SELECT_ 和这些运算符都是同优先级的中缀函数；不加括号的话，代码无法编译。
 
-如果你想要交替使用 _UNION_ 和 _UNION ALL_ ，请使用 `UNION {...}` 或 `UNION_ALL {...}` 块嵌套：
+两条语句读出的行必须是同一种类型，这一点在编译期检查。它们可以来自不同的表，借助投影、结果列或 Join，详见下文：
 
 ```kotlin
-fun sample() {
-    lateinit var selectStatement: SelectStatement<Person>
-    database {
-        PersonTable { table ->
-            selectStatement = UNION {
-                table SELECT WHERE (age GTE 5)
-                UNION_ALL {
-                    table SELECT WHERE (length(name) LTE 8)
-                    table SELECT WHERE (name EQ "Tom")
-                }
-            }
-        }
-    }
-}
+// 既是学生又是老师的人的名字
+(StudentTable SELECT X<PersonName>()) INTERSECT (TeacherTable SELECT X<PersonName>())
 ```
 
-前面的代码等价于：
+连续的运算符按从左到右的顺序计算，和 SQLite 一致，括号可以改变分组。SQLite 的组合查询里不能写括号，所以 SQLlin 会把分组后的
+组合写成子查询：
 
-```roomsql
-SELECT * FROM person WHERE age >= 5
-UNION
-SELECT * FROM person WHERE length(name) <= 8
-UNION ALL
-SELECT * FROM person WHERE name = "Tom"
+```kotlin
+a UNION b UNION_ALL c    // (a UNION b) UNION ALL c
+a UNION (b UNION_ALL c)  // a UNION SELECT * FROM (b UNION ALL c)
+```
+
+写在组合之后的 _ORDER BY_ 和 _LIMIT_ 作用于整个组合。某条语句自己末尾的 _ORDER BY_ 或 _LIMIT_ 只作用于它自己，因为 SQLlin 同样会
+把它写成子查询：
+
+```kotlin
+// 年龄最大的 3 个人和年龄最小的 3 个人
+(table SELECT ORDER_BY(age to DESC) LIMIT 3) UNION_ALL (table SELECT ORDER_BY(age to ASC) LIMIT 3)
+// 儿童和老人合在一起，按名字排序，每页 10 个
+(table SELECT WHERE(age LT 18)) UNION (table SELECT WHERE(age GTE 65)) ORDER_BY (name to ASC) LIMIT 10 OFFSET 20
+```
+
+参与组合的语句会成为组合的一部分，因此不再单独执行，也无法读取它们各自的结果。
+
+### 已废弃的 `UNION {...}` 块
+
+以前的版本用 `UNION {...}` 和 `UNION_ALL {...}` 块来合并 _SELECT_ 语句。**它们已经废弃，将在未来的版本中移除**，因为它们存在
+不会再修复的 bug：
+
+- 块的结果类型取自表的行类型，结果行却按第一条 _SELECT_ 的结果类型读取。所以对投影、结果列或 Join 做 UNION 时，代码能编译通过，
+  但使用结果时会抛出 `ClassCastException`。
+- 嵌套的块在生成 SQL 时会被展平，而 SQLite 按从左到右的顺序计算，所以 `UNION { a; UNION_ALL { b; c } }` 实际执行的是
+  `(a UNION b) UNION ALL c`，而不是嵌套所表达的含义。
+
+请改用中缀运算符：
+
+```kotlin
+// 已废弃
+UNION {
+    table SELECT WHERE(age LT 18)
+    table SELECT WHERE(age GTE 65)
+}
+// 改为
+(table SELECT WHERE(age LT 18)) UNION (table SELECT WHERE(age GTE 65))
 ```
 
 ## 子查询

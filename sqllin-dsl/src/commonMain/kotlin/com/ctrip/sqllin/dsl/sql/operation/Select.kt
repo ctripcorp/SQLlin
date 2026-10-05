@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.dsl.sql.operation
 
 import com.ctrip.sqllin.driver.DatabaseConnection
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.compiler.appendDBColumnName
@@ -346,6 +347,54 @@ internal object Select : Operation {
             append(" FROM ")
             append(table.tableName)
         }
-        return FinalSelectStatement(sql, deserializer, connection, container, null, null)
+        return FinalSelectStatement(sql, deserializer, connection, container, null, null, isSimple = true)
+    }
+
+    /**
+     * Builds a compound SELECT statement: [left] and [right] combined with [operator], which is ` UNION `,
+     * ` UNION ALL `, ` INTERSECT ` or ` EXCEPT `.
+     *
+     * SQLite evaluates a compound from left to right, and only allows ORDER BY and LIMIT after its last member, where
+     * they apply to the whole compound. So a member is written as a subquery, `SELECT * FROM (...)`, when it would
+     * otherwise mean something else: when it ends with ORDER BY or LIMIT, which then apply to it alone, and when it
+     * is itself a compound on the right, as in `a UNION (b UNION ALL c)`, which then is combined as a whole. A
+     * compound on the left needs no subquery, as SQLite evaluates it first anyway.
+     *
+     * @return Statement that can be followed by another compound operator, ORDER BY or LIMIT
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun <R> compound(
+        left: SelectStatement<R>,
+        operator: String,
+        right: SelectStatement<R>,
+        container: StatementContainer,
+    ): CompoundSelectStatement<R> {
+        val sql = buildString {
+            appendMember(left, isRight = false)
+            append(operator)
+            appendMember(right, isRight = true)
+        }
+        val parameters = ArrayList<Any?>().apply {
+            left.parameters?.let { addAll(it) }
+            right.parameters?.let { addAll(it) }
+        }
+        return CompoundSelectStatement(sql, left.deserializer, left.connection, container, parameters.ifEmpty { null })
+    }
+
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    private fun StringBuilder.appendMember(member: SelectStatement<*>, isRight: Boolean) {
+        val isSubquery = when (member) {
+            is CompoundSelectStatement -> isRight
+            is OrderBySelectStatement, is LimitSelectStatement -> true
+            is FinalSelectStatement -> !member.isSimple
+            else -> false
+        }
+        if (isSubquery) {
+            append("SELECT * FROM (")
+            append(member.sqlStr)
+            append(')')
+        } else {
+            append(member.sqlStr)
+        }
     }
 }

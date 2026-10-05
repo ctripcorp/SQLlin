@@ -57,6 +57,9 @@ class NativeTest {
     fun testUnionSelect() = commonTest.testUnionSelect()
 
     @Test
+    fun testCompoundSelect() = commonTest.testCompoundSelect()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

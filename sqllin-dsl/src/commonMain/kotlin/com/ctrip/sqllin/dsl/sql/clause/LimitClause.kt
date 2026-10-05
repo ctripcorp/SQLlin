@@ -18,6 +18,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.statement.*
 
@@ -68,6 +69,13 @@ public infix fun <T> HavingSelectStatement<T>.LIMIT(count: Int): LimitSelectStat
 
 @StatementDslMaker
 public infix fun <T> JoinSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
+    appendToLimit(LimitClause(count)).also {
+        container changeLastStatement it
+    }
+
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <T> CompoundSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
         container changeLastStatement it
     }

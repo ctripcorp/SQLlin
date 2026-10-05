@@ -18,6 +18,7 @@ package com.ctrip.sqllin.dsl.sql.statement
 
 import com.ctrip.sqllin.driver.CommonCursor
 import com.ctrip.sqllin.driver.DatabaseConnection
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.compiler.QueryDecoder
 import kotlinx.serialization.DeserializationStrategy
@@ -296,7 +297,7 @@ public class LimitSelectStatement<T> internal constructor(
 ) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters, ungroupedError) {
 
     internal infix fun appendToFinal(clause: OffsetClause<T>): FinalSelectStatement<T> =
-        FinalSelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError)
+        FinalSelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, isSimple = false)
 }
 
 /**
@@ -304,6 +305,9 @@ public class LimitSelectStatement<T> internal constructor(
  *
  * This is the terminal state in the SELECT statement hierarchy - no further clauses can be added.
  * The statement is ready for execution.
+ *
+ * @property isSimple Whether the statement is a single SELECT without LIMIT, as `SELECT X` builds, rather than one
+ * with OFFSET, or a compound built by the deprecated `UNION {}` block
  *
  * @author Yuang Qiao
  */
@@ -314,4 +318,34 @@ public class FinalSelectStatement<T> internal constructor(
     container: StatementContainer,
     parameters: MutableList<Any?>?,
     ungroupedError: String?,
+    internal val isSimple: Boolean,
 ) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters, ungroupedError)
+
+/**
+ * Compound SELECT statement: SELECTs combined with UNION, UNION ALL, INTERSECT or EXCEPT, as
+ * `(select1) UNION (select2)` builds.
+ *
+ * Can be followed by:
+ * - UNION, UNION ALL, INTERSECT or EXCEPT, with another SELECT
+ * - ORDER BY
+ * - LIMIT
+ *
+ * ORDER BY and LIMIT apply to the whole compound, as in SQL.
+ *
+ * @author Yuang Qiao
+ */
+@ExperimentalDSLDatabaseAPI
+public class CompoundSelectStatement<T> internal constructor(
+    sqlStr: String,
+    deserializer: DeserializationStrategy<T>,
+    connection: DatabaseConnection,
+    container: StatementContainer,
+    parameters: MutableList<Any?>?,
+) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters, null) {
+
+    internal infix fun appendToOrderBy(clause: OrderByClause<T>): OrderBySelectStatement<T> =
+        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, null)
+
+    internal infix fun appendToLimit(clause: LimitClause<T>): LimitSelectStatement<T> =
+        LimitSelectStatement(buildSQL(clause), deserializer, connection, container, parameters, null)
+}

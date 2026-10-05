@@ -271,6 +271,109 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals("Ken Kousen", resultOfGroupByAndHaving.first().author)
     }
 
+    /**
+     * Covers compound SELECTs: UNION, UNION ALL, INTERSECT and EXCEPT combine two SELECTs of the same result type, as
+     * in SQL, from any tables. A member that ends with ORDER BY or LIMIT keeps them to itself, a compound on the right
+     * is combined as a whole, and the compound takes its own ORDER BY and LIMIT.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testCompoundSelect() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        database {
+            BookTable INSERT listOf(
+                Book(name = "The Da Vinci Code", author = "Dan Brown", price = 16.96, pages = 454),
+                Book(name = "The Lost Symbol", author = "Dan Brown", price = 19.95, pages = 510),
+                Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251),
+            )
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "Ann", age = 30),
+                PersonWithId(id = null, name = "Kotlin Cookbook", age = 40),
+            )
+        }
+
+        // The four operators, on projections. The INTERSECT only gives Dan Brown if the WHERE parameters keep their
+        // order; swapped, both SELECTs would match every book.
+        lateinit var member: SelectStatement<BookAuthor>
+        lateinit var union: SelectStatement<BookAuthor>
+        lateinit var unionAll: SelectStatement<BookAuthor>
+        lateinit var intersect: SelectStatement<BookAuthor>
+        lateinit var except: SelectStatement<BookAuthor>
+        database {
+            BookTable { table ->
+                member = table SELECT WHERE<BookAuthor>(price LT 20.0)
+                union = member UNION (table SELECT WHERE<BookAuthor>(price GT 10.0))
+                unionAll = (table SELECT WHERE<BookAuthor>(price LT 20.0)) UNION_ALL (table SELECT WHERE<BookAuthor>(price GT 30.0))
+                intersect = (table SELECT WHERE<BookAuthor>(price LT 20.0)) INTERSECT (table SELECT WHERE<BookAuthor>(pages GT 500))
+                except = (table SELECT WHERE<BookAuthor>(price GT 0.0)) EXCEPT (table SELECT WHERE<BookAuthor>(price LT 20.0))
+            }
+        }
+        assertEquals(listOf("Dan Brown", "Ken Kousen"), union.getResults().map { it.author }.sorted())
+        assertEquals(listOf("Dan Brown", "Dan Brown", "Ken Kousen"), unionAll.getResults().map { it.author }.sorted())
+        assertEquals(listOf("Dan Brown"), intersect.getResults().map { it.author })
+        assertEquals(listOf("Ken Kousen"), except.getResults().map { it.author })
+        // A SELECT that became part of a compound no longer runs on its own
+        assertFailsWith<IllegalStateException> { member.getResults() }
+
+        // Rows of different tables, projected into the same type
+        lateinit var names: SelectStatement<NameOnly>
+        database {
+            names = (BookTable SELECT X<NameOnly>()) INTERSECT (PersonWithIdTable SELECT X<NameOnly>())
+        }
+        assertEquals(listOf(NameOnly("Kotlin Cookbook")), names.getResults())
+
+        // A member's ORDER BY and LIMIT stay its own, here giving the longest and the shortest book. Written as they
+        // are, SQLite would reject the first ORDER BY, and apply the last one to the whole compound.
+        lateinit var extremes: SelectStatement<NameOnly>
+        database {
+            BookTable { table ->
+                extremes = (table SELECT ORDER_BY<NameOnly>(pages to DESC) LIMIT 1) UNION_ALL (table SELECT ORDER_BY<NameOnly>(pages to ASC) LIMIT 1)
+            }
+        }
+        assertEquals(listOf("Kotlin Cookbook", "The Lost Symbol"), extremes.getResults().map { it.name }.sorted())
+
+        // The compound's own ORDER BY, LIMIT and OFFSET apply to all of it
+        lateinit var page: SelectStatement<NameOnly>
+        database {
+            page = (BookTable SELECT X<NameOnly>()) UNION (PersonWithIdTable SELECT X<NameOnly>()) ORDER_BY (BookTable.name to ASC) LIMIT 2 OFFSET 1
+        }
+        assertEquals(listOf("Kotlin Cookbook", "The Da Vinci Code"), page.getResults().map { it.name })
+
+        // Chained operators are evaluated from left to right, as in SQL, and parentheses group them
+        lateinit var leftToRight: SelectStatement<NameOnly>
+        lateinit var grouped: SelectStatement<NameOnly>
+        database {
+            PersonWithIdTable { table ->
+                val ann = { table SELECT WHERE<NameOnly>(name EQ "Ann") }
+                leftToRight = ann() UNION ann() UNION_ALL ann() // (Ann UNION Ann) UNION ALL Ann
+                grouped = ann() UNION (ann() UNION_ALL ann()) // Ann UNION (Ann UNION ALL Ann)
+            }
+        }
+        assertEquals(2, leftToRight.getResults().size)
+        assertEquals(1, grouped.getResults().size)
+
+        // Result columns combine too, and an incomplete member is rejected when it is combined: without GROUP BY,
+        // 'author' would be NULL when no rows match
+        lateinit var counts: SelectStatement<BookCount>
+        database {
+            BookTable { table ->
+                counts = (table SELECT (count(X) AS BookCount::books) WHERE (author EQ "Dan Brown")) UNION_ALL
+                    (table SELECT (count(X) AS BookCount::books) WHERE (author EQ "Ken Kousen"))
+            }
+        }
+        assertEquals(listOf(1L, 2L), counts.getResults().map { it.books }.sorted())
+        val ungrouped = assertFailsWith<IllegalArgumentException> {
+            database {
+                BookTable { table ->
+                    (table SELECT (count(X) AS AuthorBookCount::books)) UNION (table SELECT (count(X) AS AuthorBookCount::books) GROUP_BY author)
+                }
+            }
+        }
+        assertEquals(true, ungrouped.message!!.contains("without GROUP BY"))
+    }
+
+    /**
+     * Covers the deprecated `UNION {}` block, which keeps working for the table's own rows until it is removed.
+     */
+    @Suppress("DEPRECATION")
     fun testUnionSelect() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         val book0 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         val book1 = Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72)

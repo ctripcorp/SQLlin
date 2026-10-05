@@ -535,6 +535,12 @@ data class BookTitle(val name: String, val author: String)
 data class BookAuthor(val author: String)
 
 /**
+ * The `name` of a [Book] or a [PersonWithId]: a projection both tables fit, so that a compound SELECT can combine them.
+ */
+@Serializable
+data class NameOnly(val name: String)
+
+/**
  * A projection of [UserAccount] that reads its nullable `notes` column into a nullable property.
  */
 @Serializable

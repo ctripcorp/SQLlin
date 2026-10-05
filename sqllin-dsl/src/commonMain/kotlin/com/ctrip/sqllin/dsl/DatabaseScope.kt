@@ -827,7 +827,77 @@ public class DatabaseScope internal constructor(
         return statement
     }
 
-    // ========== UNION Operations ==========
+    // ========== Compound SELECT ==========
+    //
+    // These combine two SELECTs of the same result type, as in SQL: `(select1) UNION (select2)`. Each SELECT is put in
+    // parentheses, as SELECT and these operators are infix functions of the same precedence. Chained, they are
+    // evaluated from left to right, as SQLite does, and parentheses group them: `a UNION (b UNION_ALL c)`.
+
+    /**
+     * Combines the rows of this SELECT and [select], without duplicates, as the SQL `select1 UNION select2` does.
+     *
+     * Example:
+     * ```kotlin
+     * PersonTable { table ->
+     *     (table SELECT WHERE(age LT 18)) UNION (table SELECT WHERE(age GTE 65))
+     * }
+     * ```
+     *
+     * Both SELECTs read rows of the same type, which is checked at compile time, from any tables: with a projection,
+     * result columns or a join, they can combine rows of different tables. They become part of the compound, so they
+     * no longer run on their own. A SELECT that ends with ORDER BY or LIMIT keeps them to itself, and the compound can
+     * be followed by its own ORDER BY and LIMIT.
+     *
+     * @return The compound, which can be followed by another compound operator, ORDER BY or LIMIT
+     * @throws IllegalArgumentException if either SELECT is incomplete, as an aggregate query that needs GROUP BY
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <R> SelectStatement<R>.UNION(select: SelectStatement<R>): CompoundSelectStatement<R> =
+        compound(" UNION ", select)
+
+    /**
+     * Combines the rows of this SELECT and [select], keeping duplicates, as the SQL `select1 UNION ALL select2` does.
+     *
+     * @see UNION
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <R> SelectStatement<R>.UNION_ALL(select: SelectStatement<R>): CompoundSelectStatement<R> =
+        compound(" UNION ALL ", select)
+
+    /**
+     * Keeps the rows of this SELECT that [select] also returns, as the SQL `select1 INTERSECT select2` does.
+     *
+     * @see UNION
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <R> SelectStatement<R>.INTERSECT(select: SelectStatement<R>): CompoundSelectStatement<R> =
+        compound(" INTERSECT ", select)
+
+    /**
+     * Keeps the rows of this SELECT that [select] doesn't return, as the SQL `select1 EXCEPT select2` does.
+     *
+     * @see UNION
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <R> SelectStatement<R>.EXCEPT(select: SelectStatement<R>): CompoundSelectStatement<R> =
+        compound(" EXCEPT ", select)
+
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    private fun <R> SelectStatement<R>.compound(operator: String, select: SelectStatement<R>): CompoundSelectStatement<R> {
+        checkComplete()
+        select.checkComplete()
+        container removeStatement this
+        select.container removeStatement select
+        val statement = Select.compound(this, operator, select, getSelectStatementGroup())
+        addSelectStatement(statement)
+        return statement
+    }
+
+    // ========== UNION Operations (deprecated) ==========
 
     private val unionSelectStatementGroupStack by lazy { ArrayDeque<UnionSelectStatementGroup<*>>() }
 
@@ -843,7 +913,15 @@ public class DatabaseScope internal constructor(
      *     it SELECT WHERE(age GTE 65)
      * }
      * ```
+     *
+     * **Deprecated**: the result is typed by the table's row type, but read into the first SELECT's result type, so
+     * a union of projections, result columns or joins fails with a `ClassCastException` when its results are used.
+     * A nested block is flattened into the SQL, which SQLite evaluates from left to right, so it changes its meaning
+     * when it isn't the first statement. Use the infix [UNION] instead: `(select1) UNION (select2)`.
      */
+    @Deprecated("The UNION {} block reads the rows into its first SELECT's result type while returning the table's row type, so a union of projections, result columns or joins fails with a ClassCastException when its results are used, and a nested block is flattened into the SQL, which changes its meaning. " +
+            "Use the infix operators instead, as in (select1) UNION (select2), which also offer INTERSECT and EXCEPT. This block will be removed in a future version.")
+    @Suppress("DEPRECATION") // Its body calls the plumbing deprecated with it
     public inline fun <T> Table<T>.UNION(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
         beginUnion<T>()
         var selectStatement: SelectStatement<T>? = null
@@ -858,7 +936,13 @@ public class DatabaseScope internal constructor(
 
     /**
      * Combines multiple SELECT statements with UNION ALL (keeps duplicates).
+     *
+     * **Deprecated** for the reasons given for the `UNION {}` block. Use the infix [UNION_ALL] instead:
+     * `(select1) UNION_ALL (select2)`.
      */
+    @Deprecated("The UNION {} block reads the rows into its first SELECT's result type while returning the table's row type, so a union of projections, result columns or joins fails with a ClassCastException when its results are used, and a nested block is flattened into the SQL, which changes its meaning. " +
+            "Use the infix operators instead, as in (select1) UNION (select2), which also offer INTERSECT and EXCEPT. This block will be removed in a future version.")
+    @Suppress("DEPRECATION") // Its body calls the plumbing deprecated with it
     @StatementDslMaker
     public inline fun <T> Table<T>.UNION_ALL(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
         beginUnion<T>()
@@ -875,6 +959,7 @@ public class DatabaseScope internal constructor(
     /**
      * Begins a UNION statement group (for advanced usage).
      */
+    @Deprecated("Part of the deprecated UNION {} block, which will be removed in a future version. Use the infix UNION instead.")
     public fun <T> beginUnion() {
         unionSelectStatementGroupStack.add(UnionSelectStatementGroup<T>())
     }
@@ -882,6 +967,7 @@ public class DatabaseScope internal constructor(
     /**
      * Creates the final UNION select statement from accumulated SELECT statements.
      */
+    @Deprecated("Part of the deprecated UNION {} block, which will be removed in a future version. Use the infix UNION instead.")
     public fun <T> createUnionSelectStatement(isUnionAll: Boolean): FinalSelectStatement<T> {
         check(unionSelectStatementGroupStack.isNotEmpty()) { "Please invoke the 'beginUnion' before you invoke this function!!!" }
         return (unionSelectStatementGroupStack.last() as UnionSelectStatementGroup<T>).unionStatements(isUnionAll)
@@ -890,6 +976,7 @@ public class DatabaseScope internal constructor(
     /**
      * Ends the UNION statement group and adds the final statement.
      */
+    @Deprecated("Part of the deprecated UNION {} block, which will be removed in a future version. Use the infix UNION instead.")
     public fun <T> endUnion(selectStatement: SelectStatement<T>?) {
         unionSelectStatementGroupStack.removeLast()
         selectStatement?.let { addSelectStatement(it) }

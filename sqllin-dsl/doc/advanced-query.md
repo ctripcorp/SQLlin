@@ -4,57 +4,78 @@
 
 We have learned basic querying and using SQL functions in querying conditions. Let's learn some advanced skills of querying.
 
-## Unions
+## Compound Queries
 
-The _UNION_ operator is used for merge two _SELECT_ statements' results and these results must be of the same type.
-
-In SQL, the _UNION_ operator between with the two _SELECT_ statements, but in SQLlin, we use a higher-order function to
-implement _UNION_:
+A compound query combines the rows of two _SELECT_ statements, as SQL's `UNION`, `UNION ALL`, `INTERSECT` and
+`EXCEPT` do. In SQLlin they are infix functions written between the two statements, as in SQL. They are experimental,
+so opt in with `@OptIn(ExperimentalDSLDatabaseAPI::class)`:
 
 ```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
 fun sample() {
     lateinit var selectStatement: SelectStatement<Person>
     database {
         PersonTable { table ->
-            selectStatement = UNION {
-                table SELECT WHERE (age GTE 5)
-                table SELECT WHERE (length(name) LTE 8)
-            }
+            // SELECT name,age FROM person WHERE age < ? UNION SELECT name,age FROM person WHERE age >= ?
+            selectStatement = (table SELECT WHERE(age LT 18)) UNION (table SELECT WHERE(age GTE 65))
         }
     }
 }
 ```
 
-You just need to write your _SELECT_ statements in the `UNION {...}` block. There must be at least two _SELECT_ statements
-inside the `UNION {...}` block, if not, you will get a `IllegalStateException` at runtime.
+`UNION` combines the rows without duplicates and `UNION_ALL` keeps them, `INTERSECT` keeps the rows both statements
+return, and `EXCEPT` the rows of the first that the second doesn't return. Put each _SELECT_ in parentheses, as
+_SELECT_ and these operators are infix functions of the same precedence; without them, the code doesn't compile.
 
-If you want to use _UNION_ and _UNION ALL_ interchangeably, just use `UNION {...}` or `UNION_ALL {...}` block nesting:
+Both statements have to read rows of the same type, which is checked at compile time. They can come from different
+tables, through a projection, result columns or a join, as described below:
 
 ```kotlin
-fun sample() {
-    lateinit var selectStatement: SelectStatement<Person>
-    database {
-        PersonTable { table ->
-            selectStatement = UNION {
-                table SELECT WHERE (age GTE 5)
-                UNION_ALL {
-                    table SELECT WHERE (length(name) LTE 8)
-                    table SELECT WHERE (name EQ "Tom")
-                }
-            }
-        }
-    }
-}
+// The names of the people who are both students and teachers
+(StudentTable SELECT X<PersonName>()) INTERSECT (TeacherTable SELECT X<PersonName>())
 ```
 
-Above code equals the SQL:
+Chained operators are evaluated from left to right, as SQLite does, and parentheses group them. SQLite has no
+parentheses in compound queries, so SQLlin writes a grouped compound as a subquery:
 
-```roomsql
-SELECT * FROM person WHERE age >= 5
-UNION
-SELECT * FROM person WHERE length(name) <= 8
-UNION ALL
-SELECT * FROM person WHERE name = "Tom"
+```kotlin
+a UNION b UNION_ALL c    // (a UNION b) UNION ALL c
+a UNION (b UNION_ALL c)  // a UNION SELECT * FROM (b UNION ALL c)
+```
+
+_ORDER BY_ and _LIMIT_ written after the compound apply to all of it. A statement that ends with its own _ORDER BY_ or
+_LIMIT_ keeps them to itself, as SQLlin writes it as a subquery too:
+
+```kotlin
+// The 3 oldest and the 3 youngest people
+(table SELECT ORDER_BY(age to DESC) LIMIT 3) UNION_ALL (table SELECT ORDER_BY(age to ASC) LIMIT 3)
+// The children and the seniors together, by name, 10 at a time
+(table SELECT WHERE(age LT 18)) UNION (table SELECT WHERE(age GTE 65)) ORDER_BY (name to ASC) LIMIT 10 OFFSET 20
+```
+
+The statements become part of the compound, so they no longer run on their own, and their results can't be read.
+
+### The deprecated `UNION {...}` block
+
+Earlier versions combined _SELECT_ statements with `UNION {...}` and `UNION_ALL {...}` blocks. **They are deprecated
+and will be removed in a future version**, because they have bugs that won't be fixed:
+
+- A block's result is typed by the table's row type, but its rows are read into the first _SELECT_'s result type. So
+  a union of projections, result columns or joins compiles, and then fails with a `ClassCastException` when its
+  results are used.
+- A nested block is flattened into the SQL, which SQLite evaluates from left to right, so
+  `UNION { a; UNION_ALL { b; c } }` runs as `(a UNION b) UNION ALL c`, not as its nesting suggests.
+
+Use the infix operators instead:
+
+```kotlin
+// Deprecated
+UNION {
+    table SELECT WHERE(age LT 18)
+    table SELECT WHERE(age GTE 65)
+}
+// Instead
+(table SELECT WHERE(age LT 18)) UNION (table SELECT WHERE(age GTE 65))
 ```
 
 ## Subqueries

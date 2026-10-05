@@ -18,6 +18,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.KeyWordDslMaker
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.statement.*
@@ -109,6 +110,30 @@ public inline infix fun <T> JoinSelectStatement<T>.ORDER_BY(column2Way: Pair<Cla
 @StatementDslMaker
 public infix fun <T> JoinSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, OrderByWay>): OrderBySelectStatement<T> =
     appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
+        container changeLastStatement it
+    }
+
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement<*>, OrderByWay>): OrderBySelectStatement<T> =
+    ORDER_BY(mapOf(column2Way))
+
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, OrderByWay>): OrderBySelectStatement<T> =
+    appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
+        container changeLastStatement it
+    }
+
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(column: ClauseElement<*>): OrderBySelectStatement<T> =
+    ORDER_BY(listOf(column))
+
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement<*>>): OrderBySelectStatement<T> =
+    appendToOrderBy(SimpleOrderByClause(columns)).also {
         container changeLastStatement it
     }
 
