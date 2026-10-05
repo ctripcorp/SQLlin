@@ -44,7 +44,6 @@ import kotlin.test.assertNotEquals
  * @author Yuang Qiao
  */
 
-@OptIn(ExperimentalDSLDatabaseAPI::class)
 class CommonBasicTest(private val path: DatabasePath) {
 
     companion object {
@@ -1239,7 +1238,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * table's row type insert the rows it returns, and the SELECT no longer runs on its own. The target is a copy of a
      * table made with `withName`.
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testInsertSelect() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
         val bookCopy = BookTable.withName("book_copy")
         assertEquals(true, bookCopy.createSQL.startsWith("CREATE TABLE book_copy("))
@@ -1331,7 +1329,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * and renamed to the table's name. Renaming the new table rather than the old one leaves the foreign keys of other
      * tables pointing at the rebuilt table.
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testTableRebuild() {
         val version1 = DSLDBConfiguration(
             name = DATABASE_NAME,
@@ -1717,7 +1714,6 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testDropAndCreateTable() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             // Test 1: DROP using global function
@@ -1822,7 +1818,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * table through the entity matching the shape it should have at that point, so a step that does
      * not actually run makes the test fail instead of passing quietly.
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testSchemaModification() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             database {
@@ -1955,7 +1950,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * and a key of any other type is supplied by the caller and declared `NOT NULL`, which SQLite would
      * otherwise not imply for it.
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testPrimaryKeyNullability() {
         // Both Long keys are rowid aliases; only the non-Long key needs NOT NULL spelled out.
         assertEquals(true, PersonWithIdTable.createSQL.contains("id INTEGER PRIMARY KEY,"))
@@ -2436,7 +2430,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test for CREATE_INDEX and CREATE_UNIQUE_INDEX operations
      * Verifies index creation functionality
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testIndexOperations() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
         // Test 1: CREATE_INDEX on single column
         database {
@@ -3012,7 +3005,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test PRAGMA_FOREIGN_KEYS function
      * Verifies foreign key enforcement can be enabled/disabled
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testPragmaForeignKeys() {
         Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
             // Test 1: Enable foreign keys
@@ -3062,7 +3054,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test CASCADE delete behavior with @References
      * Verifies that child rows are automatically deleted when parent is deleted
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testForeignKeyCascadeDelete() {
         Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
             // Enable foreign keys
@@ -3125,7 +3116,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test SET_NULL delete behavior with @References
      * Verifies that child foreign keys are set to NULL when parent is deleted
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testForeignKeySetNullDelete() {
         Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
             // Enable foreign keys
@@ -3184,7 +3174,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test RESTRICT delete behavior with @References
      * Verifies that parent deletion is prevented when child rows exist
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testForeignKeyRestrictDelete() {
         Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
             // Enable foreign keys
@@ -3254,7 +3243,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test composite foreign keys with @ForeignKey annotation
      * Verifies multi-column foreign key constraints work correctly
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testCompositeForeignKey() {
         Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
             // Enable foreign keys
@@ -3322,7 +3310,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test multiple foreign keys to different tables
      * Verifies a table can have foreign keys to multiple parent tables
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testMultipleForeignKeys() {
         Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
             // Enable foreign keys
@@ -3438,7 +3425,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test foreign key constraint without PRAGMA_FOREIGN_KEYS enabled
      * Verifies that constraints are not enforced when PRAGMA is not enabled
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testForeignKeyWithoutPragma() {
         Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
             // Note: NOT enabling PRAGMA_FOREIGN_KEYS
@@ -3574,7 +3560,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test for @Default annotation with foreign key ON_DELETE_SET_DEFAULT trigger
      * Verifies that default values are correctly included in CREATE TABLE statements with foreign keys
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testDefaultValuesWithForeignKey() {
         val config = DSLDBConfiguration(
             name = DATABASE_NAME,
@@ -3664,7 +3649,6 @@ class CommonBasicTest(private val path: DatabasePath) {
             }
         )
 
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     private fun getResultColumnDBConfig(): DSLDBConfiguration =
         DSLDBConfiguration(
             name = DATABASE_NAME,
@@ -3677,7 +3661,6 @@ class CommonBasicTest(private val path: DatabasePath) {
             }
         )
 
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     private fun getForeignKeyDBConfig(): DSLDBConfiguration =
         DSLDBConfiguration(
             name = DATABASE_NAME,

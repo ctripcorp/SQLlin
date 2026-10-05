@@ -19,7 +19,6 @@ package com.ctrip.sqllin.sample
 import com.ctrip.sqllin.dsl.DSLDBConfiguration
 import com.ctrip.sqllin.dsl.Database
 import com.ctrip.sqllin.dsl.annotation.DBRow
-import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.PrimaryKey
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
@@ -37,7 +36,6 @@ import kotlinx.serialization.Serializable
 
 object Sample {
 
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     private val db by lazy {
         Database(
             DSLDBConfiguration(

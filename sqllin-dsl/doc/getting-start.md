@@ -185,7 +185,7 @@ With `DSLDBConfiguration`, you can use CREATE, DROP, and ALTER operations direct
 
 Usually, you just need to create one `Database` instance in your component lifecycle. So, you need to close database manually when the lifecycle ended:
 
-> Notice: `DSLDBConfiguration` is experimental, but it will completely replace `DatabaseConfiguration` when it is stable. That means _sqllin-dsl_ will not support to use `DatabaseConfiguration` to create `Database` instances in the future versions.
+> Notice: `DSLDBConfiguration` will completely replace `DatabaseConfiguration`. That means _sqllin-dsl_ will not support to use `DatabaseConfiguration` to create `Database` instances in the future versions.
 
 ```kotlin
 override fun onDestroy() {

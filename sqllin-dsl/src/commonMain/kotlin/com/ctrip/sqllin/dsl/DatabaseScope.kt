@@ -1040,7 +1040,6 @@ public class DatabaseScope internal constructor(
      * PersonTable.CREATE()
      * ```
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <T> CREATE(table: Table<T>) {
         val statement = Create.createTable(table, databaseConnection)
@@ -1050,7 +1049,6 @@ public class DatabaseScope internal constructor(
     /**
      * Creates this table from its definition (extension function variant).
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     @JvmName("create")
     public fun <T> Table<T>.CREATE(): Unit = CREATE(this)
@@ -1074,7 +1072,6 @@ public class DatabaseScope internal constructor(
      * @param columns One or more column elements to include in the index
      * @throws IllegalArgumentException if no columns are specified
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public fun <T> Table<T>.CREATE_INDEX(indexName: String, vararg columns: ClauseElement<*>) {
         val statement = Create.createIndex(this, databaseConnection, indexName, *columns)
@@ -1099,7 +1096,6 @@ public class DatabaseScope internal constructor(
      * @param columns One or more column elements to include in the unique index
      * @throws IllegalArgumentException if no columns are specified
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public fun <T> Table<T>.CREATE_UNIQUE_INDEX(indexName: String, vararg columns: ClauseElement<*>) {
         val statement = Create.createUniqueIndex(this, databaseConnection, indexName, *columns)
@@ -1125,7 +1121,6 @@ public class DatabaseScope internal constructor(
      *
      * @param table The table to drop
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <T> DROP(table: Table<T>) {
         val statement = Drop.drop(table, databaseConnection)
@@ -1145,7 +1140,6 @@ public class DatabaseScope internal constructor(
      * }
      * ```
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     @JvmName("drop")
     public fun <T> Table<T>.DROP(): Unit = DROP(this)
@@ -1168,7 +1162,6 @@ public class DatabaseScope internal constructor(
      *
      * @param column The column definition to add to the table
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <T> Table<T>.ALTER_ADD_COLUMN(column: ClauseElement<*>) {
         val statement = Alter.addColumn(this, column, databaseConnection)
@@ -1187,7 +1180,6 @@ public class DatabaseScope internal constructor(
      *
      * @param newTable The new table definition containing the target name
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <T> Table<T>.ALTER_RENAME_TABLE_TO(newTable: Table<*>) {
         val statement = Alter.renameTable(tableName, newTable, databaseConnection)
@@ -1209,7 +1201,6 @@ public class DatabaseScope internal constructor(
      * @receiver The current name of the table to rename
      * @param newTable The new table definition containing the target name
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun String.ALTER_RENAME_TABLE_TO(newTable: Table<*>) {
         val statement = Alter.renameTable(this, newTable, databaseConnection)
@@ -1232,7 +1223,6 @@ public class DatabaseScope internal constructor(
      * @param oldColumn The current column to rename
      * @param newColumn The new column definition with the target name
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public fun <T, R : ClauseElement<*>> Table<T>.RENAME_COLUMN(oldColumn: R, newColumn: R) {
         val statement = Alter.renameColumn(this, oldColumn.valueName, newColumn, databaseConnection)
@@ -1255,7 +1245,6 @@ public class DatabaseScope internal constructor(
      * @param oldColumnName The current name of the column to rename
      * @param newColumn The new column definition with the target name
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public fun <T> Table<T>.RENAME_COLUMN(oldColumnName: String, newColumn: ClauseElement<*>) {
         val statement = Alter.renameColumn(this, oldColumnName, newColumn, databaseConnection)
@@ -1278,7 +1267,6 @@ public class DatabaseScope internal constructor(
      *
      * @param column The column to remove from the table
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <T> Table<T>.DROP_COLUMN(column: ClauseElement<*>) {
         val statement = Alter.dropColumn(this, column, databaseConnection)
@@ -1324,7 +1312,6 @@ public class DatabaseScope internal constructor(
      * @see ForeignKey
      * @see References
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun PRAGMA_FOREIGN_KEYS(flag: Boolean) {
         val statement = PRAGMA.foreignKeys(flag, databaseConnection)

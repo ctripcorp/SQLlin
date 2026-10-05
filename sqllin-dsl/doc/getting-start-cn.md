@@ -138,7 +138,7 @@ val database = Database(
 
 ### 使用 DSLDBConfiguration 进行类型安全的模式管理
 
-除此之外，你还可以使用新的试验性 API `DSLDBConfiguration`，它允许你在 `create` 和 `upgrade` 回调中使用类型安全的 SQL DSL，而不是原始的 SQL 字符串：
+除此之外，你还可以使用 `DSLDBConfiguration`，它允许你在 `create` 和 `upgrade` 回调中使用类型安全的 SQL DSL，而不是原始的 SQL 字符串：
 
 ```kotlin
 import com.ctrip.sqllin.driver.DSLDBConfiguration
@@ -176,7 +176,7 @@ val database = Database(
 
 通常你只需要在你的组件的生命周期内创建一个 `Database` 对象，所以你需要在组件的生命周期结束时手动关闭数据库：
 
-> 注意: `DSLDBConfiguration` 处于实验性阶段，但当其稳定后会彻底取代 `DatabaseConfiguration`, 也就是说在未来版本中 _sqllin-dsl_ 将不再支持使用 `DatabaseConfiguration` 创建 `Database` 实例。
+> 注意: `DSLDBConfiguration` 将会彻底取代 `DatabaseConfiguration`，也就是说在未来版本中 _sqllin-dsl_ 将不再支持使用 `DatabaseConfiguration` 创建 `Database` 实例。
 
 ```kotlin
 override fun onDestroy() {
