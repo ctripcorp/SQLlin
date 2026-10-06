@@ -92,9 +92,9 @@ class ClauseProcessor(
     @Suppress("UNCHECKED_CAST")
     override fun process(resolver: Resolver): List<KSAnnotated> {
         val allDBRowClasses = resolver.getSymbolsWithAnnotation(ANNOTATION_DATABASE_ROW_NAME)
-        val invalidateDBRowClasses = allDBRowClasses.filter { !it.validate() }.toList()
+        val invalidateDBRowClasses = allDBRowClasses.filter { !it.validate(enableNewFeatures = false) }.toList()
 
-        val validateDBRowClasses = allDBRowClasses.filter { it.validate() } as Sequence<KSClassDeclaration>
+        val validateDBRowClasses = allDBRowClasses.filter { it.validate(enableNewFeatures = false) } as Sequence<KSClassDeclaration>
         val serializableType = resolver.getClassDeclarationByName(ANNOTATION_SERIALIZABLE)!!.asStarProjectedType()
 
         for (classDeclaration in validateDBRowClasses) {
