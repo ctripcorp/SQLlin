@@ -659,3 +659,10 @@ data class RebuildPet(
 @DBView("adult_person")
 @Serializable
 data class AdultPerson(val name: String, val age: Age)
+
+/**
+ * Aggregates of the unsigned `testUInt` column of [TestPrimitiveTypeForKSP], which are only right if it holds the
+ * numbers, not their bits as signed numbers.
+ */
+@Serializable
+data class UIntTotals(val total: Long?, val highest: UInt?)

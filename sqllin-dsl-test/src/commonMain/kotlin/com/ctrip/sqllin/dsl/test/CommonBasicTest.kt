@@ -660,6 +660,73 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    /**
+     * Covers how unsigned values are stored: as the numbers they are, which SQLite's 64-bit integers hold, so that SQL
+     * compares, orders and sums them as Kotlin does, whether an INSERT or an UPDATE wrote them. Stored as the bits of
+     * signed numbers, a UByte of 200 read back as 200, but compared as -56.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testUnsignedValues() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = { CREATE(TestPrimitiveTypeForKSPTable) },
+        )
+        fun row(testInt: Int, uByte: UByte, uShort: UShort, uInt: UInt) = TestPrimitiveTypeForKSP(
+            testInt = testInt, testLong = 1, testShort = 1, testByte = 1, testFloat = 1f, testDouble = 1.0,
+            testUInt = uInt, testULong = 1u, testUShort = uShort, testUByte = uByte, testBoolean = true, testChar = 'c',
+            testString = "s", testByteArray = byteArrayOf(1), testEnum = Priority.LOW, testTypeAlias = 1,
+        )
+        Database(config).databaseAutoClose { database ->
+            database {
+                TestPrimitiveTypeForKSPTable INSERT listOf(row(1, 200u, 40_000u, 3_000_000_000u), row(2, 100u, 100u, 100u))
+            }
+            lateinit var all: SelectStatement<TestPrimitiveTypeForKSP>
+            lateinit var bigBytes: SelectStatement<TestPrimitiveTypeForKSP>
+            lateinit var bigShorts: SelectStatement<TestPrimitiveTypeForKSP>
+            lateinit var bigInts: SelectStatement<TestPrimitiveTypeForKSP>
+            lateinit var byUInt: SelectStatement<TestPrimitiveTypeForKSP>
+            lateinit var totals: SelectStatement<UIntTotals>
+            database {
+                TestPrimitiveTypeForKSPTable { table ->
+                    all = table SELECT X
+                    bigBytes = table SELECT WHERE(testUByte GT 150)
+                    bigShorts = table SELECT WHERE(testUShort GT 30_000)
+                    bigInts = table SELECT WHERE(testUInt GT 2_000_000_000L)
+                    byUInt = table SELECT ORDER_BY(testUInt to DESC)
+                    totals = table SELECT listOf(sum(testUInt) AS UIntTotals::total, max(testUInt) AS UIntTotals::highest)
+                }
+            }
+            val first = all.getResults().single { it.testInt == 1 }
+            assertEquals(200u.toUByte(), first.testUByte)
+            assertEquals(40_000u.toUShort(), first.testUShort)
+            assertEquals(3_000_000_000u, first.testUInt)
+            assertEquals(listOf(1), bigBytes.getResults().map { it.testInt })
+            assertEquals(listOf(1), bigShorts.getResults().map { it.testInt })
+            assertEquals(listOf(1), bigInts.getResults().map { it.testInt })
+            assertEquals(listOf(1, 2), byUInt.getResults().map { it.testInt })
+            assertEquals(UIntTotals(total = 3_000_000_100L, highest = 3_000_000_000u), totals.getResults().single())
+
+            // An UPDATE stores them the same way
+            database {
+                TestPrimitiveTypeForKSPTable { table ->
+                    table UPDATE SET { testUByte = 250u; testUInt = 4_000_000_000u } WHERE (testInt EQ 2)
+                }
+            }
+            lateinit var updatedBytes: SelectStatement<TestPrimitiveTypeForKSP>
+            lateinit var updatedInts: SelectStatement<TestPrimitiveTypeForKSP>
+            database {
+                TestPrimitiveTypeForKSPTable { table ->
+                    updatedBytes = table SELECT WHERE(testUByte GT 150)
+                    updatedInts = table SELECT WHERE(testUInt GT 3_500_000_000L)
+                }
+            }
+            assertEquals(listOf(1, 2), updatedBytes.getResults().map { it.testInt }.sorted())
+            assertEquals(listOf(2), updatedInts.getResults().map { it.testInt })
+        }
+    }
+
     @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
     fun testConcurrency() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         runTest {

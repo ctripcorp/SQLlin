@@ -31,7 +31,19 @@ internal class AndroidDatabaseConnection(private val database: SQLiteDatabase) :
         if (bindParams == null)
             database.execSQL(sql)
         else
-            database.execSQL(sql, bindParams)
+            database.execSQL(sql, Array(bindParams.size) { unsignedAsLong(bindParams[it]) })
+
+    /**
+     * The framework binds a value it doesn't know, such as a `UInt`, as its string, so unsigned values are bound as
+     * the numbers they are, as [bindTypedParameters] does for queries. A `ULong` keeps the bits of a `Long`.
+     */
+    private fun unsignedAsLong(param: Any?): Any? = when (param) {
+        is ULong -> param.toLong()
+        is UInt -> param.toLong()
+        is UShort -> param.toLong()
+        is UByte -> param.toLong()
+        else -> param
+    }
 
     override fun executeInsert(sql: String, bindParams: Array<out Any?>?) = execSQL(sql, bindParams)
 

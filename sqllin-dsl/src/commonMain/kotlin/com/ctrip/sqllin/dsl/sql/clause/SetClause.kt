@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.dsl.sql.clause
 
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
+import com.ctrip.sqllin.dsl.sql.compiler.storedValue
 
 /**
  * SET clause for UPDATE statements.
@@ -67,7 +68,7 @@ public class SetClause<T> : Clause<T> {
         val params = parameters ?: ArrayList<Any?>().also {
             parameters = it
         }
-        params.add(propertyValue)
+        params.add(storedValue(propertyValue))
     }
 
     /**

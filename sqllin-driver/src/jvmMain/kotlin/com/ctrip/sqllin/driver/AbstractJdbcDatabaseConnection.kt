@@ -56,10 +56,12 @@ internal abstract class AbstractJdbcDatabaseConnection : DatabaseConnection {
                     is Short -> setShort(realIndex, any)
                     is Byte -> setByte(realIndex, any)
 
+                    // As the numbers they are, as the native driver does: setInt(any.toInt()) stored a UInt
+                    // above Int.MAX_VALUE as a negative number. A ULong keeps the bits of a Long.
                     is ULong -> setLong(realIndex, any.toLong())
-                    is UInt -> setInt(realIndex, any.toInt())
-                    is UShort -> setShort(realIndex, any.toShort())
-                    is UByte -> setByte(realIndex, any.toByte())
+                    is UInt -> setLong(realIndex, any.toLong())
+                    is UShort -> setLong(realIndex, any.toLong())
+                    is UByte -> setLong(realIndex, any.toLong())
 
                     is BigDecimal -> setBigDecimal(realIndex, any)
 
