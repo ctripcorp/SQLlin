@@ -1464,17 +1464,21 @@ public class DatabaseScope internal constructor(
      * However, they also consume additional storage space and may slow down INSERT, UPDATE,
      * and DELETE operations.
      *
+     * A function of the table's columns makes an expression index, which the queries comparing the same expression
+     * use, as `lower(email)` for case-insensitive lookups.
+     *
      * Example:
      * ```kotlin
      * database {
      *     UserTable.CREATE_INDEX("idx_user_email", UserTable.email)
      *     UserTable.CREATE_INDEX("idx_user_name_age", UserTable.name, UserTable.age)
+     *     UserTable.CREATE_INDEX("idx_user_lower_email", UserTable.lower(UserTable.email))
      * }
      * ```
      *
      * @param indexName The name of the index to create
-     * @param columns One or more column elements to include in the index
-     * @throws IllegalArgumentException if no columns are specified
+     * @param columns One or more columns, or functions of them, to include in the index
+     * @throws IllegalArgumentException if no columns are specified, or one reads another table
      */
     @StatementDslMaker
     public fun <T> Table<T>.CREATE_INDEX(indexName: String, vararg columns: ClauseElement<*>) {
@@ -1493,12 +1497,16 @@ public class DatabaseScope internal constructor(
      * database {
      *     UserTable.CREATE_UNIQUE_INDEX("idx_unique_email", UserTable.email)
      *     ProductTable.CREATE_UNIQUE_INDEX("idx_unique_sku", ProductTable.sku)
+     *     UserTable.CREATE_UNIQUE_INDEX("idx_unique_lower_email", UserTable.lower(UserTable.email))
      * }
      * ```
      *
+     * A function of the table's columns makes the values of that expression unique, as `lower(email)` does for emails
+     * that differ only in case.
+     *
      * @param indexName The name of the unique index to create
-     * @param columns One or more column elements to include in the unique index
-     * @throws IllegalArgumentException if no columns are specified
+     * @param columns One or more columns, or functions of them, to include in the unique index
+     * @throws IllegalArgumentException if no columns are specified, or one reads another table
      */
     @StatementDslMaker
     public fun <T> Table<T>.CREATE_UNIQUE_INDEX(indexName: String, vararg columns: ClauseElement<*>) {

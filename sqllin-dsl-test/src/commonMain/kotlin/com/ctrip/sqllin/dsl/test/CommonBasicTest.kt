@@ -3167,6 +3167,32 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers expression indexes: a function of the table's columns, written without the table's name, which SQLite
+     * doesn't allow in an index, while a string literal holding that name keeps it. Unique indexes of `lower(name)`
+     * and of `replace(name, 'product.', '')` show that the expressions are indexed, and an expression of another table
+     * is rejected.
+     */
+    fun testExpressionIndex() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            ProductTable.CREATE_UNIQUE_INDEX("idx_product_lower_name", ProductTable.lower(ProductTable.name))
+            ProductTable.CREATE_UNIQUE_INDEX("idx_product_bare_name", ProductTable.replace(ProductTable.name, "product.", ""))
+            ProductTable INSERT Product(sku = "SKU-1", name = "Widget", price = 1.0)
+        }
+        fun insertFails(product: Product): Boolean = try {
+            database { ProductTable INSERT product }
+            false
+        } catch (e: Exception) {
+            true
+        }
+        assertEquals(true, insertFails(Product(sku = "SKU-2", name = "WIDGET", price = 2.0)))
+        assertEquals(true, insertFails(Product(sku = "SKU-3", name = "product.Widget", price = 3.0)))
+        assertEquals(false, insertFails(Product(sku = "SKU-4", name = "Gadget", price = 4.0)))
+        assertFailsWith<IllegalArgumentException> {
+            database { ProductTable.CREATE_INDEX("idx_other_table", BookTable.lower(BookTable.name)) }
+        }
+    }
+
+    /**
      * Test for CREATE_INDEX and CREATE_UNIQUE_INDEX operations
      * Verifies index creation functionality
      */

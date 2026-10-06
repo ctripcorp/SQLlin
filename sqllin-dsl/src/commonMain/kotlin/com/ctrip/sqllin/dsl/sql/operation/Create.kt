@@ -135,19 +135,53 @@ internal object Create : Operation {
             append(" ON ")
             append(table.tableName)
             append('(')
-            val iterator = columns.iterator()
-            if (!iterator.hasNext())
+            if (columns.isEmpty())
                 throw IllegalArgumentException("You must create an index for at least one column.")
-            // Extract column name without table prefix (e.g., "book.name" -> "name")
-            val firstColumn = iterator.next().valueName.substringAfterLast('.')
-            append(firstColumn)
-            while (iterator.hasNext()) {
-                append(',')
-                val columnName = iterator.next().valueName.substringAfterLast('.')
-                append(columnName)
+            columns.forEachIndexed { index, column ->
+                if (index > 0)
+                    append(',')
+                val otherTable = column.columnTables.firstOrNull { it != table.tableName }
+                require(otherTable == null) {
+                    "The index '$indexName' of table '${table.tableName}' can only hold the columns of that table, but '${column.valueName}' reads table '$otherTable'."
+                }
+                append(if (column.isFunction) unqualified(column.valueName, table.tableName) else column.valueName)
             }
             append(')')
         }
         return TableStructureStatement(sql, connection)
     }
+
+    /**
+     * Returns the SQL of a function without the name [table] before its columns, outside its string literals, as
+     * SQLite doesn't allow `.` in the expressions of an index, which can only read the indexed table anyway.
+     */
+    private fun unqualified(sql: String, table: String): String = buildString {
+        val prefix = "$table."
+        var quote: Char? = null
+        var index = 0
+        while (index < sql.length) {
+            val char = sql[index]
+            when {
+                quote != null -> {
+                    // A quote doubled to escape it closes the literal and opens it again
+                    if (char == quote)
+                        quote = null
+                    append(char)
+                    index++
+                }
+                char == '\'' || char == '"' -> {
+                    quote = char
+                    append(char)
+                    index++
+                }
+                sql.startsWith(prefix, index) && (index == 0 || !sql[index - 1].isIdentifierPart()) -> index += prefix.length
+                else -> {
+                    append(char)
+                    index++
+                }
+            }
+        }
+    }
+
+    private fun Char.isIdentifierPart(): Boolean = isLetterOrDigit() || this == '_'
 }

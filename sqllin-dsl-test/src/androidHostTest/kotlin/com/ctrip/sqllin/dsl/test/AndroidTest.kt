@@ -85,6 +85,9 @@ class AndroidTest {
     fun testJoinedRelation() = commonTest.testJoinedRelation()
 
     @Test
+    fun testExpressionIndex() = commonTest.testExpressionIndex()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test
