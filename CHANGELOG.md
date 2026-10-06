@@ -4,6 +4,10 @@
 
 ## 2.5.0 / 2026-xx-xx
 
+### All
+
+* Rebuild the SQLite static libraries in `libs`, which the native tests on Linux and Windows link, from SQLite 3.51.1 with FTS3, FTS4 (with the enhanced query syntax), FTS5, R*Tree, Geopoly, the math functions, `dbstat` and column metadata enabled, and without debug information, which held paths of the machine that built them
+
 ### sqllin-dsl
 
 * New experimental DSL API: views. A class annotated with `@DBView` gets a generated view object, such as `AdultView` for `Adult`, which `CREATE_VIEW(AdultView) AS (select)` creates from a SELECT of its row type, checked at compile time, and `DROP(AdultView)` drops. SQLite doesn't let a view take parameters, so the SELECT's values are written into the view's SQL. A view is queried like a table, in joins and compound SELECTs too, and an observed query of it watches the tables it reads, which SQLite lists through `EXPLAIN`. To keep views from being written to, the new `Relation` is the base of `Table` and `View`: SELECT, joins, the SQL functions and the clause elements take a `Relation`, while INSERT, UPDATE, DELETE, CREATE and ALTER keep taking a `Table`. This is source-compatible, but on Kotlin/Native a library compiled against an earlier version has to be recompiled
