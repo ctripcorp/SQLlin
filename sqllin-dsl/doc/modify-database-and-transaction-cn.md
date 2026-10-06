@@ -135,11 +135,20 @@ fun sample() {
 }
 ```
 
+#### 依赖 SQLite 版本的 API
+
+有些 API 需要某个版本的 SQLite，或者 SQLite 的某个编译选项，而有的平台没有。SQLlin 运行在哪个 SQLite 上取决于平台：Android 系统的
+SQLite 在 API 24（SQLlin 的最低版本）上是 3.9，API 34 以下是 3.32，API 34 起是 3.39，并且没有数学函数等编译选项；Apple 系统的 SQLite
+取决于系统版本；在 Linux 和 Windows 上，则是你的应用链接的 SQLite。这样的 API 在缺少所需条件的 SQLite 上会在运行时失败，所以它们都
+标有 `@PlatformDependentSQLiteAPI`：不用 `@OptIn(PlatformDependentSQLiteAPI::class)` 声明同意就会编译报错。请只在你的应用的所有平台
+都满足 API 文档中写明的条件时才这样做。
+
 #### 重命名列
 
-重命名表中的列：
+重命名表中的列。`ALTER TABLE ... RENAME COLUMN` 需要 SQLite 3.25.0，Android 从 API 30 起才具备：
 
 ```kotlin
+@OptIn(PlatformDependentSQLiteAPI::class)
 fun sample() {
     database {
         // Using ClauseElement references (type-safe)
@@ -153,9 +162,10 @@ fun sample() {
 
 #### 删除列
 
-从现有表中删除列：
+从现有表中删除列。`ALTER TABLE ... DROP COLUMN` 需要 SQLite 3.35.0：
 
 ```kotlin
+@OptIn(PlatformDependentSQLiteAPI::class)
 fun sample() {
     database {
         PersonTable DROP_COLUMN PersonTable.email

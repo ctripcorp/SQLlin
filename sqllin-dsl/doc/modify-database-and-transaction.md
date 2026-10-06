@@ -142,11 +142,22 @@ fun sample() {
 }
 ```
 
+#### APIs That Depend on the SQLite Version
+
+Some APIs only work with a SQLite version, or a compile-time option of SQLite, that some platforms don't have. The
+SQLite SQLlin runs on depends on the platform: Android's system SQLite is 3.9 at API 24, SQLlin's minimum, 3.32 below
+API 34 and 3.39 from API 34 on, and lacks options such as the math functions; Apple's system SQLite depends on the OS
+version; and on Linux and Windows, it is the SQLite your app links. Such an API fails at runtime where the SQLite lacks
+what it needs, so it is marked with `@PlatformDependentSQLiteAPI`, which is a compile error unless you opt in with
+`@OptIn(PlatformDependentSQLiteAPI::class)`. Opt in only when all your app's platforms have what the API needs, which
+its documentation describes.
+
 #### Rename Column
 
-Rename a column within a table:
+Rename a column within a table. `ALTER TABLE ... RENAME COLUMN` needs SQLite 3.25.0, which Android has from API 30 on:
 
 ```kotlin
+@OptIn(PlatformDependentSQLiteAPI::class)
 fun sample() {
     database {
         // Using ClauseElement references (type-safe)
@@ -160,9 +171,10 @@ fun sample() {
 
 #### Drop Column
 
-Remove a column from an existing table:
+Remove a column from an existing table. `ALTER TABLE ... DROP COLUMN` needs SQLite 3.35.0:
 
 ```kotlin
+@OptIn(PlatformDependentSQLiteAPI::class)
 fun sample() {
     database {
         PersonTable DROP_COLUMN PersonTable.email

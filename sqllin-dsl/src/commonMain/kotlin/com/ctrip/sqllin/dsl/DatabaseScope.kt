@@ -19,6 +19,7 @@ package com.ctrip.sqllin.dsl
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
+import com.ctrip.sqllin.dsl.annotation.PlatformDependentSQLiteAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.DerivedTable
 import com.ctrip.sqllin.dsl.sql.Relation
@@ -1433,9 +1434,12 @@ public class DatabaseScope internal constructor(
      * }
      * ```
      *
+     * `ALTER TABLE ... RENAME COLUMN` needs SQLite 3.25.0, which Android has from API 30 on.
+     *
      * @param oldColumn The current column to rename
      * @param newColumn The new column definition with the target name
      */
+    @PlatformDependentSQLiteAPI
     @StatementDslMaker
     public fun <T, R : ClauseElement<*>> Table<T>.RENAME_COLUMN(oldColumn: R, newColumn: R) {
         val statement = Alter.renameColumn(this, oldColumn.valueName, newColumn, databaseConnection)
@@ -1455,9 +1459,12 @@ public class DatabaseScope internal constructor(
      * }
      * ```
      *
+     * `ALTER TABLE ... RENAME COLUMN` needs SQLite 3.25.0, which Android has from API 30 on.
+     *
      * @param oldColumnName The current name of the column to rename
      * @param newColumn The new column definition with the target name
      */
+    @PlatformDependentSQLiteAPI
     @StatementDslMaker
     public fun <T> Table<T>.RENAME_COLUMN(oldColumnName: String, newColumn: ClauseElement<*>) {
         val statement = Alter.renameColumn(this, oldColumnName, newColumn, databaseConnection)
@@ -1468,8 +1475,8 @@ public class DatabaseScope internal constructor(
      * Removes a column from this table.
      *
      * **⚠️ WARNING**: This permanently deletes the column and all its data.
-     * Note: SQLite has limited support for DROP COLUMN (added in version 3.35.0).
-     * Older SQLite versions may require table recreation to drop columns.
+     * `ALTER TABLE ... DROP COLUMN` needs SQLite 3.35.0, which Android has from API 34 on. Where SQLite is older,
+     * rebuild the table without the column, as `withName` describes.
      *
      * Example:
      * ```kotlin
@@ -1480,6 +1487,7 @@ public class DatabaseScope internal constructor(
      *
      * @param column The column to remove from the table
      */
+    @PlatformDependentSQLiteAPI
     @StatementDslMaker
     public infix fun <T> Table<T>.DROP_COLUMN(column: ClauseElement<*>) {
         val statement = Alter.dropColumn(this, column, databaseConnection)

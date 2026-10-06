@@ -23,6 +23,7 @@ import com.ctrip.sqllin.dsl.Database
 import com.ctrip.sqllin.dsl.DatabaseScope
 import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
+import com.ctrip.sqllin.dsl.annotation.PlatformDependentSQLiteAPI
 import com.ctrip.sqllin.dsl.sql.FtsTable
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.withName
@@ -2427,6 +2428,7 @@ class CommonBasicTest(private val path: DatabasePath) {
      * table through the entity matching the shape it should have at that point, so a step that does
      * not actually run makes the test fail instead of passing quietly.
      */
+    @OptIn(PlatformDependentSQLiteAPI::class)
     fun testSchemaModification() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             database {
