@@ -75,6 +75,7 @@ internal class UnionSelectStatementGroup<T> : StatementContainer {
                 container = container,
                 parameters,
                 ungroupedError = null,
+                tables = statementList.flatMapTo(LinkedHashSet()) { it.tables },
                 isSimple = false,
             )
         }

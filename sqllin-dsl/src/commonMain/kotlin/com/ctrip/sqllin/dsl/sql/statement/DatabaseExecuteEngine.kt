@@ -46,6 +46,14 @@ internal class DatabaseExecuteEngine(
         statementList.add(statement)
     }
 
+    /**
+     * What the statements may change when they run, so that the queries observing the tables can be refreshed.
+     */
+    val changes: Changes
+        get() = statementList.fold(Changes.NONE) { changes, statement ->
+            maxOf(changes, if (statement is TransactionStatementsGroup) statement.changes else Changes.of(statement as SingleStatement))
+        }
+
     override infix fun removeStatement(statement: SingleStatement) {
         statementList.remove(statement)
     }

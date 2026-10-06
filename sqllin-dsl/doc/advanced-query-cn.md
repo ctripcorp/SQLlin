@@ -266,6 +266,40 @@ fun sample() {
 交给表达式的属性按属性名查找，所以不能用 `@SerialName` 重命名。结果列只能查询单张表：目前还不能和 Join 一起使用，
 也不支持算术运算、`CASE` 和子查询。
 
+## 可观察查询
+
+`Database#observe` 把一条 _SELECT_ 变成它的结果的 `Flow`：开始收集时发出当前结果；之后每当经由这个数据库执行的语句修改了
+这条 _SELECT_ 读取的表，并且结果确实有变化时，再次发出。它是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample(scope: CoroutineScope) {
+    val adults: Flow<List<Person>> = database.observe {
+        PersonTable SELECT WHERE(PersonTable.age GTE 18)
+    }
+    scope.launch {
+        adults.collect { people ->
+            // 当前的成年人，以及之后 person 表每次改变了这个结果之后的成年人
+        }
+    }
+}
+```
+
+代码块用来构建要观察的 _SELECT_，并且只应该构建它，因为每次查询结果时它都会重新执行。任何 _SELECT_ 都可以：Join 和组合查询会
+观察它们读取的所有表。查询默认在 `Dispatchers.IO` 上执行，也可以传入别的上下文：`database.observe(context) { ... }`。
+连续的多次修改可能只引起一次查询。
+
+修改由 SQLite 自己计数：某张表第一次被观察时，SQLlin 会在它上面创建 TEMP 触发器。所以外键动作（比如 `ON DELETE CASCADE`）
+修改了被观察的表中的行，即使没有任何语句提到这张表，也会被计入；而回滚的事务不会被计入，没有匹配到任何行的 _UPDATE_ 或
+_DELETE_ 也不会。
+
+只有经由同一个 `Database` 实例的修改才能被感知：同一个文件上的其他实例或连接（比如用 _sqllin-driver_ 打开的连接），以及其他
+进程所做的修改，都感知不到。
+
+要组合几条 _SELECT_ 的结果，可以用 kotlinx.coroutines 的 `combine` 组合观察它们的几个 Flow。由于每个 Flow 各自执行查询，一次
+同时影响两边的表的修改，可能会短暂地呈现一边的新结果和另一边的旧结果。如果结果来自几张表，用一条带 Join 的 _SELECT_ 可以一次
+得到。
+
 ## 最后
 
 你已经学习了所有的 SQLlin 用法，享受你的 SQLlin 的编程旅程并对它的更新保持关注吧 :)

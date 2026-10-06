@@ -31,9 +31,12 @@ import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
@@ -511,6 +514,101 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(outerJoinStatement?.getResults()?.size, books.size)
         assertEquals(naturalOuterJoinStatement?.getResults()?.size, books.size)
         assertEquals(outerJoinStatementWithOn?.getResults()?.size, books.size)
+    }
+
+    /**
+     * Covers observed queries: the flow emits the SELECT's results when it is collected, and again when a statement run
+     * through the database changes a table the SELECT reads and the results differ. A join watches all of its tables.
+     * A change to another table, an UPDATE that matches no rows or leaves the results as they were, and a rolled back
+     * transaction emit nothing, and an observed table that is dropped and created again is still watched.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, ExperimentalDSLDatabaseAPI::class)
+    fun testObserve() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        runTest {
+            val books = Channel<List<Book>>(Channel.UNLIMITED)
+            val joined = Channel<List<Joiner>>(Channel.UNLIMITED)
+            // The queries run in the test's own context, so that runCurrent() lets them catch up
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) { BookTable SELECT X }.collect { books.send(it) }
+            }
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) {
+                    BookTable SELECT INNER_JOIN<Joiner>(CategoryTable) USING BookTable.name
+                }.collect { joined.send(it) }
+            }
+            fun assertNoNewBooks() {
+                runCurrent()
+                assertEquals(true, books.tryReceive().isFailure)
+            }
+
+            assertEquals(emptyList(), books.receive())
+            assertEquals(emptyList(), joined.receive())
+
+            val book = Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251)
+            database { BookTable INSERT book }
+            assertEquals(listOf(book), books.receive())
+
+            // Nothing new: a change to another table, an UPDATE that matches no rows, one that leaves the results as
+            // they were, and a transaction that is rolled back
+            database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Ann", age = 30) }
+            assertNoNewBooks()
+            database { BookTable { table -> table UPDATE SET { pages = 1 } WHERE (name EQ "No Such Book") } }
+            assertNoNewBooks()
+            database { BookTable { table -> table UPDATE SET { pages = 251 } WHERE (name EQ "Kotlin Cookbook") } }
+            assertNoNewBooks()
+            assertFails {
+                database {
+                    transaction {
+                        BookTable INSERT Book(name = "Rolled Back", author = "Nobody", price = 1.0, pages = 1)
+                        UniqueEmailTestTable INSERT listOf(
+                            UniqueEmailTest(id = null, email = "same@example.com", name = "One"),
+                            UniqueEmailTest(id = null, email = "same@example.com", name = "Two"),
+                        )
+                    }
+                }
+            }
+            assertNoNewBooks()
+
+            database { BookTable { table -> table UPDATE SET { pages = 300 } WHERE (name EQ "Kotlin Cookbook") } }
+            assertEquals(listOf(book.copy(pages = 300)), books.receive())
+
+            // The join watches the category table too
+            database { CategoryTable INSERT Category(name = "Kotlin Cookbook", code = 1) }
+            assertEquals(listOf("Kotlin Cookbook"), joined.receive().map { it.name })
+
+            // A dropped and created table loses its triggers, which come back
+            database {
+                DROP(BookTable)
+                CREATE(BookTable)
+            }
+            assertEquals(emptyList(), books.receive())
+            database { BookTable INSERT book }
+            assertEquals(listOf(book), books.receive())
+        }
+    }
+
+    /**
+     * Covers an observed query of a table that only a foreign key action changes: SQLite reports the rows that
+     * ON DELETE CASCADE deletes, though no statement names their table.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, ExperimentalDSLDatabaseAPI::class)
+    fun testObserveForeignKeyAction() = Database(getForeignKeyDBConfig()).databaseAutoClose { database ->
+        runTest {
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+            }
+            database {
+                FKUserTable INSERT FKUser(id = null, email = "alice@example.com", name = "Alice")
+                FKOrderTable INSERT FKOrder(id = null, userId = 1L, amount = 99.99, orderDate = "2025-01-15")
+            }
+            val orders = Channel<List<FKOrder>>(Channel.UNLIMITED)
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) { FKOrderTable SELECT X }.collect { orders.send(it) }
+            }
+            assertEquals(1, orders.receive().size)
+            database { FKUserTable DELETE WHERE(FKUserTable.id EQ 1L) }
+            assertEquals(emptyList(), orders.receive())
+        }
     }
 
     @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)

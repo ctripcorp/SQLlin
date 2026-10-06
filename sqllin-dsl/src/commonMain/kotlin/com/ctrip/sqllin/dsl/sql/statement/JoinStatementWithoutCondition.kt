@@ -41,6 +41,7 @@ public class JoinStatementWithoutCondition<R> internal constructor(
     private val deserializer: DeserializationStrategy<R>,
     private val connection: DatabaseConnection,
     private val container: StatementContainer,
+    private val tables: Set<String>,
     private val addSelectStatement: (SelectStatement<R>) -> Unit
 ) {
     /**
@@ -65,7 +66,7 @@ public class JoinStatementWithoutCondition<R> internal constructor(
             }
             append(')')
         }
-        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, null, null)
+        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, null, null, tables)
         addSelectStatement(joinStatement)
         return joinStatement
     }
@@ -85,7 +86,7 @@ public class JoinStatementWithoutCondition<R> internal constructor(
             append(" ON ")
             append(condition.conditionSQL)
         }
-        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, condition.parameters, null)
+        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, condition.parameters, null, tables)
         addSelectStatement(joinStatement)
         return joinStatement
     }

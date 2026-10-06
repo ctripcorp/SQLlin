@@ -42,6 +42,14 @@ internal class TransactionStatementsGroup(
         statementList.add(statement)
     }
 
+    /**
+     * What the statements of the transaction may change when they run.
+     *
+     * @see DatabaseExecuteEngine.changes
+     */
+    val changes: Changes
+        get() = statementList.fold(Changes.NONE) { changes, statement -> maxOf(changes, Changes.of(statement)) }
+
     override infix fun removeStatement(statement: SingleStatement) {
         statementList.remove(statement)
     }

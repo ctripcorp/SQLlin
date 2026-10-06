@@ -281,6 +281,44 @@ so a property that needs it is reported when the database scope ends, before any
 A property given an expression is found by its name, so it can't be renamed with `@SerialName`. Result columns select from
 a single table: they can't be used with a join yet, nor can arithmetic, `CASE` or subqueries.
 
+## Observed Queries
+
+`Database#observe` turns a _SELECT_ into a `Flow` of its results: it emits them when it is collected, and again whenever
+a statement run through the database changes a table the _SELECT_ reads, if the results differ. It is experimental, so
+opt in with `@OptIn(ExperimentalDSLDatabaseAPI::class)`:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample(scope: CoroutineScope) {
+    val adults: Flow<List<Person>> = database.observe {
+        PersonTable SELECT WHERE(PersonTable.age GTE 18)
+    }
+    scope.launch {
+        adults.collect { people ->
+            // The adults now, and after every change to the person table that changes them
+        }
+    }
+}
+```
+
+The block builds the _SELECT_ to observe, and should only build it, as it runs again each time the results are queried.
+Any _SELECT_ works: a join or a compound query watches all of the tables it reads. The queries run on `Dispatchers.IO`,
+unless you pass another context: `database.observe(context) { ... }`. Several changes in a row may lead to a single
+query.
+
+The changes are counted by SQLite itself, through TEMP triggers SQLlin creates on a table the first time a query that
+reads it is observed. So the rows that a foreign key action, such as `ON DELETE CASCADE`, changes in an observed table
+count, though no statement names it, while a rolled back transaction doesn't, and neither does an _UPDATE_ or _DELETE_
+that matches no rows.
+
+Only the changes made through the same `Database` instance are seen: not those of another instance or connection on
+the same file, such as one opened with _sqllin-driver_, nor those of another process.
+
+To combine the results of several _SELECT_ statements, combine the flows that observe them, with `combine` from
+kotlinx.coroutines. As each runs its query on its own, a change to the tables of both may briefly show the new results of
+one with the old results of the other. When the results come from several tables, a single _SELECT_ with a join gives
+them at once.
+
 ## Finally
 
 You have learned all usages with SQLlin, enjoy it and stay Stay tuned for SQLlin's updates :)

@@ -55,7 +55,7 @@ internal object Select : Operation {
         container: StatementContainer,
     ): WhereSelectStatement<R> {
         checkProjection(table, deserializer)
-        return WhereSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, clause.selectCondition.parameters, null)
+        return WhereSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, clause.selectCondition.parameters, null, setOf(table.tableName))
     }
 
     /**
@@ -72,7 +72,7 @@ internal object Select : Operation {
         container: StatementContainer,
     ): OrderBySelectStatement<R> {
         checkProjection(table, deserializer)
-        return OrderBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null)
+        return OrderBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null, setOf(table.tableName))
     }
 
     /**
@@ -89,7 +89,7 @@ internal object Select : Operation {
         container: StatementContainer,
     ): LimitSelectStatement<R> {
         checkProjection(table, deserializer)
-        return LimitSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null)
+        return LimitSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null, setOf(table.tableName))
     }
 
     /**
@@ -106,7 +106,7 @@ internal object Select : Operation {
         container: StatementContainer,
     ): GroupBySelectStatement<R> {
         checkProjection(table, deserializer)
-        return GroupBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null)
+        return GroupBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null, setOf(table.tableName))
     }
 
     /**
@@ -124,7 +124,7 @@ internal object Select : Operation {
         connection: DatabaseConnection,
         container: StatementContainer,
     ) : JoinSelectStatement<R> =
-        JoinSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null)
+        JoinSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null, clause.tables + table.tableName)
 
     /**
      * Builds a SELECT statement with JOIN clause (requires ON or USING).
@@ -147,6 +147,7 @@ internal object Select : Operation {
             deserializer,
             connection,
             container,
+            clause.tables + table.tableName,
             addSelectStatement,
         )
 
@@ -231,7 +232,7 @@ internal object Select : Operation {
             append(" FROM ")
             append(table.tableName)
         }
-        return ResultColumnSelectStatement(sql, deserializer, connection, container, null, ungroupedError(table, expressions, deserializer))
+        return ResultColumnSelectStatement(sql, deserializer, connection, container, null, ungroupedError(table, expressions, deserializer), setOf(table.tableName))
     }
 
     /**
@@ -347,7 +348,7 @@ internal object Select : Operation {
             append(" FROM ")
             append(table.tableName)
         }
-        return FinalSelectStatement(sql, deserializer, connection, container, null, null, isSimple = true)
+        return FinalSelectStatement(sql, deserializer, connection, container, null, null, setOf(table.tableName), isSimple = true)
     }
 
     /**
@@ -378,7 +379,7 @@ internal object Select : Operation {
             left.parameters?.let { addAll(it) }
             right.parameters?.let { addAll(it) }
         }
-        return CompoundSelectStatement(sql, left.deserializer, left.connection, container, parameters.ifEmpty { null })
+        return CompoundSelectStatement(sql, left.deserializer, left.connection, container, parameters.ifEmpty { null }, left.tables + right.tables)
     }
 
     @OptIn(ExperimentalDSLDatabaseAPI::class)

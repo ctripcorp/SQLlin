@@ -17,8 +17,17 @@
 package com.ctrip.sqllin.dsl
 
 import com.ctrip.sqllin.driver.DatabaseConnection
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
+import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.coroutines.CoroutineContext
 
 /**
  * High-level database interface for executing SQL operations using type-safe DSL.
@@ -63,8 +72,23 @@ public class Database internal constructor(
     public operator fun <T> invoke(block: DatabaseScope.() -> T): T {
         val databaseScope = DatabaseScope(databaseConnection, enableSimpleSQLLog)
         val result = databaseScope.block()
-        databaseScope.executeAllStatements()
+        execute(databaseScope)
         return result
+    }
+
+    private val invalidationTracker = InvalidationTracker(databaseConnection)
+
+    /**
+     * Runs the statements of [databaseScope], then tells the observed queries what they changed. They are told even
+     * when a statement fails, as the ones before it may have changed something.
+     */
+    private fun execute(databaseScope: DatabaseScope) {
+        val changes = databaseScope.changes
+        try {
+            databaseScope.executeAllStatements()
+        } finally {
+            invalidationTracker.refresh(changes)
+        }
     }
 
     private val executiveMutex by lazy { Mutex() }
@@ -82,8 +106,54 @@ public class Database internal constructor(
         val databaseScope = DatabaseScope(databaseConnection, enableSimpleSQLLog)
         val result = databaseScope.block()
         executiveMutex.withLock {
-            databaseScope.executeAllStatements()
+            execute(databaseScope)
         }
         return result
     }
+
+    /**
+     * Observes the results of the SELECT that [query] builds: the flow emits them when it is collected, and again
+     * whenever a statement run through this database changes one of the tables the SELECT reads, if the results differ.
+     *
+     * Example:
+     * ```kotlin
+     * val adults: Flow<List<Person>> = database.observe {
+     *     PersonTable SELECT WHERE(PersonTable.age GTE 18)
+     * }
+     * ```
+     *
+     * [query] runs again to build the SELECT each time, and should only build it. The tables it reads are watched
+     * whatever the SELECT is: a join or a compound SELECT watches all of its tables. Changes are counted by SQLite
+     * itself, so rows that a foreign key action changes count, a rolled back transaction doesn't, and neither does an
+     * UPDATE or DELETE that matches no rows. Several changes in a row may lead to a single query.
+     *
+     * Only changes made through this database are seen, not those of another database instance or connection on the
+     * same file, or of another process. To combine the results of several SELECTs, combine the flows that observe them;
+     * as each runs its query on its own, a change to the tables of both may briefly show the new results of one with the
+     * old results of the other.
+     *
+     * @param context The context the queries run in
+     * @param query Builds the SELECT to observe
+     * @return A flow of the SELECT's results
+     */
+    @ExperimentalDSLDatabaseAPI
+    public fun <R> observe(context: CoroutineContext = Dispatchers.IO, query: DatabaseScope.() -> SelectStatement<R>): Flow<List<R>> =
+        flow {
+            // The versions of the tables read when the results were last queried
+            var queriedVersions: Map<String, Long>? = null
+            invalidationTracker.versions.collect { versions ->
+                val queried = queriedVersions
+                if (queried != null && queried.all { (table, version) -> (versions[table] ?: 0L) == version })
+                    return@collect
+                val databaseScope = DatabaseScope(databaseConnection, enableSimpleSQLLog)
+                val statement = databaseScope.query()
+                executiveMutex.withLock {
+                    // Tracked before the SELECT runs, so that no change after it is missed
+                    invalidationTracker.track(statement.tables)
+                    queriedVersions = statement.tables.associateWith { invalidationTracker.versions.value[it] ?: 0L }
+                    execute(databaseScope)
+                }
+                emit(statement.getResults())
+            }
+        }.distinctUntilChanged().flowOn(context)
 }

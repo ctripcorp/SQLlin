@@ -1,9 +1,5 @@
 # SQLlin Roadmap
 
-## High Priority
-
-* Support observable queries that return a `Flow` re-emitting whenever the tables they read change, e.g. to invalidate a Paging source
-
 ## Medium Priority
 
 * Support WASM platform DSL
@@ -23,6 +19,7 @@
 
 ## Supported
 
+* Support observable queries that return a `Flow` of their results (2.5.0 ✅)
 * Support compound SELECTs: UNION, UNION ALL, INTERSECT and EXCEPT (2.5.0 ✅)
 * Support INSERT INTO ... SELECT (2.4.0 ✅)
 * Support SQL functions in SELECT results (2.4.0 ✅)

@@ -32,16 +32,22 @@ import com.ctrip.sqllin.dsl.sql.statement.JoinStatementWithoutCondition
  *
  * @author Yuang Qiao
  */
-public sealed class BaseJoinClause<R>(private vararg val tables: Table<*>) : SelectClause<R> {
+public sealed class BaseJoinClause<R>(private vararg val joinedTables: Table<*>) : SelectClause<R> {
 
     internal abstract val clauseName: String
+
+    /**
+     * The names of the tables this clause joins.
+     */
+    internal val tables: Set<String>
+        get() = joinedTables.mapTo(LinkedHashSet()) { it.tableName }
 
     final override val clauseStr: String
         get() = buildString {
             append(clauseName)
-            tables.forEachIndexed { index, table ->
+            joinedTables.forEachIndexed { index, table ->
                 append(table.tableName)
-                if (index < tables.lastIndex)
+                if (index < joinedTables.lastIndex)
                     append(',')
             }
         }

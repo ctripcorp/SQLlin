@@ -59,7 +59,8 @@ kotlin {
         commonMain.dependencies {
             api(project(":sqllin-driver"))
             implementation(libs.kotlinx.serialization)
-            implementation(libs.kotlinx.coroutines.core)
+            // Database.observe returns a Flow
+            api(libs.kotlinx.coroutines.core)
         }
     }
 }

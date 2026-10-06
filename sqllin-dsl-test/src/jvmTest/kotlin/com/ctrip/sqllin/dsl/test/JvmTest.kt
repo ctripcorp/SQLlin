@@ -44,6 +44,12 @@ class JvmTest {
     fun testCompoundSelect() = commonTest.testCompoundSelect()
 
     @Test
+    fun testObserve() = commonTest.testObserve()
+
+    @Test
+    fun testObserveForeignKeyAction() = commonTest.testObserveForeignKeyAction()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

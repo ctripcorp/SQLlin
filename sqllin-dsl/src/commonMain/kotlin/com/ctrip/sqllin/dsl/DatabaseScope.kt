@@ -174,6 +174,12 @@ public class DatabaseScope internal constructor(
 
     internal fun executeAllStatements() = executiveEngine.executeAllStatement()
 
+    /**
+     * What the statements of this scope may change when they run.
+     */
+    internal val changes: Changes
+        get() = executiveEngine.changes
+
     // ========== INSERT Operations ==========
 
     /**
