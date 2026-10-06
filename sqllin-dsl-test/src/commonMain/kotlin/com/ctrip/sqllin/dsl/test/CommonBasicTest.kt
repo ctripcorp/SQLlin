@@ -865,6 +865,87 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(listOf(Note(docid = 9, text = "Crêpe")), all.getResults())
     }
 
+    /**
+     * Covers CHECK constraints: their SQL, with a column's unnamed ones before its named ones, rows that pass them,
+     * NULL included, rows that fail one, which SQLite reports by its name, an UPDATE that fails one and leaves the row
+     * as it was, and an INSERT_OR_IGNORE that skips the rows failing one. SQLite reports an unnamed one by its
+     * expression from 3.34 on, and by the table's name before, as on Android below API 34.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testCheckConstraint() {
+        assertEquals(
+            "CREATE TABLE CheckedMembership(id INTEGER PRIMARY KEY," +
+                "name TEXT NOT NULL CHECK (length(trim(name)) > 0) CONSTRAINT lower_case_name CHECK (lower(name) = name)," +
+                "age INT CHECK (age BETWEEN 0 AND 150),level INT NOT NULL CHECK (level IN (0, 1, 2)),startDate TEXT NOT NULL," +
+                "endDate TEXT CHECK (endDate IS NULL OR date(endDate) IS endDate)," +
+                "CONSTRAINT valid_period CHECK (endDate IS NULL OR endDate >= startDate))",
+            CheckedMembershipTable.createSQL,
+        )
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = { CREATE(CheckedMembershipTable) },
+        )
+        fun member(name: String = "ann", age: Int? = 30, level: Int = 0, endDate: String? = null) =
+            CheckedMembership(id = null, name = name, age = age, level = level, startDate = "2026-01-01", endDate = endDate)
+        Database(config).databaseAutoClose { database ->
+            fun failure(block: DatabaseScope.() -> Unit): String = assertFails { database(block) }.message.orEmpty()
+            fun assertReports(message: String, name: String?, expression: String?) {
+                val reported = if (name != null)
+                    name in message
+                else
+                    expression!! in message || "CHECK constraint failed: CheckedMembership" in message
+                assertEquals(true, reported, "'$message' doesn't report the constraint '${name ?: expression}'")
+            }
+            fun names(): List<String> {
+                lateinit var statement: SelectStatement<CheckedMembership>
+                database {
+                    statement = CheckedMembershipTable SELECT X
+                }
+                return statement.getResults().map { it.name }
+            }
+
+            // NULL passes a constraint, as it isn't false
+            database {
+                CheckedMembershipTable INSERT listOf(member(), member(name = "bob", age = null, level = 2, endDate = "2026-12-31"))
+            }
+            assertEquals(listOf("ann", "bob"), names())
+
+            // The rows failing a named constraint, and those failing an unnamed one, with its expression
+            val namedFailures = mapOf(
+                member(name = "Cat") to "lower_case_name",
+                member(endDate = "2025-12-31") to "valid_period",
+            )
+            val unnamedFailures = mapOf(
+                member(name = "   ") to "length(trim(name)) > 0",
+                member(age = 200) to "age BETWEEN 0 AND 150",
+                member(level = 3) to "level IN (0, 1, 2)",
+                member(endDate = "2026-13-01") to "date(endDate) IS endDate",
+            )
+            for ((row, name) in namedFailures)
+                assertReports(failure { CheckedMembershipTable INSERT row }, name = name, expression = null)
+            for ((row, expression) in unnamedFailures)
+                assertReports(failure { CheckedMembershipTable INSERT row }, name = null, expression = expression)
+            assertEquals(listOf("ann", "bob"), names())
+
+            val message = failure {
+                CheckedMembershipTable { table -> table UPDATE SET { level = 5 } WHERE (name EQ "ann") }
+            }
+            assertReports(message, name = null, expression = "level IN (0, 1, 2)")
+            lateinit var levels: SelectStatement<CheckedMembership>
+            database {
+                levels = CheckedMembershipTable SELECT ORDER_BY(CheckedMembershipTable.name)
+            }
+            assertEquals(listOf(0, 2), levels.getResults().map { it.level })
+
+            database {
+                CheckedMembershipTable INSERT_OR_IGNORE listOf(member(name = "dan"), member(name = "Eve"), member(name = "fay", age = -1))
+            }
+            assertEquals(listOf("ann", "bob", "dan"), names())
+        }
+    }
+
     @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
     fun testConcurrency() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         runTest {

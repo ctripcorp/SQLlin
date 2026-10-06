@@ -44,6 +44,7 @@ import java.io.OutputStreamWriter
  *   - NOT NULL constraints
  *   - UNIQUE constraints (single and composite)
  *   - COLLATE NOCASE for case-insensitive text columns
+ *   - CHECK constraints of columns and of the table, optionally named
  * - **Type support**:
  *   - All Kotlin primitive types and unsigned variants
  *   - String, Char, Boolean, ByteArray
@@ -65,6 +66,7 @@ import java.io.OutputStreamWriter
  * @see com.ctrip.sqllin.dsl.annotation.Unique
  * @see com.ctrip.sqllin.dsl.annotation.CompositeUnique
  * @see com.ctrip.sqllin.dsl.annotation.CollateNoCase
+ * @see com.ctrip.sqllin.dsl.annotation.Check
  */
 class ClauseProcessor(
     private val environment: SymbolProcessorEnvironment,
@@ -80,6 +82,8 @@ class ClauseProcessor(
         const val ANNOTATION_FTS4 = "$ANNOTATION_PACKAGE.Fts4"
         const val ANNOTATION_FTS3 = "$ANNOTATION_PACKAGE.Fts3"
         const val ANNOTATION_PRIMARY_KEY = "$ANNOTATION_PACKAGE.PrimaryKey"
+        const val ANNOTATION_CHECK = "$ANNOTATION_PACKAGE.Check"
+        val SQL_IDENTIFIER = Regex("[A-Za-z_][A-Za-z0-9_]*")
 
         /** The names SQLite gives the rowid; an FTS table also calls it docid. */
         val ROW_ID_NAMES = setOf("rowid", "oid", "_rowid_", "docid")
@@ -87,7 +91,7 @@ class ClauseProcessor(
         /** The annotations that declare constraints, which only a table's columns can have. */
         val CONSTRAINT_ANNOTATIONS = listOf(
             "PrimaryKey", "CompositePrimaryKey", "CollateNoCase", "Unique", "CompositeUnique",
-            "ForeignKeyGroup", "References", "ForeignKey", "Default",
+            "ForeignKeyGroup", "References", "ForeignKey", "Default", "Check",
         ).map { "$ANNOTATION_PACKAGE.$it" }.toSet()
         const val ANNOTATION_SERIALIZABLE = "kotlinx.serialization.Serializable"
         const val ANNOTATION_TRANSIENT = "kotlinx.serialization.Transient"
@@ -166,6 +170,9 @@ class ClauseProcessor(
                 continue
             }
 
+            if (!validateChecks(classDeclaration, propertyList))
+                continue
+
             val outputStream = environment.codeGenerator.createNewFile(
                 dependencies = classDeclaration.containingFile?.let { Dependencies(true, it) } ?: Dependencies(true),
                 packageName = packageName,
@@ -215,6 +222,9 @@ class ClauseProcessor(
 
                         columnConstraintParser.parseProperty(this, property, propertyName, isNotNull)
 
+                        // Before @References, whose constraint name SQLite would give the CHECK constraints after it
+                        appendColumnChecks(this, property)
+
                         // Handle @Reference and @ForeignKey
                         foreignKeyParser.parseColumnAnnotations(createSQLBuilder, property.annotations, propertyName, isNotNull)
 
@@ -235,9 +245,14 @@ class ClauseProcessor(
 
                 columnConstraintParser.generateCodeForPrimaryKey(writer, createSQLBuilder)
                 foreignKeyParser.generateCodeForForeignKey(createSQLBuilder)
+                for (check in classDeclaration.checkConstraints()) {
+                    createSQLBuilder.append(',')
+                    check.appendTo(createSQLBuilder)
+                }
                 createSQLBuilder.append(')')
 
-                writer.write("    override val createSQL = \"$createSQLBuilder\"\n")
+                // A CHECK expression or a DEFAULT value can hold characters that a Kotlin string literal escapes
+                writer.write("    override val createSQL = \"${kotlinStringContent(createSQLBuilder.toString())}\"\n")
 
                 writer.write("}\n")
             }
@@ -398,6 +413,79 @@ class ClauseProcessor(
             writer.write("    override val createSQL = \"${kotlinStringContent(createSQL)}\"\n")
             writer.write("}\n")
         }
+    }
+
+    /**
+     * A `CHECK` constraint, read from a [@Check][com.ctrip.sqllin.dsl.annotation.Check] annotation.
+     */
+    private class CheckConstraint(val expression: String, val constraintName: String) {
+
+        /**
+         * Appends `CHECK (expression)` to [builder], after `CONSTRAINT name ` when the constraint is named.
+         */
+        fun appendTo(builder: StringBuilder) {
+            if (constraintName.isNotEmpty()) {
+                builder.append("CONSTRAINT ")
+                builder.append(constraintName)
+                builder.append(' ')
+            }
+            builder.append("CHECK (")
+            builder.append(expression)
+            builder.append(')')
+        }
+    }
+
+    /**
+     * Returns the `CHECK` constraints that [@Check][com.ctrip.sqllin.dsl.annotation.Check] annotations declare on
+     * this class or property, in their order.
+     */
+    private fun KSAnnotated.checkConstraints(): List<CheckConstraint> =
+        annotations.filter { it.qualifiedName == ANNOTATION_CHECK }.map { annotation ->
+            val arguments = annotation.arguments.associate { it.name?.asString() to it.value }
+            CheckConstraint(
+                expression = (arguments["expression"] as? String).orEmpty().trim(),
+                constraintName = (arguments["constraintName"] as? String).orEmpty().trim(),
+            )
+        }.toList()
+
+    /**
+     * Appends the `CHECK` constraints of [property]'s column to [createSQLBuilder]: the unnamed ones first, as SQLite
+     * gives a column's constraint the name of the named one before it, and would report it under that name.
+     */
+    private fun appendColumnChecks(createSQLBuilder: StringBuilder, property: KSPropertyDeclaration) {
+        for (check in property.checkConstraints().sortedBy { it.constraintName.isNotEmpty() }) {
+            createSQLBuilder.append(' ')
+            check.appendTo(createSQLBuilder)
+        }
+    }
+
+    /**
+     * Reports the [@Check][com.ctrip.sqllin.dsl.annotation.Check] annotations of a `@DBRow` class and its properties
+     * that would make an invalid table: without an expression, with a name that isn't an SQL identifier, or with the
+     * name of another of the table's CHECK constraints, which would make SQLite's report of a failed one ambiguous.
+     *
+     * @return Whether all of them are valid
+     */
+    private fun validateChecks(classDeclaration: KSClassDeclaration, propertyList: List<KSPropertyDeclaration>): Boolean {
+        val className = classDeclaration.simpleName.asString()
+        val names = HashSet<String>()
+        var isValid = true
+        for (symbol in listOf<KSAnnotated>(classDeclaration) + propertyList) {
+            for (check in symbol.checkConstraints()) {
+                val name = check.constraintName
+                val message = when {
+                    check.expression.isEmpty() -> "A @Check of '$className' has no expression."
+                    name.isNotEmpty() && !SQL_IDENTIFIER.matches(name) ->
+                        "The constraint name '$name' of a @Check of '$className' isn't an SQL identifier: it can only contain letters, digits and underscores, and can't start with a digit."
+                    name.isNotEmpty() && !names.add(name) ->
+                        "The table of '$className' has two CHECK constraints named '$name'. Their names have to differ, as SQLite reports the name of the one a row fails."
+                    else -> continue
+                }
+                environment.logger.error(message, symbol)
+                isValid = false
+            }
+        }
+        return isValid
     }
 
     /**

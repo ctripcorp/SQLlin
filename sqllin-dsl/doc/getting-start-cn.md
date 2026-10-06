@@ -505,6 +505,77 @@ val status: String
 val status: String
 ```
 
+#### @Check - 校验列值
+
+使用 `@Check` 添加 `CHECK` 约束：一个每一行都必须满足的 SQL 表达式。每当 _INSERT_ 或 _UPDATE_ 写入一行时，SQLite 都会对它
+求值，结果为假就拒绝这一行。这样无论是哪里的代码写入，不合法的数据都进不了这张表。`@Check` 是实验性 API，使用时需要
+`@OptIn(ExperimentalDSLDatabaseAPI::class)`：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow
+@Check("endDate IS NULL OR endDate >= startDate", constraintName = "valid_period")
+@Serializable
+data class Membership(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @Check("length(trim(name)) > 0") val name: String,
+    @Check("level IN (0, 1, 2)") val level: Int,
+    @Check("age BETWEEN 0 AND 150") val age: Int?,
+    val startDate: String,
+    val endDate: String?,
+)
+// 生成的 SQL：CREATE TABLE Membership(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+//   level INT NOT NULL CHECK (level IN (0, 1, 2)),
+//   age INT CHECK (age BETWEEN 0 AND 150),
+//   startDate TEXT NOT NULL,
+//   endDate TEXT,
+//   CONSTRAINT valid_period CHECK (endDate IS NULL OR endDate >= startDate)
+// )
+```
+
+`@Check` 写在属性上，就是给这一列加约束；写在类上，就是给整张表加约束。SQLite 对两者的检查方式相同，两者也都可以引用任意列，
+所以比较多列的约束写在类上更清楚。两者都可以重复使用，每个约束都会被检查。
+
+**给约束命名：**
+
+`constraintName` 给约束命名，之后某一行违反它时，SQLite 会报出这个名字：`CHECK constraint failed: valid_period`。没有名字的
+约束，SQLite 3.34 起报的是它的表达式，更早的版本报的则是表名，Android 在 API 34 之前就是这样，这时只有名字能区分一张表的各个
+约束。名字必须是 SQL 标识符，同一张表的 CHECK 约束名不能重复。
+
+**NULL 会通过：**
+
+只有表达式的结果为假，这一行才算违反约束；结果为 NULL 时，这一行会通过。所以 `@Check("age BETWEEN 0 AND 150")` 会放行为
+NULL 的 age；要拦住 NULL，请把属性声明为非空类型。看起来正确的表达式也可能因此失效：
+
+```kotlin
+// ❌ 不是日期的文本都能通过：对它们 date(day) 是 NULL，比较的结果也是 NULL
+@Check("date(day) = day")
+val day: String?
+
+// ✅ 能拦住它们：IS 把 NULL 当作一个值来比较
+@Check("day IS NULL OR date(day) IS day")
+val day: String?
+```
+
+**表达式：**
+- 它是 SQL，原样写进 CREATE TABLE 语句，所以其中的错误要到建表时才会暴露
+- 用列在表中的名字引用列
+- 不能包含子查询，所以不能引用其他表，这种需求请用[外键](#外键约束)
+- 只能调用确定性函数：和当前时间比较的表达式，比如 `expires > date('now')`，会在写入行时失败
+
+**语句的行为：**
+- 写入违反约束的行的 _INSERT_ 或 _UPDATE_ 会失败，抛出驱动的异常，_UPDATE_ 不会修改这一行
+- `INSERT_OR_IGNORE` 会跳过违反约束的行，插入其余的行
+- `INSERT_OR_REPLACE` 和 _INSERT_ 一样会失败：替换已有的行并不能让新行满足约束
+
+**已有的表：**
+
+SQLite 的 `ALTER TABLE` 不能给表添加约束，`ALTER_ADD_COLUMN` 添加的列也不带约束。要给已有的表添加约束，请
+[重建表](modify-database-and-transaction-cn.md#重建表)。删除某一列时，它自己的约束会随之删除，但如果其他列的约束或表的约束
+引用了这一列，SQLite 会拒绝删除。
+
 ### 支持的类型
 
 SQLlin 支持以下 Kotlin 类型用于 `@DBRow` 数据类的属性。其他任何类型的属性都会导致编译错误；如果想让这样的属性不进入表中，请为它加上 `kotlinx.serialization.Transient` 注解：

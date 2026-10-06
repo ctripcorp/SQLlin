@@ -78,6 +78,9 @@ class NativeTest {
     fun testFts3() = commonTest.testFts3()
 
     @Test
+    fun testCheckConstraint() = commonTest.testCheckConstraint()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

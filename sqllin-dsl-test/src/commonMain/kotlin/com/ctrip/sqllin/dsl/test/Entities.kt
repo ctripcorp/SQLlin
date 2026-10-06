@@ -16,6 +16,7 @@
 
 package com.ctrip.sqllin.dsl.test
 
+import com.ctrip.sqllin.dsl.annotation.Check
 import com.ctrip.sqllin.dsl.annotation.CollateNoCase
 import com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey
 import com.ctrip.sqllin.dsl.annotation.CompositeUnique
@@ -700,3 +701,20 @@ class ArticleMatchInfo(val title: String, val info: ByteArray)
 @Fts3(tokenizer = FtsTokenizer.UNICODE61, tokenizerArgs = ["remove_diacritics=1"])
 @Serializable
 data class Note(@PrimaryKey val docid: Long, val text: String)
+
+/**
+ * A table with CHECK constraints: of columns, two of them on one column, written named first to check that the unnamed
+ * one comes first, and a named one of the table that compares two columns.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow
+@Check("endDate IS NULL OR endDate >= startDate", constraintName = "valid_period")
+@Serializable
+data class CheckedMembership(
+    @PrimaryKey val id: Long?,
+    @Check("lower(name) = name", constraintName = "lower_case_name") @Check("length(trim(name)) > 0") val name: String,
+    @Check("age BETWEEN 0 AND 150") val age: Int?,
+    @Check("level IN (0, 1, 2)") val level: Int,
+    val startDate: String,
+    @Check("endDate IS NULL OR date(endDate) IS endDate") val endDate: String?,
+)

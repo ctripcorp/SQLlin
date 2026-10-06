@@ -908,3 +908,58 @@ public enum class Trigger {
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.BINARY)
 public annotation class Default(val value: String)
+/**
+ * Adds a `CHECK` constraint to a table: an SQL expression that every row has to satisfy, checked by SQLite whenever
+ * an INSERT or UPDATE writes a row, which fails if the expression is false for it.
+ *
+ * On a property, it is a constraint of the property's column; on a class annotated with [DBRow], a constraint of the
+ * table, after its columns. SQLite checks them alike, and both can refer to any column of the table, so a constraint
+ * that compares columns reads best on the class. They only differ when a column is dropped: the column's own
+ * constraints are dropped with it, while SQLite refuses to drop a column that another column's constraint or the
+ * table's refers to. Both can be repeated, and every constraint is checked.
+ *
+ * ```kotlin
+ * @OptIn(ExperimentalDSLDatabaseAPI::class)
+ * @DBRow
+ * @Check("endDate IS NULL OR endDate >= startDate", constraintName = "valid_period")
+ * @Serializable
+ * data class Membership(
+ *     @PrimaryKey val id: Long?,
+ *     @Check("level IN (0, 1, 2)") val level: Int,
+ *     val startDate: String,
+ *     val endDate: String?,
+ * )
+ * // CREATE TABLE Membership(id INTEGER PRIMARY KEY,level INT NOT NULL CHECK (level IN (0, 1, 2)),startDate TEXT NOT NULL,
+ * //     endDate TEXT,CONSTRAINT valid_period CHECK (endDate IS NULL OR endDate >= startDate))
+ * ```
+ *
+ * ### NULL Passes
+ * A row fails only when the expression is false: when it is NULL, the row passes. So `CHECK (age >= 0)` lets a NULL
+ * age through, which only a non-null property keeps out. This also catches expressions that look right: `date(day)`
+ * is NULL for a text that isn't a date, so `CHECK (date(day) = day)` lets every such text through, while
+ * `CHECK (day IS NULL OR date(day) IS day)` keeps them out.
+ *
+ * ### The Expression
+ * The expression is SQL, written into the CREATE TABLE statement as it is, and so only checked by SQLite when the table
+ * is created. It names columns by their names in the table, can't contain a subquery, so it can't refer to other
+ * tables, and can only call deterministic functions: a comparison with the current time such as
+ * `expires > date('now')` fails when a row is written.
+ *
+ * A row that fails the constraint makes its INSERT or UPDATE fail with the driver's exception, and an
+ * `INSERT_OR_IGNORE` skip the row, while an `INSERT_OR_REPLACE` fails as an INSERT does. SQLite's `ALTER TABLE` can't
+ * add a constraint to a table, and `ALTER_ADD_COLUMN` adds a column without its constraints: to add one to an existing
+ * table, rebuild the table, as `withName` describes.
+ *
+ * @property expression The SQL expression every row has to satisfy, such as `age BETWEEN 0 AND 150`
+ * @property constraintName The name of the constraint, which SQLite reports when a row fails it, or empty for none.
+ * SQLite reports an unnamed constraint by its expression from 3.34 on, but by the table's name before, as on Android
+ * below API 34, where only the names tell a table's constraints apart. It has to be an SQL identifier, and the names
+ * of a table's CHECK constraints have to differ
+ *
+ * @see DBRow
+ */
+@ExperimentalDSLDatabaseAPI
+@Repeatable
+@Target(AnnotationTarget.PROPERTY, AnnotationTarget.CLASS)
+@Retention(AnnotationRetention.BINARY)
+public annotation class Check(val expression: String, val constraintName: String = "")

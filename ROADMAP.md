@@ -11,7 +11,6 @@
 
 ## Low Priority
 
-* Support CHECK keyword
 * Support using a query's results within the same transaction, so that a read-modify-write is one transaction
 * Support upsert, `INSERT ... ON CONFLICT (target) DO UPDATE` and `DO NOTHING`, which updates the conflicting row in place where `INSERT OR REPLACE` deletes and re-inserts it
 * Use a SQLite bundled with SQLlin on Android, such as androidx.sqlite's sqlite-bundled, rather than the system's, which has no FTS5 or R*Tree, and on older Android versions lacks newer SQL such as DROP COLUMN (before API 34) and upsert (before API 30)
@@ -19,6 +18,7 @@
 
 ## Supported
 
+* Support CHECK constraints (2.5.0 ✅)
 * Support CREATE VIRTUAL TABLE for FTS4 and FTS3 full-text search (2.5.0 ✅)
 * Support CREATE VIEW (2.5.0 ✅)
 * Support observable queries that return a `Flow` of their results (2.5.0 ✅)
