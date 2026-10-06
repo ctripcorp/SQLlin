@@ -245,6 +245,8 @@ val database = Database(
 
 `withName` 返回的表与原表有相同的列、约束和行类型，但没有列属性，因为那些属性指向的是原表。它用于针对整张表的语句：
 `CREATE`、`INSERT`、`DROP` 和 `ALTER_RENAME_TABLE_TO`。
+对于 [FTS 表](advanced-query-cn.md#全文搜索)，它返回的是选项相同的 FTS 表，所以要修改 FTS 表的列或选项，也是用同样的方法
+重建。
 
 数据的转换由 `SELECT` 完成，可以使用投影或结果列，详见[《高级查询》](advanced-query-cn.md)。转换值类型、替换 `NULL` 的函数目前还不支持。
 

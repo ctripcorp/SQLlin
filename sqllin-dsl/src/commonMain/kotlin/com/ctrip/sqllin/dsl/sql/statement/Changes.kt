@@ -39,5 +39,15 @@ internal enum class Changes {
             is TableStructureStatement -> SCHEMA
             is InsertStatement, is UpdateDeleteStatement, is UpdateStatementWithoutWhereClause<*> -> ROWS
         }
+
+        /**
+         * The table [statement] writes rows to, or null if it writes none.
+         */
+        fun writtenTable(statement: SingleStatement): String? = when (statement) {
+            is InsertStatement -> statement.table
+            is UpdateDeleteStatement -> statement.table
+            is UpdateStatementWithoutWhereClause<*> -> statement.table
+            is SelectStatement<*>, is TableStructureStatement -> null
+        }
     }
 }

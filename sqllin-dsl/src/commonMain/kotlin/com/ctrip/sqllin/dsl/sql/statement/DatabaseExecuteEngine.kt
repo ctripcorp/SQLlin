@@ -54,6 +54,14 @@ internal class DatabaseExecuteEngine(
             maxOf(changes, if (statement is TransactionStatementsGroup) statement.changes else Changes.of(statement as SingleStatement))
         }
 
+    /**
+     * The tables the statements write rows to, as INSERT, UPDATE and DELETE name them.
+     */
+    val writtenTables: Set<String>
+        get() = statementList.flatMapTo(LinkedHashSet()) {
+            if (it is TransactionStatementsGroup) it.writtenTables else Changes.writtenTable(it as SingleStatement)?.let(::setOf).orEmpty()
+        }
+
     override infix fun removeStatement(statement: SingleStatement) {
         statementList.remove(statement)
     }

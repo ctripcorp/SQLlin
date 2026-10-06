@@ -300,6 +300,124 @@ _DELETE_ 也不会。
 同时影响两边的表的修改，可能会短暂地呈现一边的新结果和另一边的旧结果。如果结果来自几张表，用一条带 Join 的 _SELECT_ 可以一次
 得到。
 
+## 全文搜索
+
+全文搜索（FTS）表会为文本建立索引，让查询像搜索引擎一样找出包含某些词的行。SQLlin 支持 SQLite 的 FTS4 和 FTS3 表，SQLlin
+支持的所有平台上的 SQLite 都有它们，Android 也不例外。它们是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`。
+
+### 声明 FTS 表
+
+给 `@DBRow` 类加上 `@Fts4`，_sqllin-processor_ 就会像为普通表一样为它生成表对象：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow("articles")
+@Fts4(tokenizer = FtsTokenizer.PORTER, prefix = [2], notIndexed = ["note"])
+@Serializable
+data class Article(
+    @PrimaryKey val rowid: Long?,
+    val title: String,
+    val body: String,
+    val note: String?,
+)
+```
+
+`CREATE(ArticleTable)` 用下面的语句创建它：
+
+```sql
+CREATE VIRTUAL TABLE articles USING fts4(title,body,note,tokenize=porter,prefix="2",notindexed=note)
+```
+
+FTS 为文本建立索引，所以列就是类中 `String` 和 `String?` 类型的属性；FTS 表的列没有类型和约束，所以它们也不接受约束注解。
+行的 id，也就是 rowid，通过一个名为 `rowid` 或 `docid`、类型为 `Long` 或 `Long?` 的 `@PrimaryKey` 属性读写，它不是一列：
+`Long?` 表示由 SQLite 分配，和普通表的 `INTEGER PRIMARY KEY` 一样；`Long` 表示由你提供。没有这个属性时，行仍然有 rowid，
+只是你读不到。
+
+`@Fts4` 的选项有：
+
+* `tokenizer`，把文本切分成词的分词器：`FtsTokenizer.SIMPLE` 是默认值，把 ASCII 转为小写；`PORTER` 还会把英文单词还原为
+  词干，于是 "running" 能匹配 "run"；`UNICODE61` 按 Unicode 切分并转为小写，还会去掉变音符号
+* `tokenizerArgs`，分词器的参数，比如给 `UNICODE61` 的 `["remove_diacritics=2"]`
+* `prefix`，要建立索引的前缀长度，可以加快 `kot*` 这样的前缀查询
+* `notIndexed`，只存储值、不参与搜索的列
+
+`@Fts3` 声明 FTS3 表，它是 FTS4 的旧版本，只有 `tokenizer` 和 `tokenizerArgs` 两个选项。除非表必须是 FTS3（比如你的应用的
+早期版本创建的表），否则请使用 FTS4。
+
+FTS 表和普通表一样，用 _INSERT_、_UPDATE_、_DELETE_ 写入，用 _SELECT_ 读取。SQLite 不允许修改虚拟表的结构或给它建索引，
+所以 `ALTER_ADD_COLUMN` 和 `CREATE_INDEX` 用在它上面会失败。要修改它的列或选项，请按照[重建表](modify-database-and-transaction-cn.md#重建表)
+的方法重建：对于 FTS 表，`withName` 返回的是选项相同的 FTS 表。
+
+### MATCH
+
+`MATCH` 找出在任意一列或某一列中匹配查询的行：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    lateinit var anyColumn: SelectStatement<Article>
+    lateinit var titles: SelectStatement<Article>
+    database {
+        ArticleTable { table ->
+            // SELECT rowid,title,body,note FROM articles WHERE articles MATCH ?
+            anyColumn = table SELECT WHERE(table MATCH "kotlin coroutines")
+            // SELECT rowid,title,body,note FROM articles WHERE articles.title MATCH ?
+            titles = table SELECT WHERE(title MATCH "kotlin")
+        }
+    }
+}
+```
+
+查询用的是 FTS 自己的语言，其中的词会和文本一样经过表的分词器切分和转换：
+
+* `kotlin coroutines`：同时包含这两个词的行
+* `kotlin OR java`：包含其中任意一个词的行；`OR` 必须大写
+* `"kotlin multiplatform"`：包含这个短语的行
+* `corout*`：包含以 `corout` 开头的词的行
+* `title:kotlin`：`title` 列中包含这个词的行
+* `kotlin NEAR java`：这两个词彼此靠近的行
+
+只用这些写法的查询在所有平台上的效果都一样。除此之外，FTS 有两种语法。Android 的 SQLite 使用标准语法，其中 `-java` 表示
+排除包含 `java` 的行；JVM 驱动和 Apple 平台的 SQLite 使用增强语法，它增加了 `AND`、`NOT` 和括号，而 `-java` 只被当作 `java`
+这个词本身。在 Linux 和 Windows 上，取决于你的应用链接的 SQLite 是如何编译的。
+
+### 描述匹配
+
+在带 `MATCH` 的 _SELECT_ 中，FTS 表对象的函数 `snippet`、`offsets` 和 `matchinfo` 描述每一行是如何匹配的。它们通过
+[结果列](#结果列)选取：
+
+```kotlin
+@Serializable
+data class SearchResult(val title: String, val excerpt: String)
+
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    lateinit var results: SelectStatement<SearchResult>
+    database {
+        ArticleTable { table ->
+            // SELECT title,snippet(articles,'<b>','</b>','<b>...</b>',-1,-15) AS excerpt FROM articles WHERE articles MATCH ?
+            results = table SELECT listOf(table.snippet() AS SearchResult::excerpt) WHERE (table MATCH "coroutines")
+        }
+    }
+    // 例如：SearchResult(title = "Kotlin Coroutines", excerpt = "Kotlin <b>Coroutines</b>")
+}
+```
+
+* `snippet(start, end, ellipsis, column, tokens)`：匹配到的词周围的文本，词的前后分别加上 `start` 和 `end`；取自 `column`
+  列，默认取自匹配得最好的列
+* `offsets()`：匹配到的词所在的位置，是一段文本，每处匹配四个数字：列、查询中的第几个词、匹配的字节偏移量和字节数
+* `matchinfo(format)`：匹配的统计数据，是由本机字节序的 32 位无符号整数组成的 `ByteArray`，其含义见 SQLite 的 `matchinfo`
+  文档
+
+FTS4 和 FTS3 不会给匹配结果排序：_SELECT_ 按 rowid 的顺序返回它们。要排序的话，请在 Kotlin 中根据 `matchinfo` 计算分数。
+能给匹配结果排序的 FTS5 和 R*Tree 表暂不支持，因为 Android 的 SQLite 没有它们。
+
+### 观察 FTS 表
+
+FTS 表是虚拟表，无法拥有[可观察查询](#可观察查询)用来计数修改的触发器。所以 `Database#observe` 改为根据 SQLlin 对它执行的
+_INSERT_、_UPDATE_ 和 _DELETE_ 来计数：用其他 SQL 所做的修改感知不到，视图所读取的 FTS 表的修改也感知不到。回滚的事务仍会
+计入其中的语句，这只会让查询多执行一次。
+
 ## 最后
 
 你已经学习了所有的 SQLlin 用法，享受你的 SQLlin 的编程旅程并对它的更新保持关注吧 :)

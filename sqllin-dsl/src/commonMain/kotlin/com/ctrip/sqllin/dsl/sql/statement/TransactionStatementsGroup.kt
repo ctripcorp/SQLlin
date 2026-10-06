@@ -50,6 +50,14 @@ internal class TransactionStatementsGroup(
     val changes: Changes
         get() = statementList.fold(Changes.NONE) { changes, statement -> maxOf(changes, Changes.of(statement)) }
 
+    /**
+     * The tables the statements of the transaction write rows to.
+     *
+     * @see DatabaseExecuteEngine.writtenTables
+     */
+    val writtenTables: Set<String>
+        get() = statementList.mapNotNullTo(LinkedHashSet()) { Changes.writtenTable(it) }
+
     override infix fun removeStatement(statement: SingleStatement) {
         statementList.remove(statement)
     }

@@ -96,7 +96,7 @@ public infix fun <T> UpdateStatementWithoutWhereClause<T>.WHERE(condition: Selec
     val statement = UpdateDeleteStatement(buildString {
         append(sqlStr)
         append(WhereClause<T>(condition).clauseStr)
-    }, connection, params)
+    }, connection, params, table)
     statementContainer changeLastStatement statement
     return statement.sqlStr
 }

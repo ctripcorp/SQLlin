@@ -319,6 +319,132 @@ kotlinx.coroutines. As each runs its query on its own, a change to the tables of
 one with the old results of the other. When the results come from several tables, a single _SELECT_ with a join gives
 them at once.
 
+## Full-Text Search
+
+A full-text search (FTS) table indexes text, so that a query finds the rows containing some words, as a search engine
+does. SQLlin supports SQLite's FTS4 and FTS3 tables, which SQLite has on every platform SQLlin supports, Android's
+included. They are experimental, so opt in with `@OptIn(ExperimentalDSLDatabaseAPI::class)`.
+
+### Declaring an FTS Table
+
+Annotate a `@DBRow` class with `@Fts4`, and _sqllin-processor_ generates a table object for it, as for any table:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow("articles")
+@Fts4(tokenizer = FtsTokenizer.PORTER, prefix = [2], notIndexed = ["note"])
+@Serializable
+data class Article(
+    @PrimaryKey val rowid: Long?,
+    val title: String,
+    val body: String,
+    val note: String?,
+)
+```
+
+`CREATE(ArticleTable)` creates it with:
+
+```sql
+CREATE VIRTUAL TABLE articles USING fts4(title,body,note,tokenize=porter,prefix="2",notindexed=note)
+```
+
+FTS indexes text, so the columns are the class's `String` and `String?` properties, and as an FTS table's columns have
+no types or constraints, they take no constraint annotations. A row's id, its rowid, is read and written through a
+`@PrimaryKey` property of type `Long` or `Long?` named `rowid` or `docid`, which isn't a column: `Long?` leaves it for
+SQLite to assign, as for a table's `INTEGER PRIMARY KEY`, while `Long` has you supply it. Without one, the rows still
+have rowids, which you can't read.
+
+The options of `@Fts4` are:
+
+* `tokenizer`, which splits the text into terms: `FtsTokenizer.SIMPLE`, the default, which folds ASCII to lower case;
+  `PORTER`, which also reduces English words to their stems, so that "running" matches "run"; and `UNICODE61`, which
+  splits and folds all of Unicode, and removes diacritics
+* `tokenizerArgs`, the tokenizer's arguments, such as `["remove_diacritics=2"]` for `UNICODE61`
+* `prefix`, the lengths of the prefixes to index, which make prefix queries such as `kot*` faster
+* `notIndexed`, the columns whose values are stored, but not searched
+
+`@Fts3` declares an FTS3 table, the older version of FTS4, with only `tokenizer` and `tokenizerArgs`. Prefer FTS4,
+unless the table has to be FTS3, such as one an earlier version of your app created.
+
+An FTS table is written to with _INSERT_, _UPDATE_ and _DELETE_, and read with _SELECT_, like any table. SQLite doesn't
+let a virtual table be altered or indexed, so `ALTER_ADD_COLUMN` and `CREATE_INDEX` fail on it. To change its columns or
+options, rebuild it as described in [Rebuilding a Table](modify-database-and-transaction.md#rebuilding-a-table): for an
+FTS table, `withName` returns an FTS table with the same options.
+
+### MATCH
+
+`MATCH` finds the rows that match a query, in any column, or in one:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    lateinit var anyColumn: SelectStatement<Article>
+    lateinit var titles: SelectStatement<Article>
+    database {
+        ArticleTable { table ->
+            // SELECT rowid,title,body,note FROM articles WHERE articles MATCH ?
+            anyColumn = table SELECT WHERE(table MATCH "kotlin coroutines")
+            // SELECT rowid,title,body,note FROM articles WHERE articles.title MATCH ?
+            titles = table SELECT WHERE(title MATCH "kotlin")
+        }
+    }
+}
+```
+
+The query is written in FTS's own language. Its terms are split and folded by the table's tokenizer, as the text is:
+
+* `kotlin coroutines`: rows with both terms
+* `kotlin OR java`: rows with either term; `OR` has to be in upper case
+* `"kotlin multiplatform"`: rows with the phrase
+* `corout*`: rows with a term starting with `corout`
+* `title:kotlin`: rows with the term in the column `title`
+* `kotlin NEAR java`: rows with the terms close to each other
+
+Queries made of these work the same on every platform. Beyond them, FTS has two syntaxes. Android's SQLite has the
+standard one, where `-java` leaves out the rows with the term `java`. The SQLite of the JVM driver and of Apple's
+platforms has the enhanced one, which adds `AND`, `NOT` and parentheses, and reads `-java` as the term `java` itself. On
+Linux and Windows, it depends on how the SQLite your app links was compiled.
+
+### Describing the Matches
+
+In a _SELECT_ with `MATCH`, the functions `snippet`, `offsets` and `matchinfo` of an FTS table object describe how each
+row matched. They are selected with [result columns](#result-columns):
+
+```kotlin
+@Serializable
+data class SearchResult(val title: String, val excerpt: String)
+
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    lateinit var results: SelectStatement<SearchResult>
+    database {
+        ArticleTable { table ->
+            // SELECT title,snippet(articles,'<b>','</b>','<b>...</b>',-1,-15) AS excerpt FROM articles WHERE articles MATCH ?
+            results = table SELECT listOf(table.snippet() AS SearchResult::excerpt) WHERE (table MATCH "coroutines")
+        }
+    }
+    // For example: SearchResult(title = "Kotlin Coroutines", excerpt = "Kotlin <b>Coroutines</b>")
+}
+```
+
+* `snippet(start, end, ellipsis, column, tokens)`: the text around the matched terms, with `start` and `end` around
+  them, from `column`, or by default from the column that matches best
+* `offsets()`: where the matched terms are, as a text of four numbers per match: the column, the term of the query, and
+  the byte offset and size of the match
+* `matchinfo(format)`: statistics of the match, as a `ByteArray` of 32-bit unsigned integers in the machine's byte
+  order, described by SQLite's documentation of `matchinfo`
+
+FTS4 and FTS3 don't rank the matches: a _SELECT_ returns them in the order of their rowids. To rank them, compute a
+score from `matchinfo` in Kotlin. FTS5, which ranks matches, and R*Tree tables aren't supported yet, as Android's
+SQLite doesn't have them.
+
+### Observing an FTS Table
+
+An FTS table is a virtual table, which can't have the triggers [observed queries](#observed-queries) count changes with.
+So `Database#observe` counts the changes to it from SQLlin's _INSERT_, _UPDATE_ and _DELETE_ on it instead: a change
+made with other SQL isn't seen, and neither is a change to an FTS table that a view reads. A rolled back transaction
+still counts its statements, which only runs the query once more.
+
 ## Finally
 
 You have learned all usages with SQLlin, enjoy it and stay Stay tuned for SQLlin's updates :)

@@ -59,7 +59,7 @@ internal object Insert : Operation {
             append(' ')
             encodeEntities2InsertValues(table, this,entities, parameters, isInsertWithId)
         }
-        return InsertStatement(sql, connection, parameters)
+        return InsertStatement(sql, connection, parameters, table.tableName)
     }
 
     fun <T> insertOrReplace(table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>): SingleStatement {
@@ -70,7 +70,7 @@ internal object Insert : Operation {
             append(' ')
             encodeEntities2InsertValues(table, this, entities, parameters, isInsertWithId = true)
         }
-        return InsertStatement(sql, connection, parameters)
+        return InsertStatement(sql, connection, parameters, table.tableName)
     }
 
     fun <T> insertOrIgnore(table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>): SingleStatement {
@@ -82,7 +82,7 @@ internal object Insert : Operation {
             // Write the primary key even when the database would assign it, or a conflict on it could never be seen
             encodeEntities2InsertValues(table, this, entities, parameters, isInsertWithId = true)
         }
-        return InsertStatement(sql, connection, parameters)
+        return InsertStatement(sql, connection, parameters, table.tableName)
     }
 
     /**
@@ -112,6 +112,6 @@ internal object Insert : Operation {
             append(") ")
             append(select.sqlStr)
         }
-        return InsertStatement(sql, connection, select.parameters?.toMutableList())
+        return InsertStatement(sql, connection, select.parameters?.toMutableList(), table.tableName)
     }
 }

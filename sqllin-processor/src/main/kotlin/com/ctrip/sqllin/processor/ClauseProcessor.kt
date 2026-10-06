@@ -50,6 +50,10 @@ import java.io.OutputStreamWriter
  *   - Enum classes (stored as integers)
  *   - Typealiases of supported types
  *
+ * A `@DBRow` class annotated with [@Fts4][com.ctrip.sqllin.dsl.annotation.Fts4] or
+ * [@Fts3][com.ctrip.sqllin.dsl.annotation.Fts3] gets an `FtsTable` object instead, whose statement is a
+ * `CREATE VIRTUAL TABLE`, and a class annotated with [@DBView][com.ctrip.sqllin.dsl.annotation.DBView] a `View` object.
+ *
  * ### Performance Optimization
  * CREATE TABLE statements are generated at **compile-time** rather than runtime,
  * eliminating the overhead of runtime reflection and string building during table creation.
@@ -73,6 +77,12 @@ class ClauseProcessor(
         const val ANNOTATION_DATABASE_ROW_NAME = "com.ctrip.sqllin.dsl.annotation.DBRow"
         const val ANNOTATION_DATABASE_VIEW_NAME = "com.ctrip.sqllin.dsl.annotation.DBView"
         const val ANNOTATION_PACKAGE = "com.ctrip.sqllin.dsl.annotation"
+        const val ANNOTATION_FTS4 = "$ANNOTATION_PACKAGE.Fts4"
+        const val ANNOTATION_FTS3 = "$ANNOTATION_PACKAGE.Fts3"
+        const val ANNOTATION_PRIMARY_KEY = "$ANNOTATION_PACKAGE.PrimaryKey"
+
+        /** The names SQLite gives the rowid; an FTS table also calls it docid. */
+        val ROW_ID_NAMES = setOf("rowid", "oid", "_rowid_", "docid")
 
         /** The annotations that declare constraints, which only a table's columns can have. */
         val CONSTRAINT_ANNOTATIONS = listOf(
@@ -150,6 +160,12 @@ class ClauseProcessor(
             if (unsupportedProperties.isNotEmpty())
                 continue
 
+            val ftsAnnotations = classDeclaration.annotations.filter { it.qualifiedName == ANNOTATION_FTS4 || it.qualifiedName == ANNOTATION_FTS3 }.toList()
+            if (ftsAnnotations.isNotEmpty()) {
+                processFtsTable(classDeclaration, ftsAnnotations, propertyList, tableName as String, visibilityModifier)
+                continue
+            }
+
             val outputStream = environment.codeGenerator.createNewFile(
                 dependencies = classDeclaration.containingFile?.let { Dependencies(true, it) } ?: Dependencies(true),
                 packageName = packageName,
@@ -226,8 +242,177 @@ class ClauseProcessor(
                 writer.write("}\n")
             }
         }
+        // @Fts4 and @Fts3 only describe the table of a @DBRow class, without which nothing would be generated for them
+        for (ftsAnnotationName in listOf(ANNOTATION_FTS4, ANNOTATION_FTS3)) {
+            resolver.getSymbolsWithAnnotation(ftsAnnotationName)
+                .filter { symbol -> symbol.annotations.none { it.qualifiedName == ANNOTATION_DATABASE_ROW_NAME } }
+                .forEach {
+                    val annotationName = ftsAnnotationName.substringAfterLast('.')
+                    environment.logger.error("The class annotated with '@$annotationName' must also be annotated with '@DBRow', which makes it a table.", it)
+                }
+        }
         return invalidateDBRowClasses + processViews(resolver)
     }
+
+    /**
+     * Generates the table object of a `@DBRow` class annotated with [@Fts4][com.ctrip.sqllin.dsl.annotation.Fts4] or
+     * [@Fts3][com.ctrip.sqllin.dsl.annotation.Fts3]: an `FtsTable`, created with `CREATE VIRTUAL TABLE`.
+     *
+     * Its columns are the class's `String` properties, as FTS indexes text, without types or constraints, which an FTS
+     * table doesn't have. A `@PrimaryKey` property of type `Long` named `rowid` or `docid` isn't a column but the row's
+     * id, which `Long?` leaves for SQLite to assign, as for a table's `INTEGER PRIMARY KEY`.
+     */
+    private fun processFtsTable(
+        classDeclaration: KSClassDeclaration,
+        ftsAnnotations: List<KSAnnotation>,
+        propertyList: List<KSPropertyDeclaration>,
+        tableName: String,
+        visibilityModifier: String,
+    ) {
+        val className = classDeclaration.simpleName.asString()
+        var isValid = true
+        fun error(message: String, symbol: KSNode) {
+            environment.logger.error(message, symbol)
+            isValid = false
+        }
+
+        if (ftsAnnotations.size > 1)
+            error("The class '$className' is annotated with both '@Fts3' and '@Fts4'; its FTS table can only be one of them.", classDeclaration)
+        val ftsAnnotation = ftsAnnotations.first()
+        val isFts4 = ftsAnnotation.qualifiedName == ANNOTATION_FTS4
+        classDeclaration.annotations.filter { it.qualifiedName in CONSTRAINT_ANNOTATIONS }.forEach {
+            error("The FTS table '$className' can't be annotated with '@${it.shortName.asString()}': an FTS table has no constraints.", classDeclaration)
+        }
+
+        var rowIdProperty: KSPropertyDeclaration? = null
+        val columns = ArrayList<String>()
+        for (property in propertyList) {
+            val propertyName = property.simpleName.asString()
+            val constraints = property.annotations.filter { it.qualifiedName in CONSTRAINT_ANNOTATIONS }.toList()
+            val primaryKey = constraints.find { it.qualifiedName == ANNOTATION_PRIMARY_KEY }
+            if (propertyName.lowercase() in ROW_ID_NAMES) {
+                val rules = "The rowid of an FTS table is read and written through a @PrimaryKey property of type Long or Long?, named 'rowid' or 'docid'"
+                when {
+                    propertyName != "rowid" && propertyName != "docid" ->
+                        error("The property '$propertyName' of FTS table '$className' is named as the rowid. $rules.", property)
+                    primaryKey == null ->
+                        error("The property '$propertyName' of FTS table '$className' has to be annotated with '@PrimaryKey'. $rules.", property)
+                    resolvedTypeName(property) != FullNameCache.LONG ->
+                        error("The property '$propertyName' of FTS table '$className' has the type '${property.type.resolve()}'. $rules.", property)
+                    primaryKey.arguments.any { it.name?.asString() == "autoIncrement" && it.value == true } ->
+                        error("The rowid of FTS table '$className' can't be AUTOINCREMENT, which only a table's INTEGER PRIMARY KEY can be.", property)
+                    rowIdProperty != null ->
+                        error("The FTS table '$className' has two rowid properties, '${rowIdProperty.simpleName.asString()}' and '$propertyName'.", property)
+                }
+                rowIdProperty = property
+                (constraints - primaryKey).filterNotNull().forEach {
+                    error("The rowid '$propertyName' of FTS table '$className' can't be annotated with '@${it.shortName.asString()}': an FTS table has no constraints.", property)
+                }
+                continue
+            }
+            if (primaryKey != null)
+                error("The property '$propertyName' of FTS table '$className' can't be its primary key, which is its rowid. To read and write the rowid, give the class a @PrimaryKey property of type Long or Long? named 'rowid' or 'docid'.", property)
+            (constraints - primaryKey).filterNotNull().forEach {
+                error("The property '$propertyName' of FTS table '$className' can't be annotated with '@${it.shortName.asString()}': an FTS table's columns have no constraints.", property)
+            }
+            if (resolvedTypeName(property) != FullNameCache.STRING)
+                error("The property '$propertyName' of FTS table '$className' has the type '${property.type.resolve()}', but FTS indexes text, so its columns are String or String?.", property)
+            columns.add(propertyName)
+        }
+        if (columns.isEmpty())
+            error("The FTS table '$className' has no columns. Its columns are its String or String? properties.", classDeclaration)
+
+        val arguments = ftsAnnotation.arguments.associate { it.name?.asString() to it.value }
+        val options = ArrayList<String>()
+        val tokenizer = when (val value = arguments["tokenizer"]) {
+            is KSClassDeclaration -> value.simpleName.asString()
+            is KSType -> value.declaration.simpleName.asString()
+            null -> "SIMPLE"
+            else -> value.toString().substringAfterLast('.')
+        }.lowercase()
+        val tokenizerArgs = (arguments["tokenizerArgs"] as? List<*>).orEmpty().map { it.toString() }
+        if (tokenizer != "simple" || tokenizerArgs.isNotEmpty())
+            options.add((listOf(tokenizer) + tokenizerArgs.map { "\"${it.replace("\"", "\"\"")}\"" }).joinToString(" ", "tokenize="))
+        if (isFts4) {
+            val prefix = (arguments["prefix"] as? List<*>).orEmpty().map { it as Int }
+            if (prefix.any { it <= 0 })
+                error("The prefix lengths of FTS table '$className' have to be positive, but they are ${prefix.joinToString()}.", classDeclaration)
+            if (prefix.isNotEmpty())
+                options.add("prefix=\"${prefix.joinToString(",")}\"")
+            for (column in (arguments["notIndexed"] as? List<*>).orEmpty().map { it.toString() }) {
+                if (column !in columns)
+                    error("The column '$column' that FTS table '$className' doesn't index isn't one of its columns, ${columns.joinToString { "'$it'" }}.", classDeclaration)
+                options.add("notindexed=$column")
+            }
+        }
+        if (!isValid)
+            return
+
+        val createSQL = (columns + options).joinToString(",", "CREATE VIRTUAL TABLE $tableName USING ${if (isFts4) "fts4" else "fts3"}(", ")")
+        val packageName = classDeclaration.packageName.asString()
+        val objectName = "${className}Table"
+        val outputStream = environment.codeGenerator.createNewFile(
+            dependencies = classDeclaration.containingFile?.let { Dependencies(true, it) } ?: Dependencies(true),
+            packageName = packageName,
+            fileName = objectName,
+        )
+        OutputStreamWriter(outputStream).use { writer ->
+            writer.write("package $packageName\n\n")
+            writer.write("import com.ctrip.sqllin.dsl.annotation.ColumnNameDslMaker\n")
+            writer.write("import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI\n")
+            writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseNumber\n")
+            writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseString\n")
+            writer.write("import com.ctrip.sqllin.dsl.sql.clause.SetClause\n")
+            writer.write("import com.ctrip.sqllin.dsl.sql.FtsTable\n")
+            writer.write("import com.ctrip.sqllin.dsl.sql.PrimaryKeyInfo\n\n")
+            // As for table objects, the column properties carry @ColumnNameDslMaker for IntelliJ IDEA's DSL
+            // highlighting. FtsTable is experimental, and the table object opts in so that its users don't have to.
+            writer.write("@Suppress(\"DSL_MARKER_APPLIED_TO_WRONG_TARGET\")\n")
+            writer.write("@OptIn(ExperimentalDSLDatabaseAPI::class)\n")
+            writer.write("${visibilityModifier}object $objectName : FtsTable<$className>(\"$tableName\") {\n\n")
+            writer.write("    override fun kSerializer() = $className.serializer()\n\n")
+            writer.write("    inline operator fun <R> invoke(block: $objectName.(table: $objectName) -> R): R = this.block(this)\n\n")
+            propertyList.forEachIndexed { index, property ->
+                val propertyName = property.simpleName.asString()
+                val elementName = "$className.serializer().descriptor.getElementName($index)"
+                val isNotNull = property.type.resolve().nullability == Nullability.NOT_NULL
+                writer.write("    @ColumnNameDslMaker\n")
+                writer.write("    val $propertyName\n")
+                writer.write("        get() = ${checkNotNull(getClauseElementTypeStr(property))}($elementName, this, ${!isNotNull})\n\n")
+                writer.write("    @ColumnNameDslMaker\n")
+                writer.write("    var SetClause<$className>.$propertyName: ${property.typeName}${if (isNotNull) "" else "?"}\n")
+                writer.write("        get() = ${getSetClauseGetterValue(property)}\n")
+                writer.write("        set(value) = ${appendFunction(elementName, property, isNotNull)}\n\n")
+            }
+            val rowId = rowIdProperty
+            if (rowId == null) {
+                writer.write("    override val primaryKeyInfo = null\n\n")
+            } else {
+                writer.write("    override val primaryKeyInfo = PrimaryKeyInfo(\n")
+                writer.write("        primaryKeyName = \"${rowId.simpleName.asString()}\",\n")
+                writer.write("        isAutomaticIncrement = false,\n")
+                writer.write("        isGeneratedByDatabase = ${rowId.type.resolve().nullability != Nullability.NOT_NULL},\n")
+                writer.write("        compositePrimaryKeys = null,\n")
+                writer.write("    )\n\n")
+            }
+            writer.write("    override val createSQL = \"${kotlinStringContent(createSQL)}\"\n")
+            writer.write("}\n")
+        }
+    }
+
+    /**
+     * Returns the qualified name of a property's type, without nullability, through a type alias.
+     */
+    private fun resolvedTypeName(property: KSPropertyDeclaration): String? = when (val declaration = property.type.resolve().declaration) {
+        is KSTypeAlias -> declaration.type.resolve().declaration.typeName
+        else -> declaration.typeName
+    }
+
+    /**
+     * Escapes [string] to be the content of a Kotlin string literal.
+     */
+    private fun kotlinStringContent(string: String): String =
+        string.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$")
 
     /**
      * Processes all [@DBView][com.ctrip.sqllin.dsl.annotation.DBView] annotated classes and generates their view

@@ -36,7 +36,11 @@ import kotlinx.coroutines.flow.update
  * a change made between the two.
  *
  * A view can't have such triggers, so an observed view stands for the tables it reads, which SQLite itself lists: they
- * are the ones the program of `EXPLAIN SELECT * FROM view` opens, through views over views and joins alike.
+ * are the ones the program of `EXPLAIN SELECT * FROM view` opens, through views over views and joins alike. A virtual
+ * table, such as an FTS table, can't have them either, so its changes are counted from the SQLlin statements that write
+ * to it, INSERT, UPDATE and DELETE: a change made with other SQL isn't seen, and neither is one to a virtual table a
+ * view reads, as a virtual table isn't opened that way. A rolled back transaction still counts its statements, which
+ * only means the queries run once more.
  *
  * TEMP tables and triggers belong to the connection, so changes made through another connection, or by another
  * process, aren't seen. A table stays tracked until the connection closes.
@@ -46,6 +50,9 @@ import kotlinx.coroutines.flow.update
 internal class InvalidationTracker(private val connection: DatabaseConnection) {
 
     private val trackedTables = MutableStateFlow<Set<String>>(emptySet())
+
+    /** The tracked tables that are virtual, whose counts [refresh] increments, as they have no triggers. */
+    private val virtualTables = MutableStateFlow<Set<String>>(emptySet())
 
     private val _versions = MutableStateFlow<Map<String, Long>>(emptyMap())
 
@@ -66,13 +73,26 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
         if (newTables.isEmpty())
             return tables
         connection.execSQL(CREATE_LOG)
+        val newVirtualTables = newTables intersect virtualTables()
         for (table in newTables) {
             connection.execSQL(INSERT_LOG_ROW, arrayOf(table))
-            createTriggers(table)
+            if (table !in newVirtualTables)
+                createTriggers(table)
         }
+        virtualTables.update { it + newVirtualTables }
         trackedTables.update { it + newTables }
         return tables
     }
+
+    /**
+     * Returns the virtual tables of the database, the tables without a root page of their own.
+     */
+    private fun virtualTables(): Set<String> =
+        connection.withQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND rootpage = 0") { cursor ->
+            buildSet {
+                cursor.forEachRow { add(cursor.getString(0)!!) }
+            }
+        }
 
     /**
      * Returns the tables that the table or view named [relation] reads: the table itself, or the tables of the view.
@@ -106,19 +126,29 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
     }
 
     /**
-     * Reads the counts of the tracked tables into [versions], after a scope that made [changes] ran.
+     * Reads the counts of the tracked tables into [versions], after a scope that made [changes] and wrote rows to
+     * [writtenTables] ran.
      *
      * A schema change may have dropped or replaced a tracked table, and its triggers with it, so the triggers are
-     * created again where they are missing, and every tracked table counts as changed.
+     * created again where they are missing, and every tracked table counts as changed. A table may also have been
+     * created again as the other kind, virtual or not, or only now, so which tables are virtual is read again too.
      */
-    fun refresh(changes: Changes) {
+    fun refresh(changes: Changes, writtenTables: Set<String>) {
         val tables = trackedTables.value
         if (changes == Changes.NONE || tables.isEmpty())
             return
         if (changes == Changes.SCHEMA) {
-            for (table in tables)
+            val virtual = tables intersect virtualTables()
+            virtualTables.value = virtual
+            for (table in tables - virtual)
                 createTriggers(table)
             connection.execSQL(COUNT_ALL)
+        } else {
+            val writtenVirtualTables = virtualTables.value intersect writtenTables
+            if (writtenVirtualTables.isNotEmpty()) {
+                val placeholders = writtenVirtualTables.joinToString(",") { "?" }
+                connection.execSQL("$COUNT_ALL WHERE table_name IN ($placeholders)", writtenVirtualTables.toTypedArray())
+            }
         }
         // On Android, a query outside a transaction may run on a reader connection, which has no TEMP table
         val counts = connection.withTransaction {

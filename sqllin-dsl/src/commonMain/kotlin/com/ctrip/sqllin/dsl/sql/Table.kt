@@ -16,6 +16,7 @@
 
 package com.ctrip.sqllin.dsl.sql
 
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import kotlinx.serialization.KSerializer
 
 /**
@@ -156,30 +157,54 @@ public abstract class Table<T>(tableName: String) : Relation<T>(tableName) {
  * at a table that no longer exists once it's dropped.
  *
  * The returned table has no column properties, as those of this table name this table. It is meant for statements
- * on the table as a whole: `CREATE`, `INSERT`, `DROP` and `ALTER_RENAME_TABLE_TO`.
+ * on the table as a whole: `CREATE`, `INSERT`, `DROP` and `ALTER_RENAME_TABLE_TO`. The table of an [FtsTable] is an
+ * [FtsTable] too, with the same options, which is how an FTS table is rebuilt with other ones.
  *
  * @param name The name of the returned table
  * @return A table with this table's columns, constraints and row type, named [name]
  */
-public fun <T> Table<T>.withName(name: String): Table<T> = NamedTable(this, name)
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+public fun <T> Table<T>.withName(name: String): Table<T> {
+    require(name.isNotBlank()) { "The name of a table can't be blank." }
+    return if (this is FtsTable<T>) NamedFtsTable(this, name) else NamedTable(this, name)
+}
 
 /**
  * A table with the structure of [table] under another name.
  */
 private class NamedTable<T>(private val table: Table<T>, name: String) : Table<T>(name) {
 
-    init {
-        require(name.isNotBlank()) { "The name of a table can't be blank." }
-    }
+    override fun kSerializer(): KSerializer<T> = table.kSerializer()
+
+    override val primaryKeyInfo: PrimaryKeyInfo?
+        get() = table.primaryKeyInfo
+
+    override val createSQL: String = table.createSQLNamed(name)
+}
+
+/**
+ * An FTS table with the structure of [table] under another name.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+private class NamedFtsTable<T>(private val table: FtsTable<T>, name: String) : FtsTable<T>(name) {
 
     override fun kSerializer(): KSerializer<T> = table.kSerializer()
 
     override val primaryKeyInfo: PrimaryKeyInfo?
         get() = table.primaryKeyInfo
 
-    override val createSQL: String = run {
-        val prefix = "CREATE TABLE ${table.tableName}("
-        check(table.createSQL.startsWith(prefix)) { "The CREATE TABLE statement of table '${table.tableName}' doesn't start with '$prefix'." }
-        "CREATE TABLE $name(${table.createSQL.substring(prefix.length)}"
+    override val createSQL: String = table.createSQLNamed(name)
+}
+
+/**
+ * Returns the CREATE statement of this table with [name] in place of its own: `CREATE TABLE name(...)`, or
+ * `CREATE VIRTUAL TABLE name USING ...` for a virtual table.
+ */
+private fun Table<*>.createSQLNamed(name: String): String {
+    for ((start, end) in listOf("CREATE TABLE " to "(", "CREATE VIRTUAL TABLE " to " USING ")) {
+        val prefix = "$start$tableName$end"
+        if (createSQL.startsWith(prefix))
+            return "$start$name$end${createSQL.substring(prefix.length)}"
     }
+    error("The CREATE statement of table '$tableName' doesn't start with 'CREATE TABLE $tableName(' or 'CREATE VIRTUAL TABLE $tableName USING '.")
 }

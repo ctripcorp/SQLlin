@@ -23,6 +23,7 @@ import com.ctrip.sqllin.dsl.Database
 import com.ctrip.sqllin.dsl.DatabaseScope
 import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
+import com.ctrip.sqllin.dsl.sql.FtsTable
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.withName
 import com.ctrip.sqllin.dsl.sql.clause.*
@@ -725,6 +726,143 @@ class CommonBasicTest(private val path: DatabasePath) {
             assertEquals(listOf(1, 2), updatedBytes.getResults().map { it.testInt }.sorted())
             assertEquals(listOf(2), updatedInts.getResults().map { it.testInt })
         }
+    }
+
+    /**
+     * Covers FTS4 tables: their CREATE VIRTUAL TABLE statement, rowids SQLite assigns, MATCH over the whole table and
+     * over one column with terms, stems, prefixes, OR and phrases, a column that isn't indexed, snippet, offsets and
+     * matchinfo, UPDATE and DELETE, an observed query, and rebuilding the table under another name.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, ExperimentalDSLDatabaseAPI::class)
+    fun testFts4() = Database(getFtsDBConfig()).databaseAutoClose { database ->
+        runTest {
+            assertEquals(
+                "CREATE VIRTUAL TABLE articles USING fts4(title,body,note,tokenize=porter,prefix=\"2\",notindexed=note)",
+                ArticleTable.createSQL,
+            )
+            database {
+                ArticleTable INSERT listOf(
+                    Article(rowid = null, title = "Kotlin Coroutines", body = "Running suspending functions concurrently", note = "draft"),
+                    Article(rowid = null, title = "SQLite Full-Text Search", body = "Indexes documents for searching", note = "kotlin"),
+                    Article(rowid = null, title = "Kotlin Multiplatform", body = "Sharing code between platforms", note = null),
+                )
+            }
+            fun matches(block: ArticleTable.() -> SelectCondition): List<Long?> {
+                lateinit var statement: SelectStatement<Article>
+                database {
+                    statement = ArticleTable SELECT WHERE(ArticleTable.block())
+                }
+                return statement.getResults().map { it.rowid }
+            }
+            // "kotlin" is only in a column that isn't indexed of article 2
+            assertEquals(listOf(1L, 3L), matches { this MATCH "kotlin" })
+            assertEquals(listOf(1L), matches { this MATCH "run" })
+            assertEquals(listOf(1L), matches { this MATCH "corout*" })
+            assertEquals(listOf(1L, 2L), matches { this MATCH "coroutines OR search" })
+            assertEquals(listOf(3L), matches { this MATCH "\"kotlin multiplatform\"" })
+            assertEquals(listOf(3L), matches { this MATCH "body:sharing" })
+            assertEquals(emptyList(), matches { this MATCH "draft" })
+            assertEquals(listOf(3L), matches { body MATCH "platform" })
+            assertEquals(emptyList(), matches { title MATCH "code" })
+            assertFailsWith<IllegalArgumentException> { BookTable.name MATCH "kotlin" }
+
+            lateinit var all: SelectStatement<Article>
+            lateinit var snippets: SelectStatement<ArticleMatch>
+            lateinit var bodySnippets: SelectStatement<ArticleMatch>
+            lateinit var offsets: SelectStatement<ArticleMatch>
+            lateinit var matchInfo: SelectStatement<ArticleMatchInfo>
+            database {
+                ArticleTable { table ->
+                    all = table SELECT X
+                    snippets = table SELECT listOf(table.snippet() AS ArticleMatch::excerpt) WHERE (table MATCH "search")
+                    bodySnippets = table SELECT listOf(table.snippet("[", "]", column = 1) AS ArticleMatch::excerpt) WHERE (table MATCH "run")
+                    offsets = table SELECT listOf(table.offsets() AS ArticleMatch::excerpt) WHERE (table MATCH "coroutines")
+                    matchInfo = table SELECT listOf(table.matchinfo() AS ArticleMatchInfo::info) WHERE (table MATCH "kotlin")
+                }
+            }
+            assertEquals("draft", all.getResults().first().note)
+            assertEquals(listOf(ArticleMatch("SQLite Full-Text Search", "SQLite Full-Text <b>Search</b>")), snippets.getResults())
+            assertEquals(listOf(ArticleMatch("Kotlin Coroutines", "[Running] suspending functions concurrently")), bodySnippets.getResults())
+            // Column 0, term 0 of the query, at byte 7, 10 bytes long
+            assertEquals(listOf(ArticleMatch("Kotlin Coroutines", "0 0 7 10")), offsets.getResults())
+            // "pcx": 1 phrase, 3 columns, and 3 numbers for each of them, of 4 bytes each
+            assertEquals(listOf(44, 44), matchInfo.getResults().map { it.info.size })
+
+            database {
+                ArticleTable { table ->
+                    table UPDATE SET { body = "Structured concurrency" } WHERE (rowid EQ 1L)
+                    table DELETE WHERE (table MATCH "multiplatform")
+                }
+            }
+            assertEquals(listOf(1L), matches { this MATCH "structured" })
+            assertEquals(emptyList(), matches { this MATCH "running" })
+            assertEquals(listOf(1L), matches { this MATCH "kotlin" })
+
+            // A virtual table has no triggers, but its observed queries see SQLlin's statements that write to it
+            val kotlinArticles = Channel<List<Article>>(Channel.UNLIMITED)
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) { ArticleTable SELECT WHERE(ArticleTable MATCH "kotlin") }
+                    .collect { kotlinArticles.send(it) }
+            }
+            assertEquals(listOf(1L), kotlinArticles.receive().map { it.rowid })
+            database { ArticleTable INSERT Article(rowid = null, title = "Kotlin Flows", body = "Cold streams", note = null) }
+            assertEquals(listOf("Kotlin Coroutines", "Kotlin Flows"), kotlinArticles.receive().map { it.title })
+            database { BookTable INSERT Book(name = "Kotlin in Action", author = "Dmitry Jemerov", price = 40.0, pages = 360) }
+            runCurrent()
+            assertEquals(true, kotlinArticles.tryReceive().isFailure)
+
+            // Rebuilt under another name, with its rowids, and renamed back, it is still watched. The rebuild itself
+            // leaves the results as they were, so it emits nothing.
+            val newArticles = ArticleTable.withName("articles_new")
+            assertEquals(true, newArticles is FtsTable<*>)
+            assertEquals(ArticleTable.createSQL.replace(" articles ", " articles_new "), newArticles.createSQL)
+            database {
+                CREATE(newArticles)
+                newArticles INSERT (ArticleTable SELECT X)
+                DROP(ArticleTable)
+                "articles_new" ALTER_RENAME_TABLE_TO ArticleTable
+            }
+            database { ArticleTable DELETE WHERE (ArticleTable MATCH "flows") }
+            assertEquals(listOf(1L), kotlinArticles.receive().map { it.rowid })
+        }
+    }
+
+    /**
+     * Covers FTS3 tables: a tokenizer with an argument, which here removes diacritics, and a rowid named docid that the
+     * caller supplies, through INSERT, INSERT_OR_REPLACE, UPDATE and DELETE.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testFts3() = Database(getFtsDBConfig()).databaseAutoClose { database ->
+        assertEquals("CREATE VIRTUAL TABLE notes USING fts3(text,tokenize=unicode61 \"remove_diacritics=1\")", NoteTable.createSQL)
+        fun matches(block: NoteTable.() -> SelectCondition): List<Note> {
+            lateinit var statement: SelectStatement<Note>
+            database {
+                statement = NoteTable SELECT WHERE(NoteTable.block())
+            }
+            return statement.getResults()
+        }
+        database {
+            NoteTable INSERT listOf(Note(docid = 5, text = "Crème brûlée"), Note(docid = 9, text = "Café au lait"))
+        }
+        assertEquals(listOf(Note(docid = 5, text = "Crème brûlée")), matches { this MATCH "creme" })
+        assertEquals(listOf(9L), matches { text MATCH "cafe" }.map { it.docid })
+
+        database {
+            NoteTable { table ->
+                table INSERT_OR_REPLACE Note(docid = 5, text = "Tarte Tatin")
+                table UPDATE SET { text = "Crêpe" } WHERE (docid EQ 9L)
+            }
+        }
+        assertEquals(listOf(5L), matches { this MATCH "tatin" }.map { it.docid })
+        assertEquals(emptyList(), matches { this MATCH "creme" })
+        assertEquals(listOf(9L), matches { this MATCH "crepe" }.map { it.docid })
+
+        database { NoteTable DELETE WHERE (NoteTable MATCH "tatin") }
+        lateinit var all: SelectStatement<Note>
+        database {
+            all = NoteTable SELECT X
+        }
+        assertEquals(listOf(Note(docid = 9, text = "Crêpe")), all.getResults())
     }
 
     @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
@@ -3872,6 +4010,19 @@ class CommonBasicTest(private val path: DatabasePath) {
                 CREATE(BookTable)
                 CREATE(UserAccountTable)
                 CREATE(DefaultValuesTestTable)
+            }
+        )
+
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    private fun getFtsDBConfig(): DSLDBConfiguration =
+        DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(ArticleTable)
+                CREATE(NoteTable)
+                CREATE(BookTable)
             }
         )
 

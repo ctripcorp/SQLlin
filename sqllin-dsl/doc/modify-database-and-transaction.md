@@ -257,6 +257,8 @@ rebuilt one.
 The table `withName` returns has the columns, constraints and row type of the original, but no column properties, as
 those name the original table. It is meant for statements on the table as a whole: `CREATE`, `INSERT`, `DROP` and
 `ALTER_RENAME_TABLE_TO`.
+For an [FTS table](advanced-query.md#full-text-search), it is an FTS table with the same
+options, so an FTS table is rebuilt the same way, to change its columns or options.
 
 The rows are converted by the `SELECT`, with a projection or with result columns, as described in
 [Advanced Query](advanced-query.md). Functions to convert a value's type, or to replace a `NULL`, aren't available yet.

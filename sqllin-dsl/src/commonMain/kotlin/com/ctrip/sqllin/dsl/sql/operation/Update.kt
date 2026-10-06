@@ -59,6 +59,6 @@ internal object Update : Operation {
             append(" SET ")
             append(clause.finalize())
         }
-        return UpdateStatementWithoutWhereClause(sql, container, connection, clause.parameters)
+        return UpdateStatementWithoutWhereClause(sql, container, connection, clause.parameters, table.tableName)
     }
 }

@@ -50,7 +50,7 @@ internal object Delete : Operation {
             buildBaseDeleteStatement(table)
             append(whereClause.clauseStr)
         }
-        return UpdateDeleteStatement(sql, connection, whereClause.selectCondition.parameters)
+        return UpdateDeleteStatement(sql, connection, whereClause.selectCondition.parameters, table.tableName)
     }
 
     /**
@@ -66,7 +66,7 @@ internal object Delete : Operation {
         val sql = buildString {
             buildBaseDeleteStatement(table)
         }
-        return UpdateDeleteStatement(sql, connection, null)
+        return UpdateDeleteStatement(sql, connection, null, table.tableName)
     }
 
     private fun StringBuilder.buildBaseDeleteStatement(table: Table<*>) {

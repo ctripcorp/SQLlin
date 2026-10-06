@@ -3,7 +3,6 @@
 ## Medium Priority
 
 * Support WASM platform DSL
-* Support CREATE VIRTUAL TABLE DSL
 * Support CREATE TRIGGER DSL
 * Support JOIN sub-query DSL
 * Support more functions, such as `coalesce` and `ifnull`, as well as `CAST` and literal values in expressions, e.g. to convert data while copying it to a rebuilt table with `INSERT INTO ... SELECT`
@@ -20,6 +19,7 @@
 
 ## Supported
 
+* Support CREATE VIRTUAL TABLE for FTS4 and FTS3 full-text search (2.5.0 ✅)
 * Support CREATE VIEW (2.5.0 ✅)
 * Support observable queries that return a `Flow` of their results (2.5.0 ✅)
 * Support compound SELECTs: UNION, UNION ALL, INTERSECT and EXCEPT (2.5.0 ✅)

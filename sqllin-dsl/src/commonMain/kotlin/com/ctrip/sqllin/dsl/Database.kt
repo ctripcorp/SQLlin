@@ -84,10 +84,11 @@ public class Database internal constructor(
      */
     private fun execute(databaseScope: DatabaseScope) {
         val changes = databaseScope.changes
+        val writtenTables = databaseScope.writtenTables
         try {
             databaseScope.executeAllStatements()
         } finally {
-            invalidationTracker.refresh(changes)
+            invalidationTracker.refresh(changes, writtenTables)
         }
     }
 

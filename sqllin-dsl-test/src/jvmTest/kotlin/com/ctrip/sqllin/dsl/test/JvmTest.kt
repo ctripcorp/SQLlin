@@ -56,6 +56,12 @@ class JvmTest {
     fun testUnsignedValues() = commonTest.testUnsignedValues()
 
     @Test
+    fun testFts4() = commonTest.testFts4()
+
+    @Test
+    fun testFts3() = commonTest.testFts3()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

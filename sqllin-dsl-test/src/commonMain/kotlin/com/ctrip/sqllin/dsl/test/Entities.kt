@@ -22,6 +22,9 @@ import com.ctrip.sqllin.dsl.annotation.CompositeUnique
 import com.ctrip.sqllin.dsl.annotation.DBRow
 import com.ctrip.sqllin.dsl.annotation.DBView
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
+import com.ctrip.sqllin.dsl.annotation.Fts3
+import com.ctrip.sqllin.dsl.annotation.Fts4
+import com.ctrip.sqllin.dsl.annotation.FtsTokenizer
 import com.ctrip.sqllin.dsl.annotation.PrimaryKey
 import com.ctrip.sqllin.dsl.annotation.Unique
 import kotlinx.serialization.SerialName
@@ -666,3 +669,34 @@ data class AdultPerson(val name: String, val age: Age)
  */
 @Serializable
 data class UIntTotals(val total: Long?, val highest: UInt?)
+
+/**
+ * An FTS4 table: the porter tokenizer, so that "running" matches "run", prefixes of two letters indexed, and a column
+ * it stores but doesn't index. Its rowid is assigned by SQLite.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow("articles")
+@Fts4(tokenizer = FtsTokenizer.PORTER, prefix = [2], notIndexed = ["note"])
+@Serializable
+data class Article(@PrimaryKey val rowid: Long?, val title: String, val body: String, val note: String?)
+
+/**
+ * A match of [Article] with a text that describes it: a snippet, or offsets.
+ */
+@Serializable
+data class ArticleMatch(val title: String, val excerpt: String)
+
+/**
+ * A match of [Article] with its matchinfo.
+ */
+@Serializable
+class ArticleMatchInfo(val title: String, val info: ByteArray)
+
+/**
+ * An FTS3 table whose tokenizer takes an argument, with its rowid named docid and supplied by the caller.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow("notes")
+@Fts3(tokenizer = FtsTokenizer.UNICODE61, tokenizerArgs = ["remove_diacritics=1"])
+@Serializable
+data class Note(@PrimaryKey val docid: Long, val text: String)

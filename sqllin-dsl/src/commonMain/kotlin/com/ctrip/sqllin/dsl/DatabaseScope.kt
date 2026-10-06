@@ -183,6 +183,12 @@ public class DatabaseScope internal constructor(
     internal val changes: Changes
         get() = executiveEngine.changes
 
+    /**
+     * The tables the statements of this scope write rows to.
+     */
+    internal val writtenTables: Set<String>
+        get() = executiveEngine.writtenTables
+
     // ========== INSERT Operations ==========
 
     /**
