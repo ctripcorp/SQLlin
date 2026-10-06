@@ -16,8 +16,8 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.sql.Relation
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
-import com.ctrip.sqllin.dsl.sql.Table
 
 /**
  * LEFT OUTER JOIN clause - returns all rows from the left table and matching rows from the right.
@@ -31,7 +31,7 @@ import com.ctrip.sqllin.dsl.sql.Table
  * @author Yuang Qiao
  */
 internal class LeftOuterJoinClause<R>(
-    vararg tables: Table<*>
+    vararg tables: Relation<*>
 ) : JoinClause<R>(*tables) {
 
     override val clauseName: String = " LEFT OUTER JOIN "
@@ -48,7 +48,7 @@ internal class LeftOuterJoinClause<R>(
  */
 @Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
-public fun <R> LEFT_OUTER_JOIN(vararg tables: Table<*>): JoinClause<R> = LeftOuterJoinClause(*tables)
+public fun <R> LEFT_OUTER_JOIN(vararg tables: Relation<*>): JoinClause<R> = LeftOuterJoinClause(*tables)
 
 /**
  * NATURAL LEFT OUTER JOIN - automatically joins on matching column names.
@@ -62,7 +62,7 @@ public fun <R> LEFT_OUTER_JOIN(vararg tables: Table<*>): JoinClause<R> = LeftOut
  * @author Yuang Qiao
  */
 internal class NaturalLeftOuterJoinClause<R>(
-    vararg tables: Table<*>
+    vararg tables: Relation<*>
 ) : NaturalJoinClause<R>(*tables) {
 
     override val clauseName: String = " NATURAL LEFT OUTER JOIN "
@@ -78,4 +78,4 @@ internal class NaturalLeftOuterJoinClause<R>(
  */
 @Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
-public fun <R> NATURAL_LEFT_OUTER_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NaturalLeftOuterJoinClause(*tables)
+public fun <R> NATURAL_LEFT_OUTER_JOIN(vararg tables: Relation<*>): NaturalJoinClause<R> = NaturalLeftOuterJoinClause(*tables)

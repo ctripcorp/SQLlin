@@ -17,8 +17,13 @@
 package com.ctrip.sqllin.dsl.sql.operation
 
 import com.ctrip.sqllin.driver.DatabaseConnection
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.View
 import com.ctrip.sqllin.dsl.sql.clause.ClauseElement
+import com.ctrip.sqllin.dsl.sql.compiler.appendDBColumnName
+import com.ctrip.sqllin.dsl.sql.compiler.inlineParameters
+import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.SingleStatement
 import com.ctrip.sqllin.dsl.sql.statement.TableStructureStatement
 
@@ -38,6 +43,29 @@ internal object Create : Operation {
 
     private const val INDEX = "INDEX "
     private const val UNIQUE_INDEX = "UNIQUE INDEX "
+
+    /**
+     * Builds a CREATE VIEW statement for [view], defined by [select].
+     *
+     * Generates SQL in the format: `CREATE VIEW view_name(column1, column2, ...) AS SELECT ...`, naming the view's
+     * columns after the properties of its row type. SQLite doesn't let a view take parameters, so the values of
+     * [select] are written into the SQL as literals.
+     *
+     * @return A [TableStructureStatement] representing the CREATE VIEW operation
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun <T> createView(view: View<T>, select: SelectStatement<T>, connection: DatabaseConnection): SingleStatement {
+        val sql = buildString {
+            append(sqlStr)
+            append("VIEW ")
+            append(view.tableName)
+            append('(')
+            appendDBColumnName(view.kSerializer().descriptor)
+            append(") AS ")
+            append(inlineParameters(select.sqlStr, select.parameters))
+        }
+        return TableStructureStatement(sql, connection)
+    }
 
     /**
      * Builds a CREATE TABLE statement for the given table definition.

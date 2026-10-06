@@ -35,6 +35,9 @@ import kotlinx.coroutines.flow.update
  * into [versions], which observed queries collect. Counts, rather than a flag that is read and then cleared, can't lose
  * a change made between the two.
  *
+ * A view can't have such triggers, so an observed view stands for the tables it reads, which SQLite itself lists: they
+ * are the ones the program of `EXPLAIN SELECT * FROM view` opens, through views over views and joins alike.
+ *
  * TEMP tables and triggers belong to the connection, so changes made through another connection, or by another
  * process, aren't seen. A table stays tracked until the connection closes.
  *
@@ -52,18 +55,54 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
     val versions: StateFlow<Map<String, Long>> = _versions
 
     /**
-     * Starts tracking [tables], creating their triggers, unless they are tracked already.
+     * Starts tracking the tables that the tables and views named [relations] read, creating their triggers, unless they
+     * are tracked already.
+     *
+     * @return The tables tracked for [relations]: a table stands for itself, and a view for the tables it reads
      */
-    fun track(tables: Set<String>) {
+    fun track(relations: Set<String>): Set<String> {
+        val tables = relations.flatMapTo(LinkedHashSet()) { tablesOf(it) }
         val newTables = tables - trackedTables.value
         if (newTables.isEmpty())
-            return
+            return tables
         connection.execSQL(CREATE_LOG)
         for (table in newTables) {
             connection.execSQL(INSERT_LOG_ROW, arrayOf(table))
             createTriggers(table)
         }
         trackedTables.update { it + newTables }
+        return tables
+    }
+
+    /**
+     * Returns the tables that the table or view named [relation] reads: the table itself, or the tables of the view.
+     */
+    private fun tablesOf(relation: String): Set<String> {
+        val type = connection.withQuery("SELECT type FROM sqlite_master WHERE name = ?", arrayOf(relation)) {
+            if (it.next()) it.getString(0) else null
+        }
+        if (type != "view")
+            return setOf(relation)
+        // An OpenRead's P2 is the root page of the table or index it opens, and P3 the database, 0 for main
+        val rootPages = connection.withQuery("EXPLAIN SELECT * FROM ${identifier(relation)}") { cursor ->
+            val opcode = cursor.getColumnIndex("opcode")
+            val rootPage = cursor.getColumnIndex("p2")
+            val database = cursor.getColumnIndex("p3")
+            buildSet {
+                cursor.forEachRow {
+                    if (cursor.getString(opcode) == "OpenRead" && cursor.getLong(database) == 0L)
+                        add(cursor.getLong(rootPage))
+                }
+            }
+        }
+        if (rootPages.isEmpty())
+            return emptySet()
+        // An index's tbl_name is its table
+        return connection.withQuery("SELECT DISTINCT tbl_name FROM sqlite_master WHERE rootpage IN (${rootPages.joinToString()})") { cursor ->
+            buildSet {
+                cursor.forEachRow { add(cursor.getString(0)!!) }
+            }
+        }
     }
 
     /**

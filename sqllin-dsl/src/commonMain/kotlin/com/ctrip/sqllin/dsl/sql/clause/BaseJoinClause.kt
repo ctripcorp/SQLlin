@@ -16,8 +16,8 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.sql.Relation
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
-import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.statement.JoinSelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.JoinStatementWithoutCondition
 
@@ -32,7 +32,7 @@ import com.ctrip.sqllin.dsl.sql.statement.JoinStatementWithoutCondition
  *
  * @author Yuang Qiao
  */
-public sealed class BaseJoinClause<R>(private vararg val joinedTables: Table<*>) : SelectClause<R> {
+public sealed class BaseJoinClause<R>(private vararg val joinedTables: Relation<*>) : SelectClause<R> {
 
     internal abstract val clauseName: String
 
@@ -60,7 +60,7 @@ public sealed class BaseJoinClause<R>(private vararg val joinedTables: Table<*>)
  *
  * @param R The result entity type after JOIN
  */
-public sealed class NaturalJoinClause<R>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables)
+public sealed class NaturalJoinClause<R>(vararg tables: Relation<*>) : BaseJoinClause<R>(*tables)
 
 /**
  * JOIN clause that requires an ON or USING condition.
@@ -69,7 +69,7 @@ public sealed class NaturalJoinClause<R>(vararg tables: Table<*>) : BaseJoinClau
  *
  * @param R The result entity type after JOIN
  */
-public sealed class JoinClause<R>(vararg tables: Table<*>) : BaseJoinClause<R>(*tables)
+public sealed class JoinClause<R>(vararg tables: Relation<*>) : BaseJoinClause<R>(*tables)
 
 @Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker

@@ -18,7 +18,7 @@ package com.ctrip.sqllin.dsl.sql.operation
 
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
-import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.Relation
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.compiler.appendDBColumnName
 import com.ctrip.sqllin.dsl.sql.statement.*
@@ -47,7 +47,7 @@ internal object Select : Operation {
      * @return Statement that can be followed by GROUP BY, ORDER BY, or LIMIT
      */
     fun <R> select(
-        table: Table<*>,
+        table: Relation<*>,
         clause: WhereClause<R>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<R>,
@@ -64,7 +64,7 @@ internal object Select : Operation {
      * @return Statement that can be followed by LIMIT
      */
     fun <R> select(
-        table: Table<*>,
+        table: Relation<*>,
         clause: OrderByClause<R>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<R>,
@@ -81,7 +81,7 @@ internal object Select : Operation {
      * @return Statement that can be followed by OFFSET
      */
     fun <R> select(
-        table: Table<*>,
+        table: Relation<*>,
         clause: LimitClause<R>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<R>,
@@ -98,7 +98,7 @@ internal object Select : Operation {
      * @return Statement that can be followed by HAVING or ORDER BY
      */
     fun <R> select(
-        table: Table<*>,
+        table: Relation<*>,
         clause: GroupByClause<R>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<R>,
@@ -117,7 +117,7 @@ internal object Select : Operation {
      * @return Statement that can be followed by WHERE, GROUP BY, ORDER BY, or LIMIT
      */
     fun <R> select(
-        table: Table<*>,
+        table: Relation<*>,
         clause: NaturalJoinClause<R>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<R>,
@@ -134,7 +134,7 @@ internal object Select : Operation {
      * @return Incomplete JOIN statement requiring condition
      */
     fun <R> select(
-        table: Table<*>,
+        table: Relation<*>,
         clause: JoinClause<R>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<R>,
@@ -163,7 +163,7 @@ internal object Select : Operation {
      * @throws IllegalArgumentException if the projection type doesn't fit the table
      */
     @OptIn(ExperimentalSerializationApi::class)
-    private fun checkProjection(table: Table<*>, deserializer: DeserializationStrategy<*>) {
+    private fun checkProjection(table: Relation<*>, deserializer: DeserializationStrategy<*>) {
         val columns = table.kSerializer().descriptor
         val projection = deserializer.descriptor
         if (projection == columns)
@@ -177,7 +177,7 @@ internal object Select : Operation {
      * [checkProjection].
      */
     @OptIn(ExperimentalSerializationApi::class)
-    private fun checkColumnProperty(table: Table<*>, columns: SerialDescriptor, projection: SerialDescriptor, index: Int) {
+    private fun checkColumnProperty(table: Relation<*>, columns: SerialDescriptor, projection: SerialDescriptor, index: Int) {
         val projectionName = projection.serialName
         val name = projection.getElementName(index)
         val columnIndex = columns.getElementIndex(name)
@@ -206,7 +206,7 @@ internal object Select : Operation {
      * @return Statement that can be followed by WHERE, GROUP BY, ORDER BY, or LIMIT
      */
     fun <R> select(
-        table: Table<*>,
+        table: Relation<*>,
         resultColumns: Iterable<ResultColumn<R>>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<R>,
@@ -249,7 +249,7 @@ internal object Select : Operation {
      */
     @OptIn(ExperimentalSerializationApi::class)
     private fun <R> checkResultColumns(
-        table: Table<*>,
+        table: Relation<*>,
         resultColumns: Iterable<ResultColumn<R>>,
         deserializer: DeserializationStrategy<R>,
     ): Map<String, ClauseElement<*>> {
@@ -293,7 +293,7 @@ internal object Select : Operation {
      */
     @OptIn(ExperimentalSerializationApi::class)
     private fun ungroupedError(
-        table: Table<*>,
+        table: Relation<*>,
         expressions: Map<String, ClauseElement<*>>,
         deserializer: DeserializationStrategy<*>,
     ): String? {
@@ -311,7 +311,7 @@ internal object Select : Operation {
     }
 
     private fun <T> buildSQL(
-        table: Table<*>,
+        table: Relation<*>,
         clause: SelectClause<T>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<T>,
@@ -333,7 +333,7 @@ internal object Select : Operation {
      * @return Final SELECT statement ready for execution
      */
     fun <R> select(
-        table: Table<*>,
+        table: Relation<*>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,

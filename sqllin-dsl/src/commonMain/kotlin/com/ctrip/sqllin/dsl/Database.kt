@@ -123,7 +123,7 @@ public class Database internal constructor(
      * ```
      *
      * [query] runs again to build the SELECT each time, and should only build it. The tables it reads are watched
-     * whatever the SELECT is: a join or a compound SELECT watches all of its tables. Changes are counted by SQLite
+     * whatever the SELECT is: a join or a compound SELECT watches all of its tables, and a view the tables it reads. Changes are counted by SQLite
      * itself, so rows that a foreign key action changes count, a rolled back transaction doesn't, and neither does an
      * UPDATE or DELETE that matches no rows. Several changes in a row may lead to a single query.
      *
@@ -149,8 +149,8 @@ public class Database internal constructor(
                 val statement = databaseScope.query()
                 executiveMutex.withLock {
                     // Tracked before the SELECT runs, so that no change after it is missed
-                    invalidationTracker.track(statement.tables)
-                    queriedVersions = statement.tables.associateWith { invalidationTracker.versions.value[it] ?: 0L }
+                    val tables = invalidationTracker.track(statement.tables)
+                    queriedVersions = tables.associateWith { invalidationTracker.versions.value[it] ?: 0L }
                     execute(databaseScope)
                 }
                 emit(statement.getResults())

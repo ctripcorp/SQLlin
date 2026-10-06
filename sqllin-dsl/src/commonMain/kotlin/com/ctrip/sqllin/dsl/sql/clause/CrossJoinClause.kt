@@ -16,8 +16,8 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.sql.Relation
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
-import com.ctrip.sqllin.dsl.sql.Table
 
 /**
  * CROSS JOIN clause - returns the Cartesian product of two tables.
@@ -32,7 +32,7 @@ import com.ctrip.sqllin.dsl.sql.Table
  *
  * @author Yuang Qiao
  */
-internal class CrossJoinClause<R>(vararg tables: Table<*>) : NaturalJoinClause<R>(*tables) {
+internal class CrossJoinClause<R>(vararg tables: Relation<*>) : NaturalJoinClause<R>(*tables) {
     override val clauseName: String = " CROSS JOIN "
 }
 
@@ -49,4 +49,4 @@ internal class CrossJoinClause<R>(vararg tables: Table<*>) : NaturalJoinClause<R
  */
 @Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
-public fun <R> CROSS_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = CrossJoinClause(*tables)
+public fun <R> CROSS_JOIN(vararg tables: Relation<*>): NaturalJoinClause<R> = CrossJoinClause(*tables)

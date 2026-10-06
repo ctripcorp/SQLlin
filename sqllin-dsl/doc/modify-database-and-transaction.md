@@ -7,7 +7,7 @@ we start to learn how to write SQL statements with SQLlin.
 
 ## Table Structure Operations
 
-SQLlin provides type-safe DSL operations for managing table structures: CREATE, DROP, and ALTER.
+SQLlin provides type-safe DSL operations for managing table structures: CREATE, DROP, and ALTER, and for views.
 
 ### CREATE - Creating Tables
 
@@ -61,6 +61,46 @@ fun sample() {
 ```
 
 **⚠️ WARNING**: DROP is a destructive operation. Once executed, the table and all its data are permanently deleted. Use with caution.
+
+### CREATE VIEW - Creating Views
+
+A view is a stored _SELECT_ that queries read like a table. Declare its rows with `@DBView`, as you declare a table's
+with `@DBRow`, and _sqllin-processor_ generates a view object named after the class with a `View` suffix. Views are
+experimental, so opt in with `@OptIn(ExperimentalDSLDatabaseAPI::class)`:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBView("adults")
+@Serializable
+data class Adult(
+    val name: String,
+    val age: Int,
+)
+
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // CREATE VIEW adults(name,age) AS SELECT name,age FROM person WHERE age>=18
+        CREATE_VIEW(AdultView) AS (PersonTable SELECT WHERE<Adult>(PersonTable.age GTE 18))
+    }
+    lateinit var olderAdults: SelectStatement<Adult>
+    database {
+        AdultView { view ->
+            olderAdults = view SELECT WHERE(age GT 60)
+        }
+    }
+}
+```
+
+The _SELECT_ after `AS` has to read rows of the view's type, which is checked at compile time. It can be any _SELECT_:
+with a projection, result columns, a join or a compound query. SQLite doesn't let a view take parameters, so SQLlin
+writes the values of the _SELECT_ into the view's SQL.
+
+A view is queried like a table, with the properties of its view object as columns, in joins and compound queries too,
+and `Database#observe` watches the tables it reads. It can't be written to: its object isn't a `Table`, so `INSERT`,
+`UPDATE`, `DELETE`, `CREATE` and `ALTER` don't compile on it, and its properties take no constraint annotations.
+`DROP(AdultView)` drops it. A view's definition is part of the schema: to change it, drop it and create it again in an
+`upgrade`.
 
 ### ALTER - Modifying Table Structure
 

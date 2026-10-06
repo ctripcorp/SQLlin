@@ -59,6 +59,42 @@ fun sample() {
 
 **⚠️ 警告**：DROP 是一个破坏性操作。执行后，表及其所有数据将被永久删除。请谨慎使用。
 
+### CREATE VIEW - 创建视图
+
+视图是保存在数据库里的一条 _SELECT_，查询时可以像表一样读取它。用 `@DBView` 声明视图的行，就像用 `@DBRow` 声明表的行一样，
+_sqllin-processor_ 会生成一个以类名加 `View` 后缀命名的视图对象。视图是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBView("adults")
+@Serializable
+data class Adult(
+    val name: String,
+    val age: Int,
+)
+
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // CREATE VIEW adults(name,age) AS SELECT name,age FROM person WHERE age>=18
+        CREATE_VIEW(AdultView) AS (PersonTable SELECT WHERE<Adult>(PersonTable.age GTE 18))
+    }
+    lateinit var olderAdults: SelectStatement<Adult>
+    database {
+        AdultView { view ->
+            olderAdults = view SELECT WHERE(age GT 60)
+        }
+    }
+}
+```
+
+`AS` 后面的 _SELECT_ 读出的必须是视图的行类型，这一点在编译期检查。它可以是任何 _SELECT_：投影、结果列、Join 或组合查询都可以。
+SQLite 不允许视图带参数，所以 SQLlin 会把 _SELECT_ 中的值直接写进视图的 SQL。
+
+查询视图的方式和查询表一样，视图对象的属性就是它的列，也可以用在 Join 和组合查询中，`Database#observe` 会观察它读取的表。
+视图不能写入：它的对象不是 `Table`，所以对它使用 `INSERT`、`UPDATE`、`DELETE`、`CREATE` 和 `ALTER` 都无法编译，它的属性也不能
+加约束注解。`DROP(AdultView)` 会删除视图。视图的定义属于数据库结构的一部分：要修改它，就在 `upgrade` 中先删除、再重新创建。
+
 ### ALTER - 修改表结构
 
 SQLlin 提供了多种 ALTER 操作来修改现有的表结构：

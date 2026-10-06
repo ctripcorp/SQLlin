@@ -71,6 +71,14 @@ class ClauseProcessor(
      */
     private companion object {
         const val ANNOTATION_DATABASE_ROW_NAME = "com.ctrip.sqllin.dsl.annotation.DBRow"
+        const val ANNOTATION_DATABASE_VIEW_NAME = "com.ctrip.sqllin.dsl.annotation.DBView"
+        const val ANNOTATION_PACKAGE = "com.ctrip.sqllin.dsl.annotation"
+
+        /** The annotations that declare constraints, which only a table's columns can have. */
+        val CONSTRAINT_ANNOTATIONS = listOf(
+            "PrimaryKey", "CompositePrimaryKey", "CollateNoCase", "Unique", "CompositeUnique",
+            "ForeignKeyGroup", "References", "ForeignKey", "Default",
+        ).map { "$ANNOTATION_PACKAGE.$it" }.toSet()
         const val ANNOTATION_SERIALIZABLE = "kotlinx.serialization.Serializable"
         const val ANNOTATION_TRANSIENT = "kotlinx.serialization.Transient"
     }
@@ -218,8 +226,118 @@ class ClauseProcessor(
                 writer.write("}\n")
             }
         }
-        return invalidateDBRowClasses
+        return invalidateDBRowClasses + processViews(resolver)
     }
+
+    /**
+     * Processes all [@DBView][com.ctrip.sqllin.dsl.annotation.DBView] annotated classes and generates their view
+     * objects: like a table object, with a column property per serialized property, but without SET properties,
+     * constraints or a CREATE statement, as a view is created from a SELECT and can't be written to.
+     *
+     * @return The symbols that couldn't be processed yet
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun processViews(resolver: Resolver): List<KSAnnotated> {
+        val allViewClasses = resolver.getSymbolsWithAnnotation(ANNOTATION_DATABASE_VIEW_NAME)
+        val invalidViewClasses = allViewClasses.filter { !it.validate(enableNewFeatures = false) }.toList()
+        val serializableType = resolver.getClassDeclarationByName(ANNOTATION_SERIALIZABLE)!!.asStarProjectedType()
+        val transientName = resolver.getClassDeclarationByName(ANNOTATION_TRANSIENT)!!.asStarProjectedType()
+
+        for (classDeclaration in allViewClasses.filter { it.validate(enableNewFeatures = false) } as Sequence<KSClassDeclaration>) {
+            val className = classDeclaration.simpleName.asString()
+            if (classDeclaration.annotations.all { !it.annotationType.resolve().isAssignableFrom(serializableType) }) {
+                environment.logger.error("The class annotated with '@DBView' must be annotated with '@Serializable', but '$className' isn't.", classDeclaration)
+                continue
+            }
+            if (classDeclaration.annotations.any { it.qualifiedName == ANNOTATION_DATABASE_ROW_NAME }) {
+                environment.logger.error("The class '$className' is annotated with both '@DBRow' and '@DBView'; it can only be a table or a view.", classDeclaration)
+                continue
+            }
+            val visibility = classDeclaration.getVisibility()
+            if (visibility != Visibility.PUBLIC && visibility != Visibility.INTERNAL) {
+                environment.logger.error(
+                    "The class annotated with '@DBView' must be 'public' or 'internal', but '$className' is '${visibility.name.lowercase()}'.",
+                    classDeclaration,
+                )
+                continue
+            }
+            val visibilityModifier = if (visibility == Visibility.INTERNAL) "internal " else ""
+
+            // The same properties as a table's: those the serializer writes, in its order
+            val propertyList = classDeclaration.getAllProperties().filter { property ->
+                property.hasBackingField &&
+                    !property.annotations.any { ksAnnotation -> ksAnnotation.annotationType.resolve().isAssignableFrom(transientName) }
+            }.toList()
+
+            var isValid = true
+            classDeclaration.annotations.filter { it.qualifiedName in CONSTRAINT_ANNOTATIONS }.forEach {
+                environment.logger.error("The view '$className' can't be annotated with '@${it.shortName.asString()}': a view has no constraints.", classDeclaration)
+                isValid = false
+            }
+            for (property in propertyList) {
+                val propertyName = property.simpleName.asString()
+                property.annotations.filter { it.qualifiedName in CONSTRAINT_ANNOTATIONS }.forEach {
+                    environment.logger.error(
+                        "The property '$propertyName' of view '$className' can't be annotated with '@${it.shortName.asString()}': a view's columns have no constraints.",
+                        property,
+                    )
+                    isValid = false
+                }
+                if (getClauseElementTypeStr(property) == null) {
+                    environment.logger.error(
+                        "The property '$propertyName' of '@DBView' class '$className' has the type '${property.type.resolve()}', which no column can hold. " +
+                            "Supported types are Byte, Short, Int, Long, Float, Double and their unsigned variants, Boolean, Char, String, ByteArray, enum classes, " +
+                            "and type aliases of these. To leave the property out of the view, annotate it with @kotlinx.serialization.Transient.",
+                        property,
+                    )
+                    isValid = false
+                }
+            }
+            if (!isValid)
+                continue
+
+            val packageName = classDeclaration.packageName.asString()
+            val objectName = "${className}View"
+            val viewName = classDeclaration.annotations.find { it.qualifiedName == ANNOTATION_DATABASE_VIEW_NAME }
+                ?.arguments?.firstOrNull()?.value?.takeIf { (it as? String)?.isNotBlank() == true } ?: className
+
+            val outputStream = environment.codeGenerator.createNewFile(
+                dependencies = classDeclaration.containingFile?.let { Dependencies(true, it) } ?: Dependencies(true),
+                packageName = packageName,
+                fileName = objectName,
+            )
+            OutputStreamWriter(outputStream).use { writer ->
+                writer.write("package $packageName\n\n")
+                writer.write("import com.ctrip.sqllin.dsl.annotation.ColumnNameDslMaker\n")
+                writer.write("import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI\n")
+                writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseBlob\n")
+                writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseBoolean\n")
+                writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseEnum\n")
+                writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseNumber\n")
+                writer.write("import com.ctrip.sqllin.dsl.sql.clause.ClauseString\n")
+                writer.write("import com.ctrip.sqllin.dsl.sql.View\n\n")
+                // As for table objects, the column properties carry @ColumnNameDslMaker for IntelliJ IDEA's DSL
+                // highlighting. View is experimental, and the view object opts in so that its users don't have to.
+                writer.write("@Suppress(\"DSL_MARKER_APPLIED_TO_WRONG_TARGET\")\n")
+                writer.write("@OptIn(ExperimentalDSLDatabaseAPI::class)\n")
+                writer.write("${visibilityModifier}object $objectName : View<$className>(\"$viewName\") {\n\n")
+                writer.write("    override fun kSerializer() = $className.serializer()\n\n")
+                writer.write("    inline operator fun <R> invoke(block: $objectName.(view: $objectName) -> R): R = this.block(this)\n\n")
+                propertyList.forEachIndexed { index, property ->
+                    val clauseElementTypeName = checkNotNull(getClauseElementTypeStr(property)) // Rejected above
+                    val isNotNull = property.type.resolve().nullability == Nullability.NOT_NULL
+                    writer.write("    @ColumnNameDslMaker\n")
+                    writer.write("    val ${property.simpleName.asString()}\n")
+                    writer.write("        get() = $clauseElementTypeName($className.serializer().descriptor.getElementName($index), this, ${!isNotNull})\n\n")
+                }
+                writer.write("}\n")
+            }
+        }
+        return invalidViewClasses
+    }
+
+    private val KSAnnotation.qualifiedName: String?
+        get() = annotationType.resolve().declaration.qualifiedName?.asString()
 
     /**
      * Maps a property's Kotlin type to the corresponding clause element type name.

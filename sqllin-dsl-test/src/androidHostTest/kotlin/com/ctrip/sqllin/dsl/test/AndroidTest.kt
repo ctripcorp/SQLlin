@@ -58,6 +58,9 @@ class AndroidTest {
     fun testObserveForeignKeyAction() = commonTest.testObserveForeignKeyAction()
 
     @Test
+    fun testView() = commonTest.testView()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

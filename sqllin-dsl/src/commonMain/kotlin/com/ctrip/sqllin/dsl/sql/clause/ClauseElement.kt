@@ -16,7 +16,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
-import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.Relation
 
 /**
  * Base class for elements used in SQL clauses.
@@ -59,7 +59,7 @@ import com.ctrip.sqllin.dsl.sql.Table
  */
 public sealed class ClauseElement<V : Any>(
     internal val valueName: String,
-    internal val table: Table<*>,
+    internal val table: Relation<*>,
     internal val isFunction: Boolean,
     internal val isNullable: Boolean,
     internal val isAggregate: Boolean,
@@ -70,7 +70,7 @@ public sealed class ClauseElement<V : Any>(
      * Creates the element of an aggregate function of this element that has values of the same type, as `max` and
      * `min` do.
      */
-    internal abstract fun toAggregate(valueName: String, table: Table<*>): ClauseElement<V>
+    internal abstract fun toAggregate(valueName: String, table: Relation<*>): ClauseElement<V>
 
     /**
      * Appends this element as SQL to [builder]: a column qualified by its table's name, so that it can be told apart

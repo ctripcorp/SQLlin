@@ -18,8 +18,8 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.sql.Relation
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
-import com.ctrip.sqllin.dsl.sql.Table
 
 /**
  * INNER JOIN clause - returns rows where there's a match in both tables.
@@ -32,7 +32,7 @@ import com.ctrip.sqllin.dsl.sql.Table
  * @author Yuang Qiao
  */
 internal class InnerJoinClause<R>(
-    vararg tables: Table<*>,
+    vararg tables: Relation<*>,
 ) : JoinClause<R>(*tables) {
 
     override val clauseName: String = " JOIN "
@@ -48,13 +48,13 @@ internal class InnerJoinClause<R>(
  * ```
  */
 @StatementDslMaker
-public fun <R> JOIN(vararg tables: Table<*>): JoinClause<R> = InnerJoinClause(*tables)
+public fun <R> JOIN(vararg tables: Relation<*>): JoinClause<R> = InnerJoinClause(*tables)
 
 /**
  * Alias for [JOIN] - creates an INNER JOIN clause.
  */
 @StatementDslMaker
-public inline fun <R> INNER_JOIN(vararg tables: Table<*>): JoinClause<R> = JOIN(*tables)
+public inline fun <R> INNER_JOIN(vararg tables: Relation<*>): JoinClause<R> = JOIN(*tables)
 
 /**
  * NATURAL INNER JOIN - automatically joins on columns with matching names.
@@ -67,7 +67,7 @@ public inline fun <R> INNER_JOIN(vararg tables: Table<*>): JoinClause<R> = JOIN(
  * @author Yuang Qiao
  */
 internal class NaturalInnerJoinClause<R>(
-    vararg tables: Table<*>,
+    vararg tables: Relation<*>,
 ) : NaturalJoinClause<R>(*tables) {
 
     override val clauseName: String = " NATURAL JOIN "
@@ -82,10 +82,10 @@ internal class NaturalInnerJoinClause<R>(
  * ```
  */
 @StatementDslMaker
-public fun <R> NATURAL_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NaturalInnerJoinClause(*tables)
+public fun <R> NATURAL_JOIN(vararg tables: Relation<*>): NaturalJoinClause<R> = NaturalInnerJoinClause(*tables)
 
 /**
  * Alias for [NATURAL_JOIN].
  */
 @StatementDslMaker
-public inline fun <R> NATURAL_INNER_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = NATURAL_JOIN(*tables)
+public inline fun <R> NATURAL_INNER_JOIN(vararg tables: Relation<*>): NaturalJoinClause<R> = NATURAL_JOIN(*tables)

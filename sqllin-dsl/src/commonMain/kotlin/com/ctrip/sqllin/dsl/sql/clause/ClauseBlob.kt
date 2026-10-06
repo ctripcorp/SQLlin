@@ -16,7 +16,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
-import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.Relation
 
 /**
  * Wrapper for BLOB (Binary Large Object) column/function references in SQL clauses.
@@ -44,7 +44,7 @@ import com.ctrip.sqllin.dsl.sql.Table
  */
 public class ClauseBlob internal constructor(
     valueName: String,
-    table: Table<*>,
+    table: Relation<*>,
     isFunction: Boolean,
     isNullable: Boolean,
     isAggregate: Boolean,
@@ -56,10 +56,10 @@ public class ClauseBlob internal constructor(
      *
      * @param isNullable Whether the column is nullable
      */
-    public constructor(valueName: String, table: Table<*>, isNullable: Boolean) :
+    public constructor(valueName: String, table: Relation<*>, isNullable: Boolean) :
         this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
 
-    override fun toAggregate(valueName: String, table: Table<*>): ClauseBlob =
+    override fun toAggregate(valueName: String, table: Relation<*>): ClauseBlob =
         ClauseBlob(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true)
 
     /**

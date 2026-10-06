@@ -611,6 +611,55 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    /**
+     * Covers views: `CREATE_VIEW` creates one from a SELECT of its row type, with the SELECT's values written into its
+     * SQL, as a view can't take parameters. A SELECT reads the view like a table, an observed query of it watches the
+     * tables it reads, and `DROP` drops it.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, ExperimentalDSLDatabaseAPI::class)
+    fun testView() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        runTest {
+            database {
+                PersonWithIdTable INSERT listOf(
+                    PersonWithId(id = null, name = "Ann", age = 30),
+                    PersonWithId(id = null, name = "Bob", age = 15),
+                    PersonWithId(id = null, name = "Cat?", age = 40),
+                    PersonWithId(id = null, name = "It's", age = 50),
+                )
+                // The literals of the SELECT go into the view: 18, 'Cat' and 'It''s'. The '?' in replace(name,'?','')
+                // is a string, not a parameter, and stays as it is.
+                PersonWithIdTable { table ->
+                    CREATE_VIEW(AdultPersonView) AS (
+                        table SELECT WHERE<AdultPerson>((age GTE 18) AND (replace(name, "?", "") NEQ "Cat") AND (name NEQ "It's"))
+                    )
+                }
+            }
+
+            lateinit var adults: SelectStatement<AdultPerson>
+            lateinit var olderThan25: SelectStatement<AdultPerson>
+            database {
+                adults = AdultPersonView SELECT X
+                AdultPersonView { view ->
+                    olderThan25 = view SELECT WHERE(age GT 25)
+                }
+            }
+            assertEquals(listOf(AdultPerson("Ann", 30)), adults.getResults())
+            assertEquals(listOf(AdultPerson("Ann", 30)), olderThan25.getResults())
+
+            // An observed query of the view watches the person table
+            val observed = Channel<List<AdultPerson>>(Channel.UNLIMITED)
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) { AdultPersonView SELECT X }.collect { observed.send(it) }
+            }
+            assertEquals(listOf(AdultPerson("Ann", 30)), observed.receive())
+            database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Dan", age = 20) }
+            assertEquals(listOf("Ann", "Dan"), observed.receive().map { it.name }.sorted())
+
+            database { DROP(AdultPersonView) }
+            assertEquals(true, database.selectFails { AdultPersonView SELECT X })
+        }
+    }
+
     @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
     fun testConcurrency() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         runTest {

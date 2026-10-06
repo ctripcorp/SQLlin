@@ -20,6 +20,8 @@ import com.ctrip.sqllin.dsl.annotation.CollateNoCase
 import com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey
 import com.ctrip.sqllin.dsl.annotation.CompositeUnique
 import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.DBView
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.PrimaryKey
 import com.ctrip.sqllin.dsl.annotation.Unique
 import kotlinx.serialization.SerialName
@@ -649,3 +651,11 @@ data class RebuildPet(
     @com.ctrip.sqllin.dsl.annotation.References(tableName = "rebuild_person", foreignKeys = ["id"])
     val ownerId: Long,
 )
+
+/**
+ * A view of the [PersonWithId]s who are adults, which `CREATE_VIEW` creates from a SELECT of this type.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBView("adult_person")
+@Serializable
+data class AdultPerson(val name: String, val age: Age)

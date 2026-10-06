@@ -17,7 +17,9 @@
 package com.ctrip.sqllin.dsl.sql.operation
 
 import com.ctrip.sqllin.driver.DatabaseConnection
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.View
 import com.ctrip.sqllin.dsl.sql.statement.SingleStatement
 import com.ctrip.sqllin.dsl.sql.statement.TableStructureStatement
 
@@ -58,4 +60,15 @@ internal object Drop : Operation {
         }
         return TableStructureStatement(sql, connection)
     }
+
+    /**
+     * Creates a DROP VIEW statement for the specified view.
+     *
+     * @param view The view to drop
+     * @param connection The database connection for executing the statement
+     * @return A [TableStructureStatement] representing the DROP VIEW operation
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun dropView(view: View<*>, connection: DatabaseConnection): SingleStatement =
+        TableStructureStatement("DROP VIEW ${view.tableName}", connection)
 }

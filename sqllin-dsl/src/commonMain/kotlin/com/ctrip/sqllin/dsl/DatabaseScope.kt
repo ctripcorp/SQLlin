@@ -20,7 +20,10 @@ import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
+import com.ctrip.sqllin.dsl.sql.Relation
 import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.View
+import com.ctrip.sqllin.dsl.sql.ViewDefinition
 import com.ctrip.sqllin.dsl.sql.ProjectedX
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.clause.*
@@ -493,17 +496,17 @@ public class DatabaseScope internal constructor(
      * ```
      */
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT(x: X): FinalSelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT(x: X): FinalSelectStatement<T> =
         select(kSerializer(), false)
 
     /**
      * Selects distinct records from the table.
      */
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(x: X): FinalSelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT_DISTINCT(x: X): FinalSelectStatement<T> =
         select(kSerializer(), true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, isDistinct: Boolean): FinalSelectStatement<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, isDistinct: Boolean): FinalSelectStatement<R> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -521,14 +524,14 @@ public class DatabaseScope internal constructor(
      * ```
      */
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT(clause: WhereClause<T>): WhereSelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT(clause: WhereClause<T>): WhereSelectStatement<T> =
         select(kSerializer(), clause, false)
 
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: WhereClause<T>): WhereSelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT_DISTINCT(clause: WhereClause<T>): WhereSelectStatement<T> =
         select(kSerializer(), clause, true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: WhereClause<R>, isDistinct: Boolean): WhereSelectStatement<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: WhereClause<R>, isDistinct: Boolean): WhereSelectStatement<R> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -544,14 +547,14 @@ public class DatabaseScope internal constructor(
      * ```
      */
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
         select(kSerializer(), clause, false)
 
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT_DISTINCT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
         select(kSerializer(), clause, true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: OrderByClause<R>, isDistinct: Boolean): OrderBySelectStatement<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: OrderByClause<R>, isDistinct: Boolean): OrderBySelectStatement<R> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -567,14 +570,14 @@ public class DatabaseScope internal constructor(
      * ```
      */
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT(clause: LimitClause<T>): LimitSelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT(clause: LimitClause<T>): LimitSelectStatement<T> =
         select(kSerializer(), clause, false)
 
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: LimitClause<T>): LimitSelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT_DISTINCT(clause: LimitClause<T>): LimitSelectStatement<T> =
         select(kSerializer(), clause, true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: LimitClause<R>, isDistinct: Boolean): LimitSelectStatement<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: LimitClause<R>, isDistinct: Boolean): LimitSelectStatement<R> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -590,14 +593,14 @@ public class DatabaseScope internal constructor(
      * ```
      */
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
         select(kSerializer(), clause, false)
 
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT_DISTINCT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
         select(kSerializer(), clause, true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: GroupByClause<R>, isDistinct: Boolean): GroupBySelectStatement<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: GroupByClause<R>, isDistinct: Boolean): GroupBySelectStatement<R> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -630,7 +633,7 @@ public class DatabaseScope internal constructor(
      * is of a different type from its column, or isn't nullable while its column is
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(x: ProjectedX<R>): FinalSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(x: ProjectedX<R>): FinalSelectStatement<R> =
         select(getKSerializer<R>(), false)
 
     /**
@@ -645,7 +648,7 @@ public class DatabaseScope internal constructor(
      * is of a different type from its column, or isn't nullable while its column is
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(x: ProjectedX<R>): FinalSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(x: ProjectedX<R>): FinalSelectStatement<R> =
         select(getKSerializer<R>(), true)
 
     /**
@@ -661,7 +664,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectWhereProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(clause: WhereClause<R>): WhereSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(clause: WhereClause<R>): WhereSelectStatement<R> =
         select(getKSerializer<R>(), clause, false)
 
     /**
@@ -672,7 +675,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectDistinctWhereProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: WhereClause<R>): WhereSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: WhereClause<R>): WhereSelectStatement<R> =
         select(getKSerializer<R>(), clause, true)
 
     /**
@@ -688,7 +691,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectOrderByProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(clause: OrderByClause<R>): OrderBySelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(clause: OrderByClause<R>): OrderBySelectStatement<R> =
         select(getKSerializer<R>(), clause, false)
 
     /**
@@ -699,7 +702,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectDistinctOrderByProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: OrderByClause<R>): OrderBySelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: OrderByClause<R>): OrderBySelectStatement<R> =
         select(getKSerializer<R>(), clause, true)
 
     /**
@@ -715,7 +718,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectLimitProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(clause: LimitClause<R>): LimitSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(clause: LimitClause<R>): LimitSelectStatement<R> =
         select(getKSerializer<R>(), clause, false)
 
     /**
@@ -726,7 +729,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectDistinctLimitProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: LimitClause<R>): LimitSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: LimitClause<R>): LimitSelectStatement<R> =
         select(getKSerializer<R>(), clause, true)
 
     /**
@@ -742,7 +745,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectGroupByProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(clause: GroupByClause<R>): GroupBySelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(clause: GroupByClause<R>): GroupBySelectStatement<R> =
         select(getKSerializer<R>(), clause, false)
 
     /**
@@ -753,7 +756,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectDistinctGroupByProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: GroupByClause<R>): GroupBySelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: GroupByClause<R>): GroupBySelectStatement<R> =
         select(getKSerializer<R>(), clause, true)
 
     // ========== SELECT with Result Columns ==========
@@ -780,7 +783,7 @@ public class DatabaseScope internal constructor(
      * non-null in a group of GROUP BY is reported when the scope ends, before anything runs, if no GROUP BY follows.
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(column: ResultColumn<R>): ResultColumnSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(column: ResultColumn<R>): ResultColumnSelectStatement<R> =
         select(getKSerializer<R>(), listOf(column), false)
 
     /**
@@ -790,7 +793,7 @@ public class DatabaseScope internal constructor(
      * @throws IllegalArgumentException if [R] doesn't fit the query, as for [SELECT]
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(column: ResultColumn<R>): ResultColumnSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(column: ResultColumn<R>): ResultColumnSelectStatement<R> =
         select(getKSerializer<R>(), listOf(column), true)
 
     /**
@@ -813,7 +816,7 @@ public class DatabaseScope internal constructor(
      * expressions, or none at all
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(columns: Iterable<ResultColumn<R>>): ResultColumnSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(columns: Iterable<ResultColumn<R>>): ResultColumnSelectStatement<R> =
         select(getKSerializer<R>(), columns, false)
 
     /**
@@ -823,10 +826,10 @@ public class DatabaseScope internal constructor(
      * @throws IllegalArgumentException if [R] doesn't fit the query, as for [SELECT]
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(columns: Iterable<ResultColumn<R>>): ResultColumnSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(columns: Iterable<ResultColumn<R>>): ResultColumnSelectStatement<R> =
         select(getKSerializer<R>(), columns, true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, columns: Iterable<ResultColumn<R>>, isDistinct: Boolean): ResultColumnSelectStatement<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, columns: Iterable<ResultColumn<R>>, isDistinct: Boolean): ResultColumnSelectStatement<R> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, columns, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -999,14 +1002,14 @@ public class DatabaseScope internal constructor(
      * ```
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
         select(getKSerializer(), clause, false)
 
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
         select(getKSerializer(), clause, true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: JoinClause<R>, isDistinct: Boolean): JoinStatementWithoutCondition<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: JoinClause<R>, isDistinct: Boolean): JoinStatementWithoutCondition<R> {
         val container = getSelectStatementGroup()
         return Select.select(this, clause, isDistinct, serializer, databaseConnection, container, ::addSelectStatement)
     }
@@ -1020,14 +1023,14 @@ public class DatabaseScope internal constructor(
      * ```
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
         select(getKSerializer(), clause, false)
 
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
         select(getKSerializer(), clause, true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: NaturalJoinClause<R>, isDistinct: Boolean): JoinSelectStatement<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: NaturalJoinClause<R>, isDistinct: Boolean): JoinSelectStatement<R> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -1149,6 +1152,57 @@ public class DatabaseScope internal constructor(
     @StatementDslMaker
     @JvmName("drop")
     public fun <T> Table<T>.DROP(): Unit = DROP(this)
+
+    // ========== CREATE VIEW and DROP VIEW ==========
+
+    /**
+     * Starts the creation of [view], which `AS` completes with the SELECT that defines it.
+     *
+     * Example:
+     * ```kotlin
+     * CREATE_VIEW(AdultView) AS (PersonTable SELECT WHERE<Adult>(PersonTable.age GTE 18))
+     * // CREATE VIEW adults(name,age) AS SELECT name,age FROM person WHERE age>=18
+     * ```
+     *
+     * @return The view to create, which becomes a statement once `AS` gives it its SELECT
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> CREATE_VIEW(view: View<T>): ViewDefinition<T> = ViewDefinition(view)
+
+    /**
+     * Creates the view, defined by [select], as the SQL `CREATE VIEW view AS SELECT ...` does.
+     *
+     * [select] reads rows of the view's row type, which is checked at compile time, from any tables, through a
+     * projection, result columns, a join or a compound SELECT. It becomes part of this statement, so it no longer runs
+     * on its own. As SQLite doesn't let a view take parameters, its values are written into the view's SQL.
+     *
+     * @throws IllegalArgumentException if [select] is incomplete, as an aggregate query that needs GROUP BY
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> ViewDefinition<T>.AS(select: SelectStatement<T>) {
+        select.checkComplete()
+        select.container removeStatement select
+        addStatement(Create.createView(view, select, databaseConnection))
+    }
+
+    /**
+     * Drops [view], as the SQL `DROP VIEW view` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> DROP(view: View<T>) {
+        addStatement(Drop.dropView(view, databaseConnection))
+    }
+
+    /**
+     * Drops this view (extension function variant).
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("drop")
+    public fun <T> View<T>.DROP(): Unit = DROP(this)
 
     // ========== ALTER Operations ==========
 
