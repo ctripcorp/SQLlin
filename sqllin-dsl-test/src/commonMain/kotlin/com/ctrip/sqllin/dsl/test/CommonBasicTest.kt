@@ -946,6 +946,116 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    /**
+     * Covers subqueries: derived tables in FROM and in a join, one joining a table with itself, IN with a subquery
+     * combined with other conditions, correlated EXISTS, NOT, subqueries in UPDATE and DELETE, IN subqueries that don't
+     * fit, and observed queries that watch the tables their subqueries read. Parameters of the subqueries and of the
+     * queries they are in are bound in the order the SQL has them.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, ExperimentalDSLDatabaseAPI::class)
+    fun testSubquery() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        runTest {
+            database {
+                BookTable INSERT listOf(
+                    Book(name = "The Da Vinci Code", author = "Dan Brown", price = 16.96, pages = 454),
+                    Book(name = "The Lost Symbol", author = "Dan Brown", price = 19.95, pages = 510),
+                    Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251),
+                    Book(name = "Cheap Book", author = "Dan Brown", price = 5.0, pages = 10),
+                )
+                PersonWithIdTable INSERT listOf(
+                    PersonWithId(id = null, name = "Dan Brown", age = 61),
+                    PersonWithId(id = null, name = "Ken Kousen", age = 60),
+                    PersonWithId(id = null, name = "Ann", age = 30),
+                )
+            }
+
+            lateinit var prolific: SelectStatement<AuthorBooks>
+            lateinit var personBooks: SelectStatement<PersonBooks>
+            lateinit var pairs: SelectStatement<YoungerAndElder>
+            database {
+                // The books over 10 of each author; a derived table can be read by several queries
+                val authorBooks = BookTable { table ->
+                    table SELECT listOf(count(X) AS AuthorBooks::books) WHERE (price GT 10.0) GROUP_BY author
+                } AS AuthorBooksView
+                prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
+                personBooks = PersonWithIdTable SELECT INNER_JOIN<PersonBooks>(authorBooks) ON (PersonWithIdTable.name EQ AuthorBooksView.author)
+                // The persons under other names join their table with itself
+                val elders = PersonWithIdTable { table ->
+                    table SELECT listOf(name AS Elder::elderName, age AS Elder::elderAge)
+                } AS ElderView
+                pairs = PersonWithIdTable SELECT INNER_JOIN<YoungerAndElder>(elders) ON (ElderView.elderAge GT PersonWithIdTable.age)
+            }
+            assertEquals(listOf(AuthorBooks("Dan Brown", 2)), prolific.getResults())
+            assertEquals(
+                listOf(PersonBooks("Dan Brown", 61, 2), PersonBooks("Ken Kousen", 60, 1)),
+                personBooks.getResults().sortedBy { it.name },
+            )
+            assertEquals(
+                listOf(YoungerAndElder("Ann", "Dan Brown"), YoungerAndElder("Ann", "Ken Kousen"), YoungerAndElder("Ken Kousen", "Dan Brown")),
+                pairs.getResults().sortedWith(compareBy({ it.name }, { it.elderName })),
+            )
+
+            lateinit var expensiveAuthors: SelectStatement<PersonWithId>
+            lateinit var shortBookAuthors: SelectStatement<PersonWithId>
+            lateinit var withoutBooks: SelectStatement<PersonWithId>
+            lateinit var middleAged: SelectStatement<PersonWithId>
+            database {
+                PersonWithIdTable { table ->
+                    expensiveAuthors = table SELECT WHERE((age GT 50) AND (name IN (BookTable SELECT WHERE<BookAuthor>(BookTable.price GT 30.0))))
+                    shortBookAuthors = table SELECT WHERE(EXISTS(BookTable SELECT WHERE((BookTable.author EQ name) AND (BookTable.pages LT 300) AND (BookTable.price GT 6.0))))
+                    withoutBooks = table SELECT WHERE(NOT(EXISTS(BookTable SELECT WHERE(BookTable.author EQ name))))
+                    middleAged = table SELECT WHERE(NOT((age LT 40) OR (age GT 60)))
+                }
+            }
+            assertEquals(listOf("Ken Kousen"), expensiveAuthors.getResults().map { it.name })
+            assertEquals(listOf("Ken Kousen"), shortBookAuthors.getResults().map { it.name })
+            assertEquals(listOf("Ann"), withoutBooks.getResults().map { it.name })
+            assertEquals(listOf("Ken Kousen"), middleAged.getResults().map { it.name })
+
+            // IN compares with a single column of values of the same kind
+            assertFailsWith<IllegalArgumentException> {
+                database { PersonWithIdTable SELECT WHERE(PersonWithIdTable.age IN (BookTable SELECT X<BookAuthor>())) }
+            }
+            assertFailsWith<IllegalArgumentException> {
+                database { PersonWithIdTable SELECT WHERE(PersonWithIdTable.name IN (BookTable SELECT X<BookTitle>())) }
+            }
+
+            // Subqueries in UPDATE and DELETE, after the parameters of SET
+            database {
+                PersonWithIdTable { table ->
+                    table UPDATE SET { age = 62 } WHERE (name IN (BookTable SELECT WHERE<BookAuthor>(BookTable.pages GT 500)))
+                }
+                PersonWithIdTable DELETE WHERE(NOT(PersonWithIdTable.name IN (BookTable SELECT X<BookAuthor>())))
+            }
+            lateinit var persons: SelectStatement<PersonWithId>
+            database {
+                persons = PersonWithIdTable SELECT X
+            }
+            assertEquals(listOf("Dan Brown" to 62, "Ken Kousen" to 60), persons.getResults().map { it.name to it.age }.sortedBy { it.first })
+
+            // Observed queries watch the tables their derived tables and IN subqueries read
+            val books = Channel<List<PersonBooks>>(Channel.UNLIMITED)
+            val oldest = Channel<List<PersonWithId>>(Channel.UNLIMITED)
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) {
+                    val authorBooks = BookTable { table -> table SELECT listOf(count(X) AS AuthorBooks::books) GROUP_BY author } AS AuthorBooksView
+                    PersonWithIdTable SELECT INNER_JOIN<PersonBooks>(authorBooks) ON (PersonWithIdTable.name EQ AuthorBooksView.author)
+                }.collect { books.send(it) }
+            }
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) {
+                    PersonWithIdTable { table -> table SELECT WHERE(age IN (table SELECT listOf(max(age) AS PersonAge::age))) }
+                }.collect { oldest.send(it) }
+            }
+            assertEquals(listOf(3L, 1L), books.receive().sortedBy { it.name }.map { it.books })
+            assertEquals(listOf("Dan Brown"), oldest.receive().map { it.name })
+            database { BookTable INSERT Book(name = "Inferno", author = "Ken Kousen", price = 18.0, pages = 480) }
+            assertEquals(listOf(3L, 2L), books.receive().sortedBy { it.name }.map { it.books })
+            database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Old Timer", age = 99) }
+            assertEquals(listOf("Old Timer"), oldest.receive().map { it.name })
+        }
+    }
+
     @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
     fun testConcurrency() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         runTest {

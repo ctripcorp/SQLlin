@@ -18,6 +18,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 
 /**
@@ -285,3 +286,12 @@ public infix fun SelectCondition.OR(prediction: SelectCondition): SelectConditio
 // Condition 'AND' operator
 @StatementDslMaker
 public infix fun SelectCondition.AND(prediction: SelectCondition): SelectCondition = and(prediction)
+
+/**
+ * Negates [condition]: `NOT (condition)`, as in `NOT(EXISTS(select))`, `NOT(age IN listOf(1, 2))` or
+ * `NOT((age LT 18) OR (age GT 65))`.
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public fun NOT(condition: SelectCondition): SelectCondition =
+    SelectCondition("NOT (${condition.conditionSQL})", condition.parameters, condition.tables)

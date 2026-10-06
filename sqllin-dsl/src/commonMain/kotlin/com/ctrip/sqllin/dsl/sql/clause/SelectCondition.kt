@@ -31,12 +31,14 @@ package com.ctrip.sqllin.dsl.sql.clause
  *
  * @property conditionSQL The SQL condition expression (may contain ? placeholders)
  * @property parameters Parameterized query values (String, ByteArray, etc.), or null if none
+ * @property tables The tables and views that the subqueries of the condition read, which an observed query watches
  *
  * @author Yuang Qiao
  */
 public class SelectCondition internal constructor(
     internal val conditionSQL: String,
     internal val parameters: MutableList<Any?>?,
+    internal val tables: Set<String> = emptySet(),
 ) {
 
     /**
@@ -68,6 +70,6 @@ public class SelectCondition internal constructor(
                 parameters
             }
         }
-        return SelectCondition(sql, combinedParameters)
+        return SelectCondition(sql, combinedParameters, tables + next.tables)
     }
 }

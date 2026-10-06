@@ -19,6 +19,7 @@ package com.ctrip.sqllin.dsl.sql.statement
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.sql.clause.ClauseElement
 import com.ctrip.sqllin.dsl.sql.clause.SelectCondition
+import com.ctrip.sqllin.dsl.sql.operation.parametersOf
 import kotlinx.serialization.DeserializationStrategy
 
 /**
@@ -41,6 +42,7 @@ public class JoinStatementWithoutCondition<R> internal constructor(
     private val deserializer: DeserializationStrategy<R>,
     private val connection: DatabaseConnection,
     private val container: StatementContainer,
+    private val parameters: MutableList<Any?>?,
     private val tables: Set<String>,
     private val addSelectStatement: (SelectStatement<R>) -> Unit
 ) {
@@ -66,7 +68,7 @@ public class JoinStatementWithoutCondition<R> internal constructor(
             }
             append(')')
         }
-        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, null, null, tables)
+        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, parameters, null, tables)
         addSelectStatement(joinStatement)
         return joinStatement
     }
@@ -86,7 +88,7 @@ public class JoinStatementWithoutCondition<R> internal constructor(
             append(" ON ")
             append(condition.conditionSQL)
         }
-        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, condition.parameters, null, tables)
+        val joinStatement = JoinSelectStatement(sql, deserializer, connection, container, parametersOf(parameters, condition.parameters), null, tables + condition.tables)
         addSelectStatement(joinStatement)
         return joinStatement
     }

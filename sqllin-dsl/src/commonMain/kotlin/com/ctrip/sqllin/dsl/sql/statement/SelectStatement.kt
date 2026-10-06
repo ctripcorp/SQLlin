@@ -21,6 +21,7 @@ import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.compiler.QueryDecoder
+import com.ctrip.sqllin.dsl.sql.operation.parametersOf
 import kotlinx.serialization.DeserializationStrategy
 import kotlin.concurrent.Volatile
 
@@ -153,7 +154,7 @@ public class ResultColumnSelectStatement<T> internal constructor(
 ) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters, ungroupedError, tables) {
 
     internal infix fun appendToWhere(clause: WhereClause<T>): WhereSelectStatement<T> =
-        WhereSelectStatement(buildSQL(clause), deserializer, connection, container, clause.selectCondition.parameters, ungroupedError, tables)
+        WhereSelectStatement(buildSQL(clause), deserializer, connection, container, parametersOf(parameters, clause.selectCondition.parameters), ungroupedError, tables + clause.selectCondition.tables)
 
     internal infix fun appendToLimit(clause: LimitClause<T>): LimitSelectStatement<T> =
         LimitSelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables)
@@ -186,15 +187,8 @@ public class JoinSelectStatement<T> internal constructor(
     tables: Set<String>,
 ) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters, ungroupedError, tables) {
 
-    internal infix fun appendToWhere(clause: WhereClause<T>): WhereSelectStatement<T> {
-        val clauseParams = clause.selectCondition.parameters
-        val params = parameters?.also {
-            clauseParams?.let { p ->
-                it.addAll(p)
-            }
-        } ?: clauseParams
-        return WhereSelectStatement(buildSQL(clause), deserializer, connection, container, params, ungroupedError, tables)
-    }
+    internal infix fun appendToWhere(clause: WhereClause<T>): WhereSelectStatement<T> =
+        WhereSelectStatement(buildSQL(clause), deserializer, connection, container, parametersOf(parameters, clause.selectCondition.parameters), ungroupedError, tables + clause.selectCondition.tables)
 
     internal infix fun appendToLimit(clause: LimitClause<T>): LimitSelectStatement<T> =
         LimitSelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables)
@@ -228,15 +222,8 @@ public class GroupBySelectStatement<T> internal constructor(
     internal infix fun appendToOrderBy(clause: OrderByClause<T>): OrderBySelectStatement<T> =
         OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables)
 
-    internal infix fun appendToHaving(clause: HavingClause<T>): HavingSelectStatement<T> {
-        val clauseParams = clause.selectCondition.parameters
-        val params = parameters?.also {
-            clauseParams?.let { p ->
-                it.addAll(p)
-            }
-        } ?: clauseParams
-        return HavingSelectStatement(buildSQL(clause), deserializer, connection, container, params, ungroupedError, tables)
-    }
+    internal infix fun appendToHaving(clause: HavingClause<T>): HavingSelectStatement<T> =
+        HavingSelectStatement(buildSQL(clause), deserializer, connection, container, parametersOf(parameters, clause.selectCondition.parameters), ungroupedError, tables + clause.selectCondition.tables)
 }
 
 /**

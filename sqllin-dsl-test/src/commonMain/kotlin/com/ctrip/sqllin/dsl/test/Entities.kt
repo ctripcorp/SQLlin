@@ -718,3 +718,37 @@ data class CheckedMembership(
     val startDate: String,
     @Check("endDate IS NULL OR date(endDate) IS endDate") val endDate: String?,
 )
+
+/**
+ * The number of books of each author, declared as a view to name a derived table of book: no such view is created.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBView("author_books")
+@Serializable
+data class AuthorBooks(val author: String, val books: Long)
+
+/**
+ * A person with the number of their books, from a join with the derived table [AuthorBooks].
+ */
+@Serializable
+data class PersonBooks(val name: String, val age: Age, val books: Long)
+
+/**
+ * The persons under other names, as a derived table that joins person_with_id with itself.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBView("elder")
+@Serializable
+data class Elder(val elderName: String, val elderAge: Age)
+
+/**
+ * A person with someone older, from person_with_id joined with itself.
+ */
+@Serializable
+data class YoungerAndElder(val name: String, val elderName: String)
+
+/**
+ * The age of the oldest person: a SELECT of a single column, which an IN subquery compares with.
+ */
+@Serializable
+data class PersonAge(val age: Age?)

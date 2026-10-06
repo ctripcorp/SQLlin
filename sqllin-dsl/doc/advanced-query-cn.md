@@ -72,10 +72,6 @@ UNION {
 (table SELECT WHERE(age LT 18)) UNION (table SELECT WHERE(age GTE 65))
 ```
 
-## 子查询
-
-SQLlin 还不支持子查询，我们将会尽快开发该功能。
-
 ## Join
 
 SQLlin 目前支持 join 表。
@@ -265,6 +261,106 @@ fun sample() {
 
 交给表达式的属性按属性名查找，所以不能用 `@SerialName` 重命名。结果列只能查询单张表：目前还不能和 Join 一起使用，
 也不支持算术运算、`CASE` 和子查询。
+
+## 子查询
+
+一条 _SELECT_ 可以成为另一条查询的一部分：作为派生表，在 FROM 或 Join 中像表一样被读取；或者作为 `IN`、`EXISTS` 条件里的子查询。
+它会成为那条查询的一部分，所以不会再单独执行。子查询是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`。
+
+示例使用这两张表：
+
+```kotlin
+@DBRow("person")
+@Serializable
+data class Person(@PrimaryKey val id: Long?, val name: String, val age: Int)
+
+@DBRow("book")
+@Serializable
+data class Book(val title: String, val authorId: Long, val price: Double)
+```
+
+### 派生表
+
+派生表以一个视图命名：像[视图](modify-database-and-transaction-cn.md#create-view---创建视图)一样用 `@DBView` 声明它的行，但数据库里
+不需要真的有这个视图，视图对象只是为派生表提供名字和列。`AS` 把一条返回该视图行类型的 _SELECT_ 变成派生表：
+
+```kotlin
+@DBView("author_books")
+@Serializable
+data class AuthorBooks(val authorId: Long, val books: Long)
+
+@Serializable
+data class PersonBooks(val name: String, val books: Long)
+
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    lateinit var prolific: SelectStatement<AuthorBooks>
+    lateinit var personBooks: SelectStatement<PersonBooks>
+    database {
+        val authorBooks = BookTable { table ->
+            table SELECT listOf(count(X) AS AuthorBooks::books) GROUP_BY authorId
+        } AS AuthorBooksView
+        // SELECT authorId,books FROM (SELECT authorId,count(*) AS books FROM book GROUP BY authorId) AS author_books
+        //     WHERE author_books.books>?
+        prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
+        // SELECT name,books FROM person JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
+        personBooks = PersonTable SELECT INNER_JOIN<PersonBooks>(authorBooks) ON (PersonTable.id EQ AuthorBooksView.authorId)
+    }
+}
+```
+
+_SELECT_ 必须返回视图的行类型，这在编译期检查。派生表可以被多条查询读取：可以用任意子句、投影或结果列从中查询，也可以参与 Join，
+但不能写入。一条查询不能读取同一个视图的两个派生表，因为它们的名字相同。
+
+由一张表的行构成的派生表相当于给这张表起了另一个名字，表和自身 Join 时就需要这样做。同时用结果列给它的列也起别的名字，让查询能
+把它们和表自己的列区分开：
+
+```kotlin
+@DBView("elder")
+@Serializable
+data class Elder(val elderName: String, val elderAge: Int)
+
+@Serializable
+data class YoungerAndElder(val name: String, val elderName: String)
+
+database {
+    val elders = PersonTable { table ->
+        table SELECT listOf(name AS Elder::elderName, age AS Elder::elderAge)
+    } AS ElderView
+    // SELECT name,elderName FROM person JOIN (SELECT name AS elderName,age AS elderAge FROM person) AS elder
+    //     ON elder.elderAge>person.age
+    pairs = PersonTable SELECT INNER_JOIN<YoungerAndElder>(elders) ON (ElderView.elderAge GT PersonTable.age)
+}
+```
+
+### IN 和 EXISTS
+
+带 _SELECT_ 的 `IN` 检查一个值是否在 _SELECT_ 返回的值之中。_SELECT_ 必须只返回一列、并且是同一类的值（数字、文本或 BLOB），
+这在构建语句时检查，所以请用投影或结果列选取一个只有一个属性的类型：
+
+```kotlin
+@Serializable
+data class AuthorId(val authorId: Long)
+
+// SELECT id,name,age FROM person WHERE person.id IN (SELECT authorId FROM book WHERE book.price>?)
+PersonTable SELECT WHERE(PersonTable.id IN (BookTable SELECT WHERE<AuthorId>(BookTable.price GT 30.0)))
+```
+
+`EXISTS` 检查一条 _SELECT_ 是否返回了任意一行。由于 SQLlin 写列时都带上表名，_SELECT_ 可以引用外层查询的列，这会让它对外层查询的
+每一行执行一次：
+
+```kotlin
+// SELECT id,name,age FROM person WHERE EXISTS (SELECT title,authorId,price FROM book WHERE book.authorId=person.id)
+PersonTable SELECT WHERE(EXISTS(BookTable SELECT WHERE(BookTable.authorId EQ PersonTable.id)))
+```
+
+在 _SELECT_ 内部，两条查询都读取的表的列指的是 _SELECT_ 自己的，因为两者名字相同，所以它不能引用外层查询中这张表的行。
+
+`NOT` 对条件取反，比如用 `NOT(EXISTS(select))` 找出没有书的人，或者 `NOT(PersonTable.id IN (select))`。它会给条件加上括号：
+`NOT((age LT 18) OR (age GT 65))` 生成的是 `NOT (person.age<? OR person.age>?)`。
+
+子查询同样可以用在 _UPDATE_ 和 _DELETE_ 的 _WHERE_ 中，可观察查询也会观察子查询读取的表。只返回单个值的子查询，比如
+`age > (SELECT avg(age) FROM person)`，暂不支持，因为它需要表达式；公用表表达式（`WITH`）也暂不支持。
 
 ## 可观察查询
 

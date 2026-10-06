@@ -55,7 +55,7 @@ internal object Select : Operation {
         container: StatementContainer,
     ): WhereSelectStatement<R> {
         checkProjection(table, deserializer)
-        return WhereSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, clause.selectCondition.parameters, null, setOf(table.tableName))
+        return WhereSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(table.fromParameters, clause.selectCondition.parameters), null, table.readTables + clause.selectCondition.tables)
     }
 
     /**
@@ -72,7 +72,7 @@ internal object Select : Operation {
         container: StatementContainer,
     ): OrderBySelectStatement<R> {
         checkProjection(table, deserializer)
-        return OrderBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null, setOf(table.tableName))
+        return OrderBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(table.fromParameters), null, table.readTables)
     }
 
     /**
@@ -89,7 +89,7 @@ internal object Select : Operation {
         container: StatementContainer,
     ): LimitSelectStatement<R> {
         checkProjection(table, deserializer)
-        return LimitSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null, setOf(table.tableName))
+        return LimitSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(table.fromParameters), null, table.readTables)
     }
 
     /**
@@ -106,7 +106,7 @@ internal object Select : Operation {
         container: StatementContainer,
     ): GroupBySelectStatement<R> {
         checkProjection(table, deserializer)
-        return GroupBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null, setOf(table.tableName))
+        return GroupBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(table.fromParameters), null, table.readTables)
     }
 
     /**
@@ -124,7 +124,7 @@ internal object Select : Operation {
         connection: DatabaseConnection,
         container: StatementContainer,
     ) : JoinSelectStatement<R> =
-        JoinSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, null, null, clause.tables + table.tableName)
+        JoinSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(table.fromParameters, clause.parameters), null, table.readTables + clause.tables)
 
     /**
      * Builds a SELECT statement with JOIN clause (requires ON or USING).
@@ -147,7 +147,8 @@ internal object Select : Operation {
             deserializer,
             connection,
             container,
-            clause.tables + table.tableName,
+            parametersOf(table.fromParameters, clause.parameters),
+            table.readTables + clause.tables,
             addSelectStatement,
         )
 
@@ -230,9 +231,9 @@ internal object Select : Operation {
                 append(name)
             }
             append(" FROM ")
-            append(table.tableName)
+            append(table.fromSQL)
         }
-        return ResultColumnSelectStatement(sql, deserializer, connection, container, null, ungroupedError(table, expressions, deserializer), setOf(table.tableName))
+        return ResultColumnSelectStatement(sql, deserializer, connection, container, parametersOf(table.fromParameters), ungroupedError(table, expressions, deserializer), table.readTables)
     }
 
     /**
@@ -321,7 +322,7 @@ internal object Select : Operation {
             append("DISTINCT ")
         appendDBColumnName(deserializer.descriptor)
         append(" FROM ")
-        append(table.tableName)
+        append(table.fromSQL)
         append(clause.clauseStr)
     }
 
@@ -346,9 +347,9 @@ internal object Select : Operation {
                 append("DISTINCT ")
             appendDBColumnName(deserializer.descriptor)
             append(" FROM ")
-            append(table.tableName)
+            append(table.fromSQL)
         }
-        return FinalSelectStatement(sql, deserializer, connection, container, null, null, setOf(table.tableName), isSimple = true)
+        return FinalSelectStatement(sql, deserializer, connection, container, parametersOf(table.fromParameters), null, table.readTables, isSimple = true)
     }
 
     /**
@@ -399,3 +400,10 @@ internal object Select : Operation {
         }
     }
 }
+
+/**
+ * Returns the parameters of a statement made of parts with [parameters], in their order: a new list, so that a list of a
+ * part, such as a derived table's, is never changed, or null for none.
+ */
+internal fun parametersOf(vararg parameters: List<Any?>?): MutableList<Any?>? =
+    parameters.flatMapTo(ArrayList()) { it.orEmpty() }.ifEmpty { null }

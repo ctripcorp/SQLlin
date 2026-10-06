@@ -20,6 +20,7 @@ import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
+import com.ctrip.sqllin.dsl.sql.DerivedTable
 import com.ctrip.sqllin.dsl.sql.Relation
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.View
@@ -36,7 +37,9 @@ import com.ctrip.sqllin.dsl.sql.operation.PRAGMA
 import com.ctrip.sqllin.dsl.sql.operation.Select
 import com.ctrip.sqllin.dsl.sql.operation.Update
 import com.ctrip.sqllin.dsl.sql.statement.*
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.serializer
 import kotlin.concurrent.Volatile
@@ -910,6 +913,150 @@ public class DatabaseScope internal constructor(
         val statement = Select.compound(this, operator, select, getSelectStatementGroup())
         addSelectStatement(statement)
         return statement
+    }
+
+    // ========== Subqueries ==========
+    //
+    // A SELECT can be a derived table, in the FROM clause or a JOIN of another query, or the subquery of an IN or
+    // EXISTS condition. It becomes part of that query, so it no longer runs on its own.
+
+    /**
+     * Makes this SELECT a derived table named after [view], which a query reads like a table: `(SELECT ...) AS name`.
+     *
+     * The derived table has [view]'s rows, which the SELECT has to return, as is checked at compile time, and [view]'s
+     * column properties name its columns. [view] is the object generated for a class annotated with `@DBView`, which
+     * only declares the rows and their name here: no such view has to exist in the database.
+     *
+     * Example:
+     * ```kotlin
+     * @DBView("author_books")
+     * @Serializable
+     * data class AuthorBooks(val authorId: Long, val books: Long)
+     *
+     * val authorBooks = BookTable { table ->
+     *     table SELECT listOf(count(X) AS AuthorBooks::books) GROUP_BY authorId
+     * } AS AuthorBooksView
+     * PersonTable SELECT INNER_JOIN<Author>(authorBooks) ON (PersonTable.id EQ AuthorBooksView.authorId)
+     * // SELECT ... FROM person INNER JOIN (SELECT authorId,count(*) AS books FROM book GROUP BY authorId) AS author_books
+     * //     ON person.id=author_books.authorId
+     * ```
+     *
+     * As each derived table is named after its view, a query can't read two derived tables of the same view. A
+     * derived table of a table's rows gives that table another name, which a query joining the table with itself
+     * needs: `(PersonTable SELECT X) AS ManagerView`.
+     *
+     * @return The derived table, which can be selected from and joined like a table or a view, but not written to
+     * @throws IllegalArgumentException if this SELECT is incomplete, as an aggregate query that needs GROUP BY
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <R> SelectStatement<R>.AS(view: View<R>): Relation<R> {
+        takeAsSubquery()
+        return DerivedTable(view, this)
+    }
+
+    /**
+     * Whether this number is among the values the single column of [select] returns: `column IN (SELECT ...)`.
+     *
+     * Example:
+     * ```kotlin
+     * @Serializable
+     * data class AuthorId(val authorId: Long)
+     *
+     * PersonTable SELECT WHERE(PersonTable.id IN (BookTable SELECT X<AuthorId>()))
+     * // SELECT ... FROM person WHERE person.id IN (SELECT authorId FROM book)
+     * ```
+     *
+     * @throws IllegalArgumentException if [select] doesn't return one column of numbers, or is incomplete
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun ClauseNumber<*>.IN(select: SelectStatement<*>): SelectCondition =
+        subqueryIn(this, select, "numbers") { it.serialName.removeSuffix("?") in NUMBER_TYPES }
+
+    /**
+     * Whether this text is among the values the single column of [select] returns: `column IN (SELECT ...)`.
+     *
+     * @throws IllegalArgumentException if [select] doesn't return one column of text, or is incomplete
+     * @see IN
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun ClauseString<*>.IN(select: SelectStatement<*>): SelectCondition =
+        subqueryIn(this, select, "text") { it.serialName.removeSuffix("?") in TEXT_TYPES }
+
+    /**
+     * Whether this BLOB is among the values the single column of [select] returns: `column IN (SELECT ...)`.
+     *
+     * @throws IllegalArgumentException if [select] doesn't return one column of BLOBs, or is incomplete
+     * @see IN
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun ClauseBlob.IN(select: SelectStatement<*>): SelectCondition =
+        subqueryIn(this, select, "BLOBs") { it.serialName.removeSuffix("?") == BYTE_ARRAY_TYPE }
+
+    /**
+     * Whether [select] returns any row: `EXISTS (SELECT ...)`.
+     *
+     * The SELECT can refer to the columns of the query it is in, as columns are written with their tables' names,
+     * which makes it run for each of that query's rows:
+     * ```kotlin
+     * PersonTable SELECT WHERE(EXISTS(BookTable SELECT WHERE(BookTable.authorId EQ PersonTable.id)))
+     * // SELECT ... FROM person WHERE EXISTS (SELECT ... FROM book WHERE book.authorId=person.id)
+     * ```
+     * Inside the SELECT, a column of a table that both queries read is the SELECT's own, as both have the same name,
+     * so it can't refer to the other query's rows of that table. `NOT(EXISTS(select))` checks that it returns no rows.
+     *
+     * @throws IllegalArgumentException if [select] is incomplete, as an aggregate query that needs GROUP BY
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun EXISTS(select: SelectStatement<*>): SelectCondition {
+        select.takeAsSubquery()
+        return SelectCondition("EXISTS (${select.sqlStr})", select.parameters?.toMutableList(), select.tables)
+    }
+
+    /**
+     * Takes this SELECT out of the statements the scope runs, as it becomes a subquery of another one.
+     */
+    private fun SelectStatement<*>.takeAsSubquery() {
+        checkComplete()
+        container removeStatement this
+    }
+
+    /**
+     * Returns the condition that [element] is among the values of the single column of [select], checking that the
+     * column [holds] values [element] can be compared with, which are [values].
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun subqueryIn(element: ClauseElement<*>, select: SelectStatement<*>, values: String, holds: (SerialDescriptor) -> Boolean): SelectCondition {
+        val descriptor = select.deserializer.descriptor
+        val prefix = "Can't find '${element.valueName}' IN the results of a SELECT of '${descriptor.serialName}'"
+        require(descriptor.elementsCount == 1) {
+            "$prefix: it returns ${descriptor.elementsCount} columns, while IN compares with one. Select a type with a single property."
+        }
+        val column = descriptor.getElementDescriptor(0)
+        require(holds(column)) {
+            "$prefix: its column '${descriptor.getElementName(0)}' holds ${column.serialName.removeSuffix("?")}, while '${element.valueName}' holds $values."
+        }
+        select.takeAsSubquery()
+        val sql = buildString {
+            element.appendSQL(this)
+            append(" IN (")
+            append(select.sqlStr)
+            append(')')
+        }
+        return SelectCondition(sql, select.parameters?.toMutableList(), select.tables)
+    }
+
+    private companion object {
+        val NUMBER_TYPES = setOf(
+            "kotlin.Byte", "kotlin.Short", "kotlin.Int", "kotlin.Long", "kotlin.Float", "kotlin.Double",
+            "kotlin.UByte", "kotlin.UShort", "kotlin.UInt", "kotlin.ULong",
+        )
+        val TEXT_TYPES = setOf("kotlin.String", "kotlin.Char")
+        const val BYTE_ARRAY_TYPE = "kotlin.ByteArray"
     }
 
     // ========== UNION Operations (deprecated) ==========

@@ -40,6 +40,24 @@ public abstract class Relation<T> internal constructor(
      * and deserializing query results to entity objects.
      */
     public abstract fun kSerializer(): KSerializer<T>
+
+    /**
+     * The relation as written after FROM or JOIN: its name, or the subquery of a derived table with its alias.
+     */
+    internal open val fromSQL: String
+        get() = tableName
+
+    /**
+     * The parameters of [fromSQL], which a statement binds before those of its other clauses.
+     */
+    internal open val fromParameters: List<Any?>
+        get() = emptyList()
+
+    /**
+     * The tables and views a query of this relation reads, which an observed query watches.
+     */
+    internal open val readTables: Set<String>
+        get() = setOf(tableName)
 }
 
 /**

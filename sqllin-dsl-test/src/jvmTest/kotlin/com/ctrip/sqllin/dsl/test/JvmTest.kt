@@ -65,6 +65,9 @@ class JvmTest {
     fun testCheckConstraint() = commonTest.testCheckConstraint()
 
     @Test
+    fun testSubquery() = commonTest.testSubquery()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

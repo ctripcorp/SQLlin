@@ -78,10 +78,6 @@ UNION {
 (table SELECT WHERE(age LT 18)) UNION (table SELECT WHERE(age GTE 65))
 ```
 
-## Subqueries
-
-SQLlin doesn't support subqueries yet, we will develop as soon as possible.
-
 ## Join
 
 SQLlin supports joining tables now.
@@ -280,6 +276,113 @@ so a property that needs it is reported when the database scope ends, before any
 
 A property given an expression is found by its name, so it can't be renamed with `@SerialName`. Result columns select from
 a single table: they can't be used with a join yet, nor can arithmetic, `CASE` or subqueries.
+
+## Subqueries
+
+A _SELECT_ can be part of another query: as a derived table, which the FROM clause or a join reads like a table, or as
+the subquery of an `IN` or `EXISTS` condition. It becomes part of that query, so it no longer runs on its own.
+Subqueries are experimental, so opt in with `@OptIn(ExperimentalDSLDatabaseAPI::class)`.
+
+The examples use these tables:
+
+```kotlin
+@DBRow("person")
+@Serializable
+data class Person(@PrimaryKey val id: Long?, val name: String, val age: Int)
+
+@DBRow("book")
+@Serializable
+data class Book(val title: String, val authorId: Long, val price: Double)
+```
+
+### Derived Tables
+
+A derived table is named after a view: declare its rows with `@DBView`, as for a [view](modify-database-and-transaction.md#create-view---creating-views),
+but no such view has to exist in the database, as the view object only gives the derived table its name and its
+columns. `AS` makes a _SELECT_ of the view's rows a derived table:
+
+```kotlin
+@DBView("author_books")
+@Serializable
+data class AuthorBooks(val authorId: Long, val books: Long)
+
+@Serializable
+data class PersonBooks(val name: String, val books: Long)
+
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    lateinit var prolific: SelectStatement<AuthorBooks>
+    lateinit var personBooks: SelectStatement<PersonBooks>
+    database {
+        val authorBooks = BookTable { table ->
+            table SELECT listOf(count(X) AS AuthorBooks::books) GROUP_BY authorId
+        } AS AuthorBooksView
+        // SELECT authorId,books FROM (SELECT authorId,count(*) AS books FROM book GROUP BY authorId) AS author_books
+        //     WHERE author_books.books>?
+        prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
+        // SELECT name,books FROM person JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
+        personBooks = PersonTable SELECT INNER_JOIN<PersonBooks>(authorBooks) ON (PersonTable.id EQ AuthorBooksView.authorId)
+    }
+}
+```
+
+The _SELECT_ has to return the view's rows, which is checked at compile time. A derived table can be selected from,
+with any clause, a projection or result columns, and joined, by several queries, but not written to. A query can't read
+two derived tables of the same view, as they would have the same name.
+
+A derived table of a table's rows gives the table another name, which a query that joins the table with itself needs.
+Give its columns other names too, with result columns, so that the query can tell them from the table's:
+
+```kotlin
+@DBView("elder")
+@Serializable
+data class Elder(val elderName: String, val elderAge: Int)
+
+@Serializable
+data class YoungerAndElder(val name: String, val elderName: String)
+
+database {
+    val elders = PersonTable { table ->
+        table SELECT listOf(name AS Elder::elderName, age AS Elder::elderAge)
+    } AS ElderView
+    // SELECT name,elderName FROM person JOIN (SELECT name AS elderName,age AS elderAge FROM person) AS elder
+    //     ON elder.elderAge>person.age
+    pairs = PersonTable SELECT INNER_JOIN<YoungerAndElder>(elders) ON (ElderView.elderAge GT PersonTable.age)
+}
+```
+
+### IN and EXISTS
+
+`IN` with a _SELECT_ checks whether a value is among those the _SELECT_ returns. The _SELECT_ has to return a single
+column of values of the same kind, numbers, text or BLOBs, which is checked when the statement is built, so select a
+type with a single property, with a projection or with result columns:
+
+```kotlin
+@Serializable
+data class AuthorId(val authorId: Long)
+
+// SELECT id,name,age FROM person WHERE person.id IN (SELECT authorId FROM book WHERE book.price>?)
+PersonTable SELECT WHERE(PersonTable.id IN (BookTable SELECT WHERE<AuthorId>(BookTable.price GT 30.0)))
+```
+
+`EXISTS` checks whether a _SELECT_ returns any row. The _SELECT_ can refer to the columns of the query it is in, which
+makes it run for each row of that query, as SQLlin writes columns with their tables' names:
+
+```kotlin
+// SELECT id,name,age FROM person WHERE EXISTS (SELECT title,authorId,price FROM book WHERE book.authorId=person.id)
+PersonTable SELECT WHERE(EXISTS(BookTable SELECT WHERE(BookTable.authorId EQ PersonTable.id)))
+```
+
+Inside the _SELECT_, a column of a table that both queries read is the _SELECT_'s own, as both have the same name, so it
+can't refer to the other query's rows of that table.
+
+`NOT` negates a condition, such as `NOT(EXISTS(select))` for the persons without books, or
+`NOT(PersonTable.id IN (select))`. It puts the condition in parentheses: `NOT((age LT 18) OR (age GT 65))` is
+`NOT (person.age<? OR person.age>?)`.
+
+Subqueries work in the _WHERE_ of _UPDATE_ and _DELETE_ too, and an observed query watches the tables its subqueries
+read. A subquery that gives a single value, such as `age > (SELECT avg(age) FROM person)`, isn't supported yet, as it
+needs expressions, and neither are common table expressions (`WITH`).
 
 ## Observed Queries
 

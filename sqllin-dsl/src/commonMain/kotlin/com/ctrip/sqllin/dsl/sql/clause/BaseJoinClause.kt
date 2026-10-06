@@ -37,16 +37,22 @@ public sealed class BaseJoinClause<R>(private vararg val joinedTables: Relation<
     internal abstract val clauseName: String
 
     /**
-     * The names of the tables this clause joins.
+     * The tables and views that the relations this clause joins read, which an observed query watches.
      */
     internal val tables: Set<String>
-        get() = joinedTables.mapTo(LinkedHashSet()) { it.tableName }
+        get() = joinedTables.flatMapTo(LinkedHashSet()) { it.readTables }
+
+    /**
+     * The parameters of the derived tables this clause joins, in their order.
+     */
+    internal val parameters: List<Any?>
+        get() = joinedTables.flatMap { it.fromParameters }
 
     final override val clauseStr: String
         get() = buildString {
             append(clauseName)
             joinedTables.forEachIndexed { index, table ->
-                append(table.tableName)
+                append(table.fromSQL)
                 if (index < joinedTables.lastIndex)
                     append(',')
             }
