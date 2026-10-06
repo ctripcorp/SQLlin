@@ -79,6 +79,9 @@ class AndroidTest {
     fun testConditionPrecedence() = commonTest.testConditionPrecedence()
 
     @Test
+    fun testConditionReuse() = commonTest.testConditionReuse()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

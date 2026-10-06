@@ -16,6 +16,8 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.sql.operation.parametersOf
+
 /**
  * Represents a condition expression used in WHERE or HAVING clauses.
  *
@@ -63,16 +65,8 @@ public class SelectCondition internal constructor(
             append(" $symbol ")
             next.appendOperand(this, symbol)
         }
-        val combinedParameters = when {
-            parameters == null && next.parameters != null -> next.parameters
-            parameters != null && next.parameters == null -> parameters
-            parameters == null && next.parameters == null -> null
-            else -> {
-                parameters!!.addAll(next.parameters!!)
-                parameters
-            }
-        }
-        return SelectCondition(sql, combinedParameters, tables + next.tables, symbol)
+        // A new list, as this condition may be kept in a variable and used again, with its own parameters
+        return SelectCondition(sql, parametersOf(parameters, next.parameters), tables + next.tables, symbol)
     }
 
     /**

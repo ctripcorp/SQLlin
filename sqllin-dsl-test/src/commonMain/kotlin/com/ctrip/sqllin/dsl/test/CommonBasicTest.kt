@@ -1094,6 +1094,34 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(listOf("x"), names { NOT((age EQ 1) OR (age EQ 2)) AND (name EQ "x") })
     }
 
+    /**
+     * Covers a condition kept in a variable and used in several statements: combining it with others leaves its own
+     * parameters as they were, so that each statement binds the parameters its SQL has.
+     */
+    fun testConditionReuse() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        database {
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "a", age = 1),
+                PersonWithId(id = null, name = "x", age = 2),
+                PersonWithId(id = null, name = "y", age = 3),
+            )
+        }
+        val older = PersonWithIdTable.age GTE 2
+        lateinit var combined: SelectStatement<PersonWithId>
+        lateinit var alone: SelectStatement<PersonWithId>
+        lateinit var either: SelectStatement<PersonWithId>
+        database {
+            PersonWithIdTable { table ->
+                combined = table SELECT WHERE(older AND (name EQ "x"))
+                alone = table SELECT WHERE(older)
+                either = table SELECT WHERE(older OR (name EQ "a"))
+            }
+        }
+        assertEquals(listOf("x"), combined.getResults().map { it.name })
+        assertEquals(listOf("x", "y"), alone.getResults().map { it.name }.sorted())
+        assertEquals(listOf("a", "x", "y"), either.getResults().map { it.name }.sorted())
+    }
+
     @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
     fun testConcurrency() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         runTest {
