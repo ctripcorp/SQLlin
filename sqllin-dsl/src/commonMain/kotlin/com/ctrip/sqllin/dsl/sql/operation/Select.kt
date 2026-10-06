@@ -225,7 +225,7 @@ internal object Select : Operation {
                     append(',')
                 val name = projection.getElementName(index)
                 expressions[name]?.let {
-                    append(it.valueName)
+                    it.appendSQL(this)
                     append(" AS ")
                 }
                 append(name)

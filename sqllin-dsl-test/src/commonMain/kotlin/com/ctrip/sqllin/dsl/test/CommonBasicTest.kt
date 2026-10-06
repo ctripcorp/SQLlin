@@ -1734,7 +1734,7 @@ class CommonBasicTest(private val path: DatabasePath) {
                 }
             }
         }
-        assertEquals(true, nullInGroup.message!!.contains("'group_concat(notes,',')' can be NULL, so property 'notes' has to be nullable"))
+        assertEquals(true, nullInGroup.message!!.contains("'group_concat(user_account.notes,',')' can be NULL, so property 'notes' has to be nullable"))
         val twice = assertFailsWith<IllegalArgumentException> {
             database {
                 BookTable { table ->

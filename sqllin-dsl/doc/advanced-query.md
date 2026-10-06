@@ -192,7 +192,7 @@ fun sample() {
         PersonTable { table ->
             // SELECT name FROM person
             names = table SELECT X<PersonName>()
-            // SELECT name FROM person WHERE age >= ? ORDER BY name LIMIT 10
+            // SELECT name FROM person WHERE age >= ? ORDER BY person.name LIMIT 10
             adultNames = table SELECT WHERE<PersonName>(age GTE 18) ORDER_BY name LIMIT 10
         }
     }
@@ -236,7 +236,7 @@ fun sample() {
     lateinit var adults: SelectStatement<PersonCount>
     database {
         PersonTable { table ->
-            // SELECT name,count(*) AS people,max(age) AS maxAge FROM person GROUP BY name
+            // SELECT name,count(*) AS people,max(person.age) AS maxAge FROM person GROUP BY person.name
             stats = table SELECT listOf(count(X) AS NameStats::people, max(age) AS NameStats::maxAge) GROUP_BY name
             // SELECT count(*) AS people FROM person WHERE age >= ?
             adults = table SELECT (count(X) AS PersonCount::people) WHERE (age GTE 18)
@@ -317,7 +317,7 @@ fun sample() {
         val authorBooks = BookTable { table ->
             table SELECT listOf(count(X) AS AuthorBooks::books) GROUP_BY authorId
         } AS AuthorBooksView
-        // SELECT authorId,books FROM (SELECT authorId,count(*) AS books FROM book GROUP BY authorId) AS author_books
+        // SELECT authorId,books FROM (SELECT authorId,count(*) AS books FROM book GROUP BY book.authorId) AS author_books
         //     WHERE author_books.books>?
         prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
         // SELECT name,books FROM person JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
@@ -345,7 +345,7 @@ database {
     val elders = PersonTable { table ->
         table SELECT listOf(name AS Elder::elderName, age AS Elder::elderAge)
     } AS ElderView
-    // SELECT name,elderName FROM person JOIN (SELECT name AS elderName,age AS elderAge FROM person) AS elder
+    // SELECT name,elderName FROM person JOIN (SELECT person.name AS elderName,person.age AS elderAge FROM person) AS elder
     //     ON elder.elderAge>person.age
     pairs = PersonTable SELECT INNER_JOIN<YoungerAndElder>(elders) ON (ElderView.elderAge GT PersonTable.age)
 }

@@ -45,10 +45,10 @@ public class GroupByClause<T> internal constructor(private val columnNames: Iter
             append(" GROUP BY ")
             val iterator = columnNames.iterator()
             require(iterator.hasNext()) { "Please provider at least one 'BaseClauseElement' for 'GROUP BY' clause!!!" }
-            append(iterator.next().valueName)
+            iterator.next().appendSQL(this)
             while (iterator.hasNext()) {
                 append(',')
-                append(iterator.next().valueName)
+                iterator.next().appendSQL(this)
             }
         }
 }

@@ -817,7 +817,7 @@ public class DatabaseScope internal constructor(
      * val stats = BookTable { table ->
      *     table SELECT listOf(count(X) AS AuthorStats::books, sum(pages) AS AuthorStats::totalPages) GROUP_BY author
      * }
-     * // SELECT author,count(*) AS books,sum(pages) AS totalPages FROM book GROUP BY author
+     * // SELECT author,count(*) AS books,sum(book.pages) AS totalPages FROM book GROUP BY book.author
      * ```
      *
      * Can be followed by WHERE, GROUP BY, ORDER BY, or LIMIT.
@@ -938,7 +938,7 @@ public class DatabaseScope internal constructor(
      *     table SELECT listOf(count(X) AS AuthorBooks::books) GROUP_BY authorId
      * } AS AuthorBooksView
      * PersonTable SELECT INNER_JOIN<Author>(authorBooks) ON (PersonTable.id EQ AuthorBooksView.authorId)
-     * // SELECT ... FROM person INNER JOIN (SELECT authorId,count(*) AS books FROM book GROUP BY authorId) AS author_books
+     * // SELECT ... FROM person JOIN (SELECT authorId,count(*) AS books FROM book GROUP BY book.authorId) AS author_books
      * //     ON person.id=author_books.authorId
      * ```
      *
@@ -1315,7 +1315,7 @@ public class DatabaseScope internal constructor(
      * Example:
      * ```kotlin
      * CREATE_VIEW(AdultView) AS (PersonTable SELECT WHERE<Adult>(PersonTable.age GTE 18))
-     * // CREATE VIEW adults(name,age) AS SELECT name,age FROM person WHERE age>=18
+     * // CREATE VIEW adults(name,age) AS SELECT name,age FROM person WHERE person.age>=18
      * ```
      *
      * @return The view to create, which becomes a statement once `AS` gives it its SELECT

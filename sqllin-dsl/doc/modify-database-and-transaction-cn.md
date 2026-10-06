@@ -76,7 +76,7 @@ data class Adult(
 @OptIn(ExperimentalDSLDatabaseAPI::class)
 fun sample() {
     database {
-        // CREATE VIEW adults(name,age) AS SELECT name,age FROM person WHERE age>=18
+        // CREATE VIEW adults(name,age) AS SELECT name,age FROM person WHERE person.age>=18
         CREATE_VIEW(AdultView) AS (PersonTable SELECT WHERE<Adult>(PersonTable.age GTE 18))
     }
     lateinit var olderAdults: SelectStatement<Adult>
@@ -239,7 +239,7 @@ val database = Database(
                 val newPerson = PersonTable.withName("person_new")
                 CREATE(newPerson)
                 PersonV1Table { table ->
-                    // INSERT INTO person_new(id,fullName) SELECT id,name AS fullName FROM person
+                    // INSERT INTO person_new(id,fullName) SELECT id,person.name AS fullName FROM person
                     newPerson INSERT (table SELECT (name AS Person::fullName))
                 }
                 DROP(PersonV1Table)

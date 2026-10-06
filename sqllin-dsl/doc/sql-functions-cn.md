@@ -40,7 +40,7 @@ fun sample() {
     lateinit var stats: SelectStatement<NameStats>
     database {
         PersonTable { table ->
-            // SELECT name,count(*) AS people,max(age) AS maxAge FROM person GROUP BY name
+            // SELECT name,count(*) AS people,max(person.age) AS maxAge FROM person GROUP BY person.name
             stats = table SELECT listOf(count(X) AS NameStats::people, max(age) AS NameStats::maxAge) GROUP_BY name
         }
     }

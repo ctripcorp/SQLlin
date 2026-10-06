@@ -66,7 +66,7 @@ private fun sqlString(string: String): String = "'${string.replace("'", "''")}'"
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.count(element: ClauseElement<*>): ClauseNumber<Long> =
-    ClauseNumber("count(${element.valueName})", this, isFunction = true, isNullable = false, isAggregate = true, isNullOnNoRows = false)
+    ClauseNumber("count(${element.sql})", this, isFunction = true, isNullable = false, isAggregate = true, isNullOnNoRows = false)
 
 /**
  * COUNT(*) aggregate function - counts all rows (including NULLs).
@@ -85,7 +85,7 @@ public fun <T> Relation<T>.count(x: X): ClauseNumber<Long> =
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.avg(element: ClauseElement<*>): ClauseNumber<Double> =
-    numberAggregate("avg(${element.valueName})", element)
+    numberAggregate("avg(${element.sql})", element)
 
 /**
  * SUM aggregate function - returns sum of values.
@@ -97,60 +97,60 @@ public fun <T> Relation<T>.avg(element: ClauseElement<*>): ClauseNumber<Double> 
 @FunctionDslMaker
 @JvmName("sumOfByte")
 public fun <T> Relation<T>.sum(element: ClauseNumber<Byte>): ClauseNumber<Long> =
-    numberAggregate("sum(${element.valueName})", element)
+    numberAggregate("sum(${element.sql})", element)
 
 /** SUM aggregate function of a `Short` column - returns a `Long`. */
 @FunctionDslMaker
 @JvmName("sumOfShort")
 public fun <T> Relation<T>.sum(element: ClauseNumber<Short>): ClauseNumber<Long> =
-    numberAggregate("sum(${element.valueName})", element)
+    numberAggregate("sum(${element.sql})", element)
 
 /** SUM aggregate function of an `Int` column - returns a `Long`. */
 @FunctionDslMaker
 @JvmName("sumOfInt")
 public fun <T> Relation<T>.sum(element: ClauseNumber<Int>): ClauseNumber<Long> =
-    numberAggregate("sum(${element.valueName})", element)
+    numberAggregate("sum(${element.sql})", element)
 
 /** SUM aggregate function of a `Long` column - returns a `Long`. */
 @FunctionDslMaker
 @JvmName("sumOfLong")
 public fun <T> Relation<T>.sum(element: ClauseNumber<Long>): ClauseNumber<Long> =
-    numberAggregate("sum(${element.valueName})", element)
+    numberAggregate("sum(${element.sql})", element)
 
 /** SUM aggregate function of a `UByte` column - returns a `Long`. */
 @FunctionDslMaker
 @JvmName("sumOfUByte")
 public fun <T> Relation<T>.sum(element: ClauseNumber<UByte>): ClauseNumber<Long> =
-    numberAggregate("sum(${element.valueName})", element)
+    numberAggregate("sum(${element.sql})", element)
 
 /** SUM aggregate function of a `UShort` column - returns a `Long`. */
 @FunctionDslMaker
 @JvmName("sumOfUShort")
 public fun <T> Relation<T>.sum(element: ClauseNumber<UShort>): ClauseNumber<Long> =
-    numberAggregate("sum(${element.valueName})", element)
+    numberAggregate("sum(${element.sql})", element)
 
 /** SUM aggregate function of a `UInt` column - returns a `Long`. */
 @FunctionDslMaker
 @JvmName("sumOfUInt")
 public fun <T> Relation<T>.sum(element: ClauseNumber<UInt>): ClauseNumber<Long> =
-    numberAggregate("sum(${element.valueName})", element)
+    numberAggregate("sum(${element.sql})", element)
 
 /** SUM aggregate function of a `Float` column - returns a `Double`. */
 @FunctionDslMaker
 @JvmName("sumOfFloat")
 public fun <T> Relation<T>.sum(element: ClauseNumber<Float>): ClauseNumber<Double> =
-    numberAggregate("sum(${element.valueName})", element)
+    numberAggregate("sum(${element.sql})", element)
 
 /** SUM aggregate function of a `Double` column - returns a `Double`. */
 @FunctionDslMaker
 @JvmName("sumOfDouble")
 public fun <T> Relation<T>.sum(element: ClauseNumber<Double>): ClauseNumber<Double> =
-    numberAggregate("sum(${element.valueName})", element)
+    numberAggregate("sum(${element.sql})", element)
 
 /** SUM aggregate function of a Boolean column - returns the number of `true` values, as a `Long`. */
 @FunctionDslMaker
 public fun <T> Relation<T>.sum(element: ClauseBoolean): ClauseNumber<Long> =
-    numberAggregate("sum(${element.valueName})", element)
+    numberAggregate("sum(${element.sql})", element)
 
 /**
  * MAX aggregate function - returns maximum value, of the same type as [element]: a `max` of an `Int` column is an
@@ -159,7 +159,7 @@ public fun <T> Relation<T>.sum(element: ClauseBoolean): ClauseNumber<Long> =
 @Suppress("UNCHECKED_CAST")
 @FunctionDslMaker
 public fun <T, E : ClauseElement<*>> Relation<T>.max(element: E): E =
-    element.toAggregate("max(${element.valueName})", this) as E
+    element.toAggregate("max(${element.sql})", this) as E
 
 /**
  * MIN aggregate function - returns minimum value, of the same type as [element]: a `min` of an `Int` column is an
@@ -168,7 +168,7 @@ public fun <T, E : ClauseElement<*>> Relation<T>.max(element: E): E =
 @Suppress("UNCHECKED_CAST")
 @FunctionDslMaker
 public fun <T, E : ClauseElement<*>> Relation<T>.min(element: E): E =
-    element.toAggregate("min(${element.valueName})", this) as E
+    element.toAggregate("min(${element.sql})", this) as E
 
 /**
  * GROUP_CONCAT aggregate function - concatenates all non-NULL values in a group with a separator.
@@ -188,14 +188,14 @@ public fun <T, E : ClauseElement<*>> Relation<T>.min(element: E): E =
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.group_concat(element: ClauseString<*>, infix: String): ClauseString<String> =
-    ClauseString("group_concat(${element.valueName},${sqlString(infix)})", this, isFunction = true, isNullable = element.isNullable, isAggregate = true, isNullOnNoRows = true)
+    ClauseString("group_concat(${element.sql},${sqlString(infix)})", this, isFunction = true, isNullable = element.isNullable, isAggregate = true, isNullOnNoRows = true)
 
 /**
  * ABS scalar function - returns absolute value, of the same type as [element].
  */
 @FunctionDslMaker
 public fun <T, V : Any> Relation<T>.abs(element: ClauseNumber<V>): ClauseNumber<V> =
-    numberFunction("abs(${element.valueName})", element)
+    numberFunction("abs(${element.sql})", element)
 
 /**
  * ROUND scalar function - rounds a number to a specified number of decimal places.
@@ -215,7 +215,7 @@ public fun <T, V : Any> Relation<T>.abs(element: ClauseNumber<V>): ClauseNumber<
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.round(element: ClauseNumber<*>, digits: Int): ClauseNumber<Double> =
-    numberFunction("round(${element.valueName},$digits)", element)
+    numberFunction("round(${element.sql},$digits)", element)
 
 /**
  * RANDOM scalar function - returns a pseudo-random integer.
@@ -252,28 +252,28 @@ public fun <T> Relation<T>.random(): ClauseNumber<Long> =
  */
 /* @FunctionDslMaker
  public fun <T> Relation<T>.sign(element: ClauseNumber<*>): ClauseNumber<Long> =
-    numberFunction("sign(${element.valueName})", element) */
+    numberFunction("sign(${element.sql})", element) */
 
 /**
  * UPPER scalar function - converts string to uppercase.
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.upper(element: ClauseString<*>): ClauseString<String> =
-    stringFunction("upper(${element.valueName})", element)
+    stringFunction("upper(${element.sql})", element)
 
 /**
  * LOWER scalar function - converts string to lowercase.
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.lower(element: ClauseString<*>): ClauseString<String> =
-    stringFunction("lower(${element.valueName})", element)
+    stringFunction("lower(${element.sql})", element)
 
 /**
  * LENGTH scalar function - returns string/blob length in bytes.
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.length(element: ClauseString<*>): ClauseNumber<Long> =
-    numberFunction("length(${element.valueName})", element)
+    numberFunction("length(${element.sql})", element)
 
 /**
  * LENGTH scalar function - returns the length of a BLOB in bytes.
@@ -291,7 +291,7 @@ public fun <T> Relation<T>.length(element: ClauseString<*>): ClauseNumber<Long> 
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.length(element: ClauseBlob): ClauseNumber<Long> =
-    numberFunction("length(${element.valueName})", element)
+    numberFunction("length(${element.sql})", element)
 
 /**
  * SUBSTR scalar function - extracts a substring from a string.
@@ -312,7 +312,7 @@ public fun <T> Relation<T>.length(element: ClauseBlob): ClauseNumber<Long> =
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.substr(element: ClauseString<*>, start: Int, len: Int): ClauseString<String> =
-    stringFunction("substr(${element.valueName},$start,$len)", element)
+    stringFunction("substr(${element.sql},$start,$len)", element)
 
 /**
  * TRIM scalar function - removes leading and trailing whitespace from a string.
@@ -330,7 +330,7 @@ public fun <T> Relation<T>.substr(element: ClauseString<*>, start: Int, len: Int
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.trim(element: ClauseString<*>): ClauseString<String> =
-    stringFunction("trim(${element.valueName})", element)
+    stringFunction("trim(${element.sql})", element)
 
 /**
  * LTRIM scalar function - removes leading (left) whitespace from a string.
@@ -348,7 +348,7 @@ public fun <T> Relation<T>.trim(element: ClauseString<*>): ClauseString<String> 
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.ltrim(element: ClauseString<*>): ClauseString<String> =
-    stringFunction("ltrim(${element.valueName})", element)
+    stringFunction("ltrim(${element.sql})", element)
 
 /**
  * RTRIM scalar function - removes trailing (right) whitespace from a string.
@@ -366,7 +366,7 @@ public fun <T> Relation<T>.ltrim(element: ClauseString<*>): ClauseString<String>
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.rtrim(element: ClauseString<*>): ClauseString<String> =
-    stringFunction("rtrim(${element.valueName})", element)
+    stringFunction("rtrim(${element.sql})", element)
 
 /**
  * REPLACE scalar function - replaces all occurrences of a substring with another string.
@@ -386,7 +386,7 @@ public fun <T> Relation<T>.rtrim(element: ClauseString<*>): ClauseString<String>
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.replace(element: ClauseString<*>, old: String, new: String): ClauseString<String> =
-    stringFunction("replace(${element.valueName},${sqlString(old)},${sqlString(new)})", element)
+    stringFunction("replace(${element.sql},${sqlString(old)},${sqlString(new)})", element)
 
 /**
  * INSTR scalar function - finds the first occurrence of a substring.
@@ -406,7 +406,7 @@ public fun <T> Relation<T>.replace(element: ClauseString<*>, old: String, new: S
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.instr(element: ClauseString<*>, sub: String): ClauseNumber<Long> =
-    numberFunction("instr(${element.valueName},${sqlString(sub)})", element)
+    numberFunction("instr(${element.sql},${sqlString(sub)})", element)
 
 /**
  * PRINTF scalar function - formats a string according to a format specification.
@@ -426,4 +426,4 @@ public fun <T> Relation<T>.instr(element: ClauseString<*>, sub: String): ClauseN
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.printf(format: String, element: ClauseString<*>): ClauseString<String> =
-    stringFunction("printf(${sqlString(format)},${element.valueName})", element)
+    stringFunction("printf(${sqlString(format)},${element.sql})", element)

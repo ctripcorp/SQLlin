@@ -83,4 +83,11 @@ public sealed class ClauseElement<V : Any>(
         }
         builder.append(valueName)
     }
+
+    /**
+     * This element as SQL, as [appendSQL] writes it, which a function writes for its argument, so that a column is told
+     * apart from a column of the same name of another table in a join.
+     */
+    internal val sql: String
+        get() = buildString { appendSQL(this) }
 }

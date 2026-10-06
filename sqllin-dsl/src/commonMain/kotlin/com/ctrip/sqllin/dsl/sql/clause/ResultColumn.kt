@@ -36,7 +36,7 @@ import kotlin.reflect.KProperty1
  * BookTable { table ->
  *     table SELECT listOf(count(X) AS AuthorStats::books, sum(pages) AS AuthorStats::totalPages) GROUP_BY author
  * }
- * // SELECT author,count(*) AS books,sum(pages) AS totalPages FROM book GROUP BY author
+ * // SELECT author,count(*) AS books,sum(book.pages) AS totalPages FROM book GROUP BY book.author
  * ```
  *
  * @param R The result type the expression is selected into

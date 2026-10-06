@@ -38,7 +38,10 @@ import com.ctrip.sqllin.dsl.sql.statement.*
  */
 public sealed interface OrderByClause<T> : SelectClause<T>
 
-internal class CompleteOrderByClause<T>(private val column2WayMap: Map<ClauseElement<*>, OrderByWay>) : OrderByClause<T> {
+internal class CompleteOrderByClause<T>(
+    private val column2WayMap: Map<ClauseElement<*>, OrderByWay>,
+    private val isQualified: Boolean = true,
+) : OrderByClause<T> {
 
     override val clauseStr: String
         get() {
@@ -48,7 +51,7 @@ internal class CompleteOrderByClause<T>(private val column2WayMap: Map<ClauseEle
                 val iterator = column2WayMap.entries.iterator()
                 fun appendNext() {
                     val (element, way) = iterator.next()
-                    append(element.valueName)
+                    appendColumn(element, isQualified)
                     append(' ')
                     append(way.str)
                 }
@@ -59,6 +62,18 @@ internal class CompleteOrderByClause<T>(private val column2WayMap: Map<ClauseEle
                 }
             }
         }
+}
+
+/**
+ * Appends [element] as a term of ORDER BY: qualified by its table's name, so that a join can tell it apart from a column
+ * of the same name of another table, unless [isQualified] is false, as for a compound SELECT, whose ORDER BY can only
+ * name the columns of its results.
+ */
+private fun StringBuilder.appendColumn(element: ClauseElement<*>, isQualified: Boolean) {
+    if (isQualified)
+        element.appendSQL(this)
+    else
+        append(element.valueName)
 }
 
 public enum class OrderByWay(internal val str: String) {
@@ -121,7 +136,7 @@ public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(column2Way: Pair<Clause
 @ExperimentalDSLDatabaseAPI
 @StatementDslMaker
 public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, OrderByWay>): OrderBySelectStatement<T> =
-    appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
+    appendToOrderBy(CompleteOrderByClause(column2WayMap, isQualified = false)).also {
         container changeLastStatement it
     }
 
@@ -133,7 +148,7 @@ public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(column: ClauseElement<*
 @ExperimentalDSLDatabaseAPI
 @StatementDslMaker
 public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement<*>>): OrderBySelectStatement<T> =
-    appendToOrderBy(SimpleOrderByClause(columns)).also {
+    appendToOrderBy(SimpleOrderByClause(columns, isQualified = false)).also {
         container changeLastStatement it
     }
 
@@ -147,7 +162,10 @@ public infix fun <T> ResultColumnSelectStatement<T>.ORDER_BY(column2WayMap: Map<
         container changeLastStatement it
     }
 
-internal class SimpleOrderByClause<T>(private val columns: Iterable<ClauseElement<*>>) : OrderByClause<T> {
+internal class SimpleOrderByClause<T>(
+    private val columns: Iterable<ClauseElement<*>>,
+    private val isQualified: Boolean = true,
+) : OrderByClause<T> {
 
     override val clauseStr: String
         get() {
@@ -155,10 +173,10 @@ internal class SimpleOrderByClause<T>(private val columns: Iterable<ClauseElemen
             require(iterator.hasNext()) { "Please provider at least one 'BaseClauseElement' for 'ORDER BY' clause!!!" }
             return buildString {
                 append(" ORDER BY ")
-                append(iterator.next().valueName)
+                appendColumn(iterator.next(), isQualified)
                 while (iterator.hasNext()) {
                     append(',')
-                    append(iterator.next().valueName)
+                    appendColumn(iterator.next(), isQualified)
                 }
             }
         }
