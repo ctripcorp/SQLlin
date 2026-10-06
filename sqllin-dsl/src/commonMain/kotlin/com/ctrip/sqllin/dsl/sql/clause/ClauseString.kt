@@ -47,7 +47,8 @@ public class ClauseString<V : Any> internal constructor(
     isNullable: Boolean,
     isAggregate: Boolean,
     isNullOnNoRows: Boolean,
-) : ClauseElement<V>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows) {
+    columnTables: Set<String>? = null,
+) : ClauseElement<V>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables) {
 
     /**
      * Creates the element of a column, as the code generated for a table does.
@@ -58,7 +59,7 @@ public class ClauseString<V : Any> internal constructor(
         this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
 
     override fun toAggregate(valueName: String, table: Relation<*>): ClauseString<V> =
-        ClauseString(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true)
+        ClauseString(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables)
 
     /** Equals (=), or IS NULL if value is null */
     internal infix fun eq(str: String?): SelectCondition = appendNullableString("=", " IS NULL", str)

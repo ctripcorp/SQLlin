@@ -46,12 +46,22 @@ internal class InnerJoinClause<R>(
  * SELECT(user) JOIN (order) ON (user.id EQ order.userId)
  * SELECT(user) JOIN (order) USING (user.id)
  * ```
+ *
+ * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+ * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+ * against the joined relations, and can join more than two. See
+ * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
  */
 @StatementDslMaker
 public fun <R> JOIN(vararg tables: Relation<*>): JoinClause<R> = InnerJoinClause(*tables)
 
 /**
  * Alias for [JOIN] - creates an INNER JOIN clause.
+ *
+ * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+ * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+ * against the joined relations, and can join more than two. See
+ * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
  */
 @StatementDslMaker
 public inline fun <R> INNER_JOIN(vararg tables: Relation<*>): JoinClause<R> = JOIN(*tables)
@@ -80,12 +90,22 @@ internal class NaturalInnerJoinClause<R>(
  * ```kotlin
  * SELECT(user) NATURAL_JOIN (profile)  // Joins on matching column names
  * ```
+ *
+ * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+ * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+ * against the joined relations, and can join more than two. See
+ * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
  */
 @StatementDslMaker
 public fun <R> NATURAL_JOIN(vararg tables: Relation<*>): NaturalJoinClause<R> = NaturalInnerJoinClause(*tables)
 
 /**
  * Alias for [NATURAL_JOIN].
+ *
+ * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+ * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+ * against the joined relations, and can join more than two. See
+ * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
  */
 @StatementDslMaker
 public inline fun <R> NATURAL_INNER_JOIN(vararg tables: Relation<*>): NaturalJoinClause<R> = NATURAL_JOIN(*tables)

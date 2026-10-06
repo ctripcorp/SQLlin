@@ -18,6 +18,7 @@
 
 ## Supported
 
+* Support joins of relations: checked result types, result columns, more than two tables, and RIGHT and FULL OUTER JOIN (2.5.0 ✅)
 * Support subqueries: derived tables in FROM and JOIN, IN and EXISTS (2.5.0 ✅)
 * Support CHECK constraints (2.5.0 ✅)
 * Support CREATE VIRTUAL TABLE for FTS4 and FTS3 full-text search (2.5.0 ✅)

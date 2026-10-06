@@ -49,7 +49,8 @@ public class ClauseBlob internal constructor(
     isNullable: Boolean,
     isAggregate: Boolean,
     isNullOnNoRows: Boolean,
-) : ClauseElement<ByteArray>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows) {
+    columnTables: Set<String>? = null,
+) : ClauseElement<ByteArray>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables) {
 
     /**
      * Creates the element of a column, as the code generated for a table does.
@@ -60,7 +61,7 @@ public class ClauseBlob internal constructor(
         this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
 
     override fun toAggregate(valueName: String, table: Relation<*>): ClauseBlob =
-        ClauseBlob(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true)
+        ClauseBlob(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables)
 
     /**
      * Creates an equality comparison condition (=).

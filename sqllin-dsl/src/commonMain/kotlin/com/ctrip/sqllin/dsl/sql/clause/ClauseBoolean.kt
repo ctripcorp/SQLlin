@@ -35,7 +35,8 @@ public class ClauseBoolean internal constructor(
     isNullable: Boolean,
     isAggregate: Boolean,
     isNullOnNoRows: Boolean,
-) : ClauseElement<Boolean>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows) {
+    columnTables: Set<String>? = null,
+) : ClauseElement<Boolean>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables) {
 
     /**
      * Creates the element of a column, as the code generated for a table does.
@@ -46,7 +47,7 @@ public class ClauseBoolean internal constructor(
         this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
 
     override fun toAggregate(valueName: String, table: Relation<*>): ClauseBoolean =
-        ClauseBoolean(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true)
+        ClauseBoolean(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables)
 
     /**
      * Creates a condition comparing this Boolean column/function to a value.

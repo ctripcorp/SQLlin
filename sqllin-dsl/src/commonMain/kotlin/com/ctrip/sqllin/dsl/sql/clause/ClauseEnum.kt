@@ -67,7 +67,8 @@ public class ClauseEnum<T : Enum<T>> internal constructor(
     isNullable: Boolean,
     isAggregate: Boolean,
     isNullOnNoRows: Boolean,
-) : ClauseElement<T>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows) {
+    columnTables: Set<String>? = null,
+) : ClauseElement<T>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables) {
 
     /**
      * Creates the element of a column, as the code generated for a table does.
@@ -78,7 +79,7 @@ public class ClauseEnum<T : Enum<T>> internal constructor(
         this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
 
     override fun toAggregate(valueName: String, table: Relation<*>): ClauseEnum<T> =
-        ClauseEnum(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true)
+        ClauseEnum(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables)
 
     /**
      * Less than (<) comparison using the enum's ordinal value.

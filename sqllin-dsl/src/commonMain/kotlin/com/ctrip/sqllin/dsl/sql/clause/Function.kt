@@ -40,15 +40,15 @@ import kotlin.jvm.JvmName
 
 /** An aggregate function of [element] with values of type [V]: NULL when all its values are, or no rows match. */
 private fun <V : Any> Relation<*>.numberAggregate(valueName: String, element: ClauseElement<*>): ClauseNumber<V> =
-    ClauseNumber(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = true, isNullOnNoRows = true)
+    ClauseNumber(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = element.columnTables)
 
 /** A scalar function of [element] with values of type [V]: NULL when [element] is. */
 private fun <V : Any> Relation<*>.numberFunction(valueName: String, element: ClauseElement<*>): ClauseNumber<V> =
-    ClauseNumber(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = element.isAggregate, isNullOnNoRows = element.isNullOnNoRows)
+    ClauseNumber(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = element.isAggregate, isNullOnNoRows = element.isNullOnNoRows, columnTables = element.columnTables)
 
 /** A scalar function of [element] with `String` values: NULL when [element] is. */
 private fun Relation<*>.stringFunction(valueName: String, element: ClauseElement<*>): ClauseString<String> =
-    ClauseString(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = element.isAggregate, isNullOnNoRows = element.isNullOnNoRows)
+    ClauseString(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = element.isAggregate, isNullOnNoRows = element.isNullOnNoRows, columnTables = element.columnTables)
 
 /**
  * Writes [string] as a SQL string literal. The only character SQLite escapes in one is `'`, by doubling it, so this
@@ -66,7 +66,7 @@ private fun sqlString(string: String): String = "'${string.replace("'", "''")}'"
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.count(element: ClauseElement<*>): ClauseNumber<Long> =
-    ClauseNumber("count(${element.sql})", this, isFunction = true, isNullable = false, isAggregate = true, isNullOnNoRows = false)
+    ClauseNumber("count(${element.sql})", this, isFunction = true, isNullable = false, isAggregate = true, isNullOnNoRows = false, columnTables = element.columnTables)
 
 /**
  * COUNT(*) aggregate function - counts all rows (including NULLs).
@@ -188,7 +188,7 @@ public fun <T, E : ClauseElement<*>> Relation<T>.min(element: E): E =
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.group_concat(element: ClauseString<*>, infix: String): ClauseString<String> =
-    ClauseString("group_concat(${element.sql},${sqlString(infix)})", this, isFunction = true, isNullable = element.isNullable, isAggregate = true, isNullOnNoRows = true)
+    ClauseString("group_concat(${element.sql},${sqlString(infix)})", this, isFunction = true, isNullable = element.isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = element.columnTables)
 
 /**
  * ABS scalar function - returns absolute value, of the same type as [element].

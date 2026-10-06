@@ -77,16 +77,40 @@ public sealed class NaturalJoinClause<R>(vararg tables: Relation<*>) : BaseJoinC
  */
 public sealed class JoinClause<R>(vararg tables: Relation<*>) : BaseJoinClause<R>(*tables)
 
+/**
+ * Completes a join of the old join API with `ON condition`.
+ *
+ * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+ * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+ * against the joined relations, and can join more than two. See
+ * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
+ */
 @Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
 public infix fun <R> JoinStatementWithoutCondition<R>.ON(condition: SelectCondition): JoinSelectStatement<R> =
     convertToJoinSelectStatement(condition)
 
+/**
+ * Completes a join of the old join API with `USING (column)`.
+ *
+ * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+ * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+ * against the joined relations, and can join more than two. See
+ * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
+ */
 @Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
 public inline infix fun <R> JoinStatementWithoutCondition<R>.USING(clauseElement: ClauseElement<*>): JoinSelectStatement<R> =
     USING(listOf(clauseElement))
 
+/**
+ * Completes a join of the old join API with `USING (columns)`.
+ *
+ * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+ * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+ * against the joined relations, and can join more than two. See
+ * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
+ */
 @Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
 public infix fun <R> JoinStatementWithoutCondition<R>.USING(clauseElements: Iterable<ClauseElement<*>>): JoinSelectStatement<R> =

@@ -72,99 +72,6 @@ UNION {
 (table SELECT WHERE(age LT 18)) UNION (table SELECT WHERE(age GTE 65))
 ```
 
-## Join
-
-SQLlin 目前支持 join 表。
-
-我们需要另外两个数据库实体：
-
-```kotlin
-@DBRow("transcript")
-@Serializable
-data class Transcript(
-    val name: String?,
-    val math: Int,
-    val english: Int,
-)
-
-@Serializable
-data class Student(
-    val name: String?,
-    val age: Int?,
-    val math: Int,
-    val english: Int,
-)
-
-@Serializable
-data class CrossJoinStudent(
-    val age: Int?,
-    val math: Int,
-    val english: Int,
-)
-```
-
-`Transcript` 代表另一张表，`Student` 表示 join 的查询结果的类型（所以 `Student` 不需要被添加 `@DBRow` 注解），它拥有所有 `Person` 和 `Transcript`
-所拥有的列名。
-
-### Cross Join
-
-```kotlin
-fun joinSample() {
-    db {
-        PersonTable { table ->
-            table SELECT CROSS_JOIN<CrossJoinStudent>(TranscriptTable)
-        }
-    }
-}
-```
-
-`CROSS_JOIN` 函数接收一个或多个 `Table` 作为参数。在普通的 _SELECT_ 语句中，该语句的查询结果的类型由 _sqllin-processor_ 生成的
-`Table` 决定，但是 _JOIN_ 操作符将会将其改变为指定的类型。在前面的示例中， `CROSS_JOIN` 将该类型改变为了 `CrossJoinStudent`。
-
-注意，由于 SQL 中 _CROSS JOIN_ 自身的特性，如果附带 _CROSS JOIN_ 子句的 _SELECT_ 语句查询的列包含两个表中的同名列，这会导致查询失败。因为
-class 中不能包含两个同名的属性。因此请确保 `CROSS_JOIN` 函数转换后的结果类型不包含两个表中的同名列。
-
-### Inner Join
-
-```kotlin
-fun joinSample() {
-    db {
-        PersonTable { table ->
-            table SELECT INNER_JOIN<Student>(TranscriptTable) USING name
-            table SELECT NATURAL_INNER_JOIN<Student>(TranscriptTable)
-            table SELECT INNER_JOIN<CrossJoinStudent>(TranscriptTable) ON (name EQ TranscriptTable.name)
-        }
-    }
-}
-```
-
-`INNER_JOIN` 与 `CROSS_JOIN` 非常相似，不同之处在于 `INNER_JOIN` 需要连接一个 `USING` 或 `ON` 子句。如果一个 _INNER JOIN_ 语句没有
-`USING` 或 `ON` 子句，那么它是不完整的，但是你的代码仍然可以编译，但它在运行时不会做任何事情。
-
-`NATURAL_INNER_JOIN` 将会产生一个完整的 _SELECT_ 语句（与 `CROSS_JOIN` 相似）。所以，你不能再它末尾连接 `USING` 或 `ON` 子句，这将由
-Kotlin 编译器来保证。
-
-注意，带有 `ON` 子句的 `INNER_JOIN` 子句的行为与 `CROSS_JOIN` 相同，你不能 select 在两个表中拥有相同名字的列。
-
-`INNER_JOIN` 拥有一个别名——`JOIN`， `NATURAL_INNER_JOIN` 也拥有一个别名——`NATURAL_JOIN` 。这就像你在 SQL 的 inner join
-查询中可以省略 `INNER` 关键字一样。
-
-### Left Outer Join
-
-```kotlin
-fun joinSample() {
-    db {
-        PersonTable { table ->
-            table SELECT LEFT_OUTER_JOIN<Student>(TranscriptTable) USING name
-            table SELECT NATURAL_LEFT_OUTER_JOIN<Student>(TranscriptTable)
-            table SELECT LEFT_OUTER_JOIN<CrossJoinStudent>(TranscriptTable) ON (name EQ TranscriptTable.name)
-        }
-    }
-}
-```
-
-`LEFT_OUTER_JOIN` 的用法与 `INNER_JOIN` 非常相似，不同之处仅仅是它们的 API 名字。
-
 ## 投影
 
 `SELECT` 默认把每一行读成表自己的行类型。如果只想读取其中一部分列，可以声明一个更窄的 `@Serializable` 类型，用它的属性名
@@ -259,8 +166,94 @@ fun sample() {
 `IllegalArgumentException`。唯独后面是否还会接 `GROUP_BY`，在构建时还无法得知，所以需要 `GROUP_BY` 的属性会在数据库作用域
 结束时报错，此时作用域中的任何语句都还没有执行。
 
-交给表达式的属性按属性名查找，所以不能用 `@SerialName` 重命名。结果列只能查询单张表：目前还不能和 Join 一起使用，
-也不支持算术运算、`CASE` 和子查询。
+交给表达式的属性按属性名查找，所以不能用 `@SerialName` 重命名。结果列也可以从 [Join](#join) 中查询。算术运算、`CASE` 和只返回
+单个值的子查询暂时还不能作为表达式使用。
+
+## Join
+
+Join 把多个关系（表、视图或派生表）的行合在一起读取。用 `FROM(relation)` 开始一个 Join，用 Join 运算符扩展它，然后像查询表一样
+从中查询。Join 是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`。
+
+示例用到另一张表，以及几个表示 Join 结果的类型，它们不需要 `@DBRow`：
+
+```kotlin
+@DBRow("transcript")
+@Serializable
+data class Transcript(
+    val name: String?,
+    val math: Int,
+    val english: Int,
+)
+
+@Serializable
+data class Student(
+    val name: String?,
+    val age: Int?,
+    val math: Int,
+    val english: Int,
+)
+
+@Serializable
+data class StudentScore(
+    val name: String?,
+    val tests: Long,
+    val bestMath: Int?,
+)
+```
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun joinSample() {
+    lateinit var students: SelectStatement<Student>
+    lateinit var scores: SelectStatement<StudentScore>
+    database {
+        // SELECT name,person.age,transcript.math,transcript.english FROM person INNER JOIN transcript USING (name)
+        students = (FROM(PersonTable) INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()
+        // SELECT person.name AS name,count(transcript.math) AS tests,max(transcript.math) AS bestMath
+        //     FROM person LEFT OUTER JOIN transcript ON person.name = transcript.name GROUP BY person.name
+        scores = (FROM(PersonTable) LEFT_OUTER_JOIN TranscriptTable ON (PersonTable.name EQ TranscriptTable.name)) SELECT listOf(
+            PersonTable.name AS StudentScore::name,
+            PersonTable.count(TranscriptTable.math) AS StudentScore::tests,
+            PersonTable.max(TranscriptTable.math) AS StudentScore::bestMath,
+        ) GROUP_BY PersonTable.name
+    }
+}
+```
+
+Join 运算符有：
+
+| 运算符 | 后接 | 返回 |
+| --- | --- | --- |
+| `INNER_JOIN` | `ON` 或 `USING` | 两边匹配的行 |
+| `LEFT_OUTER_JOIN` | `ON` 或 `USING` | 上述行，加上它之前的关系中没有匹配的行 |
+| `RIGHT_OUTER_JOIN` | `ON` 或 `USING` | 上述行，加上被连接的关系中没有匹配的行 |
+| `FULL_OUTER_JOIN` | `ON` 或 `USING` | 上述行，加上两边各自没有匹配的行 |
+| `CROSS_JOIN` | 无 | 它之前的关系的每一行与被连接关系的每一行的组合 |
+| `NATURAL_JOIN`、`NATURAL_LEFT_OUTER_JOIN`、`NATURAL_RIGHT_OUTER_JOIN`、`NATURAL_FULL_OUTER_JOIN` | 无 | 同上，按同名的列匹配 |
+
+`RIGHT_OUTER_JOIN`、`FULL_OUTER_JOIN` 和它们的 NATURAL 形式需要 SQLite 3.39.0，Android 从 API 34 起才具备，所以它们标有
+`@PlatformDependentSQLiteAPI`，需要按[依赖 SQLite 版本的 API](modify-database-and-transaction-cn.md#依赖-sqlite-版本的-api) 所说的
+方式声明同意。
+
+Join 按书写的顺序执行，每一个都可以有自己的条件：`FROM(a) INNER_JOIN b ON (...) LEFT_OUTER_JOIN c ON (...)`。一个关系只能被连接
+一次：要让表和自身 Join，请连接由它的行构成的[派生表](#派生表)，这相当于给它起了另一个名字。
+
+Join 的行没有自己的类型，所以从 Join 查询时要指定读取成的类型：用 `X<R>()`、`WHERE<R>(...)` 这类子句函数，或者结果列。构建语句时，
+会对照参与 Join 的关系检查这个类型：
+
+* 每个属性都必须是某个关系的列。两个关系中同名的列无法区分，除非 `USING` 或 NATURAL Join 合并了它们，所以请用 `AS` 选取其中一个，
+  就像上面的 `PersonTable.name AS StudentScore::name`。
+* 列或表达式可能为 NULL 时，属性必须可空。外连接在找不到匹配行的地方，会让一个关系的列为 NULL，因此除 `count` 以外，关于这些列的
+  表达式也是如此。
+
+SQLlin 写列时都带上关系的名字，所以条件、函数、_GROUP BY_ 和 _ORDER BY_ 都能使用其他关系中也有的列名。可观察查询会观察 Join 中的
+所有关系。
+
+### 旧的 Join API
+
+在 2.5.0 之前，Join 写作 _SELECT_ 的子句：`PersonTable SELECT INNER_JOIN<Student>(TranscriptTable) USING name`，以及 `CROSS_JOIN`、
+`NATURAL_JOIN`、`LEFT_OUTER_JOIN` 等。它们仍然可用，但不会检查行被读取成的类型，无法连接两个以上各带条件的关系，也不能选取结果列。
+**它们将在 2.5.0 之后的下一个版本中删除**，请按上面的方式书写 Join。
 
 ## 子查询
 
@@ -303,8 +296,8 @@ fun sample() {
         // SELECT authorId,books FROM (SELECT authorId,count(*) AS books FROM book GROUP BY book.authorId) AS author_books
         //     WHERE author_books.books>?
         prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
-        // SELECT name,books FROM person JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
-        personBooks = PersonTable SELECT INNER_JOIN<PersonBooks>(authorBooks) ON (PersonTable.id EQ AuthorBooksView.authorId)
+        // SELECT person.name,author_books.books FROM person INNER JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
+        personBooks = (FROM(PersonTable) INNER_JOIN authorBooks ON (PersonTable.id EQ AuthorBooksView.authorId)) SELECT X<PersonBooks>()
     }
 }
 ```
@@ -327,9 +320,9 @@ database {
     val elders = PersonTable { table ->
         table SELECT listOf(name AS Elder::elderName, age AS Elder::elderAge)
     } AS ElderView
-    // SELECT name,elderName FROM person JOIN (SELECT person.name AS elderName,person.age AS elderAge FROM person) AS elder
-    //     ON elder.elderAge>person.age
-    pairs = PersonTable SELECT INNER_JOIN<YoungerAndElder>(elders) ON (ElderView.elderAge GT PersonTable.age)
+    // SELECT person.name,elder.elderName FROM person
+    //     INNER JOIN (SELECT person.name AS elderName,person.age AS elderAge FROM person) AS elder ON elder.elderAge>person.age
+    pairs = (FROM(PersonTable) INNER_JOIN elders ON (ElderView.elderAge GT PersonTable.age)) SELECT X<YoungerAndElder>()
 }
 ```
 

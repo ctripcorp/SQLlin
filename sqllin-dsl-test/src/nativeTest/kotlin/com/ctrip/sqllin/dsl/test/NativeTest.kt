@@ -90,6 +90,9 @@ class NativeTest {
     fun testConditionReuse() = commonTest.testConditionReuse()
 
     @Test
+    fun testJoinedRelation() = commonTest.testJoinedRelation()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

@@ -104,9 +104,9 @@ public fun <T> FtsTable<T>.offsets(): ClauseString<String> = ftsFunction("offset
 @ExperimentalDSLDatabaseAPI
 @FunctionDslMaker
 public fun <T> FtsTable<T>.matchinfo(format: String = "pcx"): ClauseBlob =
-    ClauseBlob("matchinfo($tableName,${sqlString(format)})", this, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = true)
+    ClauseBlob("matchinfo($tableName,${sqlString(format)})", this, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = true, columnTables = setOf(tableName))
 
 private fun Relation<*>.ftsFunction(valueName: String): ClauseString<String> =
-    ClauseString(valueName, this, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = true)
+    ClauseString(valueName, this, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = true, columnTables = setOf(tableName))
 
 private fun sqlString(string: String): String = "'${string.replace("'", "''")}'"

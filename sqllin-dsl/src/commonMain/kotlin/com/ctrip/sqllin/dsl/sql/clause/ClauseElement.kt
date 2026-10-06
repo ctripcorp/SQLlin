@@ -54,6 +54,8 @@ import com.ctrip.sqllin.dsl.sql.Relation
  * an aggregate query
  * @property isNullOnNoRows Whether the element is NULL when an aggregate query without GROUP BY matches no rows. Such a
  * query still returns one row, in which a column, and every aggregate function except `count`, is NULL.
+ * @property columnTables The names of the tables whose columns the element reads: a column's own table, and the tables
+ * of a function's arguments, which an outer join can fill with NULL
  *
  * @author Yuang Qiao
  */
@@ -64,7 +66,10 @@ public sealed class ClauseElement<V : Any>(
     internal val isNullable: Boolean,
     internal val isAggregate: Boolean,
     internal val isNullOnNoRows: Boolean,
+    columnTables: Set<String>? = null,
 ) {
+
+    internal val columnTables: Set<String> = columnTables ?: if (isFunction) emptySet() else setOf(table.tableName)
 
     /**
      * Creates the element of an aggregate function of this element that has values of the same type, as `max` and

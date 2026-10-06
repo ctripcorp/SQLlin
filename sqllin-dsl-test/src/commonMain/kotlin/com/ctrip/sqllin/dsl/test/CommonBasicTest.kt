@@ -1123,6 +1123,135 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(listOf("a", "x", "y"), either.getResults().map { it.name }.sorted())
     }
 
+    /**
+     * Covers joins of relations: USING and NATURAL joins, which merge the columns of the same name, result columns with
+     * GROUP BY on an outer join, three joined tables, CROSS JOIN, a derived table joined with parameters in the
+     * subquery, the ON condition and WHERE, the checks of the type rows are read into, RIGHT and FULL OUTER JOIN where
+     * SQLite has them, and an observed query of a join.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+    fun testJoinedRelation() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        runTest {
+            database {
+                BookTable INSERT listOf(
+                    Book(name = "The Da Vinci Code", author = "Dan Brown", price = 16.96, pages = 454),
+                    Book(name = "The Lost Symbol", author = "Dan Brown", price = 19.95, pages = 510),
+                    Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251),
+                )
+                CategoryTable INSERT listOf(
+                    Category(name = "The Da Vinci Code", code = 1),
+                    Category(name = "Kotlin Cookbook", code = 2),
+                    Category(name = "Unwritten", code = 3),
+                )
+                PersonWithIdTable INSERT listOf(
+                    PersonWithId(id = null, name = "Dan Brown", age = 61),
+                    PersonWithId(id = null, name = "Ken Kousen", age = 60),
+                    PersonWithId(id = null, name = "Ann", age = 30),
+                )
+            }
+
+            lateinit var using: SelectStatement<Joiner>
+            lateinit var natural: SelectStatement<Joiner>
+            lateinit var stats: SelectStatement<PersonBookStats>
+            lateinit var titles: SelectStatement<PersonBookTitle>
+            lateinit var codes: SelectStatement<AuthorCode>
+            lateinit var crossCount: SelectStatement<BookCount>
+            lateinit var prolific: SelectStatement<PersonBooks>
+            database {
+                // USING and NATURAL merge 'name', which book and category both have
+                using = (FROM(BookTable) INNER_JOIN CategoryTable USING BookTable.name) SELECT WHERE<Joiner>(CategoryTable.code GT 0)
+                natural = (FROM(BookTable) NATURAL_JOIN CategoryTable) SELECT X<Joiner>()
+                // Ann has no books: count is 0, while max is NULL
+                stats = (FROM(PersonWithIdTable) LEFT_OUTER_JOIN BookTable ON (PersonWithIdTable.name EQ BookTable.author)) SELECT listOf(
+                    PersonWithIdTable.name AS PersonBookStats::name,
+                    PersonWithIdTable.count(BookTable.name) AS PersonBookStats::books,
+                    PersonWithIdTable.max(BookTable.price) AS PersonBookStats::highest,
+                ) GROUP_BY PersonWithIdTable.name
+                titles = (FROM(PersonWithIdTable) LEFT_OUTER_JOIN BookTable ON (PersonWithIdTable.name EQ BookTable.author)) SELECT listOf(
+                    BookTable.name AS PersonBookTitle::title,
+                ) WHERE (PersonWithIdTable.age LT 40)
+                codes = (
+                    FROM(PersonWithIdTable)
+                        INNER_JOIN BookTable ON (PersonWithIdTable.name EQ BookTable.author)
+                        INNER_JOIN CategoryTable ON (BookTable.name EQ CategoryTable.name)
+                ) SELECT X<AuthorCode>()
+                crossCount = (FROM(BookTable) CROSS_JOIN CategoryTable) SELECT listOf(BookTable.count(X) AS BookCount::books)
+                // Parameters of the derived table, of ON and of WHERE, in this order
+                val authorBooks = BookTable { table ->
+                    table SELECT listOf(count(X) AS AuthorBooks::books) WHERE (price GT 10.0) GROUP_BY author
+                } AS AuthorBooksView
+                prolific = (FROM(PersonWithIdTable) INNER_JOIN authorBooks ON ((PersonWithIdTable.name EQ AuthorBooksView.author) AND (AuthorBooksView.books GT 1))) SELECT WHERE<PersonBooks>(PersonWithIdTable.age GT 50)
+            }
+            assertEquals(listOf("Kotlin Cookbook" to 2, "The Da Vinci Code" to 1), using.getResults().map { it.name to it.code }.sortedBy { it.first })
+            assertEquals(using.getResults().sortedBy { it.name }, natural.getResults().sortedBy { it.name })
+            assertEquals(
+                listOf(PersonBookStats("Ann", 0, null), PersonBookStats("Dan Brown", 2, 19.95), PersonBookStats("Ken Kousen", 1, 37.72)),
+                stats.getResults().sortedBy { it.name },
+            )
+            assertEquals(listOf(PersonBookTitle(30, null)), titles.getResults())
+            assertEquals(listOf(AuthorCode(60, 2), AuthorCode(61, 1)), codes.getResults().sortedBy { it.age })
+            assertEquals(listOf(BookCount(9)), crossCount.getResults())
+            assertEquals(listOf(PersonBooks("Dan Brown", 61, 2)), prolific.getResults())
+
+            // The type rows are read into is checked against the joined relations
+            val ambiguous = assertFailsWith<IllegalArgumentException> {
+                database { (FROM(BookTable) INNER_JOIN CategoryTable ON (BookTable.name EQ CategoryTable.name)) SELECT X<Joiner>() }
+            }
+            assertEquals(true, "can't be told apart" in ambiguous.message!!, ambiguous.message)
+            val outerColumn = assertFailsWith<IllegalArgumentException> {
+                database { (FROM(PersonWithIdTable) LEFT_OUTER_JOIN BookTable ON (PersonWithIdTable.name EQ BookTable.author)) SELECT X<BookAuthor>() }
+            }
+            assertEquals(true, "outer join" in outerColumn.message!!, outerColumn.message)
+            val outerExpression = assertFailsWith<IllegalArgumentException> {
+                database {
+                    (FROM(PersonWithIdTable) LEFT_OUTER_JOIN BookTable ON (PersonWithIdTable.name EQ BookTable.author)) SELECT listOf(BookTable.name AS NameOnly::name)
+                }
+            }
+            assertEquals(true, "outer join" in outerExpression.message!!, outerExpression.message)
+            assertFailsWith<IllegalArgumentException> {
+                database { (FROM(BookTable) INNER_JOIN BookTable ON (BookTable.name EQ BookTable.name)) SELECT X<BookAuthor>() }
+            }
+            val otherTable = assertFailsWith<IllegalArgumentException> {
+                database { (FROM(BookTable) CROSS_JOIN CategoryTable) SELECT listOf(PersonWithIdTable.name AS NameOnly::name) }
+            }
+            assertEquals(true, "belongs to table 'person_with_id'" in otherTable.message!!, otherTable.message)
+
+            // RIGHT and FULL OUTER JOIN need SQLite 3.39.0, which Android has from API 34 on
+            val outerJoins = try {
+                lateinit var right: SelectStatement<Joiner>
+                lateinit var full: SelectStatement<Joiner>
+                database {
+                    right = (FROM(BookTable) RIGHT_OUTER_JOIN CategoryTable USING BookTable.name) SELECT X<Joiner>()
+                    full = (FROM(BookTable) FULL_OUTER_JOIN CategoryTable USING BookTable.name) SELECT X<Joiner>()
+                }
+                right.getResults() to full.getResults()
+            } catch (e: Exception) {
+                assertEquals(true, "RIGHT and FULL OUTER JOINs are not currently supported" in e.message.orEmpty(), e.message)
+                null
+            }
+            outerJoins?.let { (right, full) ->
+                assertEquals(listOf(1, 2, 3), right.map { it.code }.sortedBy { it })
+                assertEquals(listOf(null), right.filter { it.code == 3 }.map { it.author })
+                assertEquals(4, full.size)
+            }
+
+            // An observed query of a join watches all its tables
+            val observed = Channel<List<PersonBookStats>>(Channel.UNLIMITED)
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) {
+                    (FROM(PersonWithIdTable) LEFT_OUTER_JOIN BookTable ON (PersonWithIdTable.name EQ BookTable.author)) SELECT listOf(
+                        PersonWithIdTable.name AS PersonBookStats::name,
+                        PersonWithIdTable.count(BookTable.name) AS PersonBookStats::books,
+                        PersonWithIdTable.max(BookTable.price) AS PersonBookStats::highest,
+                    ) GROUP_BY PersonWithIdTable.name
+                }.collect { observed.send(it) }
+            }
+            assertEquals(0L, observed.receive().single { it.name == "Ann" }.books)
+            database { BookTable INSERT Book(name = "Ann's Book", author = "Ann", price = 9.0, pages = 99) }
+            assertEquals(1L, observed.receive().single { it.name == "Ann" }.books)
+        }
+    }
+
     @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
     fun testConcurrency() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         runTest {

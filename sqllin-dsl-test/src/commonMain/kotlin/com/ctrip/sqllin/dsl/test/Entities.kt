@@ -752,3 +752,21 @@ data class YoungerAndElder(val name: String, val elderName: String)
  */
 @Serializable
 data class PersonAge(val age: Age?)
+
+/**
+ * A person with the number of their books and the highest price of one, from person_with_id outer joined with book.
+ */
+@Serializable
+data class PersonBookStats(val name: String, val books: Long, val highest: Double?)
+
+/**
+ * The age of a person with the name of one of their books, which an outer join leaves NULL for a person without one.
+ */
+@Serializable
+data class PersonBookTitle(val age: Age, val title: String?)
+
+/**
+ * The age of an author with the code of the category of one of their books, from three joined tables.
+ */
+@Serializable
+data class AuthorCode(val age: Age, val code: Code)

@@ -18,6 +18,7 @@ package com.ctrip.sqllin.dsl.sql.operation
 
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
+import com.ctrip.sqllin.dsl.sql.From
 import com.ctrip.sqllin.dsl.sql.Relation
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.compiler.appendDBColumnName
@@ -47,15 +48,15 @@ internal object Select : Operation {
      * @return Statement that can be followed by GROUP BY, ORDER BY, or LIMIT
      */
     fun <R> select(
-        table: Relation<*>,
+        from: From,
         clause: WhereClause<R>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
     ): WhereSelectStatement<R> {
-        checkProjection(table, deserializer)
-        return WhereSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(table.fromParameters, clause.selectCondition.parameters), null, table.readTables + clause.selectCondition.tables)
+        checkProjection(from, deserializer)
+        return WhereSelectStatement(buildSQL(from, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(from.parameters, clause.selectCondition.parameters), null, from.tables + clause.selectCondition.tables)
     }
 
     /**
@@ -64,15 +65,15 @@ internal object Select : Operation {
      * @return Statement that can be followed by LIMIT
      */
     fun <R> select(
-        table: Relation<*>,
+        from: From,
         clause: OrderByClause<R>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
     ): OrderBySelectStatement<R> {
-        checkProjection(table, deserializer)
-        return OrderBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(table.fromParameters), null, table.readTables)
+        checkProjection(from, deserializer)
+        return OrderBySelectStatement(buildSQL(from, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(from.parameters), null, from.tables)
     }
 
     /**
@@ -81,15 +82,15 @@ internal object Select : Operation {
      * @return Statement that can be followed by OFFSET
      */
     fun <R> select(
-        table: Relation<*>,
+        from: From,
         clause: LimitClause<R>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
     ): LimitSelectStatement<R> {
-        checkProjection(table, deserializer)
-        return LimitSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(table.fromParameters), null, table.readTables)
+        checkProjection(from, deserializer)
+        return LimitSelectStatement(buildSQL(from, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(from.parameters), null, from.tables)
     }
 
     /**
@@ -98,15 +99,15 @@ internal object Select : Operation {
      * @return Statement that can be followed by HAVING or ORDER BY
      */
     fun <R> select(
-        table: Relation<*>,
+        from: From,
         clause: GroupByClause<R>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
     ): GroupBySelectStatement<R> {
-        checkProjection(table, deserializer)
-        return GroupBySelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(table.fromParameters), null, table.readTables)
+        checkProjection(from, deserializer)
+        return GroupBySelectStatement(buildSQL(from, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(from.parameters), null, from.tables)
     }
 
     /**
@@ -124,7 +125,7 @@ internal object Select : Operation {
         connection: DatabaseConnection,
         container: StatementContainer,
     ) : JoinSelectStatement<R> =
-        JoinSelectStatement(buildSQL(table, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(table.fromParameters, clause.parameters), null, table.readTables + clause.tables)
+        JoinSelectStatement(buildSQL(From.of(table), clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(table.fromParameters, clause.parameters), null, table.readTables + clause.tables)
 
     /**
      * Builds a SELECT statement with JOIN clause (requires ON or USING).
@@ -143,7 +144,7 @@ internal object Select : Operation {
         addSelectStatement: (SelectStatement<R>) -> Unit
     ) : JoinStatementWithoutCondition<R> =
         JoinStatementWithoutCondition(
-            buildSQL(table, clause, isDistinct, deserializer),
+            buildSQL(From.of(table), clause, isDistinct, deserializer),
             deserializer,
             connection,
             container,
@@ -153,47 +154,64 @@ internal object Select : Operation {
         )
 
     /**
-     * Checks that [deserializer] can read rows of [table], when it reads them into a type other than the table's
-     * own row type.
+     * Checks that [deserializer] can read rows of [from], when it reads them into a type other than the row type of a
+     * single table.
      *
      * The columns a SELECT reads are the element names of [deserializer]'s descriptor, so a projection type has to
-     * fit the table. Every property must name a column, have that column's type, and be nullable when the column is,
-     * as a NULL read into a non-null property would quietly become `0` or `""`. A mismatch fails here, while the
-     * statement is built, rather than in SQLite or not at all.
+     * fit what the SELECT reads. Every property must name a column, of a single relation unless a join merges them,
+     * have that column's type, and be nullable when the column can be NULL, as it is nullable or an outer join can
+     * leave its relation without a matching row, as a NULL read into a non-null property would quietly become `0` or
+     * `""`. A mismatch fails here, while the statement is built, rather than in SQLite or not at all.
      *
-     * @throws IllegalArgumentException if the projection type doesn't fit the table
+     * @throws IllegalArgumentException if the projection type doesn't fit what the SELECT reads
      */
     @OptIn(ExperimentalSerializationApi::class)
-    private fun checkProjection(table: Relation<*>, deserializer: DeserializationStrategy<*>) {
-        val columns = table.kSerializer().descriptor
+    private fun checkProjection(from: From, deserializer: DeserializationStrategy<*>) {
         val projection = deserializer.descriptor
-        if (projection == columns)
+        if (!from.isJoin && projection == from.members.single().columns)
             return
         for (index in 0 ..< projection.elementsCount)
-            checkColumnProperty(table, columns, projection, index)
+            checkColumnProperty(from, projection, index)
     }
 
     /**
-     * Checks that property [index] of [projection] can be read from the column of [table] it names, as described by
-     * [checkProjection].
+     * Checks that property [index] of [projection] can be read from the column of [from] it names, as described by
+     * [checkProjection], and returns that column.
      */
     @OptIn(ExperimentalSerializationApi::class)
-    private fun checkColumnProperty(table: Relation<*>, columns: SerialDescriptor, projection: SerialDescriptor, index: Int) {
+    private fun checkColumnProperty(from: From, projection: SerialDescriptor, index: Int): From.Column {
         val projectionName = projection.serialName
         val name = projection.getElementName(index)
-        val columnIndex = columns.getElementIndex(name)
-        require(columnIndex != CompositeDecoder.UNKNOWN_NAME) {
-            "Can't select '$projectionName' from table '${table.tableName}': its property '$name' isn't a column of that table."
-        }
-        val column = columns.getElementDescriptor(columnIndex)
+        val column = from.find(name, projectionName)
         val property = projection.getElementDescriptor(index)
-        val columnType = column.serialName.removeSuffix("?")
+        val columnType = column.descriptor.serialName.removeSuffix("?")
         val propertyType = property.serialName.removeSuffix("?")
         require(propertyType == columnType) {
-            "Can't select '$projectionName' from table '${table.tableName}': its property '$name' is a $propertyType, but the column holds a $columnType."
+            "Can't select '$projectionName' from ${from.description}: its property '$name' is a $propertyType, but the column holds a $columnType."
         }
         require(property.isNullable || !column.isNullable) {
-            "Can't select '$projectionName' from table '${table.tableName}': column '$name' is nullable, so property '$name' has to be nullable too."
+            if (column.descriptor.isNullable)
+                "Can't select '$projectionName' from ${from.description}: column '$name' is nullable, so property '$name' has to be nullable too."
+            else
+                "Can't select '$projectionName' from ${from.description}: column '$name' of '${column.relation.tableName}' is NULL where the outer join finds no matching row, so property '$name' has to be nullable."
+        }
+        return column
+    }
+
+    /**
+     * Appends the columns that the properties of [projection] name, as [from] writes them: with the names of their
+     * relations in a join, which [checkProjection] has checked.
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun StringBuilder.appendColumns(from: From, projection: SerialDescriptor) {
+        if (!from.isJoin) {
+            appendDBColumnName(projection)
+            return
+        }
+        for (index in 0 ..< projection.elementsCount) {
+            if (index > 0)
+                append(',')
+            append(from.find(projection.getElementName(index), projection.serialName).sql)
         }
     }
 
@@ -206,15 +224,16 @@ internal object Select : Operation {
      *
      * @return Statement that can be followed by WHERE, GROUP BY, ORDER BY, or LIMIT
      */
+    @OptIn(ExperimentalSerializationApi::class)
     fun <R> select(
-        table: Relation<*>,
+        from: From,
         resultColumns: Iterable<ResultColumn<R>>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
     ): ResultColumnSelectStatement<R> {
-        val expressions = checkResultColumns(table, resultColumns, deserializer)
+        val expressions = checkResultColumns(from, resultColumns, deserializer)
         val projection = deserializer.descriptor
         val sql = buildString {
             append(sqlStr)
@@ -224,16 +243,19 @@ internal object Select : Operation {
                 if (index > 0)
                     append(',')
                 val name = projection.getElementName(index)
-                expressions[name]?.let {
-                    it.appendSQL(this)
+                val expression = expressions[name]
+                if (expression != null) {
+                    expression.appendSQL(this)
                     append(" AS ")
+                    append(name)
+                } else {
+                    append(if (from.isJoin) from.find(name, projection.serialName).sql else name)
                 }
-                append(name)
             }
             append(" FROM ")
-            append(table.fromSQL)
+            append(from.sql)
         }
-        return ResultColumnSelectStatement(sql, deserializer, connection, container, parametersOf(table.fromParameters), ungroupedError(table, expressions, deserializer), table.readTables)
+        return ResultColumnSelectStatement(sql, deserializer, connection, container, parametersOf(from.parameters), ungroupedError(from, expressions, deserializer), from.tables)
     }
 
     /**
@@ -241,47 +263,53 @@ internal object Select : Operation {
      * the properties they are selected into.
      *
      * Every result column has to name a property that is serialized under its own name, which is how the result is
-     * read, and no property can be given two expressions. A property given an expression has to be nullable when the
-     * expression can be NULL in a row, or in a group of GROUP BY. Every other property is read from its column, and
-     * is checked as [checkProjection] does. Whether a property has to be nullable because the query isn't grouped is
-     * left to [ungroupedError].
+     * read, and no property can be given two expressions. An expression can only read the columns of what the SELECT
+     * reads, and a property given one has to be nullable when the expression can be NULL in a row, or in a group of
+     * GROUP BY, which an outer join makes any expression but `count` of a relation it can leave without a matching row.
+     * Every other property is read from its column, and is checked as [checkProjection] does. Whether a property has to
+     * be nullable because the query isn't grouped is left to [ungroupedError].
      *
      * @throws IllegalArgumentException if the result columns don't fit the result type
      */
     @OptIn(ExperimentalSerializationApi::class)
     private fun <R> checkResultColumns(
-        table: Relation<*>,
+        from: From,
         resultColumns: Iterable<ResultColumn<R>>,
         deserializer: DeserializationStrategy<R>,
     ): Map<String, ClauseElement<*>> {
         val projection = deserializer.descriptor
         val projectionName = projection.serialName
+        val relations = from.members.mapTo(HashSet()) { it.relation.tableName }
         val expressions = HashMap<String, ClauseElement<*>>()
         for (resultColumn in resultColumns) {
             val name = resultColumn.propertyName
             val index = projection.getElementIndex(name)
             require(index != CompositeDecoder.UNKNOWN_NAME) {
-                "Can't select '$projectionName' from table '${table.tableName}': it doesn't serialize its property '$name' under that name. The property may be @Transient or computed, or renamed with @SerialName, which a property given an expression with AS can't be."
+                "Can't select '$projectionName' from ${from.description}: it doesn't serialize its property '$name' under that name. The property may be @Transient or computed, or renamed with @SerialName, which a property given an expression with AS can't be."
             }
             require(name !in expressions) {
-                "Can't select '$projectionName' from table '${table.tableName}': its property '$name' is given more than one expression."
+                "Can't select '$projectionName' from ${from.description}: its property '$name' is given more than one expression."
             }
             val element = resultColumn.element
-            require(element.table.tableName == table.tableName) {
-                "Can't select '$projectionName' from table '${table.tableName}': the expression '${element.valueName}' of property '$name' belongs to table '${element.table.tableName}'."
+            val otherTable = (element.columnTables - relations).firstOrNull()
+            require(otherTable == null) {
+                "Can't select '$projectionName' from ${from.description}: the expression '${element.valueName}' of property '$name' belongs to table '$otherTable'."
             }
-            require(!element.isNullable || projection.getElementDescriptor(index).isNullable) {
-                "Can't select '$projectionName' from table '${table.tableName}': '${element.valueName}' can be NULL, so property '$name' has to be nullable."
+            val isNullable = projection.getElementDescriptor(index).isNullable
+            require(!element.isNullable || isNullable) {
+                "Can't select '$projectionName' from ${from.description}: '${element.valueName}' can be NULL, so property '$name' has to be nullable."
+            }
+            require(isNullable || !element.isNullOnNoRows || element.columnTables.none { it in from.nullableTables }) {
+                "Can't select '$projectionName' from ${from.description}: '${element.valueName}' is NULL where the outer join finds no matching row, so property '$name' has to be nullable."
             }
             expressions[name] = element
         }
         require(expressions.isNotEmpty()) {
-            "Can't select '$projectionName' from table '${table.tableName}' with no result columns. To select columns only, use X<$projectionName>()."
+            "Can't select '$projectionName' from ${from.description} with no result columns. To select columns only, use X<$projectionName>()."
         }
-        val columns = table.kSerializer().descriptor
         for (index in 0 ..< projection.elementsCount)
             if (projection.getElementName(index) !in expressions)
-                checkColumnProperty(table, columns, projection, index)
+                checkColumnProperty(from, projection, index)
         return expressions
     }
 
@@ -294,7 +322,7 @@ internal object Select : Operation {
      */
     @OptIn(ExperimentalSerializationApi::class)
     private fun ungroupedError(
-        table: Relation<*>,
+        from: From,
         expressions: Map<String, ClauseElement<*>>,
         deserializer: DeserializationStrategy<*>,
     ): String? {
@@ -308,11 +336,11 @@ internal object Select : Operation {
         if (nonNullProperties.isEmpty())
             return null
         val properties = nonNullProperties.joinToString { "'$it'" }
-        return "Can't select '${projection.serialName}' from table '${table.tableName}' without GROUP BY: an aggregate query that isn't grouped returns one row even when no rows match, in which $properties would be NULL. Make them nullable, or append GROUP BY."
+        return "Can't select '${projection.serialName}' from ${from.description} without GROUP BY: an aggregate query that isn't grouped returns one row even when no rows match, in which $properties would be NULL. Make them nullable, or append GROUP BY."
     }
 
     private fun <T> buildSQL(
-        table: Relation<*>,
+        from: From,
         clause: SelectClause<T>,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<T>,
@@ -320,9 +348,9 @@ internal object Select : Operation {
         append(sqlStr)
         if (isDistinct)
             append("DISTINCT ")
-        appendDBColumnName(deserializer.descriptor)
+        appendColumns(from, deserializer.descriptor)
         append(" FROM ")
-        append(table.fromSQL)
+        append(from.sql)
         append(clause.clauseStr)
     }
 
@@ -334,22 +362,22 @@ internal object Select : Operation {
      * @return Final SELECT statement ready for execution
      */
     fun <R> select(
-        table: Relation<*>,
+        from: From,
         isDistinct: Boolean,
         deserializer: DeserializationStrategy<R>,
         connection: DatabaseConnection,
         container: StatementContainer,
     ): FinalSelectStatement<R> {
-        checkProjection(table, deserializer)
+        checkProjection(from, deserializer)
         val sql = buildString {
             append(sqlStr)
             if (isDistinct)
                 append("DISTINCT ")
-            appendDBColumnName(deserializer.descriptor)
+            appendColumns(from, deserializer.descriptor)
             append(" FROM ")
-            append(table.fromSQL)
+            append(from.sql)
         }
-        return FinalSelectStatement(sql, deserializer, connection, container, parametersOf(table.fromParameters), null, table.readTables, isSimple = true)
+        return FinalSelectStatement(sql, deserializer, connection, container, parametersOf(from.parameters), null, from.tables, isSimple = true)
     }
 
     /**

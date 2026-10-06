@@ -46,7 +46,8 @@ public class ClauseNumber<V : Any> internal constructor(
     isNullable: Boolean,
     isAggregate: Boolean,
     isNullOnNoRows: Boolean,
-) : ClauseElement<V>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows) {
+    columnTables: Set<String>? = null,
+) : ClauseElement<V>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables) {
 
     /**
      * Creates the element of a column, as the code generated for a table does.
@@ -57,7 +58,7 @@ public class ClauseNumber<V : Any> internal constructor(
         this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
 
     override fun toAggregate(valueName: String, table: Relation<*>): ClauseNumber<V> =
-        ClauseNumber(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true)
+        ClauseNumber(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables)
 
     /**
      * Less than (<) comparison using parameterized binding.

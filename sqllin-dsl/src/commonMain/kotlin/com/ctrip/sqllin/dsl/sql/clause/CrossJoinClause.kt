@@ -46,6 +46,11 @@ internal class CrossJoinClause<R>(vararg tables: Relation<*>) : NaturalJoinClaus
  * ```
  *
  * **Warning**: Returns (left rows) × (right rows) results.
+ *
+ * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+ * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+ * against the joined relations, and can join more than two. See
+ * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
  */
 @Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker

@@ -22,6 +22,7 @@ import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.PlatformDependentSQLiteAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.DerivedTable
+import com.ctrip.sqllin.dsl.sql.From
 import com.ctrip.sqllin.dsl.sql.Relation
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.View
@@ -518,7 +519,7 @@ public class DatabaseScope internal constructor(
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, isDistinct: Boolean): FinalSelectStatement<R> {
         val container = getSelectStatementGroup()
-        val statement = Select.select(this, isDistinct, serializer, databaseConnection, container)
+        val statement = Select.select(From.of(this), isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
     }
@@ -543,7 +544,7 @@ public class DatabaseScope internal constructor(
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: WhereClause<R>, isDistinct: Boolean): WhereSelectStatement<R> {
         val container = getSelectStatementGroup()
-        val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
+        val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
     }
@@ -566,7 +567,7 @@ public class DatabaseScope internal constructor(
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: OrderByClause<R>, isDistinct: Boolean): OrderBySelectStatement<R> {
         val container = getSelectStatementGroup()
-        val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
+        val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
     }
@@ -589,7 +590,7 @@ public class DatabaseScope internal constructor(
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: LimitClause<R>, isDistinct: Boolean): LimitSelectStatement<R> {
         val container = getSelectStatementGroup()
-        val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
+        val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
     }
@@ -612,7 +613,7 @@ public class DatabaseScope internal constructor(
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: GroupByClause<R>, isDistinct: Boolean): GroupBySelectStatement<R> {
         val container = getSelectStatementGroup()
-        val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
+        val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
     }
@@ -841,7 +842,7 @@ public class DatabaseScope internal constructor(
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, columns: Iterable<ResultColumn<R>>, isDistinct: Boolean): ResultColumnSelectStatement<R> {
         val container = getSelectStatementGroup()
-        val statement = Select.select(this, columns, isDistinct, serializer, databaseConnection, container)
+        val statement = Select.select(From.of(this), columns, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
     }
@@ -937,8 +938,8 @@ public class DatabaseScope internal constructor(
      * val authorBooks = BookTable { table ->
      *     table SELECT listOf(count(X) AS AuthorBooks::books) GROUP_BY authorId
      * } AS AuthorBooksView
-     * PersonTable SELECT INNER_JOIN<Author>(authorBooks) ON (PersonTable.id EQ AuthorBooksView.authorId)
-     * // SELECT ... FROM person JOIN (SELECT authorId,count(*) AS books FROM book GROUP BY book.authorId) AS author_books
+     * (FROM(PersonTable) INNER_JOIN authorBooks ON (PersonTable.id EQ AuthorBooksView.authorId)) SELECT X<Author>()
+     * // SELECT ... FROM person INNER JOIN (SELECT authorId,count(*) AS books FROM book GROUP BY book.authorId) AS author_books
      * //     ON person.id=author_books.authorId
      * ```
      *
@@ -1145,6 +1146,220 @@ public class DatabaseScope internal constructor(
         selectStatement?.let { addSelectStatement(it) }
     }
 
+    // ========== SELECT from Joins ==========
+    //
+    // A join of relations, such as `PersonTable INNER_JOIN BookTable ON (...)`, is selected from like a table, but has
+    // to be given the type its rows are read into, as rows of a join have no type of their own.
+
+    /**
+     * Selects rows of this join into [R], with X<R>(), checking [R] against the joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT(x: ProjectedX<R>): FinalSelectStatement<R> =
+        select(getKSerializer<R>(), isDistinct = false)
+
+    /**
+     * Selects rows of this join into [R], with X<R>(), returning distinct rows, checking [R] against the joined
+     * relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT_DISTINCT(x: ProjectedX<R>): FinalSelectStatement<R> =
+        select(getKSerializer<R>(), isDistinct = true)
+
+    /**
+     * Selects rows of this join into [R], with WHERE<R>(...), checking [R] against the joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT(clause: WhereClause<R>): WhereSelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = false)
+
+    /**
+     * Selects rows of this join into [R], with WHERE<R>(...), returning distinct rows, checking [R] against the joined
+     * relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT_DISTINCT(clause: WhereClause<R>): WhereSelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = true)
+
+    /**
+     * Selects rows of this join into [R], with ORDER_BY<R>(...), checking [R] against the joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT(clause: OrderByClause<R>): OrderBySelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = false)
+
+    /**
+     * Selects rows of this join into [R], with ORDER_BY<R>(...), returning distinct rows, checking [R] against the
+     * joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT_DISTINCT(clause: OrderByClause<R>): OrderBySelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = true)
+
+    /**
+     * Selects rows of this join into [R], with LIMIT<R>(...), checking [R] against the joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT(clause: LimitClause<R>): LimitSelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = false)
+
+    /**
+     * Selects rows of this join into [R], with LIMIT<R>(...), returning distinct rows, checking [R] against the joined
+     * relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT_DISTINCT(clause: LimitClause<R>): LimitSelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = true)
+
+    /**
+     * Selects rows of this join into [R], with GROUP_BY<R>(...), checking [R] against the joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT(clause: GroupByClause<R>): GroupBySelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = false)
+
+    /**
+     * Selects rows of this join into [R], with GROUP_BY<R>(...), returning distinct rows, checking [R] against the
+     * joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT_DISTINCT(clause: GroupByClause<R>): GroupBySelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = true)
+
+    /**
+     * Selects rows of this join into [R], with a result column, checking [R] against the joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT(column: ResultColumn<R>): ResultColumnSelectStatement<R> =
+        select(getKSerializer<R>(), listOf(column), isDistinct = false)
+
+    /**
+     * Selects rows of this join into [R], with a result column, returning distinct rows, checking [R] against the
+     * joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT_DISTINCT(column: ResultColumn<R>): ResultColumnSelectStatement<R> =
+        select(getKSerializer<R>(), listOf(column), isDistinct = true)
+
+    /**
+     * Selects rows of this join into [R], with result columns, checking [R] against the joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT(columns: Iterable<ResultColumn<R>>): ResultColumnSelectStatement<R> =
+        select(getKSerializer<R>(), columns, isDistinct = false)
+
+    /**
+     * Selects rows of this join into [R], with result columns, returning distinct rows, checking [R] against the joined
+     * relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT_DISTINCT(columns: Iterable<ResultColumn<R>>): ResultColumnSelectStatement<R> =
+        select(getKSerializer<R>(), columns, isDistinct = true)
+
+    @ExperimentalDSLDatabaseAPI
+    public fun <R> JoinedRelation.select(serializer: KSerializer<R>, isDistinct: Boolean): FinalSelectStatement<R> {
+        val container = getSelectStatementGroup()
+        val statement = Select.select(from, isDistinct, serializer, databaseConnection, container)
+        addSelectStatement(statement)
+        return statement
+    }
+
+    @ExperimentalDSLDatabaseAPI
+    public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: WhereClause<R>, isDistinct: Boolean): WhereSelectStatement<R> {
+        val container = getSelectStatementGroup()
+        val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
+        addSelectStatement(statement)
+        return statement
+    }
+
+    @ExperimentalDSLDatabaseAPI
+    public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: OrderByClause<R>, isDistinct: Boolean): OrderBySelectStatement<R> {
+        val container = getSelectStatementGroup()
+        val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
+        addSelectStatement(statement)
+        return statement
+    }
+
+    @ExperimentalDSLDatabaseAPI
+    public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: LimitClause<R>, isDistinct: Boolean): LimitSelectStatement<R> {
+        val container = getSelectStatementGroup()
+        val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
+        addSelectStatement(statement)
+        return statement
+    }
+
+    @ExperimentalDSLDatabaseAPI
+    public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: GroupByClause<R>, isDistinct: Boolean): GroupBySelectStatement<R> {
+        val container = getSelectStatementGroup()
+        val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
+        addSelectStatement(statement)
+        return statement
+    }
+
+    @ExperimentalDSLDatabaseAPI
+    public fun <R> JoinedRelation.select(serializer: KSerializer<R>, columns: Iterable<ResultColumn<R>>, isDistinct: Boolean): ResultColumnSelectStatement<R> {
+        val container = getSelectStatementGroup()
+        val statement = Select.select(from, columns, isDistinct, serializer, databaseConnection, container)
+        addSelectStatement(statement)
+        return statement
+    }
+
     // ========== JOIN Operations ==========
 
     /**
@@ -1154,11 +1369,24 @@ public class DatabaseScope internal constructor(
      * ```kotlin
      * val joined = PersonTable SELECT INNER_JOIN(AddressTable) ON ...
      * ```
+     *
+     * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+     * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+     * against the joined relations, and can join more than two. See
+     * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
      */
     @StatementDslMaker
     public inline infix fun <T, reified R> Relation<T>.SELECT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
         select(getKSerializer(), clause, false)
 
+    /**
+     * Selects distinct rows with a JOIN clause, which ON or USING completes.
+     *
+     * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+     * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+     * against the joined relations, and can join more than two. See
+     * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
+     */
     @StatementDslMaker
     public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
         select(getKSerializer(), clause, true)
@@ -1175,11 +1403,24 @@ public class DatabaseScope internal constructor(
      * ```kotlin
      * val joined = PersonTable SELECT NATURAL_INNER_JOIN(AddressTable)
      * ```
+     *
+     * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+     * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+     * against the joined relations, and can join more than two. See
+     * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
      */
     @StatementDslMaker
     public inline infix fun <T, reified R> Relation<T>.SELECT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
         select(getKSerializer(), clause, false)
 
+    /**
+     * Selects distinct rows with a NATURAL or CROSS JOIN clause.
+     *
+     * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+     * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+     * against the joined relations, and can join more than two. See
+     * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
+     */
     @StatementDslMaker
     public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
         select(getKSerializer(), clause, true)
