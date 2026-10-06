@@ -3,6 +3,7 @@
 ## Medium Priority
 
 * Support WASM platform DSL
+* Support expressions in UPDATE's SET and in INSERT, such as `visits = visits + 1` or `updated_at = datetime('now')`, which triggers, upsert's `DO UPDATE SET` and rebuilding a table with converted data all need
 * Support CREATE TRIGGER DSL
 * Support JOIN sub-query DSL
 * Support more functions, such as `coalesce` and `ifnull`, as well as `CAST` and literal values in expressions, e.g. to convert data while copying it to a rebuilt table with `INSERT INTO ... SELECT`
