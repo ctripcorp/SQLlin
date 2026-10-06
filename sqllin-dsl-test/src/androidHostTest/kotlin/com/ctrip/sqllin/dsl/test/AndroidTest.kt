@@ -76,6 +76,9 @@ class AndroidTest {
     fun testSubquery() = commonTest.testSubquery()
 
     @Test
+    fun testConditionPrecedence() = commonTest.testConditionPrecedence()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

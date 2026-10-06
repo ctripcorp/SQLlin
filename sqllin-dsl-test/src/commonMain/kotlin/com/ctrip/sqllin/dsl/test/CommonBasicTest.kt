@@ -1056,6 +1056,44 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    /**
+     * Covers conditions combined with AND and OR, which apply in the order they are written, as Kotlin's infix functions
+     * do, though SQL gives AND precedence over OR: a condition that combines others with the other operator is put in
+     * parentheses, while one that combines them with the same operator isn't.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testConditionPrecedence() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        database {
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "a", age = 1),
+                PersonWithId(id = null, name = "x", age = 2),
+                PersonWithId(id = null, name = "y", age = 1),
+                PersonWithId(id = null, name = "x", age = 3),
+            )
+        }
+        fun select(condition: PersonWithIdTable.() -> SelectCondition): SelectStatement<PersonWithId> {
+            lateinit var statement: SelectStatement<PersonWithId>
+            database {
+                statement = PersonWithIdTable SELECT WHERE(PersonWithIdTable.condition())
+            }
+            return statement
+        }
+        fun names(condition: PersonWithIdTable.() -> SelectCondition): List<String> =
+            select(condition).getResults().map { it.name }.sorted()
+
+        val statement = select { (age EQ 1) OR (age EQ 2) AND (name EQ "x") }
+        assertEquals(
+            "SELECT id,name,age FROM person_with_id WHERE (person_with_id.age=? OR person_with_id.age=?) AND person_with_id.name=?",
+            statement.sqlStr,
+        )
+        assertEquals(listOf("x"), statement.getResults().map { it.name })
+        assertEquals(listOf("a", "x", "y"), names { (age EQ 1) OR ((age EQ 2) AND (name EQ "x")) })
+        assertEquals(listOf("x"), names { (name EQ "x") AND ((age EQ 2) OR (age EQ 1)) })
+        assertEquals(listOf("a", "x", "y"), names { (name EQ "x") AND (age EQ 3) OR (age EQ 1) })
+        assertEquals(listOf("a", "x", "x", "y"), names { (age EQ 1) OR (age EQ 2) OR (age EQ 3) })
+        assertEquals(listOf("x"), names { NOT((age EQ 1) OR (age EQ 2)) AND (name EQ "x") })
+    }
+
     @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
     fun testConcurrency() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         runTest {
