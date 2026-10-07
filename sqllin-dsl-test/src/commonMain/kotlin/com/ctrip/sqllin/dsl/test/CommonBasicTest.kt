@@ -3215,6 +3215,50 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers IF NOT EXISTS and IF EXISTS: creating a table, an FTS table, indexes and a view that exist does nothing, as
+     * does dropping a table, a view and an index that don't, while the statements without them fail.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testIfNotExists() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        // BookTable exists already
+        assertFails { database { CREATE(BookTable) } }
+        database {
+            CREATE_IF_NOT_EXISTS(BookTable)
+            ArticleTable.CREATE_IF_NOT_EXISTS()
+            ArticleTable.CREATE_IF_NOT_EXISTS()
+            BookTable.CREATE_INDEX_IF_NOT_EXISTS("idx_book_author", BookTable.author)
+            BookTable.CREATE_INDEX_IF_NOT_EXISTS("idx_book_author", BookTable.author)
+            ProductTable.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS("idx_product_name", ProductTable.name)
+            ProductTable.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS("idx_product_name", ProductTable.name)
+            CREATE_VIEW_IF_NOT_EXISTS(AdultPersonView) AS (PersonWithIdTable SELECT WHERE<AdultPerson>(PersonWithIdTable.age GTE 18))
+            CREATE_VIEW_IF_NOT_EXISTS(AdultPersonView) AS (PersonWithIdTable SELECT WHERE<AdultPerson>(PersonWithIdTable.age GTE 18))
+            ArticleTable INSERT Article(rowid = null, title = "Kotlin", body = "Coroutines", note = null)
+            PersonWithIdTable INSERT PersonWithId(id = null, name = "Ann", age = 30)
+        }
+        lateinit var articles: SelectStatement<Article>
+        lateinit var adults: SelectStatement<AdultPerson>
+        database {
+            articles = ArticleTable SELECT X
+            adults = AdultPersonView SELECT X
+        }
+        assertEquals(listOf("Kotlin"), articles.getResults().map { it.title })
+        assertEquals(listOf("Ann"), adults.getResults().map { it.name })
+        assertFails { database { BookTable.CREATE_INDEX("idx_book_author", BookTable.author) } }
+
+        database {
+            DROP_IF_EXISTS(AdultPersonView)
+            DROP_IF_EXISTS(AdultPersonView)
+            DROP_INDEX_IF_EXISTS("idx_book_author")
+            DROP_INDEX_IF_EXISTS("idx_book_author")
+            ArticleTable.DROP_IF_EXISTS()
+            DROP_IF_EXISTS(ArticleTable)
+        }
+        assertFails { database { DROP(ArticleTable) } }
+        assertEquals(true, database.selectFails { ArticleTable SELECT X })
+        assertEquals(true, database.selectFails { AdultPersonView SELECT X })
+    }
+
+    /**
      * Test for CREATE_INDEX and CREATE_UNIQUE_INDEX operations
      * Verifies index creation functionality
      */

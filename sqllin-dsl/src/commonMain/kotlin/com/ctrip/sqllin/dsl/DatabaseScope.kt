@@ -1458,6 +1458,28 @@ public class DatabaseScope internal constructor(
     public fun <T> Table<T>.CREATE(): Unit = CREATE(this)
 
     /**
+     * Creates [table] unless a table of its name exists, as the SQL `CREATE TABLE IF NOT EXISTS` does, so that a
+     * migration step can run more than once. An FTS table is created with `CREATE VIRTUAL TABLE IF NOT EXISTS`.
+     *
+     * The existing table isn't checked against [table]'s structure: if it differs, it stays as it is.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> CREATE_IF_NOT_EXISTS(table: Table<T>) {
+        addStatement(Create.createTable(table, databaseConnection, isIfNotExists = true))
+    }
+
+    /**
+     * Creates this table unless a table of its name exists.
+     *
+     * @see CREATE_IF_NOT_EXISTS
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("createIfNotExists")
+    public fun <T> Table<T>.CREATE_IF_NOT_EXISTS(): Unit = CREATE_IF_NOT_EXISTS(this)
+
+    /**
      * Creates an index on the specified columns of this table.
      *
      * Indexes improve query performance by allowing faster lookups on the indexed columns.
@@ -1514,6 +1536,30 @@ public class DatabaseScope internal constructor(
         addStatement(statement)
     }
 
+    /**
+     * Creates an index on [columns] of this table unless an index named [indexName] exists, as the SQL
+     * `CREATE INDEX IF NOT EXISTS` does.
+     *
+     * @see CREATE_INDEX
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> Table<T>.CREATE_INDEX_IF_NOT_EXISTS(indexName: String, vararg columns: ClauseElement<*>) {
+        addStatement(Create.createIndex(this, databaseConnection, indexName, *columns, isIfNotExists = true))
+    }
+
+    /**
+     * Creates a unique index on [columns] of this table unless an index named [indexName] exists, as the SQL
+     * `CREATE UNIQUE INDEX IF NOT EXISTS` does.
+     *
+     * @see CREATE_UNIQUE_INDEX
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> Table<T>.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS(indexName: String, vararg columns: ClauseElement<*>) {
+        addStatement(Create.createUniqueIndex(this, databaseConnection, indexName, *columns, isIfNotExists = true))
+    }
+
     // ========== DROP Operations ==========
 
     /**
@@ -1557,6 +1603,26 @@ public class DatabaseScope internal constructor(
     public fun <T> Table<T>.DROP(): Unit = DROP(this)
 
     /**
+     * Drops [table] if it exists, as the SQL `DROP TABLE IF EXISTS` does, so that a migration step can run more than
+     * once.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> DROP_IF_EXISTS(table: Table<T>) {
+        addStatement(Drop.drop(table, databaseConnection, isIfExists = true))
+    }
+
+    /**
+     * Drops this table if it exists.
+     *
+     * @see DROP_IF_EXISTS
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("dropIfExists")
+    public fun <T> Table<T>.DROP_IF_EXISTS(): Unit = DROP_IF_EXISTS(this)
+
+    /**
      * Drops the index named [indexName], as the SQL `DROP INDEX name` does, such as one that [CREATE_INDEX] or
      * [CREATE_UNIQUE_INDEX] created.
      *
@@ -1571,6 +1637,15 @@ public class DatabaseScope internal constructor(
     @StatementDslMaker
     public fun DROP_INDEX(indexName: String) {
         addStatement(Drop.dropIndex(indexName, databaseConnection))
+    }
+
+    /**
+     * Drops the index named [indexName] if it exists, as the SQL `DROP INDEX IF EXISTS` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_INDEX_IF_EXISTS(indexName: String) {
+        addStatement(Drop.dropIndex(indexName, databaseConnection, isIfExists = true))
     }
 
     // ========== CREATE VIEW and DROP VIEW ==========
@@ -1591,6 +1666,18 @@ public class DatabaseScope internal constructor(
     public fun <T> CREATE_VIEW(view: View<T>): ViewDefinition<T> = ViewDefinition(view)
 
     /**
+     * Starts the definition of [view] unless a view of its name exists, as the SQL `CREATE VIEW IF NOT EXISTS` does,
+     * which [AS] completes with the SELECT that defines it.
+     *
+     * The existing view isn't checked against the SELECT: if it differs, it stays as it is.
+     *
+     * @see CREATE_VIEW
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> CREATE_VIEW_IF_NOT_EXISTS(view: View<T>): ViewDefinition<T> = ViewDefinition(view, isIfNotExists = true)
+
+    /**
      * Creates the view, defined by [select], as the SQL `CREATE VIEW view AS SELECT ...` does.
      *
      * [select] reads rows of the view's row type, which is checked at compile time, from any tables, through a
@@ -1604,7 +1691,7 @@ public class DatabaseScope internal constructor(
     public infix fun <T> ViewDefinition<T>.AS(select: SelectStatement<T>) {
         select.checkComplete()
         select.container removeStatement select
-        addStatement(Create.createView(view, select, databaseConnection))
+        addStatement(Create.createView(view, select, databaseConnection, isIfNotExists))
     }
 
     /**
@@ -1623,6 +1710,25 @@ public class DatabaseScope internal constructor(
     @StatementDslMaker
     @JvmName("drop")
     public fun <T> View<T>.DROP(): Unit = DROP(this)
+
+    /**
+     * Drops [view] if it exists, as the SQL `DROP VIEW IF EXISTS` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> DROP_IF_EXISTS(view: View<T>) {
+        addStatement(Drop.dropView(view, databaseConnection, isIfExists = true))
+    }
+
+    /**
+     * Drops this view if it exists.
+     *
+     * @see DROP_IF_EXISTS
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("dropIfExists")
+    public fun <T> View<T>.DROP_IF_EXISTS(): Unit = DROP_IF_EXISTS(this)
 
     // ========== ALTER Operations ==========
 

@@ -134,6 +134,30 @@ fun sample() {
 }
 ```
 
+### IF NOT EXISTS and IF EXISTS
+
+`CREATE` fails if the table already exists, and `DROP` if it doesn't. Their `IF NOT EXISTS` and `IF EXISTS` versions do
+nothing instead, for tables, views and indexes. They are experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // CREATE TABLE IF NOT EXISTS person(...)
+        CREATE_IF_NOT_EXISTS(PersonTable)  // Or PersonTable.CREATE_IF_NOT_EXISTS()
+        PersonTable.CREATE_INDEX_IF_NOT_EXISTS("idx_person_name", PersonTable.name)
+        PersonTable.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS("idx_person_name_age", PersonTable.name, PersonTable.age)
+        CREATE_VIEW_IF_NOT_EXISTS(AdultView) AS (PersonTable SELECT WHERE<Adult>(PersonTable.age GTE 18))
+
+        DROP_IF_EXISTS(AdultView)  // Or AdultView.DROP_IF_EXISTS()
+        DROP_INDEX_IF_EXISTS("idx_person_name")
+        DROP_IF_EXISTS(PersonTable)  // Or PersonTable.DROP_IF_EXISTS()
+    }
+}
+```
+
+`IF NOT EXISTS` only checks the name: if a table of that name exists with other columns, it stays as it is.
+
 ### ALTER - Modifying Table Structure
 
 SQLlin provides several ALTER operations for modifying existing table structures:

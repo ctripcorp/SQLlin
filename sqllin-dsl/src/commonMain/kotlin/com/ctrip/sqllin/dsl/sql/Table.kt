@@ -215,6 +215,18 @@ private class NamedFtsTable<T>(private val table: FtsTable<T>, name: String) : F
 }
 
 /**
+ * Returns the CREATE statement of this table with `IF NOT EXISTS`, which does nothing if a table of its name exists:
+ * `CREATE TABLE IF NOT EXISTS name(...)`, or `CREATE VIRTUAL TABLE IF NOT EXISTS name USING ...`.
+ */
+internal fun Table<*>.createSQLIfNotExists(): String {
+    for (start in listOf("CREATE TABLE ", "CREATE VIRTUAL TABLE ")) {
+        if (createSQL.startsWith(start))
+            return "${start}IF NOT EXISTS ${createSQL.substring(start.length)}"
+    }
+    error("The CREATE statement of table '$tableName' doesn't start with 'CREATE TABLE ' or 'CREATE VIRTUAL TABLE '.")
+}
+
+/**
  * Returns the CREATE statement of this table with [name] in place of its own: `CREATE TABLE name(...)`, or
  * `CREATE VIRTUAL TABLE name USING ...` for a virtual table.
  */

@@ -99,6 +99,9 @@ class NativeTest {
     fun testDropIndex() = commonTest.testDropIndex()
 
     @Test
+    fun testIfNotExists() = commonTest.testIfNotExists()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

@@ -53,9 +53,11 @@ internal object Drop : Operation {
      * @param connection The database connection for executing the statement
      * @return A [TableStructureStatement] representing the DROP TABLE operation
      */
-    fun drop(table: Table<*>, connection: DatabaseConnection): SingleStatement {
+    fun drop(table: Table<*>, connection: DatabaseConnection, isIfExists: Boolean = false): SingleStatement {
         val sql = buildString {
             append(sqlStr)
+            if (isIfExists)
+                append(IF_EXISTS)
             append(table.tableName)
         }
         return TableStructureStatement(sql, connection)
@@ -69,12 +71,14 @@ internal object Drop : Operation {
      * @return A [TableStructureStatement] representing the DROP VIEW operation
      */
     @OptIn(ExperimentalDSLDatabaseAPI::class)
-    fun dropView(view: View<*>, connection: DatabaseConnection): SingleStatement =
-        TableStructureStatement("DROP VIEW ${view.tableName}", connection)
+    fun dropView(view: View<*>, connection: DatabaseConnection, isIfExists: Boolean = false): SingleStatement =
+        TableStructureStatement("DROP VIEW ${if (isIfExists) IF_EXISTS else ""}${view.tableName}", connection)
 
     /**
      * Builds a DROP INDEX statement for the index named [indexName].
      */
-    fun dropIndex(indexName: String, connection: DatabaseConnection): SingleStatement =
-        TableStructureStatement("DROP INDEX $indexName", connection)
+    fun dropIndex(indexName: String, connection: DatabaseConnection, isIfExists: Boolean = false): SingleStatement =
+        TableStructureStatement("DROP INDEX ${if (isIfExists) IF_EXISTS else ""}$indexName", connection)
+
+    private const val IF_EXISTS = "IF EXISTS "
 }

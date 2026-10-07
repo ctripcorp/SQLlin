@@ -127,6 +127,30 @@ fun sample() {
 }
 ```
 
+### IF NOT EXISTS 与 IF EXISTS
+
+表已存在时 `CREATE` 会失败，表不存在时 `DROP` 会失败。它们的 `IF NOT EXISTS` 和 `IF EXISTS` 版本则什么也不做，适用于表、视图和索引。
+它们是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // CREATE TABLE IF NOT EXISTS person(...)
+        CREATE_IF_NOT_EXISTS(PersonTable)  // 或 PersonTable.CREATE_IF_NOT_EXISTS()
+        PersonTable.CREATE_INDEX_IF_NOT_EXISTS("idx_person_name", PersonTable.name)
+        PersonTable.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS("idx_person_name_age", PersonTable.name, PersonTable.age)
+        CREATE_VIEW_IF_NOT_EXISTS(AdultView) AS (PersonTable SELECT WHERE<Adult>(PersonTable.age GTE 18))
+
+        DROP_IF_EXISTS(AdultView)  // 或 AdultView.DROP_IF_EXISTS()
+        DROP_INDEX_IF_EXISTS("idx_person_name")
+        DROP_IF_EXISTS(PersonTable)  // 或 PersonTable.DROP_IF_EXISTS()
+    }
+}
+```
+
+`IF NOT EXISTS` 只检查名字：如果同名的表已经存在但列不同，它会保持原样。
+
 ### ALTER - 修改表结构
 
 SQLlin 提供了多种 ALTER 操作来修改现有的表结构：

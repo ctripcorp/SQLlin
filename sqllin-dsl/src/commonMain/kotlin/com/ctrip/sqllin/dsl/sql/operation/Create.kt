@@ -19,6 +19,7 @@ package com.ctrip.sqllin.dsl.sql.operation
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.createSQLIfNotExists
 import com.ctrip.sqllin.dsl.sql.View
 import com.ctrip.sqllin.dsl.sql.clause.ClauseElement
 import com.ctrip.sqllin.dsl.sql.compiler.appendDBColumnName
@@ -43,6 +44,7 @@ internal object Create : Operation {
 
     private const val INDEX = "INDEX "
     private const val UNIQUE_INDEX = "UNIQUE INDEX "
+    private const val IF_NOT_EXISTS = "IF NOT EXISTS "
 
     /**
      * Builds a CREATE VIEW statement for [view], defined by [select].
@@ -54,10 +56,12 @@ internal object Create : Operation {
      * @return A [TableStructureStatement] representing the CREATE VIEW operation
      */
     @OptIn(ExperimentalDSLDatabaseAPI::class)
-    fun <T> createView(view: View<T>, select: SelectStatement<T>, connection: DatabaseConnection): SingleStatement {
+    fun <T> createView(view: View<T>, select: SelectStatement<T>, connection: DatabaseConnection, isIfNotExists: Boolean = false): SingleStatement {
         val sql = buildString {
             append(sqlStr)
             append("VIEW ")
+            if (isIfNotExists)
+                append(IF_NOT_EXISTS)
             append(view.tableName)
             append('(')
             appendDBColumnName(view.kSerializer().descriptor)
@@ -74,8 +78,8 @@ internal object Create : Operation {
      * @param connection Database connection for execution
      * @return CREATE statement ready for execution
      */
-    fun <T> createTable(table: Table<T>, connection: DatabaseConnection): SingleStatement =
-        TableStructureStatement(table.createSQL, connection)
+    fun <T> createTable(table: Table<T>, connection: DatabaseConnection, isIfNotExists: Boolean = false): SingleStatement =
+        TableStructureStatement(if (isIfNotExists) table.createSQLIfNotExists() else table.createSQL, connection)
 
     /**
      * Builds a CREATE INDEX statement for the specified table and columns.
@@ -90,9 +94,9 @@ internal object Create : Operation {
      * @return CREATE INDEX statement ready for execution
      * @throws IllegalArgumentException if no columns are specified
      */
-    fun <T> createIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>): SingleStatement {
+    fun <T> createIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>, isIfNotExists: Boolean = false): SingleStatement {
         require(columns.isNotEmpty()) { "You must create an index for at least one column." }
-        return createIndex(INDEX, table, connection, indexName, *columns)
+        return createIndex(INDEX, table, connection, indexName, *columns, isIfNotExists = isIfNotExists)
     }
 
     /**
@@ -109,9 +113,9 @@ internal object Create : Operation {
      * @return CREATE UNIQUE INDEX statement ready for execution
      * @throws IllegalArgumentException if no columns are specified
      */
-    fun <T> createUniqueIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>): SingleStatement {
+    fun <T> createUniqueIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>, isIfNotExists: Boolean = false): SingleStatement {
         require(columns.isNotEmpty()) { "You must create an index for at least one column." }
-        return createIndex(UNIQUE_INDEX, table, connection, indexName, *columns)
+        return createIndex(UNIQUE_INDEX, table, connection, indexName, *columns, isIfNotExists = isIfNotExists)
     }
 
     /**
@@ -127,10 +131,12 @@ internal object Create : Operation {
      * @return CREATE INDEX statement ready for execution
      * @throws IllegalArgumentException if no columns are specified
      */
-    private fun <T> createIndex(prefix: String, table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>): SingleStatement {
+    private fun <T> createIndex(prefix: String, table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>, isIfNotExists: Boolean): SingleStatement {
         val sql = buildString {
             append(sqlStr)
             append(prefix)
+            if (isIfNotExists)
+                append(IF_NOT_EXISTS)
             append(indexName)
             append(" ON ")
             append(table.tableName)

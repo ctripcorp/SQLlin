@@ -41,4 +41,4 @@ public abstract class View<T>(viewName: String) : Relation<T>(viewName)
  * @author Yuang Qiao
  */
 @ExperimentalDSLDatabaseAPI
-public class ViewDefinition<T> internal constructor(internal val view: View<T>)
+public class ViewDefinition<T> internal constructor(internal val view: View<T>, internal val isIfNotExists: Boolean = false)
