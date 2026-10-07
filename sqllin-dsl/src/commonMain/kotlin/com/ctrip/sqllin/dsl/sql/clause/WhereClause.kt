@@ -18,7 +18,9 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
+import com.ctrip.sqllin.dsl.sql.statement.IndexStatement
 import com.ctrip.sqllin.dsl.sql.statement.JoinSelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.ResultColumnSelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.UpdateDeleteStatement
@@ -100,3 +102,17 @@ public infix fun <T> UpdateStatementWithoutWhereClause<T>.WHERE(condition: Selec
     statementContainer changeLastStatement statement
     return statement.sqlStr
 }
+
+/**
+ * Makes this index a partial index of the rows that satisfy [condition], as the SQL `CREATE INDEX ... WHERE condition`
+ * does, such as a unique index of the rows that aren't deleted:
+ * ```kotlin
+ * UserTable.CREATE_UNIQUE_INDEX("idx_user_email", UserTable.email) WHERE (UserTable.isDeleted IS false)
+ * ```
+ * Its values are written into the SQL, as SQLite allows no parameters there, nor subqueries.
+ *
+ * @throws IllegalArgumentException if [condition] has a subquery
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun IndexStatement.WHERE(condition: SelectCondition): Unit = where(condition)

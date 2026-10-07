@@ -39,6 +39,9 @@ internal class UnionSelectStatementGroup<T> : StatementContainer {
         statementList.remove(statement)
     }
 
+    override fun replaceStatement(statement: SingleStatement, newStatement: SingleStatement): Unit =
+        error("A UNION block only holds SELECT statements, which aren't replaced.")
+
     /**
      * Combines all accumulated SELECT statements into a single UNION query.
      *

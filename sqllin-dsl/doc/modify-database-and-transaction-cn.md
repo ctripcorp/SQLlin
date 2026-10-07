@@ -116,6 +116,22 @@ fun sample() {
 用表的列的函数可以创建表达式索引，比较同一个表达式的查询会用到它，例如用 `lower(name)` 做不区分大小写的查找。索引只能包含它自己
 所在表的列。
 
+在 `CREATE_INDEX` 或 `CREATE_UNIQUE_INDEX` 后面加上 `WHERE` 就是部分索引：只索引满足条件的行。它比索引所有行的索引更小，唯一的部分
+索引只保证这些行之间的值不相同，例如未删除用户的邮箱。部分索引是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // CREATE UNIQUE INDEX idx_user_email ON user(email) WHERE isDeleted<=0
+        UserTable.CREATE_UNIQUE_INDEX("idx_user_email", UserTable.email) WHERE (UserTable.isDeleted IS false)
+    }
+}
+```
+
+SQLite 不允许索引的条件中带参数，也不允许子查询，所以 SQLlin 会把条件中的值直接写进 SQL，带子查询的条件会抛出
+`IllegalArgumentException`。只有当查询的 _WHERE_ 能推出索引的条件时，查询才会用到部分索引。
+
 `DROP_INDEX` 按名字删除索引，它是实验性 API：
 
 ```kotlin

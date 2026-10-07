@@ -3259,6 +3259,51 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers partial indexes: a unique index with WHERE keeps out the duplicates of the rows that satisfy its condition
+     * only, with the values of the condition, a quote among them, written into the SQL; a subquery there, and a second
+     * WHERE, are rejected.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testPartialIndex() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        fun insertFails(product: Product): Boolean = try {
+            database { ProductTable INSERT product }
+            false
+        } catch (e: Exception) {
+            true
+        }
+        database {
+            ProductTable.CREATE_UNIQUE_INDEX("idx_product_name_on_sale", ProductTable.name) WHERE
+                ((ProductTable.price GT 0.0) AND (ProductTable.name NEQ "It's free"))
+            ProductTable INSERT Product(sku = "SKU-1", name = "Widget", price = 1.0)
+            // Not on sale, so not in the index
+            ProductTable INSERT Product(sku = "SKU-2", name = "Widget", price = 0.0)
+            ProductTable INSERT Product(sku = "SKU-3", name = "Widget", price = 0.0)
+            ProductTable INSERT Product(sku = "SKU-4", name = "It's free", price = 1.0)
+        }
+        assertEquals(true, insertFails(Product(sku = "SKU-5", name = "Widget", price = 2.0)))
+        assertEquals(false, insertFails(Product(sku = "SKU-6", name = "It's free", price = 2.0)))
+        lateinit var widgets: SelectStatement<Product>
+        database {
+            widgets = ProductTable SELECT WHERE ((ProductTable.name EQ "Widget") AND (ProductTable.price GT 0.0))
+        }
+        assertEquals(listOf("SKU-1"), widgets.getResults().map { it.sku })
+
+        assertFailsWith<IllegalArgumentException> {
+            database {
+                ProductTable.CREATE_INDEX("idx_product_book_name", ProductTable.name) WHERE
+                    (ProductTable.name IN (BookTable SELECT WHERE<BookAuthor>(BookTable.price GT 30.0)))
+            }
+        }
+        assertFailsWith<IllegalStateException> {
+            database {
+                val index = ProductTable.CREATE_INDEX("idx_product_price", ProductTable.price)
+                index WHERE (ProductTable.price GT 0.0)
+                index WHERE (ProductTable.price GT 1.0)
+            }
+        }
+    }
+
+    /**
      * Test for CREATE_INDEX and CREATE_UNIQUE_INDEX operations
      * Verifies index creation functionality
      */

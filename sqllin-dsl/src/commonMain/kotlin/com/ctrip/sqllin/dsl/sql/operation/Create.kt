@@ -161,7 +161,7 @@ internal object Create : Operation {
      * Returns the SQL of a function without the name [table] before its columns, outside its string literals, as
      * SQLite doesn't allow `.` in the expressions of an index, which can only read the indexed table anyway.
      */
-    private fun unqualified(sql: String, table: String): String = buildString {
+    internal fun unqualified(sql: String, table: String): String = buildString {
         val prefix = "$table."
         var quote: Char? = null
         var index = 0

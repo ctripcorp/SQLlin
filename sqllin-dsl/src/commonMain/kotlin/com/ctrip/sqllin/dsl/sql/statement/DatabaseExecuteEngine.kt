@@ -42,6 +42,12 @@ internal class DatabaseExecuteEngine(
             throw IllegalStateException("Current statement can't append clause.")
     }
 
+    override fun replaceStatement(statement: SingleStatement, newStatement: SingleStatement) {
+        val index = statementList.indexOf(statement)
+        check(index >= 0) { "The statement to replace isn't one of the scope's." }
+        statementList[index] = newStatement
+    }
+
     infix fun addStatement(statement: ExecutableStatement) {
         statementList.add(statement)
     }

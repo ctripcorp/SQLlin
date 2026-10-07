@@ -94,6 +94,9 @@ class AndroidTest {
     fun testIfNotExists() = commonTest.testIfNotExists()
 
     @Test
+    fun testPartialIndex() = commonTest.testPartialIndex()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

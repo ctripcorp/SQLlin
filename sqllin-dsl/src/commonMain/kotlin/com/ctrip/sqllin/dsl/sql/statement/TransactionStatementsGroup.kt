@@ -62,6 +62,12 @@ internal class TransactionStatementsGroup(
         statementList.remove(statement)
     }
 
+    override fun replaceStatement(statement: SingleStatement, newStatement: SingleStatement) {
+        val index = statementList.indexOf(statement)
+        check(index >= 0) { "The statement to replace isn't one of the transaction's." }
+        statementList[index] = newStatement
+    }
+
     /**
      * Checks that every statement of the transaction is complete, before any of them runs.
      *

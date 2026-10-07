@@ -1487,7 +1487,8 @@ public class DatabaseScope internal constructor(
      * and DELETE operations.
      *
      * A function of the table's columns makes an expression index, which the queries comparing the same expression
-     * use, as `lower(email)` for case-insensitive lookups.
+     * use, as `lower(email)` for case-insensitive lookups. `WHERE` after it makes a partial index of the rows that
+     * satisfy a condition.
      *
      * Example:
      * ```kotlin
@@ -1503,10 +1504,8 @@ public class DatabaseScope internal constructor(
      * @throws IllegalArgumentException if no columns are specified, or one reads another table
      */
     @StatementDslMaker
-    public fun <T> Table<T>.CREATE_INDEX(indexName: String, vararg columns: ClauseElement<*>) {
-        val statement = Create.createIndex(this, databaseConnection, indexName, *columns)
-        addStatement(statement)
-    }
+    public fun <T> Table<T>.CREATE_INDEX(indexName: String, vararg columns: ClauseElement<*>): IndexStatement =
+        indexStatement(indexName, Create.createIndex(this, databaseConnection, indexName, *columns))
 
     /**
      * Creates a unique index on the specified columns of this table.
@@ -1524,17 +1523,17 @@ public class DatabaseScope internal constructor(
      * ```
      *
      * A function of the table's columns makes the values of that expression unique, as `lower(email)` does for emails
-     * that differ only in case.
+     * that differ only in case. `WHERE` after it makes the columns unique among the rows that satisfy a condition only,
+     * as `CREATE_UNIQUE_INDEX("idx_user_email", UserTable.email) WHERE (UserTable.isDeleted IS false)` does for the
+     * users that aren't deleted.
      *
      * @param indexName The name of the unique index to create
      * @param columns One or more columns, or functions of them, to include in the unique index
      * @throws IllegalArgumentException if no columns are specified, or one reads another table
      */
     @StatementDslMaker
-    public fun <T> Table<T>.CREATE_UNIQUE_INDEX(indexName: String, vararg columns: ClauseElement<*>) {
-        val statement = Create.createUniqueIndex(this, databaseConnection, indexName, *columns)
-        addStatement(statement)
-    }
+    public fun <T> Table<T>.CREATE_UNIQUE_INDEX(indexName: String, vararg columns: ClauseElement<*>): IndexStatement =
+        indexStatement(indexName, Create.createUniqueIndex(this, databaseConnection, indexName, *columns))
 
     /**
      * Creates an index on [columns] of this table unless an index named [indexName] exists, as the SQL
@@ -1544,9 +1543,8 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public fun <T> Table<T>.CREATE_INDEX_IF_NOT_EXISTS(indexName: String, vararg columns: ClauseElement<*>) {
-        addStatement(Create.createIndex(this, databaseConnection, indexName, *columns, isIfNotExists = true))
-    }
+    public fun <T> Table<T>.CREATE_INDEX_IF_NOT_EXISTS(indexName: String, vararg columns: ClauseElement<*>): IndexStatement =
+        indexStatement(indexName, Create.createIndex(this, databaseConnection, indexName, *columns, isIfNotExists = true))
 
     /**
      * Creates a unique index on [columns] of this table unless an index named [indexName] exists, as the SQL
@@ -1556,8 +1554,17 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public fun <T> Table<T>.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS(indexName: String, vararg columns: ClauseElement<*>) {
-        addStatement(Create.createUniqueIndex(this, databaseConnection, indexName, *columns, isIfNotExists = true))
+    public fun <T> Table<T>.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS(indexName: String, vararg columns: ClauseElement<*>): IndexStatement =
+        indexStatement(indexName, Create.createUniqueIndex(this, databaseConnection, indexName, *columns, isIfNotExists = true))
+
+    /**
+     * Adds [statement], which creates the index named [indexName] of this table, and returns it for a `WHERE` to make a
+     * partial index.
+     */
+    private fun Table<*>.indexStatement(indexName: String, statement: SingleStatement): IndexStatement {
+        addStatement(statement)
+        val container: StatementContainer = if (isInTransaction) transactionStatementsGroup!! else executiveEngine
+        return IndexStatement(this, indexName, databaseConnection, container, statement)
     }
 
     // ========== DROP Operations ==========
