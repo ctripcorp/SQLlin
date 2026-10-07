@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.concurrent.Volatile
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -76,7 +77,17 @@ public class Database internal constructor(
         return result
     }
 
-    private val invalidationTracker = InvalidationTracker(databaseConnection)
+    /**
+     * The tracker of the tables that observed queries read, which the first observed query creates, so that the code of
+     * a database that observes no query doesn't reach the tracker, which code shrinkers then remove.
+     */
+    @Volatile
+    private var invalidationTracker: InvalidationTracker? = null
+
+    private suspend fun invalidationTracker(): InvalidationTracker =
+        invalidationTracker ?: executiveMutex.withLock {
+            invalidationTracker ?: InvalidationTracker(databaseConnection).also { invalidationTracker = it }
+        }
 
     /**
      * Runs the statements of [databaseScope], then tells the observed queries what they changed. They are told even
@@ -88,7 +99,7 @@ public class Database internal constructor(
         try {
             databaseScope.executeAllStatements()
         } finally {
-            invalidationTracker.refresh(changes, writtenTables)
+            invalidationTracker?.refresh(changes, writtenTables)
         }
     }
 
@@ -140,9 +151,10 @@ public class Database internal constructor(
     @ExperimentalDSLDatabaseAPI
     public fun <R> observe(context: CoroutineContext = Dispatchers.IO, query: DatabaseScope.() -> SelectStatement<R>): Flow<List<R>> =
         flow {
+            val tracker = invalidationTracker()
             // The versions of the tables read when the results were last queried
             var queriedVersions: Map<String, Long>? = null
-            invalidationTracker.versions.collect { versions ->
+            tracker.versions.collect { versions ->
                 val queried = queriedVersions
                 if (queried != null && queried.all { (table, version) -> (versions[table] ?: 0L) == version })
                     return@collect
@@ -150,8 +162,8 @@ public class Database internal constructor(
                 val statement = databaseScope.query()
                 executiveMutex.withLock {
                     // Tracked before the SELECT runs, so that no change after it is missed
-                    val tables = invalidationTracker.track(statement.tables)
-                    queriedVersions = tables.associateWith { invalidationTracker.versions.value[it] ?: 0L }
+                    val tables = tracker.track(statement.tables)
+                    queriedVersions = tables.associateWith { tracker.versions.value[it] ?: 0L }
                     execute(databaseScope)
                 }
                 emit(statement.getResults())
