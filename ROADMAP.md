@@ -5,7 +5,6 @@ done. A new item takes the next number.
 
 ## High Priority
 
-* F5: Support ESCAPE in LIKE, to match a literal `%` or `_`, as in a search for what a user typed
 * F6: Support VACUUM, and VACUUM INTO, which writes a compacted copy of the database, as a backup (VACUUM INTO needs SQLite 3.27.0, Android API 30)
 * F7: Remove the joins written as clauses of SELECT, such as `table SELECT INNER_JOIN<R>(other)`, in the next version after 2.5.0, then let a join start with its first relation, as in `PersonTable INNER_JOIN BookTable`, without `FROM`
 
@@ -62,6 +61,7 @@ done. A new item takes the next number.
 * F2: Support IF NOT EXISTS and IF EXISTS on CREATE and DROP of tables, views and indexes (2.5.0 ✅)
 * F3: Support DISTINCT in aggregate functions (2.5.0 ✅)
 * F4: Support partial indexes, `CREATE INDEX ... WHERE` (2.5.0 ✅)
+* F5: Support ESCAPE in LIKE (2.5.0 ✅)
 * F49: Support joins of relations: checked result types, result columns, more than two tables, and RIGHT and FULL OUTER JOIN (2.5.0 ✅)
 * F50: Support subqueries: derived tables in FROM and JOIN, IN and EXISTS (2.5.0 ✅)
 * F51: Support CHECK constraints (2.5.0 ✅)

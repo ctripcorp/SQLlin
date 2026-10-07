@@ -119,9 +119,21 @@ public infix fun ClauseString<*>.NEQ(str: String?): SelectCondition = neq(str)
 @StatementDslMaker
 public infix fun ClauseString<*>.NEQ(clauseString: ClauseString<*>): SelectCondition = neq(clauseString)
 
-// SQL LIKE operator
+// SQL LIKE operator, which ESCAPE can follow
 @StatementDslMaker
-public infix fun ClauseString<*>.LIKE(regex: String): SelectCondition = like(regex)
+public infix fun ClauseString<*>.LIKE(regex: String): LikeCondition = like(regex)
+
+/**
+ * Gives the pattern of this LIKE an escape character, before which `%`, `_` and the escape character itself match
+ * only themselves, as the SQL `LIKE pattern ESCAPE escape` does:
+ * ```kotlin
+ * ProductTable SELECT WHERE (ProductTable.name LIKE "100\\%%" ESCAPE '\\')
+ * // Matches the names that start with "100%"
+ * ```
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun LikeCondition.ESCAPE(escape: Char): SelectCondition = escape(escape)
 
 // SQL GLOB operator
 @StatementDslMaker

@@ -1740,6 +1740,36 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers LIKE with ESCAPE: `%` and `_` after the escape character match only themselves, while without it they are
+     * wildcards; the escaped LIKE combines with other conditions as any condition does.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testLikeEscape() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            ProductTable INSERT listOf(
+                Product(sku = "SKU-1", name = "100% cotton", price = 1.0),
+                Product(sku = "SKU-2", name = "1000 threads", price = 2.0),
+                Product(sku = "SKU-3", name = "a_b", price = 3.0),
+                Product(sku = "SKU-4", name = "axb", price = 4.0),
+            )
+        }
+        lateinit var percent: SelectStatement<Product>
+        lateinit var wildcard: SelectStatement<Product>
+        lateinit var underscore: SelectStatement<Product>
+        lateinit var combined: SelectStatement<Product>
+        database {
+            percent = ProductTable SELECT WHERE (ProductTable.name LIKE "100\\%%" ESCAPE '\\')
+            wildcard = ProductTable SELECT WHERE (ProductTable.name LIKE "100%") ORDER_BY (ProductTable.sku to ASC)
+            underscore = ProductTable SELECT WHERE (ProductTable.name LIKE "a!_b" ESCAPE '!')
+            combined = ProductTable SELECT WHERE ((ProductTable.price GT 3.5) OR (ProductTable.name LIKE "a!_%" ESCAPE '!')) ORDER_BY (ProductTable.sku to ASC)
+        }
+        assertEquals(listOf("SKU-1"), percent.getResults().map { it.sku })
+        assertEquals(listOf("SKU-1", "SKU-2"), wildcard.getResults().map { it.sku })
+        assertEquals(listOf("SKU-3"), underscore.getResults().map { it.sku })
+        assertEquals(listOf("SKU-3", "SKU-4"), combined.getResults().map { it.sku })
+    }
+
+    /**
      * Covers result columns: expressions, such as aggregate functions, selected into properties of a result type with
      * AS, as in `table SELECT listOf(count(X) AS AuthorStats::books)`, while every other property is read from its
      * column. Each function reads into the type of the values SQLite returns for it, and NULL into a nullable property.

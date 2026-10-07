@@ -448,6 +448,24 @@ The chart of between SQL operators and SQLlin operators like this:
 |GLOB|GLOB|
 |OR|OR|
 |AND|AND|
+|LIKE ... ESCAPE|LIKE ... ESCAPE|
+
+In a _LIKE_ pattern, `%` matches any characters and `_` any one character. To match them as themselves, give the pattern
+an escape character with `ESCAPE`, which is experimental: after it, `%`, `_` and the escape character itself match only
+themselves.
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        PersonTable { table ->
+            // Deletes the people whose names have an underscore:
+            // DELETE FROM person WHERE person.name LIKE ? ESCAPE ?, with "%\_%" and "\"
+            table DELETE WHERE (name LIKE "%\\_%" ESCAPE '\\')
+        }
+    }
+}
+```
 
 Sometimes, we want to delete all data in the table. At this time, the _DELETE_ statement doesn't have _WHERE_ clause:
 

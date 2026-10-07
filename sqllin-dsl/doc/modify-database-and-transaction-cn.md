@@ -426,6 +426,23 @@ SQL 操作符与 SQLlin 操作符的对应关系如下表：
 |GLOB|GLOB|
 |OR|OR|
 |AND|AND|
+|LIKE ... ESCAPE|LIKE ... ESCAPE|
+
+在 _LIKE_ 的模式中，`%` 匹配任意多个字符，`_` 匹配任意一个字符。要匹配它们本身，可以用 `ESCAPE` 给模式指定一个转义字符（实验性
+API）：转义字符之后的 `%`、`_` 和转义字符本身都只匹配它们自己。
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        PersonTable { table ->
+            // 删除名字中带下划线的人：
+            // DELETE FROM person WHERE person.name LIKE ? ESCAPE ?，参数为 "%\_%" 和 "\"
+            table DELETE WHERE (name LIKE "%\\_%" ESCAPE '\\')
+        }
+    }
+}
+```
 
 有时候，我们想要删除表中的所有数据，这时 _DELETE_ 语句可以省略 _WHERE_ 子句：
 

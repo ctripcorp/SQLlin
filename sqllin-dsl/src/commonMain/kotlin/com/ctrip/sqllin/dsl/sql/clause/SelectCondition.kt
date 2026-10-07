@@ -38,7 +38,7 @@ import com.ctrip.sqllin.dsl.sql.operation.parametersOf
  *
  * @author Yuang Qiao
  */
-public class SelectCondition internal constructor(
+public open class SelectCondition internal constructor(
     internal val conditionSQL: String,
     internal val parameters: MutableList<Any?>?,
     internal val tables: Set<String> = emptySet(),
@@ -83,4 +83,21 @@ public class SelectCondition internal constructor(
             builder.append(conditionSQL)
         }
     }
+}
+
+/**
+ * A LIKE condition, which [ESCAPE] can follow to give its pattern an escape character.
+ *
+ * @author Yuang Qiao
+ */
+public class LikeCondition internal constructor(
+    conditionSQL: String,
+    parameters: MutableList<Any?>,
+) : SelectCondition(conditionSQL, parameters) {
+
+    /**
+     * This condition with [escape] as the escape character of its pattern: `column LIKE ? ESCAPE ?`.
+     */
+    internal infix fun escape(escape: Char): SelectCondition =
+        SelectCondition("$conditionSQL ESCAPE ?", parametersOf(parameters, listOf(escape.toString())))
 }

@@ -143,7 +143,7 @@ public class ClauseString<V : Any> internal constructor(
      * Wildcards: `%` (any characters), `_` (single character)
      * Example: `"John%"` matches "John", "Johnson", etc.
      */
-    internal infix fun like(regex: String): SelectCondition = appendRegex(" LIKE ", regex)
+    internal infix fun like(regex: String): LikeCondition = LikeCondition(regexSQL(" LIKE "), mutableListOf(regex))
 
     /**
      * GLOB operator - case-sensitive pattern matching.
@@ -151,19 +151,16 @@ public class ClauseString<V : Any> internal constructor(
      * Wildcards: `*` (any characters), `?` (single character)
      * Example: `"John*"` matches "John", "Johnson", etc. (case-sensitive)
      */
-    internal infix fun glob(regex: String): SelectCondition = appendRegex(" GLOB ", regex)
+    internal infix fun glob(regex: String): SelectCondition = SelectCondition(regexSQL(" GLOB "), mutableListOf(regex))
 
-    private fun appendRegex(symbol: String, regex: String): SelectCondition {
-        val sql = buildString {
-            if (!isFunction) {
-                append(table.tableName)
-                append('.')
-            }
-            append(valueName)
-            append(symbol)
-            append('?')
+    private fun regexSQL(symbol: String): String = buildString {
+        if (!isFunction) {
+            append(table.tableName)
+            append('.')
         }
-        return SelectCondition(sql, mutableListOf(regex))
+        append(valueName)
+        append(symbol)
+        append('?')
     }
 
     private fun appendNullableString(notNullSymbol: String, nullSymbol: String, str: String?): SelectCondition {

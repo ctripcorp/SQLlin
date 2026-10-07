@@ -92,6 +92,9 @@ class JvmTest {
     fun testDistinctAggregate() = commonTest.testDistinctAggregate()
 
     @Test
+    fun testLikeEscape() = commonTest.testLikeEscape()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test
