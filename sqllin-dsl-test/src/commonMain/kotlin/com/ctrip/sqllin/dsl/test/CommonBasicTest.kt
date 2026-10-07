@@ -3193,6 +3193,28 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers DROP_INDEX: a unique index keeps out a duplicate until it is dropped, and dropping an index that doesn't
+     * exist fails.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testDropIndex() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        fun insertFails(product: Product): Boolean = try {
+            database { ProductTable INSERT product }
+            false
+        } catch (e: Exception) {
+            true
+        }
+        database {
+            ProductTable.CREATE_UNIQUE_INDEX("idx_product_name", ProductTable.name)
+            ProductTable INSERT Product(sku = "SKU-1", name = "Widget", price = 1.0)
+        }
+        assertEquals(true, insertFails(Product(sku = "SKU-2", name = "Widget", price = 2.0)))
+        database { DROP_INDEX("idx_product_name") }
+        assertEquals(false, insertFails(Product(sku = "SKU-3", name = "Widget", price = 3.0)))
+        assertFails { database { DROP_INDEX("idx_product_name") } }
+    }
+
+    /**
      * Test for CREATE_INDEX and CREATE_UNIQUE_INDEX operations
      * Verifies index creation functionality
      */

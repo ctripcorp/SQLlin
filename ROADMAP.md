@@ -5,7 +5,6 @@ done. A new item takes the next number.
 
 ## High Priority
 
-* F1: Support DROP INDEX, as nothing drops the indexes that `CREATE_INDEX` and `CREATE_UNIQUE_INDEX` create
 * F2: Support IF NOT EXISTS and IF EXISTS on CREATE and DROP, so that a migration step can run more than once
 * F3: Support DISTINCT in aggregate functions, such as `count(DISTINCT author)`
 * F4: Support partial indexes, `CREATE INDEX ... WHERE`, such as a unique index of the rows that aren't deleted
@@ -62,6 +61,7 @@ done. A new item takes the next number.
 
 ## Supported
 
+* F1: Support DROP INDEX (2.5.0 ✅)
 * F49: Support joins of relations: checked result types, result columns, more than two tables, and RIGHT and FULL OUTER JOIN (2.5.0 ✅)
 * F50: Support subqueries: derived tables in FROM and JOIN, IN and EXISTS (2.5.0 ✅)
 * F51: Support CHECK constraints (2.5.0 ✅)

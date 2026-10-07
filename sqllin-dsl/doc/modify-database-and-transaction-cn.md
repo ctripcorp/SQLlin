@@ -4,7 +4,7 @@
 
 ## 表结构操作
 
-SQLlin 提供了用于管理表结构的类型安全 DSL 操作：CREATE、DROP 和 ALTER。
+SQLlin 提供了用于管理表结构的类型安全 DSL 操作：CREATE、DROP 和 ALTER，以及视图和索引的操作。
 
 ### CREATE - 创建表
 
@@ -94,6 +94,38 @@ SQLite 不允许视图带参数，所以 SQLlin 会把 _SELECT_ 中的值直接�
 查询视图的方式和查询表一样，视图对象的属性就是它的列，也可以用在 Join 和组合查询中，`Database#observe` 会观察它读取的表。
 视图不能写入：它的对象不是 `Table`，所以对它使用 `INSERT`、`UPDATE`、`DELETE`、`CREATE` 和 `ALTER` 都无法编译，它的属性也不能
 加约束注解。`DROP(AdultView)` 会删除视图。视图的定义属于数据库结构的一部分：要修改它，就在 `upgrade` 中先删除、再重新创建。
+
+### CREATE INDEX - 创建索引
+
+索引能让按其列查找行的查询变快。`CREATE_INDEX` 在表的列上创建索引，`CREATE_UNIQUE_INDEX` 创建的索引还会保证任意两行在这些列上的值
+不相同：
+
+```kotlin
+fun sample() {
+    database {
+        // CREATE INDEX idx_person_name ON person(name)
+        PersonTable.CREATE_INDEX("idx_person_name", PersonTable.name)
+        // CREATE UNIQUE INDEX idx_person_name_age ON person(name,age)
+        PersonTable.CREATE_UNIQUE_INDEX("idx_person_name_age", PersonTable.name, PersonTable.age)
+        // CREATE INDEX idx_person_lower_name ON person(lower(name))
+        PersonTable.CREATE_INDEX("idx_person_lower_name", PersonTable.lower(PersonTable.name))
+    }
+}
+```
+
+用表的列的函数可以创建表达式索引，比较同一个表达式的查询会用到它，例如用 `lower(name)` 做不区分大小写的查找。索引只能包含它自己
+所在表的列。
+
+`DROP_INDEX` 按名字删除索引，它是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        DROP_INDEX("idx_person_name")
+    }
+}
+```
 
 ### ALTER - 修改表结构
 

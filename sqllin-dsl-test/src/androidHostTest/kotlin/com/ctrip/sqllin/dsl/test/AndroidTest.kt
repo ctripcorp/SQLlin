@@ -88,6 +88,9 @@ class AndroidTest {
     fun testExpressionIndex() = commonTest.testExpressionIndex()
 
     @Test
+    fun testDropIndex() = commonTest.testDropIndex()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

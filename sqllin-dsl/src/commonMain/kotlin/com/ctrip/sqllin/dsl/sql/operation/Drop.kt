@@ -71,4 +71,10 @@ internal object Drop : Operation {
     @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun dropView(view: View<*>, connection: DatabaseConnection): SingleStatement =
         TableStructureStatement("DROP VIEW ${view.tableName}", connection)
+
+    /**
+     * Builds a DROP INDEX statement for the index named [indexName].
+     */
+    fun dropIndex(indexName: String, connection: DatabaseConnection): SingleStatement =
+        TableStructureStatement("DROP INDEX $indexName", connection)
 }

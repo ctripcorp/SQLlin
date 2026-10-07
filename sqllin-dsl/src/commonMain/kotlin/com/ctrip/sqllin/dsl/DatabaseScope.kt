@@ -1556,6 +1556,23 @@ public class DatabaseScope internal constructor(
     @JvmName("drop")
     public fun <T> Table<T>.DROP(): Unit = DROP(this)
 
+    /**
+     * Drops the index named [indexName], as the SQL `DROP INDEX name` does, such as one that [CREATE_INDEX] or
+     * [CREATE_UNIQUE_INDEX] created.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     DROP_INDEX("idx_user_email")
+     * }
+     * ```
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_INDEX(indexName: String) {
+        addStatement(Drop.dropIndex(indexName, databaseConnection))
+    }
+
     // ========== CREATE VIEW and DROP VIEW ==========
 
     /**

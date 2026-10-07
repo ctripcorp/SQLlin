@@ -7,7 +7,7 @@ we start to learn how to write SQL statements with SQLlin.
 
 ## Table Structure Operations
 
-SQLlin provides type-safe DSL operations for managing table structures: CREATE, DROP, and ALTER, and for views.
+SQLlin provides type-safe DSL operations for managing table structures: CREATE, DROP, and ALTER, and for views and indexes.
 
 ### CREATE - Creating Tables
 
@@ -101,6 +101,38 @@ and `Database#observe` watches the tables it reads. It can't be written to: its 
 `UPDATE`, `DELETE`, `CREATE` and `ALTER` don't compile on it, and its properties take no constraint annotations.
 `DROP(AdultView)` drops it. A view's definition is part of the schema: to change it, drop it and create it again in an
 `upgrade`.
+
+### CREATE INDEX - Creating Indexes
+
+An index makes the queries that look rows up by its columns fast. `CREATE_INDEX` creates one on columns of a table, and
+`CREATE_UNIQUE_INDEX` one that also keeps any two rows from having the same values in them:
+
+```kotlin
+fun sample() {
+    database {
+        // CREATE INDEX idx_person_name ON person(name)
+        PersonTable.CREATE_INDEX("idx_person_name", PersonTable.name)
+        // CREATE UNIQUE INDEX idx_person_name_age ON person(name,age)
+        PersonTable.CREATE_UNIQUE_INDEX("idx_person_name_age", PersonTable.name, PersonTable.age)
+        // CREATE INDEX idx_person_lower_name ON person(lower(name))
+        PersonTable.CREATE_INDEX("idx_person_lower_name", PersonTable.lower(PersonTable.name))
+    }
+}
+```
+
+A function of the table's columns makes an expression index, which the queries that compare the same expression use, as
+`lower(name)` does for case-insensitive lookups. An index can only hold the columns of its own table.
+
+`DROP_INDEX`, which is experimental, drops an index by its name:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        DROP_INDEX("idx_person_name")
+    }
+}
+```
 
 ### ALTER - Modifying Table Structure
 
