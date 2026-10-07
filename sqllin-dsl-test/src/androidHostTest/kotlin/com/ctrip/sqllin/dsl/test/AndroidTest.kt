@@ -103,6 +103,9 @@ class AndroidTest {
     fun testLikeEscape() = commonTest.testLikeEscape()
 
     @Test
+    fun testVacuum() = commonTest.testVacuum()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

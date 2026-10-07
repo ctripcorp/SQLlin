@@ -36,6 +36,7 @@ import com.ctrip.sqllin.dsl.sql.operation.Delete
 import com.ctrip.sqllin.dsl.sql.operation.Drop
 import com.ctrip.sqllin.dsl.sql.operation.Insert
 import com.ctrip.sqllin.dsl.sql.operation.PRAGMA
+import com.ctrip.sqllin.dsl.sql.operation.Vacuum
 import com.ctrip.sqllin.dsl.sql.operation.Select
 import com.ctrip.sqllin.dsl.sql.operation.Update
 import com.ctrip.sqllin.dsl.sql.statement.*
@@ -1871,6 +1872,60 @@ public class DatabaseScope internal constructor(
     public infix fun <T> Table<T>.DROP_COLUMN(column: ClauseElement<*>) {
         val statement = Alter.dropColumn(this, column, databaseConnection)
         addStatement(statement)
+    }
+
+    // ========== VACUUM ==========
+
+    /**
+     * Rebuilds the database file, repacking it into the minimum disk space, as the SQL `VACUUM` does: the file doesn't
+     * shrink when rows are deleted, as SQLite keeps the free pages to reuse them.
+     *
+     * VACUUM rewrites the whole database, so it takes long for a large one, and needs free disk space of up to twice
+     * its size. It may change the rowids of the tables without an INTEGER PRIMARY KEY.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     LogTable DELETE WHERE (LogTable.time LT expired)
+     * }
+     * database {
+     *     VACUUM()
+     * }
+     * ```
+     *
+     * @throws IllegalStateException if it is called inside a transaction, where SQLite can't vacuum
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun VACUUM() {
+        check(!isInTransaction) { "SQLite can't VACUUM inside a transaction." }
+        addStatement(Vacuum.vacuum(databaseConnection))
+    }
+
+    /**
+     * Writes a vacuumed copy of the database to [file], as the SQL `VACUUM INTO file` does, leaving the database as it
+     * is: a backup, consistent as of one moment, of a database that is in use.
+     *
+     * [file] is a path of the file system, so on Android, where the working directory can't be written, it has to be
+     * absolute. It must not exist, or SQLite fails.
+     *
+     * `VACUUM INTO` needs SQLite 3.27.0, which Android has from API 30 on.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     VACUUM_INTO("/data/data/com.example/backup/notes.db")
+     * }
+     * ```
+     *
+     * @throws IllegalStateException if it is called inside a transaction, where SQLite can't vacuum
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun VACUUM_INTO(file: String) {
+        check(!isInTransaction) { "SQLite can't VACUUM inside a transaction." }
+        addStatement(Vacuum.vacuumInto(file, databaseConnection))
     }
 
     /**

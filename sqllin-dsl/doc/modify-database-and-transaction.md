@@ -531,6 +531,30 @@ fun sample() {
 
 The `transaction {...}` is a member function in `Database`, it is inside or outside of `TABLE(databaseName) {...}` doesn't matter.
 
+## VACUUM
+
+Deleting rows doesn't shrink the database file, as SQLite keeps the free pages to reuse them. `VACUUM()` rebuilds the
+file, repacking it into the minimum disk space, and `VACUUM_INTO(file)` writes a vacuumed copy of the database to another
+file: a backup, consistent as of one moment, of a database in use. Both are experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+fun sample() {
+    database {
+        VACUUM()
+    }
+    database {
+        VACUUM_INTO("/absolute/path/to/backup.db")
+    }
+}
+```
+
+SQLite can't vacuum inside a transaction, so both throw an `IllegalStateException` inside `transaction {...}`. VACUUM
+rewrites the whole database, so it takes long for a large one and needs free disk space of up to twice its size, and it
+may change the rowids of the tables without an INTEGER PRIMARY KEY. `VACUUM_INTO` needs SQLite 3.27.0, which Android has
+from API 30 on, so it is marked with [`@PlatformDependentSQLiteAPI`](#apis-that-depend-on-the-sqlite-version). Its file
+must not exist, and on Android its path has to be absolute.
+
 ## Next Step
 
 You have learned how to use _INSERT_, _DELETE_ and _UPDATE_ statements. Next step you will learn _SELECT_ statements. The

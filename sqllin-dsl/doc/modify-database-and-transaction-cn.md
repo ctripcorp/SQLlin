@@ -506,6 +506,28 @@ fun sample() {
 
 `transaction {...}` 是 `Database` 的成员函数，将它写在 `TABLE(databaseName) {...}` 函数的内部或外部没有特别限制。
 
+## VACUUM
+
+删除行并不会让数据库文件变小，因为 SQLite 会留着空闲页以便复用。`VACUUM()` 会重建数据库文件，把它压缩到最小的磁盘空间；
+`VACUUM_INTO(file)` 则把压缩后的数据库副本写到另一个文件：这是正在使用的数据库在某一时刻的一致备份。两者都是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+fun sample() {
+    database {
+        VACUUM()
+    }
+    database {
+        VACUUM_INTO("/absolute/path/to/backup.db")
+    }
+}
+```
+
+SQLite 不能在事务中执行 VACUUM，所以在 `transaction {...}` 中调用两者都会抛出 `IllegalStateException`。VACUUM 会重写整个数据库，
+所以数据库大时耗时较长，并且需要最多两倍于数据库大小的空闲磁盘空间；它还可能改变没有 INTEGER PRIMARY KEY 的表的 rowid。
+`VACUUM_INTO` 需要 SQLite 3.27.0，Android 从 API 30 起才有，所以它标有 [`@PlatformDependentSQLiteAPI`](#依赖-sqlite-版本的-api)。
+目标文件必须不存在，在 Android 上路径必须是绝对路径。
+
 ## 接下来
 
 你已经学习了如何使用 _INSERT_、_DELETE_ 以及 _UPDATE_ 语句，接下来你将学习 _SELECT_ 语句。 _SELECT_ 语句相比其他语句更复杂，做好准备哦 :)。

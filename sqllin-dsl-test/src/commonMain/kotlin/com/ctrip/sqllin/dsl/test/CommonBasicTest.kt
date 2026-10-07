@@ -18,6 +18,9 @@ package com.ctrip.sqllin.dsl.test
 
 import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.DatabasePath
+import com.ctrip.sqllin.driver.deleteDatabase
+import com.ctrip.sqllin.driver.openDatabase
+import com.ctrip.sqllin.driver.withQuery
 import com.ctrip.sqllin.dsl.DSLDBConfiguration
 import com.ctrip.sqllin.dsl.Database
 import com.ctrip.sqllin.dsl.DatabaseScope
@@ -53,6 +56,7 @@ class CommonBasicTest(private val path: DatabasePath) {
 
     companion object {
         const val DATABASE_NAME = "BookStore.db"
+        const val BACKUP_DATABASE_NAME = "BookStoreBackup.db"
         const val SQL_CREATE_BOOK = "create table book (id integer primary key autoincrement, name text, author text, pages integer, price real)"
         const val SQL_CREATE_CATEGORY = "create table category (id integer primary key autoincrement, name text, code integer)"
     }
@@ -3376,6 +3380,70 @@ class CommonBasicTest(private val path: DatabasePath) {
                 index WHERE (ProductTable.price GT 0.0)
                 index WHERE (ProductTable.price GT 1.0)
             }
+        }
+    }
+
+    /**
+     * Covers VACUUM and VACUUM INTO: VACUUM keeps the rows, VACUUM INTO writes a copy that a database can be opened
+     * from, and neither can run inside a transaction. VACUUM INTO needs SQLite 3.27.0, so it is only checked where the
+     * SQLite is as new.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+    fun testVacuum() {
+        Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+            database {
+                BookTable INSERT List(100) { Book(name = "Book $it", author = "Author", price = 1.0, pages = it) }
+            }
+            database { BookTable DELETE WHERE (BookTable.pages GTE 10) }
+            database { VACUUM() }
+            lateinit var books: SelectStatement<Book>
+            database { books = BookTable SELECT X }
+            assertEquals((0 until 10).toList(), books.getResults().map { it.pages })
+            assertFailsWith<IllegalStateException> {
+                database { transaction { VACUUM() } }
+            }
+            assertFailsWith<IllegalStateException> {
+                database { transaction { VACUUM_INTO("never.db") } }
+            }
+        }
+
+        // The file of the database, and the SQLite version, from a connection of the driver
+        val connection = openDatabase(DatabaseConfiguration(name = DATABASE_NAME, path = path, version = 1, create = {}))
+        val (file, version) = try {
+            val file = connection.withQuery("PRAGMA database_list") { cursor ->
+                var main: String? = null
+                cursor.forEachRow { if (cursor.getString(1) == "main") main = cursor.getString(2) }
+                main!!
+            }
+            val version = connection.withQuery("SELECT sqlite_version()") { cursor ->
+                var version = ""
+                cursor.forEachRow { version = cursor.getString(0)!! }
+                version
+            }
+            file to version
+        } finally {
+            connection.close()
+        }
+        val (major, minor) = version.split('.').map { it.toInt() }
+        if (major == 3 && minor < 27)
+            return
+        val separator = maxOf(file.lastIndexOf('/'), file.lastIndexOf('\\'))
+        val backup = file.substring(0, separator + 1) + BACKUP_DATABASE_NAME
+        deleteDatabase(path, BACKUP_DATABASE_NAME)
+        try {
+            Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+                database { VACUUM_INTO(backup) }
+                // The file exists now
+                assertFails { database { VACUUM_INTO(backup) } }
+            }
+            val backupConfig = DSLDBConfiguration(name = BACKUP_DATABASE_NAME, path = path, version = 1, create = {})
+            Database(backupConfig, true).databaseAutoClose { database ->
+                lateinit var books: SelectStatement<Book>
+                database { books = BookTable SELECT X }
+                assertEquals((0 until 10).toList(), books.getResults().map { it.pages })
+            }
+        } finally {
+            deleteDatabase(path, BACKUP_DATABASE_NAME)
         }
     }
 
