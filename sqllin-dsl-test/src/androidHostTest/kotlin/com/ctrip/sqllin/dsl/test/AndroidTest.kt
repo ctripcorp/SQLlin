@@ -97,6 +97,9 @@ class AndroidTest {
     fun testPartialIndex() = commonTest.testPartialIndex()
 
     @Test
+    fun testDistinctAggregate() = commonTest.testDistinctAggregate()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

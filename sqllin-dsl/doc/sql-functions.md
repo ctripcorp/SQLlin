@@ -31,6 +31,11 @@ a `ClauseElement` as the result. The functions supported by SQLlin are as follow
 The `count` function has a different point, it could receive `X` as parameter be used for representing `count(*)` in SQL, as shown in the
 example above.
 
+`DISTINCT` makes an aggregate function take only the distinct values of its argument, as in SQL: `count(DISTINCT(name))`
+is `count(DISTINCT person.name)`, the number of different names. `count`, `sum`, `avg` and `group_concat` take it, and
+`group_concat` separates the distinct values with commas, as SQLite allows no other separator there. `DISTINCT` is
+experimental, so opt in with `@OptIn(ExperimentalDSLDatabaseAPI::class)`.
+
 To use functions after the _SELECT_ keyword, select them into properties of a result type with `AS`:
 
 ```kotlin

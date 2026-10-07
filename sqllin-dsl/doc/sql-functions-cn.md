@@ -26,6 +26,10 @@ fun sample() {
 
 `count` 函数有一个不同点，它可以接收一个 `X` 作为参数用于表示 SQL 中的 `count(*)`， 如前面的示例所示。
 
+`DISTINCT` 让聚合函数只计算参数中不重复的值，与 SQL 相同：`count(DISTINCT(name))` 就是 `count(DISTINCT person.name)`，即不同名字的
+个数。`count`、`sum`、`avg` 和 `group_concat` 都可以接收它，`group_concat` 会用逗号分隔这些不重复的值，因为 SQLite 在这里不允许
+其他分隔符。`DISTINCT` 是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`。
+
 要在 _SELECT_ 关键字之后使用函数，可以用 `AS` 把它们交给结果类型的属性：
 
 ```kotlin

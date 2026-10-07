@@ -18,6 +18,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.FunctionDslMaker
 import com.ctrip.sqllin.dsl.sql.Relation
 import com.ctrip.sqllin.dsl.sql.X
@@ -189,6 +190,126 @@ public fun <T, E : ClauseElement<*>> Relation<T>.min(element: E): E =
 @FunctionDslMaker
 public fun <T> Relation<T>.group_concat(element: ClauseString<*>, infix: String): ClauseString<String> =
     ClauseString("group_concat(${element.sql},${sqlString(infix)})", this, isFunction = true, isNullable = element.isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = element.columnTables)
+
+/**
+ * The argument of an aggregate function that takes only the distinct values of [element], as SQL's `DISTINCT` does
+ * in `count(DISTINCT author)`. [DISTINCT] makes it, and only the aggregate functions it changes take it: `count`,
+ * `avg`, `sum` and `group_concat`.
+ *
+ * @author Yuang Qiao
+ */
+public class Distinct<out E : ClauseElement<*>> internal constructor(internal val element: E) {
+
+    internal val sql: String
+        get() = "DISTINCT ${element.sql}"
+}
+
+/**
+ * Makes an aggregate function take only the distinct values of [element], as SQL's `DISTINCT` does:
+ * ```kotlin
+ * BookTable SELECT (count(DISTINCT(BookTable.author)) AS BookStats::authors)
+ * // SELECT count(DISTINCT book.author) AS authors FROM book
+ * ```
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <E : ClauseElement<*>> DISTINCT(element: E): Distinct<E> = Distinct(element)
+
+/**
+ * COUNT aggregate function of the distinct values - counts the distinct non-NULL values of an element, as
+ * `count(DISTINCT author)` counts the authors.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.count(distinct: Distinct<*>): ClauseNumber<Long> =
+    ClauseNumber("count(${distinct.sql})", this, isFunction = true, isNullable = false, isAggregate = true, isNullOnNoRows = false, columnTables = distinct.element.columnTables)
+
+/**
+ * AVG aggregate function of the distinct values - returns the average of the distinct values, as a `Double`.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.avg(distinct: Distinct<*>): ClauseNumber<Double> =
+    numberAggregate("avg(${distinct.sql})", distinct.element)
+
+/** SUM aggregate function of the distinct values of a `Byte` column - returns a `Long`. */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+@JvmName("sumOfDistinctByte")
+public fun <T> Relation<T>.sum(distinct: Distinct<ClauseNumber<Byte>>): ClauseNumber<Long> =
+    numberAggregate("sum(${distinct.sql})", distinct.element)
+
+/** SUM aggregate function of the distinct values of a `Short` column - returns a `Long`. */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+@JvmName("sumOfDistinctShort")
+public fun <T> Relation<T>.sum(distinct: Distinct<ClauseNumber<Short>>): ClauseNumber<Long> =
+    numberAggregate("sum(${distinct.sql})", distinct.element)
+
+/** SUM aggregate function of the distinct values of an `Int` column - returns a `Long`. */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+@JvmName("sumOfDistinctInt")
+public fun <T> Relation<T>.sum(distinct: Distinct<ClauseNumber<Int>>): ClauseNumber<Long> =
+    numberAggregate("sum(${distinct.sql})", distinct.element)
+
+/** SUM aggregate function of the distinct values of a `Long` column - returns a `Long`. */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+@JvmName("sumOfDistinctLong")
+public fun <T> Relation<T>.sum(distinct: Distinct<ClauseNumber<Long>>): ClauseNumber<Long> =
+    numberAggregate("sum(${distinct.sql})", distinct.element)
+
+/** SUM aggregate function of the distinct values of an `UByte` column - returns a `Long`. */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+@JvmName("sumOfDistinctUByte")
+public fun <T> Relation<T>.sum(distinct: Distinct<ClauseNumber<UByte>>): ClauseNumber<Long> =
+    numberAggregate("sum(${distinct.sql})", distinct.element)
+
+/** SUM aggregate function of the distinct values of an `UShort` column - returns a `Long`. */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+@JvmName("sumOfDistinctUShort")
+public fun <T> Relation<T>.sum(distinct: Distinct<ClauseNumber<UShort>>): ClauseNumber<Long> =
+    numberAggregate("sum(${distinct.sql})", distinct.element)
+
+/** SUM aggregate function of the distinct values of an `UInt` column - returns a `Long`. */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+@JvmName("sumOfDistinctUInt")
+public fun <T> Relation<T>.sum(distinct: Distinct<ClauseNumber<UInt>>): ClauseNumber<Long> =
+    numberAggregate("sum(${distinct.sql})", distinct.element)
+
+/** SUM aggregate function of the distinct values of a `Float` column - returns a `Double`. */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+@JvmName("sumOfDistinctFloat")
+public fun <T> Relation<T>.sum(distinct: Distinct<ClauseNumber<Float>>): ClauseNumber<Double> =
+    numberAggregate("sum(${distinct.sql})", distinct.element)
+
+/** SUM aggregate function of the distinct values of a `Double` column - returns a `Double`. */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+@JvmName("sumOfDistinctDouble")
+public fun <T> Relation<T>.sum(distinct: Distinct<ClauseNumber<Double>>): ClauseNumber<Double> =
+    numberAggregate("sum(${distinct.sql})", distinct.element)
+
+/** SUM aggregate function of the distinct values of a Boolean column - returns 1 if any is `true`, as a `Long`. */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+@JvmName("sumOfDistinctBoolean")
+public fun <T> Relation<T>.sum(distinct: Distinct<ClauseBoolean>): ClauseNumber<Long> =
+    numberAggregate("sum(${distinct.sql})", distinct.element)
+
+/**
+ * GROUP_CONCAT aggregate function of the distinct values - concatenates the distinct non-NULL values, separated by
+ * commas. SQLite allows no other separator here, as an aggregate function with DISTINCT takes only one argument.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.group_concat(distinct: Distinct<ClauseString<*>>): ClauseString<String> =
+    ClauseString("group_concat(${distinct.sql})", this, isFunction = true, isNullable = distinct.element.isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = distinct.element.columnTables)
 
 /**
  * ABS scalar function - returns absolute value, of the same type as [element].

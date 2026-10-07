@@ -1694,6 +1694,52 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers DISTINCT in aggregate functions: `count`, `sum`, `avg` and `group_concat` of the distinct values, next to
+     * the aggregates of all values.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testDistinctAggregate() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            BookTable INSERT listOf(
+                Book(name = "The Da Vinci Code", author = "Dan Brown", price = 10.0, pages = 100),
+                Book(name = "The Lost Symbol", author = "Dan Brown", price = 10.0, pages = 200),
+                Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 20.0, pages = 100),
+            )
+        }
+        lateinit var totals: SelectStatement<DistinctBookTotals>
+        database {
+            BookTable { table ->
+                totals = table SELECT listOf(
+                    count(DISTINCT(author)) AS DistinctBookTotals::authors,
+                    count(author) AS DistinctBookTotals::books,
+                    sum(DISTINCT(price)) AS DistinctBookTotals::distinctPrice,
+                    sum(price) AS DistinctBookTotals::totalPrice,
+                    sum(DISTINCT(pages)) AS DistinctBookTotals::distinctPages,
+                    avg(DISTINCT(pages)) AS DistinctBookTotals::averageDistinctPages,
+                    group_concat(DISTINCT(author)) AS DistinctBookTotals::authorNames,
+                )
+            }
+        }
+        val total = totals.getResults().single()
+        assertEquals(2L, total.authors)
+        assertEquals(3L, total.books)
+        assertEquals(30.0, total.distinctPrice!!, 1e-9)
+        assertEquals(40.0, total.totalPrice!!, 1e-9)
+        assertEquals(300L, total.distinctPages)
+        assertEquals(150.0, total.averageDistinctPages!!, 1e-9)
+        val authorNames = total.authorNames!!.split(',')
+        assertEquals(setOf("Dan Brown", "Ken Kousen"), authorNames.toSet())
+        assertEquals(2, authorNames.size)
+
+        // In HAVING, as any aggregate function
+        lateinit var prolificAuthors: SelectStatement<Book>
+        database {
+            prolificAuthors = BookTable SELECT GROUP_BY(BookTable.author) HAVING (BookTable.count(DISTINCT(BookTable.pages)) GT 1)
+        }
+        assertEquals(listOf("Dan Brown"), prolificAuthors.getResults().map { it.author })
+    }
+
+    /**
      * Covers result columns: expressions, such as aggregate functions, selected into properties of a result type with
      * AS, as in `table SELECT listOf(count(X) AS AuthorStats::books)`, while every other property is read from its
      * column. Each function reads into the type of the values SQLite returns for it, and NULL into a nullable property.

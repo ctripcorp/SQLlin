@@ -587,6 +587,20 @@ data class BookTotals(val books: Long, val maxPages: PageCount?, val averagePric
 data class BookCount(val books: Long)
 
 /**
+ * Aggregates of the distinct values of the columns of the books, next to those of all values.
+ */
+@Serializable
+data class DistinctBookTotals(
+    val authors: Long,
+    val books: Long,
+    val distinctPrice: Double?,
+    val totalPrice: Double?,
+    val distinctPages: Long?,
+    val averageDistinctPages: Double?,
+    val authorNames: String?,
+)
+
+/**
  * Scalar functions of the columns of a book, next to its `name`, which is read from its column.
  */
 @Serializable
