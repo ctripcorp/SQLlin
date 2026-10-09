@@ -53,15 +53,16 @@ done. A new item takes the next number.
 * F46: Support more expression syntax, planned with the expressions of F9 and the functions of F11: CASE, subqueries that give a single value, the COLLATE operator, bitwise operators, IS DISTINCT FROM (SQLite 3.39.0), JSON's `->` and `->>` (SQLite 3.38.0), and REGEXP
 * F47: Support UPDATE ... FROM, which updates rows with the values of another table, and needs the expressions of F9 (SQLite 3.33.0, Android API 34)
 * F48: Support virtual tables other than FTS and R*Tree, such as dbstat
+* F63: Support INSTEAD OF triggers on views, together with INSERT, UPDATE and DELETE on a view, which the DSL doesn't allow, as a view isn't a `Table`, so that such a trigger can be used; left out of the first version of CREATE TRIGGER (F10)
 
 ## Supported
 
-* F1: Support DROP INDEX (2.5.0 ✅)
-* F2: Support IF NOT EXISTS and IF EXISTS on CREATE and DROP of tables, views and indexes (2.5.0 ✅)
+* F6: Support VACUUM and VACUUM INTO (2.5.0 ✅)
+* F5: Support ESCAPE in LIKE (2.5.0 ✅)
 * F3: Support DISTINCT in aggregate functions (2.5.0 ✅)
 * F4: Support partial indexes, `CREATE INDEX ... WHERE` (2.5.0 ✅)
-* F5: Support ESCAPE in LIKE (2.5.0 ✅)
-* F6: Support VACUUM and VACUUM INTO (2.5.0 ✅)
+* F2: Support IF NOT EXISTS and IF EXISTS on CREATE and DROP of tables, views and indexes (2.5.0 ✅)
+* F1: Support DROP INDEX (2.5.0 ✅)
 * F49: Support joins of relations: checked result types, result columns, more than two tables, and RIGHT and FULL OUTER JOIN (2.5.0 ✅)
 * F50: Support subqueries: derived tables in FROM and JOIN, IN and EXISTS (2.5.0 ✅)
 * F51: Support CHECK constraints (2.5.0 ✅)
