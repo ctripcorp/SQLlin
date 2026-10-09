@@ -1781,6 +1781,303 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers arithmetic and concatenation: the operators of numbers of the same type, with values too, a division by
+     * zero being NULL, a negative value written so as not to start a comment, and `+` of strings. Expressions work in
+     * WHERE and ORDER BY too, but a literal on its own in ORDER BY or GROUP BY is rejected, as SQLite would read it as
+     * the number of a result column, and an expression that can be NULL in a non-null property is rejected.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testArithmetic() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            BookTable INSERT listOf(
+                Book(name = "Kotlin", author = "Ken", price = 10.0, pages = 100),
+                Book(name = "Swift", author = "Sam", price = 20.0, pages = 30),
+            )
+        }
+        lateinit var math: SelectStatement<BookMath>
+        lateinit var expensive: SelectStatement<Book>
+        lateinit var byNegatedPrice: SelectStatement<Book>
+        database {
+            BookTable { table ->
+                math = table SELECT listOf(
+                    (price * 2.0) AS BookMath::doubledPrice,
+                    (CAST(pages AS DOUBLE) / price) AS BookMath::pagesPerPrice,
+                    (-pages) AS BookMath::negatedPages,
+                    (pages - (-1)) AS BookMath::nextPage,
+                    (name + " by " + author) AS BookMath::label,
+                    (pages % 7) AS BookMath::remainder,
+                    (pages / 0) AS BookMath::perZero,
+                ) ORDER_BY (name to ASC)
+                expensive = table SELECT WHERE((price * 2.0) GT 30.0)
+                byNegatedPrice = table SELECT ORDER_BY((price * -1.0) to ASC)
+            }
+        }
+        assertEquals(
+            listOf(
+                BookMath("Kotlin", doubledPrice = 20.0, pagesPerPrice = 10.0, negatedPages = -100, nextPage = 101, label = "Kotlin by Ken", remainder = 2, perZero = null),
+                BookMath("Swift", doubledPrice = 40.0, pagesPerPrice = 1.5, negatedPages = -30, nextPage = 31, label = "Swift by Sam", remainder = 2, perZero = null),
+            ),
+            math.getResults(),
+        )
+        assertEquals(listOf("Swift"), expensive.getResults().map { it.name })
+        assertEquals(listOf("Swift", "Kotlin"), byNegatedPrice.getResults().map { it.name })
+
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable SELECT ORDER_BY(literal(1) to ASC) }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable SELECT GROUP_BY(literal(1)) }
+        }
+        // A division by zero is NULL, so it can't be read into a non-null property
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable { table -> table SELECT ((pages / 0) AS BookPages::pages) } }
+        }
+    }
+
+    /**
+     * Covers CAST to the types SQLlin names the columns of: a real number is truncated, a string read as far as it is a
+     * number, and numbers of different types computed with after a CAST.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testCast() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            BookTable INSERT Book(name = "Kotlin", author = "Ken", price = 10.5, pages = 100)
+        }
+        lateinit var casts: SelectStatement<BookCasts>
+        database {
+            BookTable { table ->
+                casts = table SELECT listOf(
+                    CAST(price AS INT) AS BookCasts::wholePrice,
+                    CAST(pages AS TEXT) AS BookCasts::pagesText,
+                    CAST(name AS BLOB) AS BookCasts::nameBytes,
+                    CAST(literal("12abc") AS INT) AS BookCasts::leadingDigits,
+                    (CAST(pages AS DOUBLE) * price) AS BookCasts::weighted,
+                )
+            }
+        }
+        val cast = casts.getResults().single()
+        assertEquals(10, cast.wholePrice)
+        assertEquals("100", cast.pagesText)
+        assertEquals("Kotlin", cast.nameBytes.decodeToString())
+        assertEquals(12, cast.leadingDigits)
+        assertEquals(1050.0, cast.weighted, 1e-9)
+    }
+
+    /**
+     * Covers the functions that replace NULL, with a value or another expression, and are NULL only where all their
+     * arguments can be, NULLIF, which can always be NULL, and the scalar max and min of several expressions.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testNullFunctions() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            UserAccountTable INSERT listOf(
+                UserAccount(id = null, username = "ann", email = "ann@mail", status = UserStatus.ACTIVE, priority = Priority.LOW, notes = null),
+                UserAccount(id = null, username = "bob", email = "bob@mail", status = UserStatus.ACTIVE, priority = Priority.HIGH, notes = "vip"),
+            )
+        }
+        lateinit var results: SelectStatement<NullFunctionResults>
+        database {
+            UserAccountTable { table ->
+                results = table SELECT listOf(
+                    coalesce(notes, "none") AS NullFunctionResults::notesOrNone,
+                    coalesce(notes, email) AS NullFunctionResults::notesOrEmail,
+                    ifnull(notes, "none") AS NullFunctionResults::ifNullNotes,
+                    nullif(username, "bob") AS NullFunctionResults::notBob,
+                    max(username, email) AS NullFunctionResults::greater,
+                    min(username, email) AS NullFunctionResults::lesser,
+                ) ORDER_BY (username to ASC)
+            }
+        }
+        assertEquals(
+            listOf(
+                NullFunctionResults("ann", notesOrNone = "none", notesOrEmail = "ann@mail", ifNullNotes = "none", notBob = "ann", greater = "ann@mail", lesser = "ann"),
+                NullFunctionResults("bob", notesOrNone = "vip", notesOrEmail = "vip", ifNullNotes = "vip", notBob = null, greater = "bob@mail", lesser = "bob"),
+            ),
+            results.getResults(),
+        )
+        // NULLIF can be NULL, and so can COALESCE of expressions that all can be
+        assertFailsWith<IllegalArgumentException> {
+            database { UserAccountTable { table -> table SELECT (nullif(username, "bob") AS NullFunctionResults::greater) } }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { UserAccountTable { table -> table SELECT (coalesce(notes, notes) AS NullFunctionResults::greater) } }
+        }
+    }
+
+    /**
+     * Covers more string, BLOB and number functions, whose arguments are expressions as well as values, and `total`,
+     * which is 0.0 rather than NULL when no rows match.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testMoreFunctions() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        lateinit var noTotals: SelectStatement<PriceTotals>
+        database {
+            BookTable { table ->
+                noTotals = table SELECT listOf(total(price) AS PriceTotals::total, total(DISTINCT(price)) AS PriceTotals::distinctTotal)
+            }
+        }
+        assertEquals(listOf(PriceTotals(0.0, 0.0)), noTotals.getResults())
+
+        database {
+            BookTable INSERT listOf(
+                Book(name = "Kotlin", author = "0Ken0", price = 10.5, pages = 100),
+                Book(name = "Swift", author = "Sam", price = 10.5, pages = 30),
+                Book(name = "Rust", author = "Rob", price = 20.0, pages = 50),
+            )
+        }
+        lateinit var texts: SelectStatement<TextFunctions>
+        lateinit var totals: SelectStatement<PriceTotals>
+        database {
+            BookTable { table ->
+                texts = table SELECT listOf(
+                    hex(name) AS TextFunctions::hexName,
+                    quote(name) AS TextFunctions::quoted,
+                    unicode(name) AS TextFunctions::firstCode,
+                    trim(author, "0") AS TextFunctions::trimmed,
+                    substr(name, 3) AS TextFunctions::tail,
+                    substr(name, literal(2), literal(3)) AS TextFunctions::middle,
+                    replace(name, literal("Kot"), author) AS TextFunctions::replaced,
+                    instr(name, literal("lin")) AS TextFunctions::position,
+                    printf("%s has %d pages", name, pages) AS TextFunctions::formatted,
+                    round(price) AS TextFunctions::rounded,
+                    length(zeroblob(3)) AS TextFunctions::zeros,
+                    length(randomblob(4)) AS TextFunctions::randomBytes,
+                ) WHERE (name EQ "Kotlin")
+                totals = table SELECT listOf(total(price) AS PriceTotals::total, total(DISTINCT(price)) AS PriceTotals::distinctTotal)
+            }
+        }
+        assertEquals(
+            TextFunctions(
+                hexName = "4B6F746C696E",
+                quoted = "'Kotlin'",
+                firstCode = 75,
+                trimmed = "Ken",
+                tail = "tlin",
+                middle = "otl",
+                replaced = "0Ken0lin",
+                position = 4,
+                formatted = "Kotlin has 100 pages",
+                rounded = 11.0,
+                zeros = 3,
+                randomBytes = 4,
+            ),
+            texts.getResults().single(),
+        )
+        assertEquals(listOf(PriceTotals(total = 41.0, distinctTotal = 30.5)), totals.getResults())
+    }
+
+    /**
+     * Covers the date and time functions, of strings, string and number expressions, with modifiers, and that a function
+     * of the current time, or of the local time, which isn't deterministic, can't be in an index or a partial index's
+     * WHERE, while one of a column can.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testDateTimeFunctions() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            BookTable INSERT Book(name = "2026-01-31", author = "Ken", price = 10.0, pages = 100)
+        }
+        lateinit var times: SelectStatement<DateTimes>
+        database {
+            BookTable { table ->
+                times = table SELECT listOf(
+                    date("2026-10-07 12:30:00") AS DateTimes::day,
+                    date(name, "+1 day") AS DateTimes::nextDay,
+                    time("2026-10-07 12:30:00", "+90 minutes") AS DateTimes::later,
+                    datetime(literal(0), "unixepoch") AS DateTimes::epochStart,
+                    strftime("%Y/%m", "2026-10-07") AS DateTimes::yearMonth,
+                    julianday("2000-01-01 12:00:00") AS DateTimes::julian,
+                    datetime("now") AS DateTimes::now,
+                )
+            }
+        }
+        val result = times.getResults().single()
+        assertEquals(
+            DateTimes(day = "2026-10-07", nextDay = "2026-02-01", later = "14:00:00", epochStart = "1970-01-01 00:00:00", yearMonth = "2026/10", julian = 2451545.0, now = result.now),
+            result,
+        )
+        assertEquals(19, result.now.length)
+        // With a modifier, which may not be valid, it can be NULL
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable { table -> table SELECT (datetime("now", "localtime") AS DateTimes::now) } }
+        }
+
+        database { BookTable.CREATE_INDEX("idx_book_day", BookTable.date(BookTable.name)) }
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable.CREATE_INDEX("idx_book_random", BookTable.random()) }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable.CREATE_INDEX("idx_book_local_day", BookTable.date(BookTable.name, "localtime")) }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable.CREATE_INDEX("idx_book_recent", BookTable.name) WHERE (BookTable.name GT BookTable.datetime("now")) }
+        }
+    }
+
+    /**
+     * Covers the functions that need a newer SQLite, or its math functions, each checked only where the SQLite has it:
+     * Android has no math functions at any API level.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+    fun testPlatformDependentFunctions() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            BookTable INSERT Book(name = "Kotlin", author = "Ken", price = 16.0, pages = 10)
+        }
+        if (sqliteHas("SELECT sqrt(4)")) {
+            lateinit var math: SelectStatement<MathResults>
+            database {
+                BookTable { table ->
+                    math = table SELECT listOf(
+                        sqrt(price) AS MathResults::root,
+                        ceil(literal(1.2)) AS MathResults::ceiling,
+                        floor(pages) AS MathResults::flooredPages,
+                        trunc(literal(-1.5)) AS MathResults::truncated,
+                        pow(pages, literal(2)) AS MathResults::power,
+                        pow(pages, 3.0) AS MathResults::powerOf,
+                        mod(pages, literal(3)) AS MathResults::remainder,
+                        mod(price, 5.0) AS MathResults::remainderOf,
+                        pi() AS MathResults::piValue,
+                        exp(literal(0)) AS MathResults::exponential,
+                        ln(literal(1)) AS MathResults::natural,
+                        log10(literal(100)) AS MathResults::decimal,
+                        log2(literal(8)) AS MathResults::binary,
+                    )
+                }
+            }
+            val result = math.getResults().single()
+            assertEquals(
+                MathResults(root = 4.0, ceiling = 2.0, flooredPages = 10, truncated = -1.0, power = 100.0, powerOf = 1000.0, remainder = 1.0, remainderOf = 1.0, piValue = result.piValue, exponential = 1.0, natural = 0.0, decimal = 2.0, binary = 3.0),
+                result,
+            )
+            assertEquals(kotlin.math.PI, result.piValue, 1e-12)
+        }
+        if (sqliteHas("SELECT sign(1)")) {
+            lateinit var signs: SelectStatement<SignResult>
+            database { BookTable { table -> signs = table SELECT (sign(literal(-3)) AS SignResult::signOf) } }
+            assertEquals(listOf(SignResult(-1)), signs.getResults())
+        }
+        if (sqliteHas("SELECT unixepoch('2020-01-01')")) {
+            lateinit var epochs: SelectStatement<EpochResult>
+            database { BookTable { table -> epochs = table SELECT (unixepoch("2020-01-01") AS EpochResult::epoch) } }
+            assertEquals(listOf(EpochResult(1577836800)), epochs.getResults())
+        }
+    }
+
+    /**
+     * Whether the SQLite of the database, which has to exist, can run [sql], as it can't use a function it doesn't have.
+     */
+    private fun sqliteHas(sql: String): Boolean {
+        val connection = openDatabase(DatabaseConfiguration(name = DATABASE_NAME, path = path, version = 1, create = {}))
+        return try {
+            connection.withQuery(sql) { cursor -> cursor.forEachRow { } }
+            true
+        } catch (e: Exception) {
+            false
+        } finally {
+            connection.close()
+        }
+    }
+
+    /**
      * Covers result columns: expressions, such as aggregate functions, selected into properties of a result type with
      * AS, as in `table SELECT listOf(count(X) AS AuthorStats::books)`, while every other property is read from its
      * column. Each function reads into the type of the values SQLite returns for it, and NULL into a nullable property.

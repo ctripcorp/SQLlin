@@ -41,15 +41,15 @@ import kotlin.jvm.JvmName
 
 /** An aggregate function of [element] with values of type [V]: NULL when all its values are, or no rows match. */
 private fun <V : Any> Relation<*>.numberAggregate(valueName: String, element: ClauseElement<*>): ClauseNumber<V> =
-    ClauseNumber(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = element.columnTables)
+    ClauseNumber(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = element.columnTables, tables = element.tables, isDeterministic = element.isDeterministic)
 
 /** A scalar function of [element] with values of type [V]: NULL when [element] is. */
 private fun <V : Any> Relation<*>.numberFunction(valueName: String, element: ClauseElement<*>): ClauseNumber<V> =
-    ClauseNumber(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = element.isAggregate, isNullOnNoRows = element.isNullOnNoRows, columnTables = element.columnTables)
+    ClauseNumber(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = element.isAggregate, isNullOnNoRows = element.isNullOnNoRows, columnTables = element.columnTables, tables = element.tables, isDeterministic = element.isDeterministic)
 
 /** A scalar function of [element] with `String` values: NULL when [element] is. */
 private fun Relation<*>.stringFunction(valueName: String, element: ClauseElement<*>): ClauseString<String> =
-    ClauseString(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = element.isAggregate, isNullOnNoRows = element.isNullOnNoRows, columnTables = element.columnTables)
+    ClauseString(valueName, this, isFunction = true, isNullable = element.isNullable, isAggregate = element.isAggregate, isNullOnNoRows = element.isNullOnNoRows, columnTables = element.columnTables, tables = element.tables, isDeterministic = element.isDeterministic)
 
 /**
  * Writes [string] as a SQL string literal. The only character SQLite escapes in one is `'`, by doubling it, so this
@@ -67,7 +67,7 @@ private fun sqlString(string: String): String = "'${string.replace("'", "''")}'"
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.count(element: ClauseElement<*>): ClauseNumber<Long> =
-    ClauseNumber("count(${element.sql})", this, isFunction = true, isNullable = false, isAggregate = true, isNullOnNoRows = false, columnTables = element.columnTables)
+    ClauseNumber("count(${element.sql})", this, isFunction = true, isNullable = false, isAggregate = true, isNullOnNoRows = false, columnTables = element.columnTables, tables = element.tables, isDeterministic = element.isDeterministic)
 
 /**
  * COUNT(*) aggregate function - counts all rows (including NULLs).
@@ -189,7 +189,7 @@ public fun <T, E : ClauseElement<*>> Relation<T>.min(element: E): E =
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.group_concat(element: ClauseString<*>, infix: String): ClauseString<String> =
-    ClauseString("group_concat(${element.sql},${sqlString(infix)})", this, isFunction = true, isNullable = element.isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = element.columnTables)
+    ClauseString("group_concat(${element.sql},${sqlString(infix)})", this, isFunction = true, isNullable = element.isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = element.columnTables, tables = element.tables, isDeterministic = element.isDeterministic)
 
 /**
  * The argument of an aggregate function that takes only the distinct values of [element], as SQL's `DISTINCT` does
@@ -222,7 +222,7 @@ public fun <E : ClauseElement<*>> DISTINCT(element: E): Distinct<E> = Distinct(e
 @ExperimentalDSLDatabaseAPI
 @FunctionDslMaker
 public fun <T> Relation<T>.count(distinct: Distinct<*>): ClauseNumber<Long> =
-    ClauseNumber("count(${distinct.sql})", this, isFunction = true, isNullable = false, isAggregate = true, isNullOnNoRows = false, columnTables = distinct.element.columnTables)
+    ClauseNumber("count(${distinct.sql})", this, isFunction = true, isNullable = false, isAggregate = true, isNullOnNoRows = false, columnTables = distinct.element.columnTables, tables = distinct.element.tables, isDeterministic = distinct.element.isDeterministic)
 
 /**
  * AVG aggregate function of the distinct values - returns the average of the distinct values, as a `Double`.
@@ -309,7 +309,7 @@ public fun <T> Relation<T>.sum(distinct: Distinct<ClauseBoolean>): ClauseNumber<
 @ExperimentalDSLDatabaseAPI
 @FunctionDslMaker
 public fun <T> Relation<T>.group_concat(distinct: Distinct<ClauseString<*>>): ClauseString<String> =
-    ClauseString("group_concat(${distinct.sql})", this, isFunction = true, isNullable = distinct.element.isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = distinct.element.columnTables)
+    ClauseString("group_concat(${distinct.sql})", this, isFunction = true, isNullable = distinct.element.isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = distinct.element.columnTables, tables = distinct.element.tables, isDeterministic = distinct.element.isDeterministic)
 
 /**
  * ABS scalar function - returns absolute value, of the same type as [element].
@@ -353,27 +353,7 @@ public fun <T> Relation<T>.round(element: ClauseNumber<*>, digits: Int): ClauseN
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.random(): ClauseNumber<Long> =
-    ClauseNumber("random()", this, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = false)
-
-/**
- * SIGN scalar function - returns the sign of a number.
- *
- * Returns -1, 0, or +1 if the argument is negative, zero, or positive respectively.
- * If the argument is NULL, then NULL is returned.
- *
- * Example:
- * ```kotlin
- * // Get the sign of balance
- * SELECT WHERE (sign(Account::balance) EQ 1)
- * ```
- * ***It is based on SQLite 3.51.1, disabled it temporarily***
- *
- * @param element The numeric value to get the sign of
- * @return ClauseNumber representing -1, 0, or 1
- */
-/* @FunctionDslMaker
- public fun <T> Relation<T>.sign(element: ClauseNumber<*>): ClauseNumber<Long> =
-    numberFunction("sign(${element.sql})", element) */
+    ClauseNumber("random()", this, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = false, isDeterministic = false)
 
 /**
  * UPPER scalar function - converts string to uppercase.
@@ -548,3 +528,232 @@ public fun <T> Relation<T>.instr(element: ClauseString<*>, sub: String): ClauseN
 @FunctionDslMaker
 public fun <T> Relation<T>.printf(format: String, element: ClauseString<*>): ClauseString<String> =
     stringFunction("printf(${sqlString(format)},${element.sql})", element)
+
+// ========== More functions ==========
+//
+// The functions below take expressions as all their arguments, and Kotlin values where a value is given: a value becomes
+// a literal of the expression's type, as `coalesce(nickname, "?")` does.
+
+/**
+ * COALESCE function - the first of [first], [second] and [others] that isn't NULL, or NULL if they all are, as in
+ * `coalesce(nickname, name)`. It is NULL only where they all can be.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T, E : ClauseElement<*>> Relation<T>.coalesce(first: E, second: E, vararg others: E): E =
+    firstNotNull("coalesce", listOf(first, second) + others)
+
+/**
+ * COALESCE function with a value - [element], or [value] where it is NULL, as in `coalesce(nickname, "?")`, which is
+ * never NULL.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T, V : Any, E : ClauseElement<V>> Relation<T>.coalesce(element: E, value: V): E =
+    firstNotNull("coalesce", listOf(element, element.literalOf(value)))
+
+/**
+ * IFNULL function - [element], or [other] where it is NULL. It is NULL only where both can be.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T, E : ClauseElement<*>> Relation<T>.ifnull(element: E, other: E): E =
+    firstNotNull("ifnull", listOf(element, other))
+
+/**
+ * IFNULL function with a value - [element], or [value] where it is NULL, which is never NULL.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T, V : Any, E : ClauseElement<V>> Relation<T>.ifnull(element: E, value: V): E =
+    firstNotNull("ifnull", listOf(element, element.literalOf(value)))
+
+/**
+ * NULLIF function - [element], or NULL where it equals [other], so it can be NULL.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T, E : ClauseElement<*>> Relation<T>.nullif(element: E, other: E): E =
+    nullIfEqual(element, other)
+
+/**
+ * NULLIF function with a value - [element], or NULL where it equals [value], as in `nullif(name, "")`, so it can be
+ * NULL.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T, V : Any, E : ClauseElement<V>> Relation<T>.nullif(element: E, value: V): E =
+    nullIfEqual(element, element.literalOf(value))
+
+@Suppress("UNCHECKED_CAST")
+private fun <E : ClauseElement<*>> firstNotNull(function: String, elements: List<ClauseElement<*>>): E {
+    val traits = strictTraits(
+        operands = elements,
+        isNullable = elements.all { it.isNullable },
+        isNullOnNoRows = elements.all { it.isNullOnNoRows },
+    )
+    return elements.first().derive("$function(${sqlOf(elements)})", traits) as E
+}
+
+@Suppress("UNCHECKED_CAST")
+private fun <E : ClauseElement<*>> nullIfEqual(element: ClauseElement<*>, other: ClauseElement<*>): E {
+    val traits = strictTraits(listOf(element, other), isNullable = true, isNullOnNoRows = element.isNullOnNoRows)
+    return element.derive("nullif(${element.sql},${other.sql})", traits) as E
+}
+
+/**
+ * MAX scalar function - the greatest of [first], [second] and [others], of their type, as in `max(price, minimumPrice)`.
+ * Unlike the aggregate `max` of one argument, it is NULL where any of them is.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T, E : ClauseElement<*>> Relation<T>.max(first: E, second: E, vararg others: E): E =
+    extreme("max", listOf(first, second) + others)
+
+/**
+ * MIN scalar function - the least of [first], [second] and [others], of their type. Unlike the aggregate `min` of one
+ * argument, it is NULL where any of them is.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T, E : ClauseElement<*>> Relation<T>.min(first: E, second: E, vararg others: E): E =
+    extreme("min", listOf(first, second) + others)
+
+@Suppress("UNCHECKED_CAST")
+private fun <E : ClauseElement<*>> extreme(function: String, elements: List<ClauseElement<*>>): E =
+    elements.first().derive("$function(${sqlOf(elements)})", strictTraits(elements)) as E
+
+/**
+ * HEX function - [element]'s value as upper-case hexadecimal digits: of the bytes of a BLOB, and of the text of another
+ * value. It is an empty string, not NULL, for NULL.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.hex(element: ClauseElement<*>): ClauseString<String> =
+    stringExpression("hex(${element.sql})", strictTraits(listOf(element), isNullable = false, isNullOnNoRows = false))
+
+/**
+ * QUOTE function - [element]'s value as an SQL literal, such as `'it''s'`, `X'01'` or `NULL`, so it is never NULL.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.quote(element: ClauseElement<*>): ClauseString<String> =
+    stringExpression("quote(${element.sql})", strictTraits(listOf(element), isNullable = false, isNullOnNoRows = false))
+
+/**
+ * UNICODE function - the code point of the first character of [element], which is NULL for an empty string.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.unicode(element: ClauseString<*>): ClauseNumber<Long> =
+    numberExpression("unicode(${element.sql})", strictTraits(listOf(element), isNullable = true))
+
+/**
+ * RANDOMBLOB function - a BLOB of [length] random bytes, which is different each time it is computed.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.randomblob(length: Int): ClauseBlob =
+    blobExpression("randomblob($length)", strictTraits(emptyList(), isNullable = false, isNullOnNoRows = false, isDeterministic = false))
+
+/**
+ * ZEROBLOB function - a BLOB of [length] zero bytes.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.zeroblob(length: Int): ClauseBlob =
+    blobExpression("zeroblob($length)", strictTraits(emptyList(), isNullable = false, isNullOnNoRows = false))
+
+/**
+ * TRIM function - [element] without the [characters] at its start and end, as in `trim(code, "0")`.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.trim(element: ClauseString<*>, characters: String): ClauseString<String> =
+    stringExpression("trim(${element.sql},${expressionLiteral(characters)})", strictTraits(listOf(element)))
+
+/**
+ * LTRIM function - [element] without the [characters] at its start.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.ltrim(element: ClauseString<*>, characters: String): ClauseString<String> =
+    stringExpression("ltrim(${element.sql},${expressionLiteral(characters)})", strictTraits(listOf(element)))
+
+/**
+ * RTRIM function - [element] without the [characters] at its end.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.rtrim(element: ClauseString<*>, characters: String): ClauseString<String> =
+    stringExpression("rtrim(${element.sql},${expressionLiteral(characters)})", strictTraits(listOf(element)))
+
+/**
+ * SUBSTR function - the characters of [element] from position [start] on, counted from 1.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.substr(element: ClauseString<*>, start: Int): ClauseString<String> =
+    stringExpression("substr(${element.sql},$start)", strictTraits(listOf(element)))
+
+/**
+ * SUBSTR function of expressions - the [length] characters of [element] from position [start] on, counted from 1.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.substr(element: ClauseString<*>, start: ClauseNumber<*>, length: ClauseNumber<*>): ClauseString<String> =
+    stringExpression("substr(${element.sql},${start.sql},${length.sql})", strictTraits(listOf(element, start, length)))
+
+/**
+ * REPLACE function of expressions - [element] with every [old] replaced by [new].
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.replace(element: ClauseString<*>, old: ClauseString<*>, new: ClauseString<*>): ClauseString<String> =
+    stringExpression("replace(${element.sql},${old.sql},${new.sql})", strictTraits(listOf(element, old, new)))
+
+/**
+ * INSTR function of an expression - the position of the first [sub] in [element], counted from 1, or 0 if there is none.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.instr(element: ClauseString<*>, sub: ClauseString<*>): ClauseNumber<Long> =
+    numberExpression("instr(${element.sql},${sub.sql})", strictTraits(listOf(element, sub)))
+
+/**
+ * PRINTF function of several values - [format] with its specifiers, as `%d` or `%s`, replaced by [elements] in turn,
+ * as in `printf("%s: %d", name, age)`. A NULL value is written as an empty string or zero, so it is never NULL.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.printf(format: String, vararg elements: ClauseElement<*>): ClauseString<String> {
+    val operands = elements.toList()
+    val arguments = if (operands.isEmpty()) "" else ",${sqlOf(operands)}"
+    return stringExpression("printf(${expressionLiteral(format)}$arguments)", strictTraits(operands, isNullable = false, isNullOnNoRows = false))
+}
+
+/**
+ * ROUND function - [element] rounded to an integer, as a `Double`.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.round(element: ClauseNumber<*>): ClauseNumber<Double> =
+    numberExpression("round(${element.sql})", strictTraits(listOf(element)))
+
+/**
+ * TOTAL aggregate function - the sum of [element]'s values as a `Double`, which, unlike `sum`, is `0.0` rather than
+ * NULL when they are all NULL, or no rows match.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.total(element: ClauseNumber<*>): ClauseNumber<Double> =
+    ClauseNumber("total(${element.sql})", this, isFunction = true, isNullable = false, isAggregate = true, isNullOnNoRows = false, columnTables = element.columnTables, tables = element.tables, isDeterministic = element.isDeterministic)
+
+/**
+ * TOTAL aggregate function of the distinct values - the sum of the distinct values as a `Double`, `0.0` when there are
+ * none.
+ */
+@ExperimentalDSLDatabaseAPI
+@FunctionDslMaker
+public fun <T> Relation<T>.total(distinct: Distinct<ClauseNumber<*>>): ClauseNumber<Double> =
+    ClauseNumber("total(${distinct.sql})", this, isFunction = true, isNullable = false, isAggregate = true, isNullOnNoRows = false, columnTables = distinct.element.columnTables, tables = distinct.element.tables, isDeterministic = distinct.element.isDeterministic)

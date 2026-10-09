@@ -358,7 +358,8 @@ For an [FTS table](advanced-query.md#full-text-search), it is an FTS table with 
 options, so an FTS table is rebuilt the same way, to change its columns or options.
 
 The rows are converted by the `SELECT`, with a projection or with result columns, as described in
-[Advanced Query](advanced-query.md). Functions to convert a value's type, or to replace a `NULL`, aren't available yet.
+[Advanced Query](advanced-query.md), and [expressions](sql-functions.md#expressions): `CAST` converts a value's type, and
+`ifnull` replaces a `NULL`, as in `ifnull(nickname, "")`.
 
 ## Insert
 

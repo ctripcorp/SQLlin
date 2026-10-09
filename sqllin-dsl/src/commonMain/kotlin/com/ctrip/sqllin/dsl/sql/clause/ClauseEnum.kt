@@ -68,7 +68,10 @@ public class ClauseEnum<T : Enum<T>> internal constructor(
     isAggregate: Boolean,
     isNullOnNoRows: Boolean,
     columnTables: Set<String>? = null,
-) : ClauseElement<T>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables) {
+    tables: Set<String> = emptySet(),
+    isDeterministic: Boolean = true,
+    isLiteral: Boolean = false,
+) : ClauseElement<T>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables, tables, isDeterministic, isLiteral) {
 
     /**
      * Creates the element of a column, as the code generated for a table does.
@@ -79,7 +82,13 @@ public class ClauseEnum<T : Enum<T>> internal constructor(
         this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
 
     override fun toAggregate(valueName: String, table: Relation<*>): ClauseEnum<T> =
-        ClauseEnum(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables)
+        ClauseEnum(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables, tables = tables, isDeterministic = isDeterministic)
+
+    override fun derive(valueName: String, traits: Traits): ClauseEnum<T> =
+        ClauseEnum(valueName, table, isFunction = true, isNullable = traits.isNullable, isAggregate = traits.isAggregate, isNullOnNoRows = traits.isNullOnNoRows, columnTables = traits.columnTables, tables = traits.tables, isDeterministic = traits.isDeterministic)
+
+    override fun literalOf(value: T): ClauseEnum<T> =
+        ClauseEnum(expressionLiteral(value.ordinal), ExpressionRelation, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = false, columnTables = emptySet(), isLiteral = true)
 
     /**
      * Less than (<) comparison using the enum's ordinal value.
@@ -219,7 +228,7 @@ public class ClauseEnum<T : Enum<T>> internal constructor(
             append(valueName)
             append(symbol)
         }
-        return SelectCondition(sql, mutableListOf(entry.ordinal))
+        return condition(sql, mutableListOf(entry.ordinal))
     }
 
     /**
@@ -248,7 +257,7 @@ public class ClauseEnum<T : Enum<T>> internal constructor(
             builder.append('?')
             mutableListOf<Any?>(entry.ordinal)
         }
-        return SelectCondition(builder.toString(), parameters)
+        return condition(builder.toString(), parameters)
     }
 
     /**
@@ -268,7 +277,7 @@ public class ClauseEnum<T : Enum<T>> internal constructor(
             append(symbol)
             clauseEnum.appendSQL(this)
         }
-        return SelectCondition(sql, null)
+        return condition(sql, null, clauseEnum)
     }
 
     override fun hashCode(): Int = valueName.hashCode() + table.tableName.hashCode()

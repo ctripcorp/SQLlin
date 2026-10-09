@@ -129,7 +129,8 @@ internal object Create : Operation {
      * @param indexName Name for the new index
      * @param columns One or more columns to include in the index
      * @return CREATE INDEX statement ready for execution
-     * @throws IllegalArgumentException if no columns are specified
+     * @throws IllegalArgumentException if no columns are specified, or one reads another table, or has a subquery, an
+     * aggregate function or a function that doesn't always give the same result for a row, such as `random()`
      */
     private fun <T> createIndex(prefix: String, table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>, isIfNotExists: Boolean): SingleStatement {
         val sql = buildString {
@@ -149,6 +150,16 @@ internal object Create : Operation {
                 val otherTable = column.columnTables.firstOrNull { it != table.tableName }
                 require(otherTable == null) {
                     "The index '$indexName' of table '${table.tableName}' can only hold the columns of that table, but '${column.valueName}' reads table '$otherTable'."
+                }
+                // SQLite rejects these too, but a function that isn't deterministic only once the table has rows
+                require(column.tables.isEmpty()) {
+                    "The index '$indexName' can't hold '${column.valueName}', which has a subquery."
+                }
+                require(!column.isAggregate) {
+                    "The index '$indexName' can't hold '${column.valueName}', which is an aggregate function."
+                }
+                require(column.isDeterministic) {
+                    "The index '$indexName' can't hold '${column.valueName}', which doesn't always give the same result for a row."
                 }
                 append(if (column.isFunction) unqualified(column.valueName, table.tableName) else column.valueName)
             }

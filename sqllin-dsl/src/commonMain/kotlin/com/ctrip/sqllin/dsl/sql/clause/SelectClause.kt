@@ -39,3 +39,27 @@ package com.ctrip.sqllin.dsl.sql.clause
 public sealed interface SelectClause<T> : Clause<T> {
     public val clauseStr: String
 }
+
+/**
+ * The tables that the subqueries in the elements of this clause read, which an observed query watches. Those of a
+ * condition are in the condition.
+ */
+internal val SelectClause<*>.elementTables: Set<String>
+    get() = when (this) {
+        is CompleteOrderByClause<*> -> column2WayMap.keys.flatMapTo(HashSet()) { it.tables }
+        is SimpleOrderByClause<*> -> columns.flatMapTo(HashSet()) { it.tables }
+        is GroupByClause<*> -> columnNames.flatMapTo(HashSet()) { it.tables }
+        else -> emptySet()
+    }
+
+/**
+ * Rejects a literal on its own among [elements] of [clause]: SQLite reads `ORDER BY 2` as the second result column, and
+ * so `(2)` and `+2` too.
+ */
+internal fun requireNoLiteral(elements: Iterable<ClauseElement<*>>, clause: String) {
+    val literal = elements.firstOrNull { it.isLiteral }
+    require(literal == null) {
+        "$clause can't have the literal ${literal?.valueName} on its own: SQLite would read it as the number of a result column."
+    }
+}
+

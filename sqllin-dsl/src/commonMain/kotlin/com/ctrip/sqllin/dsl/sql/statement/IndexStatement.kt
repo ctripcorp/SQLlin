@@ -48,6 +48,10 @@ public class IndexStatement internal constructor(
         require(condition.tables.isEmpty()) {
             "The WHERE of index '$indexName' can't have a subquery, which SQLite doesn't allow in a partial index."
         }
+        // SQLite rejects it too, but only once the table has rows
+        require(condition.isDeterministic) {
+            "The WHERE of index '$indexName' can't have a function that doesn't always give the same result for a row."
+        }
         val where = inlineParameters(Create.unqualified(condition.conditionSQL, table.tableName), condition.parameters)
         container.replaceStatement(statement, TableStructureStatement("${statement.sqlStr} WHERE $where", connection))
         hasWhere = true

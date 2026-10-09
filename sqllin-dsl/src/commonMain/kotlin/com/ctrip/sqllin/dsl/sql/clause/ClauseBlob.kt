@@ -50,7 +50,10 @@ public class ClauseBlob internal constructor(
     isAggregate: Boolean,
     isNullOnNoRows: Boolean,
     columnTables: Set<String>? = null,
-) : ClauseElement<ByteArray>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables) {
+    tables: Set<String> = emptySet(),
+    isDeterministic: Boolean = true,
+    isLiteral: Boolean = false,
+) : ClauseElement<ByteArray>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables, tables, isDeterministic, isLiteral) {
 
     /**
      * Creates the element of a column, as the code generated for a table does.
@@ -61,7 +64,13 @@ public class ClauseBlob internal constructor(
         this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
 
     override fun toAggregate(valueName: String, table: Relation<*>): ClauseBlob =
-        ClauseBlob(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables)
+        ClauseBlob(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables, tables = tables, isDeterministic = isDeterministic)
+
+    override fun derive(valueName: String, traits: Traits): ClauseBlob =
+        ClauseBlob(valueName, table, isFunction = true, isNullable = traits.isNullable, isAggregate = traits.isAggregate, isNullOnNoRows = traits.isNullOnNoRows, columnTables = traits.columnTables, tables = traits.tables, isDeterministic = traits.isDeterministic)
+
+    override fun literalOf(value: ByteArray): ClauseBlob =
+        ClauseBlob(expressionLiteral(value), ExpressionRelation, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = false, columnTables = emptySet(), isLiteral = true)
 
     /**
      * Creates an equality comparison condition (=).
@@ -181,7 +190,7 @@ public class ClauseBlob internal constructor(
                 append('?')
             }
         }
-        return SelectCondition(sql, if (blob == null) null else mutableListOf(blob))
+        return condition(sql, if (blob == null) null else mutableListOf(blob))
     }
 
     private fun appendBlob(symbol: String, blob: ByteArray): SelectCondition {
@@ -193,7 +202,7 @@ public class ClauseBlob internal constructor(
             append(valueName)
             append(symbol)
         }
-        return SelectCondition(sql, mutableListOf(blob))
+        return condition(sql, mutableListOf(blob))
     }
 
     private fun appendClauseBlob(symbol: String, clauseBlob: ClauseBlob): SelectCondition {
@@ -204,7 +213,7 @@ public class ClauseBlob internal constructor(
             append(' ')
             clauseBlob.appendSQL(this)
         }
-        return SelectCondition(sql, null)
+        return condition(sql, null, clauseBlob)
     }
 
     /**
@@ -233,7 +242,7 @@ public class ClauseBlob internal constructor(
             }
             append(')')
         }
-        return SelectCondition(sql, parameters)
+        return condition(sql, parameters)
     }
 
     /**
@@ -253,7 +262,7 @@ public class ClauseBlob internal constructor(
             append(valueName)
             append(" BETWEEN ? AND ?")
         }
-        return SelectCondition(sql, mutableListOf(range.first, range.second))
+        return condition(sql, mutableListOf(range.first, range.second))
     }
 
     override fun hashCode(): Int = valueName.hashCode() + table.tableName.hashCode()

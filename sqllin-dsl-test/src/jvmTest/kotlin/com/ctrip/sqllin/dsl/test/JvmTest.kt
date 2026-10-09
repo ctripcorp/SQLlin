@@ -98,6 +98,24 @@ class JvmTest {
     fun testVacuum() = commonTest.testVacuum()
 
     @Test
+    fun testArithmetic() = commonTest.testArithmetic()
+
+    @Test
+    fun testCast() = commonTest.testCast()
+
+    @Test
+    fun testNullFunctions() = commonTest.testNullFunctions()
+
+    @Test
+    fun testMoreFunctions() = commonTest.testMoreFunctions()
+
+    @Test
+    fun testDateTimeFunctions() = commonTest.testDateTimeFunctions()
+
+    @Test
+    fun testPlatformDependentFunctions() = commonTest.testPlatformDependentFunctions()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

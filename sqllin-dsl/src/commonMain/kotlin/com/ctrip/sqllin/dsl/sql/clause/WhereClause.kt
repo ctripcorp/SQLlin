@@ -111,7 +111,8 @@ public infix fun <T> UpdateStatementWithoutWhereClause<T>.WHERE(condition: Selec
  * ```
  * Its values are written into the SQL, as SQLite allows no parameters there, nor subqueries.
  *
- * @throws IllegalArgumentException if [condition] has a subquery
+ * @throws IllegalArgumentException if [condition] has a subquery, or a function that doesn't always give the same result
+ * for a row, such as `random()`
  */
 @ExperimentalDSLDatabaseAPI
 @StatementDslMaker

@@ -19,6 +19,7 @@ package com.ctrip.sqllin.dsl.sql.statement
 import com.ctrip.sqllin.driver.CommonCursor
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
+import com.ctrip.sqllin.dsl.sql.clause.elementTables
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.compiler.QueryDecoder
 import com.ctrip.sqllin.dsl.sql.operation.parametersOf
@@ -126,10 +127,10 @@ public class WhereSelectStatement<T> internal constructor(
         LimitSelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables)
 
     internal infix fun appendToOrderBy(clause: OrderByClause<T>): OrderBySelectStatement<T> =
-        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables)
+        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables + clause.elementTables)
 
     internal infix fun appendToGroupBy(clause: GroupByClause<T>): GroupBySelectStatement<T> =
-        GroupBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, null, tables)
+        GroupBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, null, tables + clause.elementTables)
 }
 
 /**
@@ -160,10 +161,10 @@ public class ResultColumnSelectStatement<T> internal constructor(
         LimitSelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables)
 
     internal infix fun appendToOrderBy(clause: OrderByClause<T>): OrderBySelectStatement<T> =
-        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables)
+        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables + clause.elementTables)
 
     internal infix fun appendToGroupBy(clause: GroupByClause<T>): GroupBySelectStatement<T> =
-        GroupBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, null, tables)
+        GroupBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, null, tables + clause.elementTables)
 }
 
 /**
@@ -194,10 +195,10 @@ public class JoinSelectStatement<T> internal constructor(
         LimitSelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables)
 
     internal infix fun appendToOrderBy(clause: OrderByClause<T>): OrderBySelectStatement<T> =
-        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables)
+        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables + clause.elementTables)
 
     internal infix fun appendToGroupBy(clause: GroupByClause<T>): GroupBySelectStatement<T> =
-        GroupBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, null, tables)
+        GroupBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, null, tables + clause.elementTables)
 }
 
 /**
@@ -220,7 +221,7 @@ public class GroupBySelectStatement<T> internal constructor(
 ) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters, ungroupedError, tables) {
 
     internal infix fun appendToOrderBy(clause: OrderByClause<T>): OrderBySelectStatement<T> =
-        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables)
+        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables + clause.elementTables)
 
     internal infix fun appendToHaving(clause: HavingClause<T>): HavingSelectStatement<T> =
         HavingSelectStatement(buildSQL(clause), deserializer, connection, container, parametersOf(parameters, clause.selectCondition.parameters), ungroupedError, tables + clause.selectCondition.tables)
@@ -246,7 +247,7 @@ public class HavingSelectStatement<T> internal constructor(
 ) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters, ungroupedError, tables) {
 
     internal infix fun appendToOrderBy(clause: OrderByClause<T>): OrderBySelectStatement<T> =
-        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables)
+        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables + clause.elementTables)
 
     internal infix fun appendToLimit(clause: LimitClause<T>): LimitSelectStatement<T> =
         LimitSelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables)
@@ -342,7 +343,7 @@ public class CompoundSelectStatement<T> internal constructor(
 ) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters, null, tables) {
 
     internal infix fun appendToOrderBy(clause: OrderByClause<T>): OrderBySelectStatement<T> =
-        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, null, tables)
+        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, null, tables + clause.elementTables)
 
     internal infix fun appendToLimit(clause: LimitClause<T>): LimitSelectStatement<T> =
         LimitSelectStatement(buildSQL(clause), deserializer, connection, container, parameters, null, tables)

@@ -306,4 +306,4 @@ public infix fun SelectCondition.AND(prediction: SelectCondition): SelectConditi
 @ExperimentalDSLDatabaseAPI
 @StatementDslMaker
 public fun NOT(condition: SelectCondition): SelectCondition =
-    SelectCondition("NOT (${condition.conditionSQL})", condition.parameters, condition.tables)
+    SelectCondition("NOT (${condition.conditionSQL})", condition.parameters, condition.tables, isDeterministic = condition.isDeterministic)

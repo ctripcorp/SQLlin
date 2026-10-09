@@ -587,6 +587,118 @@ data class BookTotals(val books: Long, val maxPages: PageCount?, val averagePric
 data class BookCount(val books: Long)
 
 /**
+ * Arithmetic and concatenation of the columns of a [Book], next to its `name`, read from its column.
+ */
+@Serializable
+data class BookMath(
+    val name: String,
+    val doubledPrice: Double,
+    val pagesPerPrice: Double?,
+    val negatedPages: PageCount,
+    val nextPage: PageCount,
+    val label: String,
+    val remainder: PageCount,
+    val perZero: PageCount?,
+)
+
+/**
+ * The pages of a [Book], to select an expression into.
+ */
+@Serializable
+data class BookPages(val pages: PageCount)
+
+/**
+ * The columns of a [Book] converted to other types with CAST.
+ */
+@Serializable
+data class BookCasts(
+    val wholePrice: Int,
+    val pagesText: String,
+    val nameBytes: ByteArray,
+    val leadingDigits: Int,
+    val weighted: Double,
+)
+
+/**
+ * The functions that replace NULL, and the scalar max and min, of the columns of a [UserAccount].
+ */
+@Serializable
+data class NullFunctionResults(
+    val username: String,
+    val notesOrNone: String,
+    val notesOrEmail: String,
+    val ifNullNotes: String,
+    val notBob: String?,
+    val greater: String,
+    val lesser: String,
+)
+
+/**
+ * String, BLOB and number functions of the columns of a [Book].
+ */
+@Serializable
+data class TextFunctions(
+    val hexName: String,
+    val quoted: String,
+    val firstCode: Long?,
+    val trimmed: String,
+    val tail: String,
+    val middle: String,
+    val replaced: String,
+    val position: Long,
+    val formatted: String,
+    val rounded: Double,
+    val zeros: Long,
+    val randomBytes: Long,
+)
+
+/**
+ * The `total` of the prices of the books, which is 0.0 rather than NULL when no rows match.
+ */
+@Serializable
+data class PriceTotals(val total: Double, val distinctTotal: Double)
+
+/**
+ * Date and time functions: all can be NULL, but `datetime('now')`.
+ */
+@Serializable
+data class DateTimes(
+    val day: String?,
+    val nextDay: String?,
+    val later: String?,
+    val epochStart: String?,
+    val yearMonth: String?,
+    val julian: Double?,
+    val now: String,
+)
+
+/**
+ * The math functions, which only some platforms' SQLite has.
+ */
+@Serializable
+data class MathResults(
+    val root: Double?,
+    val ceiling: Double,
+    val flooredPages: PageCount,
+    val truncated: Double,
+    val power: Double?,
+    val powerOf: Double?,
+    val remainder: Double?,
+    val remainderOf: Double?,
+    val piValue: Double,
+    val exponential: Double?,
+    val natural: Double?,
+    val decimal: Double?,
+    val binary: Double?,
+)
+
+@Serializable
+data class SignResult(val signOf: Long)
+
+@Serializable
+data class EpochResult(val epoch: Long?)
+
+/**
  * Aggregates of the distinct values of the columns of the books, next to those of all values.
  */
 @Serializable

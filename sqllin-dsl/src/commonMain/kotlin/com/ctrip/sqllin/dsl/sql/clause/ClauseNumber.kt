@@ -16,7 +16,9 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.Relation
+import kotlin.jvm.JvmName
 
 /**
  * Wrapper for numeric column/function references in SQL clauses.
@@ -47,7 +49,10 @@ public class ClauseNumber<V : Any> internal constructor(
     isAggregate: Boolean,
     isNullOnNoRows: Boolean,
     columnTables: Set<String>? = null,
-) : ClauseElement<V>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables) {
+    tables: Set<String> = emptySet(),
+    isDeterministic: Boolean = true,
+    isLiteral: Boolean = false,
+) : ClauseElement<V>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables, tables, isDeterministic, isLiteral) {
 
     /**
      * Creates the element of a column, as the code generated for a table does.
@@ -58,7 +63,13 @@ public class ClauseNumber<V : Any> internal constructor(
         this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
 
     override fun toAggregate(valueName: String, table: Relation<*>): ClauseNumber<V> =
-        ClauseNumber(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables)
+        ClauseNumber(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables, tables = tables, isDeterministic = isDeterministic)
+
+    override fun derive(valueName: String, traits: Traits): ClauseNumber<V> =
+        ClauseNumber(valueName, table, isFunction = true, isNullable = traits.isNullable, isAggregate = traits.isAggregate, isNullOnNoRows = traits.isNullOnNoRows, columnTables = traits.columnTables, tables = traits.tables, isDeterministic = traits.isDeterministic)
+
+    override fun literalOf(value: V): ClauseNumber<V> =
+        ClauseNumber(expressionLiteral(value), ExpressionRelation, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = false, columnTables = emptySet(), isLiteral = true)
 
     /**
      * Less than (<) comparison using parameterized binding.
@@ -165,7 +176,7 @@ public class ClauseNumber<V : Any> internal constructor(
             }
             append(')')
         }
-        return SelectCondition(sql, parameters)
+        return condition(sql, parameters)
     }
 
     /**
@@ -186,7 +197,7 @@ public class ClauseNumber<V : Any> internal constructor(
             append(valueName)
             append(" BETWEEN ? AND ?")
         }
-        return SelectCondition(sql, mutableListOf(range.first, range.last))
+        return condition(sql, mutableListOf(range.first, range.last))
     }
 
     private fun appendNumber(symbol: String, number: Number): SelectCondition {
@@ -198,7 +209,7 @@ public class ClauseNumber<V : Any> internal constructor(
             append(valueName)
             append(symbol)
         }
-        return SelectCondition(sql, mutableListOf(number))
+        return condition(sql, mutableListOf(number))
     }
 
     private fun appendNullableNumber(notNullSymbol: String, nullSymbol: String, number: Number?): SelectCondition {
@@ -216,7 +227,7 @@ public class ClauseNumber<V : Any> internal constructor(
             builder.append('?')
             mutableListOf<Any?>(number)
         }
-        return SelectCondition(builder.toString(), parameters)
+        return condition(builder.toString(), parameters)
     }
 
     private fun appendClauseNumber(symbol: String, clauseNumber: ClauseNumber<*>): SelectCondition {
@@ -225,11 +236,161 @@ public class ClauseNumber<V : Any> internal constructor(
             append(symbol)
             clauseNumber.appendSQL(this)
         }
-        return SelectCondition(sql, null)
+        return condition(sql, null, clauseNumber)
     }
+
+    // ========== Arithmetic ==========
+    //
+    // An operator of two numbers of the same type gives a number of that type, as `visits + 1` of an `Int` column is an
+    // `Int`; CAST converts a number to another type, to compute with numbers of different types. SQLite computes as
+    // Kotlin does, except that it turns an integer that overflows into a real number, rather than wrapping it around,
+    // and that it gives NULL for a division by zero, rather than throwing.
+
+    /**
+     * Addition: `(this + other)`.
+     */
+    @ExperimentalDSLDatabaseAPI
+    public operator fun plus(other: ClauseNumber<V>): ClauseNumber<V> = arithmetic("+", other)
+
+    /**
+     * Addition of a value: `(this + value)`, as in `visits + 1`.
+     */
+    @ExperimentalDSLDatabaseAPI
+    public operator fun plus(value: V): ClauseNumber<V> = arithmetic("+", literalOf(value))
+
+    /**
+     * Subtraction: `(this - other)`.
+     */
+    @ExperimentalDSLDatabaseAPI
+    public operator fun minus(other: ClauseNumber<V>): ClauseNumber<V> = arithmetic("-", other)
+
+    /**
+     * Subtraction of a value: `(this - value)`.
+     */
+    @ExperimentalDSLDatabaseAPI
+    public operator fun minus(value: V): ClauseNumber<V> = arithmetic("-", literalOf(value))
+
+    /**
+     * Multiplication: `(this * other)`.
+     */
+    @ExperimentalDSLDatabaseAPI
+    public operator fun times(other: ClauseNumber<V>): ClauseNumber<V> = arithmetic("*", other)
+
+    /**
+     * Multiplication by a value: `(this * value)`.
+     */
+    @ExperimentalDSLDatabaseAPI
+    public operator fun times(value: V): ClauseNumber<V> = arithmetic("*", literalOf(value))
+
+    /**
+     * Division: `(this / other)`, which divides integers as Kotlin does, `7 / 2` being `3`. SQLite gives NULL for a
+     * division by zero, so the result can be NULL.
+     */
+    @ExperimentalDSLDatabaseAPI
+    public operator fun div(other: ClauseNumber<V>): ClauseNumber<V> = arithmetic("/", other, isNullable = true)
+
+    /**
+     * Division by a value: `(this / value)`, which can only be NULL where this element can, unless [value] is zero.
+     */
+    @ExperimentalDSLDatabaseAPI
+    public operator fun div(value: V): ClauseNumber<V> {
+        val divisor = literalOf(value)
+        return arithmetic("/", divisor, isNullable = isNullable || divisor.valueName.trim('(', ')').toDouble() == 0.0)
+    }
+
+    /**
+     * Negation: `(-this)`.
+     */
+    @ExperimentalDSLDatabaseAPI
+    public operator fun unaryMinus(): ClauseNumber<V> = derive("(-$sql)", strictTraits(listOf(this)))
+
+    /**
+     * The remainder of the division of integers, `(this % other)`, which, as in Kotlin, has the sign of this element.
+     * The remainder operators are only given to integer types, as SQLite converts real numbers to integers for it.
+     */
+    internal fun remainder(other: ClauseElement<*>): ClauseNumber<V> {
+        val isNonZero = other.isLiteral && other.valueName.trim('(', ')').toDouble() != 0.0
+        return arithmetic("%", other, isNullable = isNullable || !isNonZero || other.isNullable)
+    }
+
+    private fun arithmetic(operator: String, other: ClauseElement<*>, isNullable: Boolean = this.isNullable || other.isNullable): ClauseNumber<V> =
+        derive("($sql $operator ${other.sql})", strictTraits(listOf(this, other), isNullable))
 
     override fun hashCode(): Int = valueName.hashCode() + table.tableName.hashCode()
     override fun equals(other: Any?): Boolean = (other as? ClauseNumber<*>)?.let {
         it.valueName == valueName && it.table.tableName == table.tableName
     } ?: false
 }
+
+// The remainder of integers: SQLite converts real numbers to integers for `%`, so `5.5 % 2` is `1.0` there, but `1.5` in
+// Kotlin, and the operator is only given to integer types.
+
+/** The remainder of the division of `Byte`s: `(this % other)`, NULL for a division by zero. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("remByte")
+public operator fun ClauseNumber<Byte>.rem(other: ClauseNumber<Byte>): ClauseNumber<Byte> = remainder(other)
+
+/** The remainder of the division by a `Byte`: `(this % value)`, NULL for a division by zero. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("remByteValue")
+public operator fun ClauseNumber<Byte>.rem(value: Byte): ClauseNumber<Byte> = remainder(literalOf(value))
+
+/** The remainder of the division of `Short`s: `(this % other)`, NULL for a division by zero. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("remShort")
+public operator fun ClauseNumber<Short>.rem(other: ClauseNumber<Short>): ClauseNumber<Short> = remainder(other)
+
+/** The remainder of the division by a `Short`: `(this % value)`, NULL for a division by zero. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("remShortValue")
+public operator fun ClauseNumber<Short>.rem(value: Short): ClauseNumber<Short> = remainder(literalOf(value))
+
+/** The remainder of the division of `Int`s: `(this % other)`, NULL for a division by zero. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("remInt")
+public operator fun ClauseNumber<Int>.rem(other: ClauseNumber<Int>): ClauseNumber<Int> = remainder(other)
+
+/** The remainder of the division by a `Int`: `(this % value)`, NULL for a division by zero. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("remIntValue")
+public operator fun ClauseNumber<Int>.rem(value: Int): ClauseNumber<Int> = remainder(literalOf(value))
+
+/** The remainder of the division of `Long`s: `(this % other)`, NULL for a division by zero. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("remLong")
+public operator fun ClauseNumber<Long>.rem(other: ClauseNumber<Long>): ClauseNumber<Long> = remainder(other)
+
+/** The remainder of the division by a `Long`: `(this % value)`, NULL for a division by zero. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("remLongValue")
+public operator fun ClauseNumber<Long>.rem(value: Long): ClauseNumber<Long> = remainder(literalOf(value))
+
+/** The remainder of the division of `UByte`s: `(this % other)`, NULL for a division by zero. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("remUByte")
+public operator fun ClauseNumber<UByte>.rem(other: ClauseNumber<UByte>): ClauseNumber<UByte> = remainder(other)
+
+/** The remainder of the division by a `UByte`: `(this % value)`, NULL for a division by zero. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("remUByteValue")
+public operator fun ClauseNumber<UByte>.rem(value: UByte): ClauseNumber<UByte> = remainder(literalOf(value))
+
+/** The remainder of the division of `UShort`s: `(this % other)`, NULL for a division by zero. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("remUShort")
+public operator fun ClauseNumber<UShort>.rem(other: ClauseNumber<UShort>): ClauseNumber<UShort> = remainder(other)
+
+/** The remainder of the division by a `UShort`: `(this % value)`, NULL for a division by zero. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("remUShortValue")
+public operator fun ClauseNumber<UShort>.rem(value: UShort): ClauseNumber<UShort> = remainder(literalOf(value))
+
+/** The remainder of the division of `UInt`s: `(this % other)`, NULL for a division by zero. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("remUInt")
+public operator fun ClauseNumber<UInt>.rem(other: ClauseNumber<UInt>): ClauseNumber<UInt> = remainder(other)
+
+/** The remainder of the division by a `UInt`: `(this % value)`, NULL for a division by zero. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("remUIntValue")
+public operator fun ClauseNumber<UInt>.rem(value: UInt): ClauseNumber<UInt> = remainder(literalOf(value))

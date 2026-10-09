@@ -16,6 +16,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.Relation
 
 /**
@@ -48,7 +49,10 @@ public class ClauseString<V : Any> internal constructor(
     isAggregate: Boolean,
     isNullOnNoRows: Boolean,
     columnTables: Set<String>? = null,
-) : ClauseElement<V>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables) {
+    tables: Set<String> = emptySet(),
+    isDeterministic: Boolean = true,
+    isLiteral: Boolean = false,
+) : ClauseElement<V>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables, tables, isDeterministic, isLiteral) {
 
     /**
      * Creates the element of a column, as the code generated for a table does.
@@ -59,7 +63,13 @@ public class ClauseString<V : Any> internal constructor(
         this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
 
     override fun toAggregate(valueName: String, table: Relation<*>): ClauseString<V> =
-        ClauseString(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables)
+        ClauseString(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables, tables = tables, isDeterministic = isDeterministic)
+
+    override fun derive(valueName: String, traits: Traits): ClauseString<V> =
+        ClauseString(valueName, table, isFunction = true, isNullable = traits.isNullable, isAggregate = traits.isAggregate, isNullOnNoRows = traits.isNullOnNoRows, columnTables = traits.columnTables, tables = traits.tables, isDeterministic = traits.isDeterministic)
+
+    override fun literalOf(value: V): ClauseString<V> =
+        ClauseString(expressionLiteral(value), ExpressionRelation, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = false, columnTables = emptySet(), isLiteral = true)
 
     /** Equals (=), or IS NULL if value is null */
     internal infix fun eq(str: String?): SelectCondition = appendNullableString("=", " IS NULL", str)
@@ -143,7 +153,7 @@ public class ClauseString<V : Any> internal constructor(
      * Wildcards: `%` (any characters), `_` (single character)
      * Example: `"John%"` matches "John", "Johnson", etc.
      */
-    internal infix fun like(regex: String): LikeCondition = LikeCondition(regexSQL(" LIKE "), mutableListOf(regex))
+    internal infix fun like(regex: String): LikeCondition = LikeCondition(regexSQL(" LIKE "), mutableListOf(regex), tables, isDeterministic)
 
     /**
      * GLOB operator - case-sensitive pattern matching.
@@ -151,7 +161,7 @@ public class ClauseString<V : Any> internal constructor(
      * Wildcards: `*` (any characters), `?` (single character)
      * Example: `"John*"` matches "John", "Johnson", etc. (case-sensitive)
      */
-    internal infix fun glob(regex: String): SelectCondition = SelectCondition(regexSQL(" GLOB "), mutableListOf(regex))
+    internal infix fun glob(regex: String): SelectCondition = condition(regexSQL(" GLOB "), mutableListOf(regex))
 
     private fun regexSQL(symbol: String): String = buildString {
         if (!isFunction) {
@@ -178,7 +188,7 @@ public class ClauseString<V : Any> internal constructor(
                 append('?')
             }
         }
-        return SelectCondition(sql, if (str == null) null else mutableListOf(str))
+        return condition(sql, if (str == null) null else mutableListOf(str))
     }
 
     private fun appendString(symbol: String, str: String): SelectCondition {
@@ -190,7 +200,7 @@ public class ClauseString<V : Any> internal constructor(
             append(valueName)
             append(symbol)
         }
-        return SelectCondition(sql, mutableListOf(str))
+        return condition(sql, mutableListOf(str))
     }
 
     private fun appendClauseString(symbol: String, clauseString: ClauseString<*>): SelectCondition {
@@ -201,7 +211,7 @@ public class ClauseString<V : Any> internal constructor(
             append(' ')
             clauseString.appendSQL(this)
         }
-        return SelectCondition(sql, null)
+        return condition(sql, null, clauseString)
     }
 
     /**
@@ -230,7 +240,7 @@ public class ClauseString<V : Any> internal constructor(
             }
             append(')')
         }
-        return SelectCondition(sql, parameters)
+        return condition(sql, parameters)
     }
 
     /**
@@ -250,7 +260,24 @@ public class ClauseString<V : Any> internal constructor(
             append(valueName)
             append(" BETWEEN ? AND ?")
         }
-        return SelectCondition(sql, mutableListOf(range.first, range.second))
+        return condition(sql, mutableListOf(range.first, range.second))
+    }
+
+    /**
+     * Concatenation, SQL's `||`: `(this || other)`, which is NULL if either is.
+     */
+    @ExperimentalDSLDatabaseAPI
+    public operator fun plus(other: ClauseString<*>): ClauseString<String> = concat(other)
+
+    /**
+     * Concatenation of a string, SQL's `||`: `(this || value)`.
+     */
+    @ExperimentalDSLDatabaseAPI
+    public operator fun plus(value: String): ClauseString<String> = concat(literal(value))
+
+    private fun concat(other: ClauseString<*>): ClauseString<String> {
+        val traits = strictTraits(listOf(this, other))
+        return ClauseString("($sql || ${other.sql})", table, isFunction = true, isNullable = traits.isNullable, isAggregate = traits.isAggregate, isNullOnNoRows = traits.isNullOnNoRows, columnTables = traits.columnTables, tables = traits.tables, isDeterministic = traits.isDeterministic)
     }
 
     override fun hashCode(): Int = valueName.hashCode() + table.tableName.hashCode()

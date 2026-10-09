@@ -35,6 +35,8 @@ import com.ctrip.sqllin.dsl.sql.operation.parametersOf
  * @property parameters Parameterized query values (String, ByteArray, etc.), or null if none
  * @property tables The tables and views that the subqueries of the condition read, which an observed query watches
  * @property operator The operator, `AND` or `OR`, that this condition combines others with, or null if it doesn't
+ * @property isDeterministic Whether the condition always gives the same result for the same row, which the condition
+ * of a partial index needs
  *
  * @author Yuang Qiao
  */
@@ -43,6 +45,7 @@ public open class SelectCondition internal constructor(
     internal val parameters: MutableList<Any?>?,
     internal val tables: Set<String> = emptySet(),
     private val operator: String? = null,
+    internal val isDeterministic: Boolean = true,
 ) {
 
     /**
@@ -66,7 +69,7 @@ public open class SelectCondition internal constructor(
             next.appendOperand(this, symbol)
         }
         // A new list, as this condition may be kept in a variable and used again, with its own parameters
-        return SelectCondition(sql, parametersOf(parameters, next.parameters), tables + next.tables, symbol)
+        return SelectCondition(sql, parametersOf(parameters, next.parameters), tables + next.tables, symbol, isDeterministic && next.isDeterministic)
     }
 
     /**
@@ -93,11 +96,13 @@ public open class SelectCondition internal constructor(
 public class LikeCondition internal constructor(
     conditionSQL: String,
     parameters: MutableList<Any?>,
-) : SelectCondition(conditionSQL, parameters) {
+    tables: Set<String>,
+    isDeterministic: Boolean,
+) : SelectCondition(conditionSQL, parameters, tables, isDeterministic = isDeterministic) {
 
     /**
      * This condition with [escape] as the escape character of its pattern: `column LIKE ? ESCAPE ?`.
      */
     internal infix fun escape(escape: Char): SelectCondition =
-        SelectCondition("$conditionSQL ESCAPE ?", parametersOf(parameters, listOf(escape.toString())))
+        SelectCondition("$conditionSQL ESCAPE ?", parametersOf(parameters, listOf(escape.toString())), tables, isDeterministic = isDeterministic)
 }

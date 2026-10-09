@@ -36,7 +36,10 @@ public class ClauseBoolean internal constructor(
     isAggregate: Boolean,
     isNullOnNoRows: Boolean,
     columnTables: Set<String>? = null,
-) : ClauseElement<Boolean>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables) {
+    tables: Set<String> = emptySet(),
+    isDeterministic: Boolean = true,
+    isLiteral: Boolean = false,
+) : ClauseElement<Boolean>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables, tables, isDeterministic, isLiteral) {
 
     /**
      * Creates the element of a column, as the code generated for a table does.
@@ -47,7 +50,13 @@ public class ClauseBoolean internal constructor(
         this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
 
     override fun toAggregate(valueName: String, table: Relation<*>): ClauseBoolean =
-        ClauseBoolean(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables)
+        ClauseBoolean(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables, tables = tables, isDeterministic = isDeterministic)
+
+    override fun derive(valueName: String, traits: Traits): ClauseBoolean =
+        ClauseBoolean(valueName, table, isFunction = true, isNullable = traits.isNullable, isAggregate = traits.isAggregate, isNullOnNoRows = traits.isNullOnNoRows, columnTables = traits.columnTables, tables = traits.tables, isDeterministic = traits.isDeterministic)
+
+    override fun literalOf(value: Boolean): ClauseBoolean =
+        ClauseBoolean(expressionLiteral(value), ExpressionRelation, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = false, columnTables = emptySet(), isLiteral = true)
 
     /**
      * Creates a condition comparing this Boolean column/function to a value.
@@ -76,7 +85,7 @@ public class ClauseBoolean internal constructor(
                 }
             )
         }
-        return SelectCondition(sql, null)
+        return condition(sql, null)
     }
 
     /**
@@ -113,7 +122,7 @@ public class ClauseBoolean internal constructor(
                 }
             )
         }
-        return SelectCondition(sql, null)
+        return condition(sql, null)
     }
 
     override fun hashCode(): Int = valueName.hashCode() + table.tableName.hashCode()

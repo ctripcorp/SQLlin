@@ -39,9 +39,13 @@ import com.ctrip.sqllin.dsl.sql.statement.*
 public sealed interface OrderByClause<T> : SelectClause<T>
 
 internal class CompleteOrderByClause<T>(
-    private val column2WayMap: Map<ClauseElement<*>, OrderByWay>,
+    internal val column2WayMap: Map<ClauseElement<*>, OrderByWay>,
     private val isQualified: Boolean = true,
 ) : OrderByClause<T> {
+
+    init {
+        requireNoLiteral(column2WayMap.keys, "ORDER BY")
+    }
 
     override val clauseStr: String
         get() {
@@ -163,9 +167,13 @@ public infix fun <T> ResultColumnSelectStatement<T>.ORDER_BY(column2WayMap: Map<
     }
 
 internal class SimpleOrderByClause<T>(
-    private val columns: Iterable<ClauseElement<*>>,
+    internal val columns: Iterable<ClauseElement<*>>,
     private val isQualified: Boolean = true,
 ) : OrderByClause<T> {
+
+    init {
+        requireNoLiteral(columns, "ORDER BY")
+    }
 
     override val clauseStr: String
         get() {

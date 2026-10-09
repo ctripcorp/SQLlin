@@ -20,6 +20,7 @@ import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.From
 import com.ctrip.sqllin.dsl.sql.Relation
+import com.ctrip.sqllin.dsl.sql.clause.elementTables
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.compiler.appendDBColumnName
 import com.ctrip.sqllin.dsl.sql.statement.*
@@ -73,7 +74,7 @@ internal object Select : Operation {
         container: StatementContainer,
     ): OrderBySelectStatement<R> {
         checkProjection(from, deserializer)
-        return OrderBySelectStatement(buildSQL(from, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(from.parameters), null, from.tables)
+        return OrderBySelectStatement(buildSQL(from, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(from.parameters), null, from.tables + clause.elementTables)
     }
 
     /**
@@ -107,7 +108,7 @@ internal object Select : Operation {
         container: StatementContainer,
     ): GroupBySelectStatement<R> {
         checkProjection(from, deserializer)
-        return GroupBySelectStatement(buildSQL(from, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(from.parameters), null, from.tables)
+        return GroupBySelectStatement(buildSQL(from, clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(from.parameters), null, from.tables + clause.elementTables)
     }
 
     /**
@@ -255,7 +256,8 @@ internal object Select : Operation {
             append(" FROM ")
             append(from.sql)
         }
-        return ResultColumnSelectStatement(sql, deserializer, connection, container, parametersOf(from.parameters), ungroupedError(from, expressions, deserializer), from.tables)
+        val tables = from.tables + expressions.values.flatMap { it.tables }
+        return ResultColumnSelectStatement(sql, deserializer, connection, container, parametersOf(from.parameters), ungroupedError(from, expressions, deserializer), tables)
     }
 
     /**

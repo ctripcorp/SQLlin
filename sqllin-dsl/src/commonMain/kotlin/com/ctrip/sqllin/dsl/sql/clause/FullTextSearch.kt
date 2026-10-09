@@ -59,7 +59,7 @@ public infix fun <T> FtsTable<T>.MATCH(query: String): SelectCondition =
 @StatementDslMaker
 public infix fun ClauseString<*>.MATCH(query: String): SelectCondition {
     require(!isFunction && table is FtsTable<*>) { "MATCH searches a column of an FTS table, which '$valueName' isn't." }
-    return SelectCondition("${table.tableName}.$valueName MATCH ?", mutableListOf(query))
+    return condition("${table.tableName}.$valueName MATCH ?", mutableListOf(query))
 }
 
 /**
