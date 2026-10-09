@@ -401,6 +401,24 @@ fun sample() {
 这条 _SELECT_ 会成为 _INSERT_ 的一部分，所以它不再单独执行，也无法读取它的结果。主键按查询出的值原样拷贝。
 `INSERT_OR_IGNORE` 和 `INSERT_OR_REPLACE` 同样可以接受 _SELECT_。
 
+_INSERT_ 还可以像 `INSERT INTO ... VALUES` 那样插入一行[表达式](sql-functions-cn.md#表达式)，每个表达式用 `AS` 交给行类型的
+一个属性。它是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        AuditTable { table ->
+            // INSERT INTO audit(action,at) VALUES ('purge',datetime('now'))
+            table INSERT listOf(literal("purge") AS Audit::action, datetime("now") AS Audit::at)
+        }
+    }
+}
+```
+
+没写到的列取默认值或 NULL；如果是没有默认值的 `NOT NULL` 列，语句执行时会报错。可能为 NULL 的表达式只能写进可空的列；这些值
+不能读取任何表，因为 SQLite 不允许，要插入其他行的值请用 _SELECT_。`INSERT_OR_IGNORE` 和 `INSERT_OR_REPLACE` 同样可以接受表达式。
+
 ## 删除
 
 _DELETE_ 语句将会比 _INSERT_ 语句稍微复杂。SQLlin 不像 [Jetpack Room](https://developer.android.com/training/data-storage/room)
@@ -494,6 +512,24 @@ _SET_ 子句与其他子句不同，它接收一个 lambda 表达式作为参数
 
 _SET_ lambda 中的属性只能赋值。读取它（比如 `age = age + 1`）会编译报错：它保存的不是列的值，只是一个占位值，读取的话列会被设成由
 占位值算出来的结果。
+
+要把列设成一个[表达式](sql-functions-cn.md#表达式)，比如由这一行的列算出来的值，可以给 `SET` 传一组表达式，每个表达式用 `AS`
+交给行类型的一个属性，`AS` 会在编译期检查类型。它是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        PersonTable { table ->
+            // UPDATE person SET age=(person.age + 1),name=(person.name || '!') WHERE person.name!=?
+            table UPDATE SET(listOf((age + 1) AS Person::age, (name + "!") AS Person::name)) WHERE (name NEQ "Tom")
+        }
+    }
+}
+```
+
+`SET(expression AS Person::age)` 只设置一列。可能为 NULL 的表达式只能设置可空的列；表达式只能读取被更新的表的列，也不能是聚合
+函数，这些在构建语句时检查。表达式中需要单独的值时，用 `literal(5)`。
 
 你也可以编写没有 _WHERE_ 子句的 _UPDATE_ 语句用于更新所有的行，但使用它的时候你应该谨慎。
 

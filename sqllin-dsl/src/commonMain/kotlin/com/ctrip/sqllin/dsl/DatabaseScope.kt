@@ -390,6 +390,67 @@ public class DatabaseScope internal constructor(
     public infix fun <T> Table<T>.INSERT_OR_IGNORE(entity: T): Unit =
         INSERT_OR_IGNORE(listOf(entity))
 
+    // ========== INSERT of expressions ==========
+
+    /**
+     * Inserts a row of expressions, as SQL's `INSERT INTO table(columns) VALUES (expressions)` does, each given to a
+     * property of the row type with `AS`, which checks its type at compile time:
+     * ```kotlin
+     * // INSERT INTO audit(action,at) VALUES ('purge',datetime('now'))
+     * AuditTable INSERT listOf(literal("purge") AS Audit::action, AuditTable.datetime("now") AS Audit::at)
+     * ```
+     * The columns left out take their default values, or NULL, which a NOT NULL column without a default rejects when
+     * the statement runs. An expression that can be NULL can only be written to a nullable column, and the values can't
+     * read any table, but the rows of a trigger: use `INSERT` with a SELECT to insert the values of other rows.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("insertExpressions")
+    public infix fun <T> Table<T>.INSERT(values: Iterable<ResultColumn<T>>) {
+        addStatement(Insert.insert("INSERT INTO ", this, databaseConnection, values))
+    }
+
+    /**
+     * Inserts a row of a single expression, as `INSERT(listOf(value))` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT(value: ResultColumn<T>): Unit = INSERT(listOf(value))
+
+    /**
+     * Inserts a row of expressions, or nothing if it conflicts with a row, as SQL's `INSERT OR IGNORE` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("insertOrIgnoreExpressions")
+    public infix fun <T> Table<T>.INSERT_OR_IGNORE(values: Iterable<ResultColumn<T>>) {
+        addStatement(Insert.insert("INSERT OR IGNORE INTO ", this, databaseConnection, values))
+    }
+
+    /**
+     * Inserts a row of a single expression, or nothing if it conflicts with a row.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_IGNORE(value: ResultColumn<T>): Unit = INSERT_OR_IGNORE(listOf(value))
+
+    /**
+     * Inserts a row of expressions, replacing the rows it conflicts with, as SQL's `INSERT OR REPLACE` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("insertOrReplaceExpressions")
+    public infix fun <T> Table<T>.INSERT_OR_REPLACE(values: Iterable<ResultColumn<T>>) {
+        addStatement(Insert.insert("INSERT OR REPLACE INTO ", this, databaseConnection, values))
+    }
+
+    /**
+     * Inserts a row of a single expression, replacing the rows it conflicts with.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_REPLACE(value: ResultColumn<T>): Unit = INSERT_OR_REPLACE(listOf(value))
+
     // ========== INSERT INTO ... SELECT ==========
     //
     // These insert the rows a SELECT returns, as in `PersonTable INSERT (PersonV1Table SELECT X<Person>())`. The

@@ -10,7 +10,6 @@ done. A new item takes the next number.
 ## Medium Priority
 
 * F8: Support WASM platform DSL
-* F9: Support expressions in UPDATE's SET and in INSERT, such as `visits = visits + 1` or `updated_at = datetime('now')`, which triggers, upsert's `DO UPDATE SET` and rebuilding a table with converted data all need
 * F10: Support CREATE TRIGGER DSL
 * F12: Support type converters: store a property of any type through a serializer that encodes it to a type SQLite supports, with type-safe WHERE and SET on its column, e.g. to store instances of kotlinx.datetime
 * F13: Provide a `PagingSource` for androidx.paging built on observable queries, like Room's `LimitOffsetPagingSource`, so that paging a query doesn't need a hand-written bridge
@@ -56,6 +55,7 @@ done. A new item takes the next number.
 
 ## Supported
 
+* F9: Support expressions in UPDATE's SET and in INSERT (2.5.0 ✅)
 * F46: Support more expression syntax: CASE, scalar subqueries, COLLATE, bitwise operators and null-safe IS comparisons; REGEXP is left out, as its function differs between the platforms, and the JVM's SQLite has none (2.5.0 ✅)
 * F11: Support more functions, CAST, literal values and arithmetic in expressions (2.5.0 ✅)
 * F6: Support VACUUM and VACUUM INTO (2.5.0 ✅)

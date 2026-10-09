@@ -20,6 +20,7 @@ import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.sql.statement.StatementContainer
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.clause.SetClause
+import com.ctrip.sqllin.dsl.sql.clause.writtenColumns
 import com.ctrip.sqllin.dsl.sql.statement.UpdateStatementWithoutWhereClause
 
 /**
@@ -53,11 +54,22 @@ internal object Update : Operation {
         container: StatementContainer,
         clause: SetClause<T>,
     ): UpdateStatementWithoutWhereClause<T> {
+        val assignments = clause.assignments
         val sql = buildString {
             append(sqlStr)
             append(table.tableName)
             append(" SET ")
-            append(clause.finalize())
+            if (assignments == null) {
+                append(clause.finalize())
+            } else {
+                writtenColumns(table, assignments, "UPDATE", setOf(table.tableName)).entries.forEachIndexed { index, (column, element) ->
+                    if (index > 0)
+                        append(',')
+                    append(column)
+                    append('=')
+                    element.appendSQL(this)
+                }
+            }
         }
         return UpdateStatementWithoutWhereClause(sql, container, connection, clause.parameters, table.tableName)
     }

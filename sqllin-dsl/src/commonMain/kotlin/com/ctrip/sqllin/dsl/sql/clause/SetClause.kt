@@ -16,6 +16,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.compiler.storedValue
 
@@ -55,6 +56,12 @@ public class SetClause<T> : Clause<T> {
         private set
 
     /**
+     * The expressions given to columns by `SET(listOf(...))`, which UPDATE checks against its table, or null for the
+     * values assigned in `SET {}`.
+     */
+    internal var assignments: List<ResultColumn<T>>? = null
+
+    /**
      * Appends a column assignment to the SET clause using parameterized binding.
      *
      * Generates: `propertyName = ?` and adds the value to parameters list.
@@ -85,3 +92,26 @@ public class SetClause<T> : Clause<T> {
 @Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
 public inline fun <T> SET(block: SetClause<T>.() -> Unit): SetClause<T> = SetClause<T>().apply(block)
+
+/**
+ * Sets columns to expressions, as SQL's `SET column = expression` does, such as one computed from the row's own columns:
+ * ```kotlin
+ * // UPDATE person SET visits=(person.visits + 1),seen=datetime('now') WHERE person.id=?
+ * table UPDATE SET(listOf((visits + 1) AS Person::visits, datetime("now") AS Person::seen)) WHERE (id EQ 7)
+ * ```
+ * Each expression is given to a property of the row type with `AS`, which checks its type at compile time. UPDATE checks
+ * the rest when the statement is built: an expression that can be NULL can only set a nullable column, and it can only
+ * read the columns of the table it updates, and not be an aggregate function.
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public fun <T> SET(assignments: Iterable<ResultColumn<T>>): SetClause<T> =
+    SetClause<T>().apply { this.assignments = assignments.toList() }
+
+/**
+ * Sets a column to an expression, as SQL's `SET column = expression` does: `SET((visits + 1) AS Person::visits)`.
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public fun <T> SET(assignment: ResultColumn<T>): SetClause<T> = SET(listOf(assignment))
+

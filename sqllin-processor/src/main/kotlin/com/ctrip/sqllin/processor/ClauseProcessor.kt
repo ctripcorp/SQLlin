@@ -101,7 +101,7 @@ class ClauseProcessor(
          * in `age = age + 1`, would set the column to a value computed from the placeholder. It is an error to read it.
          */
         const val SET_CLAUSE_GETTER_DEPRECATION =
-            "        @Deprecated(\"A column in SET {} can only be assigned: reading it gives a placeholder, not the column's value.\", level = DeprecationLevel.ERROR)\n"
+            "        @Deprecated(\"A column in SET {} can only be assigned: reading it gives a placeholder, not the column's value. To set a column to an expression of columns, use SET(listOf(expression AS Row::property)).\", level = DeprecationLevel.ERROR)\n"
     }
 
     /**

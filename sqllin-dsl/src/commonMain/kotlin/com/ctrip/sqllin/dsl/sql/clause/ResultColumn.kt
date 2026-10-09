@@ -19,6 +19,9 @@
 package com.ctrip.sqllin.dsl.sql.clause
 
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
+import com.ctrip.sqllin.dsl.sql.Table
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.encoding.CompositeDecoder
 import kotlin.reflect.KProperty1
 
 /**
@@ -64,3 +67,50 @@ public class ResultColumn<R> internal constructor(
 @StatementDslMaker
 public infix fun <R, P : Any> ClauseElement<P>.AS(property: KProperty1<R, P?>): ResultColumn<R> =
     ResultColumn(this, property.name)
+
+/** The names of the rows a trigger reads, the new one of INSERT and UPDATE, and the old one of UPDATE and DELETE. */
+internal const val NEW_ROW = "NEW"
+internal const val OLD_ROW = "OLD"
+
+/**
+ * Checks that [bindings], expressions given to properties of the row type of [table] with `AS`, can be written to its
+ * columns by [statement], and returns the expressions by the names of their columns, in the order given.
+ *
+ * Every property has to be serialized under its own name, which names its column, and can't be given two expressions.
+ * An expression that can be NULL can only be written to a nullable column, can't be an aggregate function, which SQLite
+ * only computes over the rows of a query, and can only read the columns of [tables], and of the rows of a trigger.
+ *
+ * @throws IllegalArgumentException if a binding can't be written
+ */
+@OptIn(ExperimentalSerializationApi::class)
+internal fun writtenColumns(table: Table<*>, bindings: Iterable<ResultColumn<*>>, statement: String, tables: Set<String>): Map<String, ClauseElement<*>> {
+    val descriptor = table.kSerializer().descriptor
+    val prefix = "Can't $statement '${table.tableName}'"
+    val columns = LinkedHashMap<String, ClauseElement<*>>()
+    for (binding in bindings) {
+        val name = binding.propertyName
+        val index = descriptor.getElementIndex(name)
+        require(index != CompositeDecoder.UNKNOWN_NAME) {
+            "$prefix: its row type doesn't serialize the property '$name' under that name, which names a column."
+        }
+        require(name !in columns) { "$prefix: the column '$name' is given more than one expression." }
+        val element = binding.element
+        require(!element.isNullable || descriptor.getElementDescriptor(index).isNullable) {
+            "$prefix: '${element.valueName}' can be NULL, so it can't be written to the column '$name', which isn't nullable."
+        }
+        require(!element.isAggregate) {
+            "$prefix: '${element.valueName}' is an aggregate function, which SQLite only computes over the rows of a query."
+        }
+        val otherTable = (element.columnTables - tables - NEW_ROW - OLD_ROW).firstOrNull()
+        require(otherTable == null) {
+            if (tables.isEmpty())
+                "$prefix: '${element.valueName}' reads table '$otherTable', while the values of INSERT can't read any. Use INSERT with a SELECT."
+            else
+                "$prefix: '${element.valueName}' reads table '$otherTable'."
+        }
+        columns[name] = element
+    }
+    require(columns.isNotEmpty()) { "$prefix with no expressions." }
+    return columns
+}
+

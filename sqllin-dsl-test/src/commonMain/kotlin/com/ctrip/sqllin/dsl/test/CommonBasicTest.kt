@@ -2224,6 +2224,95 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers SET with expressions: columns set from the row's own columns, functions, literals and a scalar subquery
+     * made non-null with coalesce. An expression that can be NULL can't set a non-null column, nor can an aggregate
+     * function or a column of another table.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testSetExpressions() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "Ann", age = 30),
+                PersonWithId(id = null, name = "Bob", age = 10),
+            )
+            BookTable INSERT Book(name = "Kotlin", author = "Ken", price = 20.0, pages = 99)
+        }
+        database {
+            PersonWithIdTable { table ->
+                table UPDATE SET(listOf((age + 1) AS PersonWithId::age, (name + "!") AS PersonWithId::name)) WHERE (name EQ "Ann")
+                table UPDATE SET(coalesce((BookTable SELECT listOf(BookTable.max(BookTable.pages) AS MaxPages::value))[MaxPages::value], 0) AS PersonWithId::age) WHERE (name EQ "Bob")
+            }
+        }
+        lateinit var people: SelectStatement<PersonWithId>
+        database { people = PersonWithIdTable SELECT ORDER_BY(PersonWithIdTable.id to ASC) }
+        assertEquals(listOf("Ann!" to 31, "Bob" to 99), people.getResults().map { it.name to it.age })
+
+        database { PersonWithIdTable { table -> table UPDATE SET(literal(5) AS PersonWithId::age) } }
+        database { people = PersonWithIdTable SELECT X }
+        assertEquals(listOf(5, 5), people.getResults().map { it.age })
+
+        // A scalar subquery can be NULL, and 'age' isn't nullable
+        assertFailsWith<IllegalArgumentException> {
+            database {
+                PersonWithIdTable UPDATE SET((BookTable SELECT listOf(BookTable.max(BookTable.pages) AS MaxPages::value))[MaxPages::value] AS PersonWithId::age)
+            }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { PersonWithIdTable UPDATE SET(PersonWithIdTable.max(PersonWithIdTable.age) AS PersonWithId::age) }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { PersonWithIdTable UPDATE SET(BookTable.pages AS PersonWithId::age) }
+        }
+    }
+
+    /**
+     * Covers INSERT of expressions: a row of literals and expressions of them, its other columns taking their default
+     * values, and INSERT OR IGNORE, which skips a row that conflicts. The values can't read a table, and an expression
+     * that can be NULL can't be written to a non-null column.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testInsertExpressions() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            PersonWithIdTable INSERT listOf(literal("Zed") AS PersonWithId::name, (literal(20) * 2) AS PersonWithId::age)
+            UserAccountTable INSERT listOf(
+                literal("ann") AS UserAccount::username,
+                (literal("ann") + "@mail") AS UserAccount::email,
+                literal(UserStatus.SUSPENDED) AS UserAccount::status,
+                literal(Priority.HIGH) AS UserAccount::priority,
+            )
+        }
+        lateinit var people: SelectStatement<PersonWithId>
+        lateinit var accounts: SelectStatement<UserAccount>
+        database {
+            people = PersonWithIdTable SELECT X
+            accounts = UserAccountTable SELECT X
+        }
+        assertEquals(listOf(PersonWithId(id = 1, name = "Zed", age = 40)), people.getResults())
+        assertEquals(
+            listOf(UserAccount(id = 1, username = "ann", email = "ann@mail", status = UserStatus.SUSPENDED, priority = Priority.HIGH, notes = null)),
+            accounts.getResults(),
+        )
+
+        // The key exists, so the row is skipped
+        database {
+            PersonWithIdTable INSERT_OR_IGNORE listOf(literal(1L) AS PersonWithId::id, literal("Dup") AS PersonWithId::name, literal(1) AS PersonWithId::age)
+        }
+        database { people = PersonWithIdTable SELECT X }
+        assertEquals(listOf("Zed"), people.getResults().map { it.name })
+
+        // 'age' is NOT NULL and has no default, which SQLite reports when the statement runs
+        assertFails {
+            database { PersonWithIdTable INSERT (literal("Nobody") AS PersonWithId::name) }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { PersonWithIdTable INSERT listOf(PersonWithIdTable.name AS PersonWithId::name, literal(1) AS PersonWithId::age) }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { PersonWithIdTable INSERT listOf(PersonWithIdTable.nullif(literal("a"), "a") AS PersonWithId::name, literal(1) AS PersonWithId::age) }
+        }
+    }
+
+    /**
      * Covers result columns: expressions, such as aggregate functions, selected into properties of a result type with
      * AS, as in `table SELECT listOf(count(X) AS AuthorStats::books)`, while every other property is read from its
      * column. Each function reads into the type of the values SQLite returns for it, and NULL into a nullable property.

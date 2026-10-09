@@ -21,6 +21,8 @@ import com.ctrip.sqllin.dsl.sql.statement.SingleStatement
 import com.ctrip.sqllin.dsl.sql.statement.InsertStatement
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
 import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.clause.ResultColumn
+import com.ctrip.sqllin.dsl.sql.clause.writtenColumns
 import com.ctrip.sqllin.dsl.sql.compiler.appendDBColumnName
 import com.ctrip.sqllin.dsl.sql.compiler.encodeEntities2InsertValues
 
@@ -113,5 +115,28 @@ internal object Insert : Operation {
             append(select.sqlStr)
         }
         return InsertStatement(sql, connection, select.parameters?.toMutableList(), table.tableName)
+    }
+
+    /**
+     * `INSERT INTO table(columns) VALUES (expressions)`, of [values], the expressions given to properties of the row
+     * type, which can't read any table but the rows of a trigger. The columns left out take their default values, or
+     * NULL.
+     */
+    fun <T> insert(insert: String, table: Table<T>, connection: DatabaseConnection, values: Iterable<ResultColumn<T>>): SingleStatement {
+        val columns = writtenColumns(table, values, insert.trim().removeSuffix(" INTO"), emptySet())
+        val sql = buildString {
+            append(insert)
+            append(table.tableName)
+            append('(')
+            append(columns.keys.joinToString(","))
+            append(") VALUES (")
+            columns.values.forEachIndexed { index, element ->
+                if (index > 0)
+                    append(',')
+                element.appendSQL(this)
+            }
+            append(')')
+        }
+        return InsertStatement(sql, connection, null, table.tableName)
     }
 }

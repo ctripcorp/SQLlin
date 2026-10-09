@@ -423,6 +423,26 @@ fun sample() {
 The _SELECT_ becomes part of the _INSERT_, so it no longer runs on its own, and its results can't be read. The primary
 key is copied as it is selected. `INSERT_OR_IGNORE` and `INSERT_OR_REPLACE` take a _SELECT_ as well.
 
+_INSERT_ can also insert a row of [expressions](sql-functions.md#expressions), as `INSERT INTO ... VALUES` does, each
+given to a property of the row type with `AS`. It is experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        AuditTable { table ->
+            // INSERT INTO audit(action,at) VALUES ('purge',datetime('now'))
+            table INSERT listOf(literal("purge") AS Audit::action, datetime("now") AS Audit::at)
+        }
+    }
+}
+```
+
+The columns left out take their default values, or NULL, which a `NOT NULL` column without a default rejects when the
+statement runs. An expression that can be NULL can only be written to a nullable column, and the values can't read a
+table, as SQLite doesn't allow it there: insert the values of other rows with a _SELECT_. `INSERT_OR_IGNORE` and
+`INSERT_OR_REPLACE` take expressions as well.
+
 ## Delete
 
 The _DELETE_ statements will be slightly more complex than _INSERT_. SQLlin doesn't delete objects like
@@ -519,6 +539,26 @@ clauses, it is different with readonly property `age` in _WHERE_ clauses.
 
 The properties in the _SET_ lambda can only be assigned. Reading one, as in `age = age + 1`, is a compile error: it
 doesn't hold the column's value, only a placeholder, so the column would be set to a value computed from that.
+
+To set a column to an [expression](sql-functions.md#expressions), such as one computed from the row's columns, give
+`SET` a list of expressions, each given to a property of the row type with `AS`, which checks its type at compile time.
+It is experimental, so opt in with `@OptIn(ExperimentalDSLDatabaseAPI::class)`:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        PersonTable { table ->
+            // UPDATE person SET age=(person.age + 1),name=(person.name || '!') WHERE person.name!=?
+            table UPDATE SET(listOf((age + 1) AS Person::age, (name + "!") AS Person::name)) WHERE (name NEQ "Tom")
+        }
+    }
+}
+```
+
+`SET(expression AS Person::age)` sets a single column. An expression that can be NULL can only set a nullable column,
+and it can only read the columns of the table it updates, and not be an aggregate function, which is checked when the
+statement is built. Use `literal(5)` for a value among expressions.
 
 You also could write the _UPDATE_ statements without the _WHERE_ clause that used for update all rows, but you should use it with caution.
 

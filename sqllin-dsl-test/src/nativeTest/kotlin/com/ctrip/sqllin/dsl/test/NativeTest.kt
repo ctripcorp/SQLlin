@@ -141,6 +141,12 @@ class NativeTest {
     fun testExpressionOperators() = commonTest.testExpressionOperators()
 
     @Test
+    fun testSetExpressions() = commonTest.testSetExpressions()
+
+    @Test
+    fun testInsertExpressions() = commonTest.testInsertExpressions()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test
