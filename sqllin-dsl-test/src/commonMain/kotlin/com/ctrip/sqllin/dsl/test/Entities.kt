@@ -660,6 +660,15 @@ data class RebuildPerson(
 )
 
 /**
+ * A view of the ids in `rebuild_person`, which a rebuild of the table has to drop before dropping the old table, and
+ * create again after the rename.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBView("rebuild_person_ids")
+@Serializable
+data class RebuildPersonId(val id: Long?)
+
+/**
  * References `rebuild_person`, so its foreign key shows whether the rebuild left the reference in place.
  */
 @DBRow("rebuild_pet")

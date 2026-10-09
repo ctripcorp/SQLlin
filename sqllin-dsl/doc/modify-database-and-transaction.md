@@ -335,10 +335,21 @@ val database = Database(
 )
 ```
 
-Rename the new table, not the old one. Renaming a table also renames the references to it in the foreign keys of
-other tables, with SQLite's default settings, so the references would follow the old table, and be left pointing at a
-table that no longer exists once it is dropped. Indexes are dropped with the old table, so create them again on the
-rebuilt one.
+Rename the new table, not the old one. Where SQLite's `legacy_alter_table` setting is off, the default on the JVM, Linux
+and Windows, renaming a table also renames the references to it in the foreign keys of other tables, so the references
+would follow the old table, and be left pointing at a table that no longer exists once it is dropped. On Android and
+Apple's platforms, where it is on, they only follow it while foreign keys are enforced. Indexes are dropped with the
+old table, so create them again on the rebuilt one.
+
+Drop the views that read the table before dropping it, and the views that read those, and create them again after the
+rename. Where `legacy_alter_table` is off, renaming a table checks that every view still reads tables that exist, so it
+fails while a view reads the dropped table. Dropping and creating the views again works on every platform:
+
+```kotlin
+DROP(PersonNameView)  // A view that reads 'person'
+// Create the new table, copy the rows, drop the old table and rename the new one, as above
+CREATE_VIEW(PersonNameView) AS (PersonTable SELECT X<PersonName>())
+```
 
 The table `withName` returns has the columns, constraints and row type of the original, but no column properties, as
 those name the original table. It is meant for statements on the table as a whole: `CREATE`, `INSERT`, `DROP` and

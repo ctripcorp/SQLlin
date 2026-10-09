@@ -2153,8 +2153,10 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Covers rebuilding a table in a migration, for a change `ALTER TABLE` can't make: the new structure is created
      * under a temporary name with `withName`, filled with `INSERT INTO ... SELECT` from the old one, which is dropped,
      * and renamed to the table's name. Renaming the new table rather than the old one leaves the foreign keys of other
-     * tables pointing at the rebuilt table.
+     * tables pointing at the rebuilt table. A view that reads the table is dropped before and created again after: had
+     * it been kept, the rename would fail where SQLite's `legacy_alter_table` is off, as on the JVM.
      */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testTableRebuild() {
         val version1 = DSLDBConfiguration(
             name = DATABASE_NAME,
@@ -2163,6 +2165,7 @@ class CommonBasicTest(private val path: DatabasePath) {
             create = {
                 CREATE(RebuildPersonV1Table)
                 CREATE(RebuildPetTable)
+                CREATE_VIEW(RebuildPersonIdView) AS (RebuildPersonV1Table SELECT X<RebuildPersonId>())
             },
         )
         Database(version1).databaseAutoClose { database ->
@@ -2182,9 +2185,11 @@ class CommonBasicTest(private val path: DatabasePath) {
             create = {
                 CREATE(RebuildPersonTable)
                 CREATE(RebuildPetTable)
+                CREATE_VIEW(RebuildPersonIdView) AS (RebuildPersonTable SELECT X<RebuildPersonId>())
             },
             upgrade = { oldVersion, _ ->
                 if (oldVersion < 2) {
+                    DROP(RebuildPersonIdView)
                     val newPerson = RebuildPersonTable.withName("rebuild_person_new")
                     CREATE(newPerson)
                     RebuildPersonV1Table { table ->
@@ -2192,6 +2197,7 @@ class CommonBasicTest(private val path: DatabasePath) {
                     }
                     DROP(RebuildPersonV1Table)
                     "rebuild_person_new" ALTER_RENAME_TABLE_TO RebuildPersonTable
+                    CREATE_VIEW(RebuildPersonIdView) AS (RebuildPersonTable SELECT X<RebuildPersonId>())
                 }
             },
         )
@@ -2203,6 +2209,13 @@ class CommonBasicTest(private val path: DatabasePath) {
             }
             assertEquals(listOf(RebuildPerson(1, "Ann"), RebuildPerson(2, "Bob")), people.getResults().sortedBy { it.id })
             assertEquals(true, database.selectFails { RebuildPersonV1Table SELECT X })
+
+            // The view, created again, reads the rebuilt table
+            lateinit var ids: SelectStatement<RebuildPersonId>
+            database {
+                ids = RebuildPersonIdView SELECT X
+            }
+            assertEquals(listOf(1L, 2L), ids.getResults().map { it.id }.sortedBy { it })
 
             // The new constraint holds
             assertFails {
