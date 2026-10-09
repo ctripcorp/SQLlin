@@ -376,8 +376,24 @@ can't refer to the other query's rows of that table.
 `NOT (person.age<? OR person.age>?)`.
 
 Subqueries work in the _WHERE_ of _UPDATE_ and _DELETE_ too, and an observed query watches the tables its subqueries
-read. A subquery that gives a single value, such as `age > (SELECT avg(age) FROM person)`, isn't supported yet, as it
-needs expressions, and neither are common table expressions (`WITH`).
+read. Common table expressions (`WITH`) aren't supported yet.
+
+### Scalar Subqueries
+
+A _SELECT_ of a single column can be a value, which is the column's value in its first row, or NULL if it returns no
+rows. `select[R::property]` names that column, so that the value has the property's type, and can be compared,
+computed with or selected like any [expression](sql-functions.md#expressions):
+
+```kotlin
+@Serializable
+data class AveragePrice(val value: Double?)
+
+// SELECT title,authorId,price FROM book WHERE book.price>(SELECT avg(book.price) AS value FROM book)
+BookTable SELECT WHERE(BookTable.price GT (BookTable SELECT listOf(BookTable.avg(BookTable.price) AS AveragePrice::value))[AveragePrice::value])
+```
+
+Its result type has to have that property only, which is checked when the statement is built. As it can be NULL, `AS`
+only selects it into a nullable property. Its values are written into the SQL, as the values of any expression are.
 
 ## Observed Queries
 

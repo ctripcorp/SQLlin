@@ -352,8 +352,23 @@ PersonTable SELECT WHERE(EXISTS(BookTable SELECT WHERE(BookTable.authorId EQ Per
 `NOT` 对条件取反，比如用 `NOT(EXISTS(select))` 找出没有书的人，或者 `NOT(PersonTable.id IN (select))`。它会给条件加上括号：
 `NOT((age LT 18) OR (age GT 65))` 生成的是 `NOT (person.age<? OR person.age>?)`。
 
-子查询同样可以用在 _UPDATE_ 和 _DELETE_ 的 _WHERE_ 中，可观察查询也会观察子查询读取的表。只返回单个值的子查询，比如
-`age > (SELECT avg(age) FROM person)`，暂不支持，因为它需要表达式；公用表表达式（`WITH`）也暂不支持。
+子查询同样可以用在 _UPDATE_ 和 _DELETE_ 的 _WHERE_ 中，可观察查询也会观察子查询读取的表。公用表表达式（`WITH`）暂不支持。
+
+### 标量子查询
+
+只返回一列的 _SELECT_ 可以作为一个值，也就是这一列在第一行的值；没有返回任何行时为 NULL。用 `select[R::property]` 指明这一列，
+这个值就有了属性的类型，可以像任何[表达式](sql-functions-cn.md#表达式)一样参与比较、运算或被选取：
+
+```kotlin
+@Serializable
+data class AveragePrice(val value: Double?)
+
+// SELECT title,authorId,price FROM book WHERE book.price>(SELECT avg(book.price) AS value FROM book)
+BookTable SELECT WHERE(BookTable.price GT (BookTable SELECT listOf(BookTable.avg(BookTable.price) AS AveragePrice::value))[AveragePrice::value])
+```
+
+它的结果类型只能有这一个属性，这在构建语句时检查。它可能为 NULL，所以 `AS` 只能把它放进可空的属性。和其他表达式一样，它里面的
+值会写进 SQL。
 
 ## 可观察查询
 

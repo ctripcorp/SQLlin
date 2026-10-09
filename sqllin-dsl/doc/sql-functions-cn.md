@@ -94,6 +94,28 @@ fun sample() {
   SQLlin 建表时给对应 Kotlin 类型的列用的名字一致：`TINYINT`、`SMALLINT`、`INT`、`BIGINT`、`FLOAT`、`DOUBLE`、`TEXT` 和
   `BLOB`。转成整数类型时，小数会截断，字符串会读取开头的数字部分，比如 `CAST('12abc' AS INT)` 是 `12`。
 
+### 更多表达式语法
+
+- `CASE` 返回第一个条件成立的分支的值，没有分支成立时返回 `ELSE` 的值，省略 `ELSE` 时为 NULL：
+
+  ```kotlin
+  // CASE WHEN book.pages<50 THEN 'short' WHEN book.pages<200 THEN 'medium' ELSE 'long' END
+  CASE(
+      WHEN(pages LT 50) THEN literal("short"),
+      WHEN(pages LT 200) THEN literal("medium"),
+      ELSE = literal("long"),
+  )
+  ```
+
+  各分支的值类型相同，`CASE` 的类型也就是它，所以 `AS` 会像检查其他表达式一样检查它。
+- `IS` 和 `ISNOT` 像 `EQ`、`NEQ` 一样比较两个表达式，区别是 NULL 等于 NULL，所以比较结果是真或假，而不会是 NULL：
+  `notes ISNOT literal("vip")` 也会匹配 `notes` 为 NULL 的行，而 `notes NEQ literal("vip")` 会把它们排除掉。它们的作用和
+  `IS DISTINCT FROM` 相同，并且所有版本的 SQLite 都支持。
+- `COLLATE` 按指定的排序规则（`BINARY`、`NOCASE` 或 `RTRIM`）比较和排序字符串：`(name COLLATE NOCASE) EQ "ann"` 也会匹配
+  `'Ann'`，`ORDER_BY((name COLLATE NOCASE) to ASC)` 会忽略大小写排序。`NOCASE` 只忽略 ASCII 字母的大小写。
+- `and`、`or`、`inv()`、`shl` 和 `shr` 是 `Int` 和 `Long` 的位运算，名字和 Kotlin 自己的一致。
+- 只返回一列的 _SELECT_ 可以作为一个值，详见[标量子查询](advanced-query-cn.md#标量子查询)。
+
 ## 更多函数
 
 这些函数同样是实验性 API。它们的参数都可以是表达式，需要值的地方也可以传 Kotlin 值：

@@ -699,6 +699,33 @@ data class SignResult(val signOf: Long)
 data class EpochResult(val epoch: Long?)
 
 /**
+ * A [Book] sorted into categories with CASE.
+ */
+@Serializable
+data class BookCategory(val name: String, val size: String, val discount: Double?)
+
+/**
+ * The single column of a SELECT used as a value, a scalar subquery.
+ */
+@Serializable
+data class AveragePrice(val value: Double?)
+
+@Serializable
+data class MaxPages(val value: PageCount?)
+
+/**
+ * A [Book] next to the most pages of any book, from a scalar subquery.
+ */
+@Serializable
+data class BookWithMaxPages(val name: String, val maxPages: PageCount?)
+
+/**
+ * Bitwise operators of the age of a [PersonWithId].
+ */
+@Serializable
+data class AgeBits(val anded: Age, val ored: Age, val shifted: Age, val halved: Age, val inverted: Age)
+
+/**
  * Aggregates of the distinct values of the columns of the books, next to those of all values.
  */
 @Serializable

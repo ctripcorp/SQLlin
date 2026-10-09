@@ -124,6 +124,15 @@ class AndroidTest {
     fun testPlatformDependentFunctions() = commonTest.testPlatformDependentFunctions()
 
     @Test
+    fun testCaseExpression() = commonTest.testCaseExpression()
+
+    @Test
+    fun testScalarSubquery() = commonTest.testScalarSubquery()
+
+    @Test
+    fun testExpressionOperators() = commonTest.testExpressionOperators()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

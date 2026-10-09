@@ -105,6 +105,30 @@ fun sample() {
   `SMALLINT`, `INT`, `BIGINT`, `FLOAT`, `DOUBLE`, `TEXT` and `BLOB`. An integer type truncates a real number, and reads a
   string as far as it is a number, as `CAST('12abc' AS INT)` is `12`.
 
+### More Expression Syntax
+
+- `CASE` gives the value of the first branch whose condition holds, or `ELSE` where none does, and NULL where `ELSE` is
+  omitted:
+
+  ```kotlin
+  // CASE WHEN book.pages<50 THEN 'short' WHEN book.pages<200 THEN 'medium' ELSE 'long' END
+  CASE(
+      WHEN(pages LT 50) THEN literal("short"),
+      WHEN(pages LT 200) THEN literal("medium"),
+      ELSE = literal("long"),
+  )
+  ```
+
+  The branches have values of the same type, which `CASE` has, so `AS` checks it as it checks any expression.
+- `IS` and `ISNOT` compare two expressions as `EQ` and `NEQ` do, except that NULL equals NULL, so the comparison is true
+  or false rather than NULL: `notes ISNOT literal("vip")` matches the rows whose `notes` are NULL too, which
+  `notes NEQ literal("vip")` leaves out. They do what `IS DISTINCT FROM` does, on every SQLite version.
+- `COLLATE` compares and sorts a string by a collation, `BINARY`, `NOCASE` or `RTRIM`:
+  `(name COLLATE NOCASE) EQ "ann"` matches `'Ann'` too, and `ORDER_BY((name COLLATE NOCASE) to ASC)` sorts ignoring
+  case. `NOCASE` only ignores the case of the ASCII letters.
+- `and`, `or`, `inv()`, `shl` and `shr` are the bitwise operators of `Int` and `Long`, named as Kotlin names them.
+- A _SELECT_ of a single column can be a value, as described in [Scalar Subqueries](advanced-query.md#scalar-subqueries).
+
 ## More Functions
 
 These functions are experimental too. Their arguments are expressions, and a Kotlin value where one is given:

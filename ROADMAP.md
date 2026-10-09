@@ -49,13 +49,14 @@ done. A new item takes the next number.
 * F43: Support custom collations, which the driver registers
 * F44: Support VALUES as a query, and SELECT without FROM, such as `SELECT datetime('now')`
 * F45: Support table-valued functions in FROM, such as json_each, json_tree and pragma_table_info (the JSON ones need SQLite 3.38.0, Android API 34)
-* F46: Support more expression syntax, planned with the expressions of F9 and the functions of F11: CASE, subqueries that give a single value, the COLLATE operator, bitwise operators, IS DISTINCT FROM (SQLite 3.39.0), JSON's `->` and `->>` (SQLite 3.38.0), and REGEXP
 * F47: Support UPDATE ... FROM, which updates rows with the values of another table, and needs the expressions of F9 (SQLite 3.33.0, Android API 34)
 * F48: Support virtual tables other than FTS and R*Tree, such as dbstat
 * F63: Support INSTEAD OF triggers on views, together with INSERT, UPDATE and DELETE on a view, which the DSL doesn't allow, as a view isn't a `Table`, so that such a trigger can be used; left out of the first version of CREATE TRIGGER (F10)
+* F64: Support the JSON functions and JSON's `->` and `->>` operators (SQLite 3.38.0, Android API 34), left out of F46
 
 ## Supported
 
+* F46: Support more expression syntax: CASE, scalar subqueries, COLLATE, bitwise operators and null-safe IS comparisons; REGEXP is left out, as its function differs between the platforms, and the JVM's SQLite has none (2.5.0 ✅)
 * F11: Support more functions, CAST, literal values and arithmetic in expressions (2.5.0 ✅)
 * F6: Support VACUUM and VACUUM INTO (2.5.0 ✅)
 * F5: Support ESCAPE in LIKE (2.5.0 ✅)

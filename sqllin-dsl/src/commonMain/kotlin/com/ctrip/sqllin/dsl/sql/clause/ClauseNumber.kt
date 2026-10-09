@@ -313,6 +313,16 @@ public class ClauseNumber<V : Any> internal constructor(
         return arithmetic("%", other, isNullable = isNullable || !isNonZero || other.isNullable)
     }
 
+    /**
+     * A bitwise operator, `(this operator other)`, which is NULL where either is.
+     */
+    internal fun bitwise(operator: String, other: ClauseElement<*>): ClauseNumber<V> = arithmetic(operator, other)
+
+    /**
+     * The bitwise complement, `(~this)`.
+     */
+    internal fun complement(): ClauseNumber<V> = derive("(~$sql)", strictTraits(listOf(this)))
+
     private fun arithmetic(operator: String, other: ClauseElement<*>, isNullable: Boolean = this.isNullable || other.isNullable): ClauseNumber<V> =
         derive("($sql $operator ${other.sql})", strictTraits(listOf(this, other), isNullable))
 
@@ -394,3 +404,95 @@ public operator fun ClauseNumber<UInt>.rem(other: ClauseNumber<UInt>): ClauseNum
 @ExperimentalDSLDatabaseAPI
 @JvmName("remUIntValue")
 public operator fun ClauseNumber<UInt>.rem(value: UInt): ClauseNumber<UInt> = remainder(literalOf(value))
+
+// Bitwise operators, named as Kotlin names them, of `Int` and `Long`, as SQLite computes them with 64-bit integers.
+
+/** Bitwise AND of `Int`s: `(this & other)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("andInt")
+public infix fun ClauseNumber<Int>.and(other: ClauseNumber<Int>): ClauseNumber<Int> = bitwise("&", other)
+
+/** Bitwise AND with a `Int`: `(this & value)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("andIntValue")
+public infix fun ClauseNumber<Int>.and(value: Int): ClauseNumber<Int> = bitwise("&", literalOf(value))
+
+/** Bitwise OR of `Int`s: `(this | other)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("orInt")
+public infix fun ClauseNumber<Int>.or(other: ClauseNumber<Int>): ClauseNumber<Int> = bitwise("|", other)
+
+/** Bitwise OR with a `Int`: `(this | value)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("orIntValue")
+public infix fun ClauseNumber<Int>.or(value: Int): ClauseNumber<Int> = bitwise("|", literalOf(value))
+
+/** Shift left of a `Int` by [bits]: `(this << bits)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("shlInt")
+public infix fun ClauseNumber<Int>.shl(bits: ClauseNumber<Int>): ClauseNumber<Int> = bitwise("<<", bits)
+
+/** Shift left of a `Int` by the value [bits]: `(this << bits)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("shlIntValue")
+public infix fun ClauseNumber<Int>.shl(bits: Int): ClauseNumber<Int> = bitwise("<<", literal(bits))
+
+/** Shift right, keeping the sign, of a `Int` by [bits]: `(this >> bits)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("shrInt")
+public infix fun ClauseNumber<Int>.shr(bits: ClauseNumber<Int>): ClauseNumber<Int> = bitwise(">>", bits)
+
+/** Shift right, keeping the sign, of a `Int` by the value [bits]: `(this >> bits)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("shrIntValue")
+public infix fun ClauseNumber<Int>.shr(bits: Int): ClauseNumber<Int> = bitwise(">>", literal(bits))
+
+/** The bitwise complement of a `Int`: `(~this)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("invInt")
+public fun ClauseNumber<Int>.inv(): ClauseNumber<Int> = complement()
+
+/** Bitwise AND of `Long`s: `(this & other)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("andLong")
+public infix fun ClauseNumber<Long>.and(other: ClauseNumber<Long>): ClauseNumber<Long> = bitwise("&", other)
+
+/** Bitwise AND with a `Long`: `(this & value)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("andLongValue")
+public infix fun ClauseNumber<Long>.and(value: Long): ClauseNumber<Long> = bitwise("&", literalOf(value))
+
+/** Bitwise OR of `Long`s: `(this | other)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("orLong")
+public infix fun ClauseNumber<Long>.or(other: ClauseNumber<Long>): ClauseNumber<Long> = bitwise("|", other)
+
+/** Bitwise OR with a `Long`: `(this | value)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("orLongValue")
+public infix fun ClauseNumber<Long>.or(value: Long): ClauseNumber<Long> = bitwise("|", literalOf(value))
+
+/** Shift left of a `Long` by [bits]: `(this << bits)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("shlLong")
+public infix fun ClauseNumber<Long>.shl(bits: ClauseNumber<Int>): ClauseNumber<Long> = bitwise("<<", bits)
+
+/** Shift left of a `Long` by the value [bits]: `(this << bits)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("shlLongValue")
+public infix fun ClauseNumber<Long>.shl(bits: Int): ClauseNumber<Long> = bitwise("<<", literal(bits))
+
+/** Shift right, keeping the sign, of a `Long` by [bits]: `(this >> bits)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("shrLong")
+public infix fun ClauseNumber<Long>.shr(bits: ClauseNumber<Int>): ClauseNumber<Long> = bitwise(">>", bits)
+
+/** Shift right, keeping the sign, of a `Long` by the value [bits]: `(this >> bits)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("shrLongValue")
+public infix fun ClauseNumber<Long>.shr(bits: Int): ClauseNumber<Long> = bitwise(">>", literal(bits))
+
+/** The bitwise complement of a `Long`: `(~this)`. */
+@ExperimentalDSLDatabaseAPI
+@JvmName("invLong")
+public fun ClauseNumber<Long>.inv(): ClauseNumber<Long> = complement()

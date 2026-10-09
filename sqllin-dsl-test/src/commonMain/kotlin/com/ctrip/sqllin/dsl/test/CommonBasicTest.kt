@@ -2078,6 +2078,152 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers CASE: the value of the first branch whose condition holds, ELSE where none does, and NULL without ELSE, so
+     * that it can only be read into a nullable property. CASE works in conditions and ORDER BY too, and the values of
+     * its conditions, a quote among them, are written into the SQL.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testCaseExpression() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            BookTable INSERT listOf(
+                Book(name = "Kotlin", author = "Ken", price = 20.0, pages = 300),
+                Book(name = "Swift", author = "Sam", price = 10.0, pages = 30),
+                Book(name = "It's Go", author = "Gus", price = 12.0, pages = 120),
+            )
+        }
+        lateinit var categories: SelectStatement<BookCategory>
+        lateinit var shortBooks: SelectStatement<Book>
+        lateinit var quotedFirst: SelectStatement<Book>
+        database {
+            BookTable { table ->
+                categories = table SELECT listOf(
+                    CASE(
+                        WHEN(pages LT 50) THEN literal("short"),
+                        WHEN(pages LT 200) THEN literal("medium"),
+                        ELSE = literal("long"),
+                    ) AS BookCategory::size,
+                    CASE(WHEN(price GT 15.0) THEN (price * 0.1)) AS BookCategory::discount,
+                ) ORDER_BY (name to ASC)
+                shortBooks = table SELECT WHERE(CASE(WHEN(pages LT 50) THEN literal("short"), ELSE = literal("long")) EQ "short")
+                quotedFirst = table SELECT ORDER_BY(CASE(WHEN(name EQ "It's Go") THEN literal(0), ELSE = literal(1)) to ASC)
+            }
+        }
+        assertEquals(
+            listOf(
+                BookCategory("It's Go", size = "medium", discount = null),
+                BookCategory("Kotlin", size = "long", discount = 2.0),
+                BookCategory("Swift", size = "short", discount = null),
+            ),
+            categories.getResults(),
+        )
+        assertEquals(listOf("Swift"), shortBooks.getResults().map { it.name })
+        assertEquals("It's Go", quotedFirst.getResults().first().name)
+
+        // Without ELSE, CASE can be NULL
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable { table -> table SELECT (CASE(WHEN(pages LT 50) THEN pages) AS BookPages::pages) } }
+        }
+    }
+
+    /**
+     * Covers scalar subqueries: a SELECT of a single column used as a value, which is NULL when the SELECT returns no
+     * rows, in conditions and result columns. An observed query watches the tables of its scalar subqueries. A SELECT of
+     * more than one column is rejected.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testScalarSubquery() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        runTest {
+            val olderThanPages = Channel<List<PersonWithId>>(Channel.UNLIMITED)
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) {
+                    PersonWithIdTable SELECT WHERE(PersonWithIdTable.age GT (BookTable SELECT listOf(BookTable.max(BookTable.pages) AS MaxPages::value))[MaxPages::value])
+                }.collect { olderThanPages.send(it) }
+            }
+            database {
+                PersonWithIdTable INSERT listOf(
+                    PersonWithId(id = null, name = "Ann", age = 30),
+                    PersonWithId(id = null, name = "Bob", age = 10),
+                )
+            }
+            // No books: the subquery is NULL, so no one is older
+            assertEquals(emptyList(), olderThanPages.receive())
+            runCurrent()
+            while (olderThanPages.tryReceive().isSuccess) Unit
+
+            database {
+                BookTable INSERT listOf(
+                    Book(name = "Kotlin", author = "Ken", price = 20.0, pages = 20),
+                    Book(name = "Swift", author = "Sam", price = 10.0, pages = 5),
+                )
+            }
+            // A change to the subquery's table is seen
+            assertEquals(listOf("Ann"), olderThanPages.receive().map { it.name })
+
+            lateinit var expensive: SelectStatement<Book>
+            lateinit var withMax: SelectStatement<BookWithMaxPages>
+            database {
+                expensive = BookTable SELECT WHERE(BookTable.price GT (BookTable SELECT listOf(BookTable.avg(BookTable.price) AS AveragePrice::value))[AveragePrice::value])
+                BookTable { table ->
+                    withMax = table SELECT ((BookTable SELECT listOf(max(pages) AS MaxPages::value))[MaxPages::value] AS BookWithMaxPages::maxPages) ORDER_BY (name to ASC)
+                }
+            }
+            assertEquals(listOf("Kotlin"), expensive.getResults().map { it.name })
+            assertEquals(listOf(BookWithMaxPages("Kotlin", 20), BookWithMaxPages("Swift", 20)), withMax.getResults())
+
+            assertFailsWith<IllegalArgumentException> {
+                database { BookTable SELECT WHERE(BookTable.name EQ (BookTable SELECT X)[Book::name]) }
+            }
+        }
+    }
+
+    /**
+     * Covers the null-safe comparisons of expressions, IS and IS NOT, which are true or false where EQ and NEQ would be
+     * NULL; the COLLATE operator, in a condition and in ORDER BY; and the bitwise operators.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testExpressionOperators() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            UserAccountTable INSERT listOf(
+                UserAccount(id = null, username = "ann", email = "ann@mail", status = UserStatus.ACTIVE, priority = Priority.LOW, notes = null),
+                UserAccount(id = null, username = "Bob", email = "bob@mail", status = UserStatus.ACTIVE, priority = Priority.HIGH, notes = "vip"),
+                UserAccount(id = null, username = "cat", email = "cat@mail", status = UserStatus.ACTIVE, priority = Priority.HIGH, notes = "new"),
+            )
+            PersonWithIdTable INSERT PersonWithId(id = null, name = "Ann", age = 13)
+        }
+        lateinit var vip: SelectStatement<UserAccount>
+        lateinit var notVip: SelectStatement<UserAccount>
+        lateinit var notVipByNeq: SelectStatement<UserAccount>
+        lateinit var bob: SelectStatement<UserAccount>
+        lateinit var byName: SelectStatement<UserAccount>
+        lateinit var bits: SelectStatement<AgeBits>
+        database {
+            UserAccountTable { table ->
+                vip = table SELECT WHERE(notes IS literal("vip"))
+                notVip = table SELECT WHERE(notes ISNOT literal("vip")) ORDER_BY (username to ASC)
+                notVipByNeq = table SELECT WHERE(notes NEQ literal("vip"))
+                bob = table SELECT WHERE((username COLLATE NOCASE) EQ "BOB")
+                byName = table SELECT ORDER_BY((username COLLATE NOCASE) to ASC)
+            }
+            PersonWithIdTable { table ->
+                bits = table SELECT listOf(
+                    (age and 4) AS AgeBits::anded,
+                    (age or 2) AS AgeBits::ored,
+                    (age shl 2) AS AgeBits::shifted,
+                    (age shr 1) AS AgeBits::halved,
+                    age.inv() AS AgeBits::inverted,
+                )
+            }
+        }
+        assertEquals(listOf("Bob"), vip.getResults().map { it.username })
+        // IS NOT is true for NULL, while != is NULL, so it leaves 'ann' out
+        assertEquals(listOf("ann", "cat"), notVip.getResults().map { it.username })
+        assertEquals(listOf("cat"), notVipByNeq.getResults().map { it.username })
+        assertEquals(listOf("Bob"), bob.getResults().map { it.username })
+        assertEquals(listOf("ann", "Bob", "cat"), byName.getResults().map { it.username })
+        assertEquals(listOf(AgeBits(anded = 4, ored = 15, shifted = 52, halved = 6, inverted = -14)), bits.getResults())
+    }
+
+    /**
      * Covers result columns: expressions, such as aggregate functions, selected into properties of a result type with
      * AS, as in `table SELECT listOf(count(X) AS AuthorStats::books)`, while every other property is read from its
      * column. Each function reads into the type of the values SQLite returns for it, and NULL into a nullable property.

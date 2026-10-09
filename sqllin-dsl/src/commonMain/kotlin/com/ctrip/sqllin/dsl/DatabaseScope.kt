@@ -30,6 +30,7 @@ import com.ctrip.sqllin.dsl.sql.ViewDefinition
 import com.ctrip.sqllin.dsl.sql.ProjectedX
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.clause.*
+import com.ctrip.sqllin.dsl.sql.compiler.inlineParameters
 import com.ctrip.sqllin.dsl.sql.operation.Alter
 import com.ctrip.sqllin.dsl.sql.operation.Create
 import com.ctrip.sqllin.dsl.sql.operation.Delete
@@ -47,6 +48,7 @@ import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.serializer
 import kotlin.concurrent.Volatile
 import kotlin.jvm.JvmName
+import kotlin.reflect.KProperty1
 
 /**
  * Scope for executing type-safe SQL DSL statements.
@@ -1023,6 +1025,74 @@ public class DatabaseScope internal constructor(
     /**
      * Takes this SELECT out of the statements the scope runs, as it becomes a subquery of another one.
      */
+    // A SELECT of a single column can also be a value, a scalar subquery: `select[R::property]` names the column, so
+    // that the value has the property's type.
+
+    /**
+     * This SELECT as a number, a scalar subquery: the value of its single column, [property], in its first row, or NULL
+     * if it returns no rows, as in `price GT (BookTable SELECT listOf(avg(price) AS AveragePrice::value))[AveragePrice::value]`.
+     * It can be NULL, and the values of the SELECT are written into the SQL, as the values of any expression are.
+     *
+     * @throws IllegalArgumentException if the SELECT returns more than one column
+     */
+    @ExperimentalDSLDatabaseAPI
+    public operator fun <R, V : Number> SelectStatement<R>.get(property: KProperty1<R, V?>): ClauseNumber<V> =
+        scalar(this, property) { sql, tables -> ClauseNumber(sql, ExpressionRelation, isFunction = true, isNullable = true, isAggregate = false, isNullOnNoRows = true, columnTables = emptySet(), tables = tables) }
+
+    /**
+     * This SELECT as a string, a scalar subquery: the value of its single column, [property], in its first row, or NULL
+     * if it returns no rows.
+     *
+     * @throws IllegalArgumentException if the SELECT returns more than one column
+     */
+    @ExperimentalDSLDatabaseAPI
+    @JvmName("getString")
+    public operator fun <R> SelectStatement<R>.get(property: KProperty1<R, String?>): ClauseString<String> =
+        scalar(this, property) { sql, tables -> ClauseString(sql, ExpressionRelation, isFunction = true, isNullable = true, isAggregate = false, isNullOnNoRows = true, columnTables = emptySet(), tables = tables) }
+
+    /**
+     * This SELECT as a Boolean, a scalar subquery: the value of its single column, [property], in its first row, or NULL
+     * if it returns no rows.
+     *
+     * @throws IllegalArgumentException if the SELECT returns more than one column
+     */
+    @ExperimentalDSLDatabaseAPI
+    @JvmName("getBoolean")
+    public operator fun <R> SelectStatement<R>.get(property: KProperty1<R, Boolean?>): ClauseBoolean =
+        scalar(this, property) { sql, tables -> ClauseBoolean(sql, ExpressionRelation, isFunction = true, isNullable = true, isAggregate = false, isNullOnNoRows = true, columnTables = emptySet(), tables = tables) }
+
+    /**
+     * This SELECT as a BLOB, a scalar subquery: the value of its single column, [property], in its first row, or NULL if
+     * it returns no rows.
+     *
+     * @throws IllegalArgumentException if the SELECT returns more than one column
+     */
+    @ExperimentalDSLDatabaseAPI
+    @JvmName("getBlob")
+    public operator fun <R> SelectStatement<R>.get(property: KProperty1<R, ByteArray?>): ClauseBlob =
+        scalar(this, property) { sql, tables -> ClauseBlob(sql, ExpressionRelation, isFunction = true, isNullable = true, isAggregate = false, isNullOnNoRows = true, columnTables = emptySet(), tables = tables) }
+
+    /**
+     * This SELECT as an enum entry, a scalar subquery: the value of its single column, [property], in its first row, or
+     * NULL if it returns no rows.
+     *
+     * @throws IllegalArgumentException if the SELECT returns more than one column
+     */
+    @ExperimentalDSLDatabaseAPI
+    @JvmName("getEnum")
+    public operator fun <R, T : Enum<T>> SelectStatement<R>.get(property: KProperty1<R, T?>): ClauseEnum<T> =
+        scalar(this, property) { sql, tables -> ClauseEnum(sql, ExpressionRelation, isFunction = true, isNullable = true, isAggregate = false, isNullOnNoRows = true, columnTables = emptySet(), tables = tables) }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun <E : ClauseElement<*>> scalar(select: SelectStatement<*>, property: KProperty1<*, *>, element: (String, Set<String>) -> E): E {
+        val descriptor = select.deserializer.descriptor
+        require(descriptor.elementsCount == 1 && descriptor.getElementName(0) == property.name) {
+            "A SELECT of '${descriptor.serialName}' can't be the value '${property.name}': a scalar subquery returns a single column, so its result type has to have that property only."
+        }
+        select.takeAsSubquery()
+        return element("(${inlineParameters(select.sqlStr, select.parameters)})", select.tables)
+    }
+
     private fun SelectStatement<*>.takeAsSubquery() {
         checkComplete()
         container removeStatement this
