@@ -4,7 +4,7 @@
 
 ## 表结构操作
 
-SQLlin 提供了用于管理表结构的类型安全 DSL 操作：CREATE、DROP 和 ALTER，以及视图和索引的操作。
+SQLlin 提供了用于管理表结构的类型安全 DSL 操作：CREATE、DROP 和 ALTER，以及视图、索引和触发器的操作。
 
 ### CREATE - 创建表
 
@@ -167,6 +167,46 @@ fun sample() {
 
 `IF NOT EXISTS` 只检查名字：如果同名的表已经存在但列不同，它会保持原样。
 
+### CREATE TRIGGER - 创建触发器
+
+触发器会在表的某一行被插入、删除或更新之前或之后执行一组语句，可以带一个条件。触发器是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // CREATE TRIGGER person_deleted AFTER DELETE ON person
+        // BEGIN INSERT INTO audit(personId,action,at) VALUES (OLD.id,'delete',datetime('now')); END
+        CREATE_TRIGGER("person_deleted") AFTER DELETE ON PersonTable BEGIN {
+            AuditTable { table ->
+                table INSERT listOf(
+                    old(PersonTable.id) AS Audit::personId,
+                    literal("delete") AS Audit::action,
+                    datetime("now") AS Audit::at,
+                )
+            }
+        }
+        // CREATE TRIGGER no_negative_age BEFORE INSERT ON person WHEN NEW.age<0
+        // BEGIN SELECT RAISE(ABORT,'age can''t be negative'); END
+        CREATE_TRIGGER("no_negative_age") BEFORE INSERT ON PersonTable WHEN (new(PersonTable.age) LT 0) BEGIN {
+            RAISE(ABORT, "age can't be negative")
+        }
+    }
+}
+```
+
+- `BEFORE` 或 `AFTER` 指定时机，`INSERT`、`DELETE`、`UPDATE` 或 `UPDATE_OF(列)` 指定事件。`WHEN` 可以指定条件。
+- `new(列)` 和 `old(列)` 读取正在写入的行：INSERT 触发器有新行，DELETE 触发器有旧行，UPDATE 触发器两者都有。读取触发器没有的
+  行会在构建语句时被拒绝，而 SQLite 要等触发器触发时才会报错。
+- 触发器体中可以插入、更新和删除行，并使用 `SET` 和 `INSERT` 的[表达式](sql-functions-cn.md#表达式)。`RAISE(ABORT, 消息)`
+  以这条消息终止触发它的语句，`FAIL` 和 `ROLLBACK` 也会终止语句，只是处理方式不同；`RAISE(IGNORE)` 跳过这一行。
+- 这些语句在触发器触发时执行，而不是在作用域结束时。SQLite 不允许触发器带参数，所以触发器 SQL 中的值都是字面量。
+
+`CREATE_TRIGGER_IF_NOT_EXISTS` 在触发器已存在时什么也不做，`DROP_TRIGGER(name)` 和 `DROP_TRIGGER_IF_EXISTS(name)` 删除触发器。
+FTS 表是虚拟表，不能有触发器。删除一张表会同时删除它的触发器。
+
+触发器写入的行会被[可观察查询](advanced-query-cn.md#可观察查询)计为修改，FTS 表也一样。
+
 ### ALTER - 修改表结构
 
 SQLlin 提供了多种 ALTER 操作来修改现有的表结构：
@@ -327,8 +367,9 @@ val database = Database(
 Android 和 Apple 平台上这个设置是开启的，只有在启用了外键约束时引用才会跟着改名。索引会随旧表一起删除，所以要在重建后的表上重新
 创建。
 
-读取这张表的视图，以及读取这些视图的视图，要在删除旧表之前删掉，改名之后再重新创建。`legacy_alter_table` 关闭时，重命名表会
-检查每个视图读取的表是否都存在，只要还有视图读取已删除的旧表，改名就会失败。先删掉视图、之后再重建，在所有平台上都可行：
+读取这张表的视图、读取这些视图的视图，以及其他表上写入或读取这张表的触发器，要在删除旧表之前删掉，改名之后再重新创建。
+`legacy_alter_table` 关闭时，重命名表会检查每个视图和触发器读取的表是否都存在，只要还有一个读取已删除的旧表，改名就会失败。
+先删掉它们、之后再重建，在所有平台上都可行。这张表自己的触发器会随旧表一起删除，所以也要重新创建：
 
 ```kotlin
 DROP(PersonNameView)  // 一个读取 'person' 的视图

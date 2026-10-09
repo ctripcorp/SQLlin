@@ -19,27 +19,37 @@ package com.ctrip.sqllin.dsl
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
+import com.ctrip.sqllin.dsl.annotation.KeyWordDslMaker
 import com.ctrip.sqllin.dsl.annotation.PlatformDependentSQLiteAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.DerivedTable
 import com.ctrip.sqllin.dsl.sql.From
+import com.ctrip.sqllin.dsl.sql.FtsTable
+import com.ctrip.sqllin.dsl.sql.ProjectedX
+import com.ctrip.sqllin.dsl.sql.RaiseIgnore
+import com.ctrip.sqllin.dsl.sql.RaiseResolution
 import com.ctrip.sqllin.dsl.sql.Relation
 import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.TriggerDefinition
+import com.ctrip.sqllin.dsl.sql.TriggerEvent
+import com.ctrip.sqllin.dsl.sql.TriggerName
+import com.ctrip.sqllin.dsl.sql.TriggerTiming
 import com.ctrip.sqllin.dsl.sql.View
 import com.ctrip.sqllin.dsl.sql.ViewDefinition
-import com.ctrip.sqllin.dsl.sql.ProjectedX
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.compiler.inlineParameters
+import com.ctrip.sqllin.dsl.sql.compiler.sqlLiteral
 import com.ctrip.sqllin.dsl.sql.operation.Alter
 import com.ctrip.sqllin.dsl.sql.operation.Create
 import com.ctrip.sqllin.dsl.sql.operation.Delete
 import com.ctrip.sqllin.dsl.sql.operation.Drop
 import com.ctrip.sqllin.dsl.sql.operation.Insert
 import com.ctrip.sqllin.dsl.sql.operation.PRAGMA
-import com.ctrip.sqllin.dsl.sql.operation.Vacuum
 import com.ctrip.sqllin.dsl.sql.operation.Select
+import com.ctrip.sqllin.dsl.sql.operation.Trigger
 import com.ctrip.sqllin.dsl.sql.operation.Update
+import com.ctrip.sqllin.dsl.sql.operation.Vacuum
 import com.ctrip.sqllin.dsl.sql.statement.*
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
@@ -130,6 +140,7 @@ public class DatabaseScope internal constructor(
      * @return `true` if transaction started successfully, `false` if already in a transaction
      */
     public fun beginTransaction(): Boolean {
+        check(triggerBody == null) { "A transaction can't begin in the body of a trigger, which runs in the statement that fires it." }
         if (isInTransaction)
             return false
         transactionStatementsGroup = TransactionStatementsGroup(databaseConnection, enableSimpleSQLLog)
@@ -170,11 +181,19 @@ public class DatabaseScope internal constructor(
     private val executiveEngine = DatabaseExecuteEngine(enableSimpleSQLLog)
 
     private fun addStatement(statement: SingleStatement) {
-        if (isInTransaction)
-            transactionStatementsGroup!!.addStatement(statement)
-        else
-            executiveEngine.addStatement(statement)
+        val body = triggerBody
+        when {
+            body != null -> body.addStatement(statement)
+            isInTransaction -> transactionStatementsGroup!!.addStatement(statement)
+            else -> executiveEngine.addStatement(statement)
+        }
     }
+
+    /**
+     * The container the statements are added to: the body of the trigger being defined, the transaction, or the scope.
+     */
+    private val currentContainer: StatementContainer
+        get() = triggerBody ?: transactionStatementsGroup ?: executiveEngine
 
     private fun <T> addSelectStatement(statement: SelectStatement<T>) {
         if (unionSelectStatementGroupStack.isNotEmpty())
@@ -183,7 +202,12 @@ public class DatabaseScope internal constructor(
             addStatement(statement)
     }
 
-    internal fun executeAllStatements() = executiveEngine.executeAllStatement()
+    internal fun executeAllStatements() {
+        check(definingTrigger == null) {
+            "The trigger '${definingTrigger?.timing?.trigger?.name}' has no BEGIN with its statements, so it would never be created."
+        }
+        executiveEngine.executeAllStatement()
+    }
 
     /**
      * What the statements of this scope may change when they run.
@@ -522,13 +546,7 @@ public class DatabaseScope internal constructor(
      */
     @StatementDslMaker
     public infix fun <T> Table<T>.UPDATE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
-        transactionStatementsGroup?.let {
-            val statement = Update.update(this, databaseConnection, it, clause)
-            it addStatement statement
-            statement
-        } ?: Update.update(this, databaseConnection, executiveEngine, clause).also {
-            executiveEngine addStatement it
-        }
+        Update.update(this, databaseConnection, currentContainer, clause).also { addStatement(it) }
 
     // ========== DELETE Operations ==========
 
@@ -1197,7 +1215,7 @@ public class DatabaseScope internal constructor(
 
     private val unionSelectStatementGroupStack by lazy { ArrayDeque<UnionSelectStatementGroup<*>>() }
 
-    private fun getSelectStatementGroup(): StatementContainer = unionSelectStatementGroupStack.lastOrNull() ?: transactionStatementsGroup ?: executiveEngine
+    private fun getSelectStatementGroup(): StatementContainer = unionSelectStatementGroupStack.lastOrNull() ?: currentContainer
 
     /**
      * Combines multiple SELECT statements with UNION (removes duplicates).
@@ -1695,8 +1713,7 @@ public class DatabaseScope internal constructor(
      */
     private fun Table<*>.indexStatement(indexName: String, statement: SingleStatement): IndexStatement {
         addStatement(statement)
-        val container: StatementContainer = if (isInTransaction) transactionStatementsGroup!! else executiveEngine
-        return IndexStatement(this, indexName, databaseConnection, container, statement)
+        return IndexStatement(this, indexName, databaseConnection, currentContainer, statement)
     }
 
     // ========== DROP Operations ==========
@@ -2003,6 +2020,249 @@ public class DatabaseScope internal constructor(
     public infix fun <T> Table<T>.DROP_COLUMN(column: ClauseElement<*>) {
         val statement = Alter.dropColumn(this, column, databaseConnection)
         addStatement(statement)
+    }
+
+    // ========== CREATE TRIGGER and DROP TRIGGER ==========
+
+    /** The trigger being defined, from ON to the end of BEGIN, whose rows `new()` and `old()` read. */
+    private var definingTrigger: TriggerDefinition? = null
+
+    /** The body of the trigger being defined, which collects the statements written in BEGIN. */
+    private var triggerBody: TriggerBody? = null
+
+    /**
+     * Creates a trigger named [name], as the SQL `CREATE TRIGGER` does: statements that run whenever a row of a table is
+     * inserted, deleted or updated, before or after, where a condition holds:
+     * ```kotlin
+     * // CREATE TRIGGER person_visits AFTER UPDATE OF visits ON person WHEN NEW.visits>OLD.visits
+     * // BEGIN UPDATE stats SET visits=(stats.visits + 1); END
+     * CREATE_TRIGGER("person_visits") AFTER UPDATE_OF(PersonTable.visits) ON PersonTable WHEN (new(PersonTable.visits) GT old(PersonTable.visits)) BEGIN {
+     *     StatsTable UPDATE SET((StatsTable.visits + 1) AS Stats::visits)
+     * }
+     * ```
+     * `new(column)` and `old(column)` read the row being written, in the condition and the statements: a trigger on
+     * INSERT has a new row, one on DELETE an old row, and one on UPDATE both. The body can insert, update and delete
+     * rows, and `RAISE` can stop the statement that fired the trigger. Its values are written into the SQL, as SQLite
+     * doesn't let a trigger take parameters.
+     *
+     * A trigger can't be created on an FTS table, which is a virtual table, nor on a view, as an INSTEAD OF trigger is
+     * of no use while SQLlin can't write to views. Dropping a table drops its triggers.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun CREATE_TRIGGER(name: String): TriggerName = TriggerName(name, isIfNotExists = false)
+
+    /**
+     * Creates a trigger named [name] unless one of that name exists, as the SQL `CREATE TRIGGER IF NOT EXISTS` does.
+     *
+     * @see CREATE_TRIGGER
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun CREATE_TRIGGER_IF_NOT_EXISTS(name: String): TriggerName = TriggerName(name, isIfNotExists = true)
+
+    /** The event of a trigger that fires when a row is inserted, which has a new row. */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val INSERT: TriggerEvent
+        get() = TriggerEvent("INSERT", hasNewRow = true, hasOldRow = false)
+
+    /** The event of a trigger that fires when a row is deleted, which has an old row. */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val DELETE: TriggerEvent
+        get() = TriggerEvent("DELETE", hasNewRow = false, hasOldRow = true)
+
+    /** The event of a trigger that fires when a row is updated, which has a new row and an old row. */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val UPDATE: TriggerEvent
+        get() = TriggerEvent("UPDATE", hasNewRow = true, hasOldRow = true)
+
+    /**
+     * The event of a trigger that fires when any of [columns] of a row is updated, as the SQL `UPDATE OF` does.
+     *
+     * @throws IllegalArgumentException if there are no columns
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun UPDATE_OF(vararg columns: ClauseElement<*>): TriggerEvent {
+        require(columns.isNotEmpty()) { "UPDATE OF needs at least one column." }
+        return TriggerEvent("UPDATE OF ${columns.joinToString(",") { it.valueName }}", hasNewRow = true, hasOldRow = true, columns.toList())
+    }
+
+    /** Makes this trigger fire before its event, so that it can stop it with `RAISE`. */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun TriggerName.BEFORE(event: TriggerEvent): TriggerTiming = TriggerTiming(this, "BEFORE", event)
+
+    /** Makes this trigger fire after its event. */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun TriggerName.AFTER(event: TriggerEvent): TriggerTiming = TriggerTiming(this, "AFTER", event)
+
+    /**
+     * Gives this trigger the [table] whose rows fire it.
+     *
+     * @throws IllegalArgumentException if [table] is an FTS table, on which SQLite can't create a trigger, or a column of
+     * `UPDATE_OF` isn't a column of [table]
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> TriggerTiming.ON(table: Table<T>): TriggerDefinition {
+        check(triggerBody == null) { "A trigger can't be created in the body of another." }
+        require(table !is FtsTable<*>) { "SQLite can't create a trigger on '${table.tableName}', which is an FTS table, a virtual table." }
+        for (column in event.columns) {
+            require(!column.isFunction && column.table.tableName == table.tableName) {
+                "The trigger '${trigger.name}' on '${table.tableName}' can only fire on an UPDATE OF its columns, but '${column.valueName}' isn't one."
+            }
+        }
+        return TriggerDefinition(this, table).also { definingTrigger = it }
+    }
+
+    /**
+     * Makes this trigger fire only for the rows where [condition] holds, as the SQL `WHEN` does. It can read the rows
+     * being written with `new()` and `old()`.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun TriggerDefinition.WHEN(condition: SelectCondition): TriggerDefinition {
+        check(this.condition == null) { "The trigger '${timing.trigger.name}' already has a WHEN." }
+        return TriggerDefinition(timing, table, condition).also { definingTrigger = it }
+    }
+
+    /**
+     * Gives this trigger its statements, which [body] writes as it writes any: INSERT, UPDATE, DELETE and `RAISE`. They
+     * run when the trigger fires, not when the scope ends, and can read the rows being written with `new()` and `old()`.
+     *
+     * @throws IllegalArgumentException if [body] writes no statement, or another one, such as a SELECT
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun TriggerDefinition.BEGIN(body: () -> Unit) {
+        val collected = TriggerBody()
+        definingTrigger = this
+        triggerBody = collected
+        try {
+            body()
+        } finally {
+            triggerBody = null
+            definingTrigger = null
+        }
+        val name = timing.trigger.name
+        require(collected.statements.isNotEmpty()) { "The trigger '$name' needs at least one statement." }
+        for (statement in collected.statements) {
+            require(statement is InsertStatement || statement is UpdateDeleteStatement || statement is UpdateStatementWithoutWhereClause<*> || statement is RaiseStatement) {
+                "The trigger '$name' can only run INSERT, UPDATE, DELETE and RAISE, but not: ${statement.sqlStr}"
+            }
+        }
+        addStatement(Trigger.create(this, collected.statements, databaseConnection))
+    }
+
+    /**
+     * The [column] of the new row of the trigger being defined, `NEW.column`: the row inserted, or a row as it is
+     * updated to. It can only be used in the WHEN and the body of a trigger on INSERT or UPDATE.
+     *
+     * @throws IllegalStateException if no trigger is being defined
+     * @throws IllegalArgumentException if the trigger has no new row, which SQLite would only report when it fires, or
+     * [column] isn't a column of its table
+     */
+    @ExperimentalDSLDatabaseAPI
+    public fun <E : ClauseElement<*>> new(column: E): E = rowColumn(column, NEW_ROW)
+
+    /**
+     * The [column] of the old row of the trigger being defined, `OLD.column`: the row deleted, or a row as it was before
+     * it is updated. It can only be used in the WHEN and the body of a trigger on UPDATE or DELETE.
+     *
+     * @throws IllegalStateException if no trigger is being defined
+     * @throws IllegalArgumentException if the trigger has no old row, which SQLite would only report when it fires, or
+     * [column] isn't a column of its table
+     */
+    @ExperimentalDSLDatabaseAPI
+    public fun <E : ClauseElement<*>> old(column: E): E = rowColumn(column, OLD_ROW)
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <E : ClauseElement<*>> rowColumn(column: E, row: String): E {
+        val definition = checkNotNull(definingTrigger) { "${row.lowercase()}() can only be used in the WHEN or the body of a trigger." }
+        val event = definition.timing.event
+        require(if (row == NEW_ROW) event.hasNewRow else event.hasOldRow) {
+            "The trigger '${definition.timing.trigger.name}' on ${event.sql.substringBefore(' ')} has no $row row, which SQLite would only report when it fires."
+        }
+        require(!column.isFunction && column.table.tableName == definition.table.tableName) {
+            "${row.lowercase()}() takes a column of '${definition.table.tableName}', the table of the trigger '${definition.timing.trigger.name}', but '${column.valueName}' isn't one."
+        }
+        return column.rebind(RowRelation(row, definition.table)) as E
+    }
+
+    /** `RAISE(ABORT, ...)`: stops the statement that fired the trigger and undoes its changes. */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val ABORT: RaiseResolution
+        get() = RaiseResolution("ABORT")
+
+    /** `RAISE(FAIL, ...)`: stops the statement that fired the trigger, keeping the changes it made before. */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val FAIL: RaiseResolution
+        get() = RaiseResolution("FAIL")
+
+    /** `RAISE(ROLLBACK, ...)`: stops the statement that fired the trigger and rolls back the transaction. */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val ROLLBACK: RaiseResolution
+        get() = RaiseResolution("ROLLBACK")
+
+    /** `RAISE(IGNORE)`: skips the row that fired the trigger, and the rest of the trigger. */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val IGNORE: RaiseIgnore
+        get() = RaiseIgnore()
+
+    /**
+     * Stops the statement that fired the trigger with [message], which SQLite reports as the error, as the SQL
+     * `RAISE(resolution, message)` does: `RAISE(ABORT, "age can't be negative")`. It can only be in the body of a
+     * trigger, where it is usually run where the WHEN of the trigger holds.
+     *
+     * @throws IllegalStateException if no trigger is being defined
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun RAISE(resolution: RaiseResolution, message: String) {
+        addRaise("RAISE(${resolution.sql},${sqlLiteral(message)})")
+    }
+
+    /**
+     * Skips the row that fired the trigger, and the rest of the trigger, as the SQL `RAISE(IGNORE)` does.
+     *
+     * @throws IllegalStateException if no trigger is being defined
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun RAISE(ignore: RaiseIgnore) {
+        addRaise("RAISE(IGNORE)")
+    }
+
+    private fun addRaise(raise: String) {
+        check(triggerBody != null) { "RAISE can only be in the body of a trigger." }
+        addStatement(RaiseStatement("SELECT $raise"))
+    }
+
+    /**
+     * Drops the trigger named [name], as the SQL `DROP TRIGGER` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_TRIGGER(name: String) {
+        addStatement(Trigger.drop(name, isIfExists = false, databaseConnection))
+    }
+
+    /**
+     * Drops the trigger named [name] if it exists, as the SQL `DROP TRIGGER IF EXISTS` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_TRIGGER_IF_EXISTS(name: String) {
+        addStatement(Trigger.drop(name, isIfExists = true, databaseConnection))
     }
 
     // ========== VACUUM ==========

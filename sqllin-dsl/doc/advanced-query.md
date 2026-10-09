@@ -555,9 +555,10 @@ SQLite doesn't have them.
 ### Observing an FTS Table
 
 An FTS table is a virtual table, which can't have the triggers [observed queries](#observed-queries) count changes with.
-So `Database#observe` counts the changes to it from SQLlin's _INSERT_, _UPDATE_ and _DELETE_ on it instead: a change
-made with other SQL isn't seen, and neither is a change to an FTS table that a view reads. A rolled back transaction
-still counts its statements, which only runs the query once more.
+So `Database#observe` counts the changes to it from SQLlin's _INSERT_, _UPDATE_ and _DELETE_ on it instead, and, as a
+trigger can write it, from those on any table that has triggers: a change made with other SQL isn't seen, and neither
+is a change to an FTS table that a view reads. A rolled back transaction still counts its statements, which only runs
+the query once more.
 
 ## Finally
 

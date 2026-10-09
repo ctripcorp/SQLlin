@@ -799,6 +799,25 @@ data class RebuildPerson(
 )
 
 /**
+ * A log that triggers write the changes of [PersonWithId]s to.
+ */
+@DBRow("trigger_audit")
+@Serializable
+data class TriggerAudit(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val personId: Long?,
+    val action: String,
+    val at: String?,
+)
+
+/**
+ * A count that a trigger keeps.
+ */
+@DBRow("trigger_counter")
+@Serializable
+data class TriggerCounter(@PrimaryKey val id: Long, val count: Int)
+
+/**
  * A view of the ids in `rebuild_person`, which a rebuild of the table has to drop before dropping the old table, and
  * create again after the rename.
  */

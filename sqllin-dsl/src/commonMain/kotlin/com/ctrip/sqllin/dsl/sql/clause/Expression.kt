@@ -72,6 +72,13 @@ internal object ExpressionRelation : Relation<Nothing>("") {
 }
 
 /**
+ * The row a trigger reads, `NEW` or `OLD`, of [table], whose columns `new(column)` and `old(column)` give.
+ */
+internal class RowRelation(name: String, val table: Relation<*>) : Relation<Nothing>(name) {
+    override fun kSerializer(): KSerializer<Nothing> = error("The row of a trigger isn't a relation that can be read.")
+}
+
+/**
  * Writes [value] as the SQL literal of an expression, the number SQLite stores for an unsigned one included. A negative
  * number is put in parentheses, as `x - -1` written without spaces, `x--1`, would start a comment.
  */

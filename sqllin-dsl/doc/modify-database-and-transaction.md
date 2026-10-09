@@ -7,7 +7,7 @@ we start to learn how to write SQL statements with SQLlin.
 
 ## Table Structure Operations
 
-SQLlin provides type-safe DSL operations for managing table structures: CREATE, DROP, and ALTER, and for views and indexes.
+SQLlin provides type-safe DSL operations for managing table structures: CREATE, DROP, and ALTER, and for views, indexes and triggers.
 
 ### CREATE - Creating Tables
 
@@ -176,6 +176,52 @@ fun sample() {
 
 `IF NOT EXISTS` only checks the name: if a table of that name exists with other columns, it stays as it is.
 
+### CREATE TRIGGER - Creating Triggers
+
+A trigger runs statements whenever a row of a table is inserted, deleted or updated, before or after, where a condition
+holds. Triggers are experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // CREATE TRIGGER person_deleted AFTER DELETE ON person
+        // BEGIN INSERT INTO audit(personId,action,at) VALUES (OLD.id,'delete',datetime('now')); END
+        CREATE_TRIGGER("person_deleted") AFTER DELETE ON PersonTable BEGIN {
+            AuditTable { table ->
+                table INSERT listOf(
+                    old(PersonTable.id) AS Audit::personId,
+                    literal("delete") AS Audit::action,
+                    datetime("now") AS Audit::at,
+                )
+            }
+        }
+        // CREATE TRIGGER no_negative_age BEFORE INSERT ON person WHEN NEW.age<0
+        // BEGIN SELECT RAISE(ABORT,'age can''t be negative'); END
+        CREATE_TRIGGER("no_negative_age") BEFORE INSERT ON PersonTable WHEN (new(PersonTable.age) LT 0) BEGIN {
+            RAISE(ABORT, "age can't be negative")
+        }
+    }
+}
+```
+
+- `BEFORE` or `AFTER` gives the time, and `INSERT`, `DELETE`, `UPDATE` or `UPDATE_OF(columns)` the event. `WHEN` can give
+  a condition.
+- `new(column)` and `old(column)` read the row being written: a trigger on INSERT has a new row, one on DELETE an old
+  row, and one on UPDATE both. Reading a row the trigger doesn't have is rejected when the statement is built, as
+  SQLite would only fail when the trigger fires.
+- The body inserts, updates and deletes rows, with the [expressions](sql-functions.md#expressions) of `SET` and
+  `INSERT`. `RAISE(ABORT, message)` stops the statement that fired the trigger with that message, as `FAIL` and
+  `ROLLBACK` do in their ways, and `RAISE(IGNORE)` skips its row.
+- The statements run when the trigger fires, not when the scope ends. SQLite doesn't let a trigger take parameters, so
+  the values in its SQL are literals.
+
+`CREATE_TRIGGER_IF_NOT_EXISTS` skips a trigger that exists, and `DROP_TRIGGER(name)` and `DROP_TRIGGER_IF_EXISTS(name)`
+drop one. A trigger can't be on an FTS table, which is a virtual table. Dropping a table drops its triggers.
+
+The rows a trigger writes count as changes for [observed queries](advanced-query.md#observed-queries), FTS tables
+included.
+
 ### ALTER - Modifying Table Structure
 
 SQLlin provides several ALTER operations for modifying existing table structures:
@@ -341,9 +387,11 @@ would follow the old table, and be left pointing at a table that no longer exist
 Apple's platforms, where it is on, they only follow it while foreign keys are enforced. Indexes are dropped with the
 old table, so create them again on the rebuilt one.
 
-Drop the views that read the table before dropping it, and the views that read those, and create them again after the
-rename. Where `legacy_alter_table` is off, renaming a table checks that every view still reads tables that exist, so it
-fails while a view reads the dropped table. Dropping and creating the views again works on every platform:
+Drop the views that read the table before dropping it, and the views that read those, and the triggers of other tables
+that write or read it, and create them again after the rename. Where `legacy_alter_table` is off, renaming a table
+checks that every view and trigger still reads tables that exist, so it fails while one reads the dropped table.
+Dropping and creating them again works on every platform. The triggers of the table itself are dropped with it, so
+create them again too:
 
 ```kotlin
 DROP(PersonNameView)  // A view that reads 'person'

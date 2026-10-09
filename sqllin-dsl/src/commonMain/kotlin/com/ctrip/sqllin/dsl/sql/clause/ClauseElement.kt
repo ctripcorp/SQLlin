@@ -98,6 +98,11 @@ public sealed class ClauseElement<V : Any>(
     internal abstract fun literalOf(value: V): ClauseElement<V>
 
     /**
+     * Creates the element of this column of another [relation], such as the row a trigger reads.
+     */
+    internal abstract fun rebind(relation: Relation<*>): ClauseElement<V>
+
+    /**
      * Creates the condition [sql] of this element, compared with [other] if given, with its [parameters]: it reads the
      * tables that the subqueries of the elements read.
      */

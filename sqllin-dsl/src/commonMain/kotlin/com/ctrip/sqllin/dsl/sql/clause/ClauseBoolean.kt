@@ -58,6 +58,8 @@ public class ClauseBoolean internal constructor(
     override fun literalOf(value: Boolean): ClauseBoolean =
         ClauseBoolean(expressionLiteral(value), ExpressionRelation, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = false, columnTables = emptySet(), isLiteral = true)
 
+    override fun rebind(relation: Relation<*>): ClauseBoolean = ClauseBoolean(valueName, relation, isNullable)
+
     /**
      * Creates a condition comparing this Boolean column/function to a value.
      *

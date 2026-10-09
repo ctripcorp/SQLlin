@@ -54,6 +54,13 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
     /** The tracked tables that are virtual, whose counts [refresh] increments, as they have no triggers. */
     private val virtualTables = MutableStateFlow<Set<String>>(emptySet())
 
+    /**
+     * The tables that have triggers, read while virtual tables are tracked: a trigger can write a virtual table, as one
+     * that keeps an FTS table in step with a table does, which SQLlin's statements don't tell, so a write to any of these
+     * tables counts as a change of every tracked virtual table.
+     */
+    private val triggeredTables = MutableStateFlow<Set<String>>(emptySet())
+
     private val _versions = MutableStateFlow<Map<String, Long>>(emptyMap())
 
     /**
@@ -80,6 +87,8 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
                 createTriggers(table)
         }
         virtualTables.update { it + newVirtualTables }
+        if (newVirtualTables.isNotEmpty())
+            triggeredTables.value = triggeredTables()
         trackedTables.update { it + newTables }
         return tables
     }
@@ -87,6 +96,14 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
     /**
      * Returns the virtual tables of the database, the tables without a root page of their own.
      */
+    // The triggers of the tracker itself are TEMP ones, which sqlite_master doesn't list
+    private fun triggeredTables(): Set<String> =
+        connection.withQuery("SELECT DISTINCT tbl_name FROM sqlite_master WHERE type = 'trigger'") { cursor ->
+            buildSet {
+                cursor.forEachRow { add(cursor.getString(0)!!) }
+            }
+        }
+
     private fun virtualTables(): Set<String> =
         connection.withQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND rootpage = 0") { cursor ->
             buildSet {
@@ -140,11 +157,13 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
         if (changes == Changes.SCHEMA) {
             val virtual = tables intersect virtualTables()
             virtualTables.value = virtual
+            triggeredTables.value = if (virtual.isEmpty()) emptySet() else triggeredTables()
             for (table in tables - virtual)
                 createTriggers(table)
             connection.execSQL(COUNT_ALL)
         } else {
-            val writtenVirtualTables = virtualTables.value intersect writtenTables
+            val virtual = virtualTables.value
+            val writtenVirtualTables = if (writtenTables.any { it in triggeredTables.value }) virtual else virtual intersect writtenTables
             if (writtenVirtualTables.isNotEmpty()) {
                 val placeholders = writtenVirtualTables.joinToString(",") { "?" }
                 connection.execSQL("$COUNT_ALL WHERE table_name IN ($placeholders)", writtenVirtualTables.toTypedArray())

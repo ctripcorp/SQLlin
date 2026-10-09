@@ -71,6 +71,8 @@ public class ClauseString<V : Any> internal constructor(
     override fun literalOf(value: V): ClauseString<V> =
         ClauseString(expressionLiteral(value), ExpressionRelation, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = false, columnTables = emptySet(), isLiteral = true)
 
+    override fun rebind(relation: Relation<*>): ClauseString<V> = ClauseString(valueName, relation, isNullable)
+
     /** Equals (=), or IS NULL if value is null */
     internal infix fun eq(str: String?): SelectCondition = appendNullableString("=", " IS NULL", str)
 

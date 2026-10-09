@@ -71,6 +71,8 @@ public class ClauseNumber<V : Any> internal constructor(
     override fun literalOf(value: V): ClauseNumber<V> =
         ClauseNumber(expressionLiteral(value), ExpressionRelation, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = false, columnTables = emptySet(), isLiteral = true)
 
+    override fun rebind(relation: Relation<*>): ClauseNumber<V> = ClauseNumber(valueName, relation, isNullable)
+
     /**
      * Less than (<) comparison using parameterized binding.
      *

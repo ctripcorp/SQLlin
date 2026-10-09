@@ -20,6 +20,8 @@ import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.From
 import com.ctrip.sqllin.dsl.sql.Relation
+import com.ctrip.sqllin.dsl.sql.clause.NEW_ROW
+import com.ctrip.sqllin.dsl.sql.clause.OLD_ROW
 import com.ctrip.sqllin.dsl.sql.clause.elementTables
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.compiler.appendDBColumnName
@@ -293,7 +295,8 @@ internal object Select : Operation {
                 "Can't select '$projectionName' from ${from.description}: its property '$name' is given more than one expression."
             }
             val element = resultColumn.element
-            val otherTable = (element.columnTables - relations).firstOrNull()
+            // The rows of a trigger, which only the WHEN and the body of a trigger can read
+            val otherTable = (element.columnTables - relations - NEW_ROW - OLD_ROW).firstOrNull()
             require(otherTable == null) {
                 "Can't select '$projectionName' from ${from.description}: the expression '${element.valueName}' of property '$name' belongs to table '$otherTable'."
             }

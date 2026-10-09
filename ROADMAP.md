@@ -10,7 +10,6 @@ done. A new item takes the next number.
 ## Medium Priority
 
 * F8: Support WASM platform DSL
-* F10: Support CREATE TRIGGER DSL
 * F12: Support type converters: store a property of any type through a serializer that encodes it to a type SQLite supports, with type-safe WHERE and SET on its column, e.g. to store instances of kotlinx.datetime
 * F13: Provide a `PagingSource` for androidx.paging built on observable queries, like Room's `LimitOffsetPagingSource`, so that paging a query doesn't need a hand-written bridge
 * F14: Support constraints in `ALTER_ADD_COLUMN`, which adds a column with its type only: DEFAULT, NOT NULL with DEFAULT, CHECK, COLLATE NOCASE and REFERENCES
@@ -55,6 +54,7 @@ done. A new item takes the next number.
 
 ## Supported
 
+* F10: Support CREATE TRIGGER and DROP TRIGGER, with BEFORE and AFTER triggers on tables (2.5.0 ✅)
 * F9: Support expressions in UPDATE's SET and in INSERT (2.5.0 ✅)
 * F46: Support more expression syntax: CASE, scalar subqueries, COLLATE, bitwise operators and null-safe IS comparisons; REGEXP is left out, as its function differs between the platforms, and the JVM's SQLite has none (2.5.0 ✅)
 * F11: Support more functions, CAST, literal values and arithmetic in expressions (2.5.0 ✅)

@@ -2313,6 +2313,172 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers triggers: on INSERT, keeping a count with an UPDATE of an expression and logging the new row with an
+     * INSERT of expressions; on DELETE, logging the old row; BEFORE INSERT with WHEN and RAISE(ABORT), which stops the
+     * statement with its message, and RAISE(IGNORE), which skips the row; and on UPDATE OF a column, with WHEN comparing
+     * the new and old rows. IF NOT EXISTS skips a trigger that exists, and DROP_TRIGGER drops one.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testTrigger() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            CREATE(TriggerAuditTable)
+            CREATE(TriggerCounterTable)
+            TriggerCounterTable INSERT TriggerCounter(id = 1, count = 0)
+            CREATE_TRIGGER("person_inserted") AFTER INSERT ON PersonWithIdTable BEGIN {
+                TriggerCounterTable { table -> table UPDATE SET((count + 1) AS TriggerCounter::count) WHERE (id EQ 1) }
+                TriggerAuditTable { table ->
+                    table INSERT listOf(
+                        new(PersonWithIdTable.id) AS TriggerAudit::personId,
+                        literal("insert") AS TriggerAudit::action,
+                        datetime("now") AS TriggerAudit::at,
+                    )
+                }
+            }
+            CREATE_TRIGGER("person_deleted") AFTER DELETE ON PersonWithIdTable BEGIN {
+                TriggerAuditTable INSERT listOf(old(PersonWithIdTable.id) AS TriggerAudit::personId, literal("delete") AS TriggerAudit::action)
+            }
+            CREATE_TRIGGER("no_negative_age") BEFORE INSERT ON PersonWithIdTable WHEN (new(PersonWithIdTable.age) LT 0) BEGIN {
+                RAISE(ABORT, "age can't be negative")
+            }
+            CREATE_TRIGGER("no_babies") BEFORE INSERT ON PersonWithIdTable WHEN ((new(PersonWithIdTable.age) GTE 0) AND (new(PersonWithIdTable.age) LT 1)) BEGIN {
+                RAISE(IGNORE)
+            }
+            CREATE_TRIGGER("age_changed") AFTER UPDATE_OF(PersonWithIdTable.age) ON PersonWithIdTable WHEN (new(PersonWithIdTable.age) ISNOT old(PersonWithIdTable.age)) BEGIN {
+                TriggerAuditTable INSERT listOf(new(PersonWithIdTable.id) AS TriggerAudit::personId, literal("age") AS TriggerAudit::action)
+            }
+        }
+        database {
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "Ann", age = 30),
+                PersonWithId(id = null, name = "Bob", age = 10),
+            )
+        }
+        val error = assertFails { database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Neg", age = -1) } }
+        assertEquals(true, error.message?.contains("age can't be negative"), error.message)
+        // Skipped, without an error
+        database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Baby", age = 0) }
+        database { PersonWithIdTable { table -> table UPDATE SET { name = "Bobby" } WHERE (name EQ "Bob") } }
+        database { PersonWithIdTable { table -> table UPDATE SET { age = 11 } WHERE (name EQ "Bobby") } }
+        database { PersonWithIdTable { table -> table UPDATE SET { age = 11 } WHERE (name EQ "Bobby") } }
+        database { PersonWithIdTable DELETE WHERE (PersonWithIdTable.name EQ "Ann") }
+
+        lateinit var audits: SelectStatement<TriggerAudit>
+        lateinit var counters: SelectStatement<TriggerCounter>
+        lateinit var people: SelectStatement<PersonWithId>
+        database {
+            audits = TriggerAuditTable SELECT ORDER_BY(TriggerAuditTable.id to ASC)
+            counters = TriggerCounterTable SELECT X
+            people = PersonWithIdTable SELECT X
+        }
+        assertEquals(listOf(1L to "insert", 2L to "insert", 2L to "age", 1L to "delete"), audits.getResults().map { it.personId to it.action })
+        assertEquals(true, audits.getResults().first().at != null)
+        assertEquals(listOf(TriggerCounter(id = 1, count = 2)), counters.getResults())
+        assertEquals(listOf("Bobby"), people.getResults().map { it.name })
+
+        // It exists, so creating it again fails, unless IF NOT EXISTS
+        assertFails {
+            database { CREATE_TRIGGER("person_deleted") AFTER DELETE ON PersonWithIdTable BEGIN { RAISE(IGNORE) } }
+        }
+        database {
+            CREATE_TRIGGER_IF_NOT_EXISTS("person_deleted") AFTER DELETE ON PersonWithIdTable BEGIN { RAISE(IGNORE) }
+            DROP_TRIGGER("person_inserted")
+            DROP_TRIGGER_IF_EXISTS("person_inserted")
+        }
+        database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Cat", age = 5) }
+        database { counters = TriggerCounterTable SELECT X }
+        assertEquals(2, counters.getResults().single().count)
+        assertFails { database { DROP_TRIGGER("person_inserted") } }
+    }
+
+    /**
+     * Covers a trigger whose body inserts the result of a SELECT that reads the trigger's new row in a result column.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testTriggerSelectingNewRow() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            CREATE(TriggerCounterTable)
+            TriggerCounterTable INSERT TriggerCounter(id = 1, count = 0)
+            CREATE_TRIGGER("copy_age") AFTER INSERT ON PersonWithIdTable BEGIN {
+                TriggerCounterTable INSERT_OR_REPLACE (TriggerCounterTable SELECT (new(PersonWithIdTable.age) AS TriggerCounter::count) WHERE (TriggerCounterTable.id EQ 1))
+            }
+        }
+        database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Ann", age = 42) }
+        lateinit var counters: SelectStatement<TriggerCounter>
+        database { counters = TriggerCounterTable SELECT X }
+        assertEquals(listOf(TriggerCounter(id = 1, count = 42)), counters.getResults())
+    }
+
+    /**
+     * Covers what a trigger rejects when it is built: `new()` in a trigger on DELETE and `old()` in one on INSERT, which
+     * SQLite would only report when the trigger fires; `new()` outside a trigger, or of a column of another table; a
+     * trigger on an FTS table; a body without statements, or with a SELECT or a transaction; `RAISE` outside a trigger;
+     * UPDATE OF a column of another table; and a trigger without BEGIN, which would never be created.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testTriggerChecks() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        assertFailsWith<IllegalArgumentException> {
+            database { CREATE_TRIGGER("t") AFTER DELETE ON PersonWithIdTable WHEN (new(PersonWithIdTable.age) GT 1) BEGIN { RAISE(IGNORE) } }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database {
+                CREATE_TRIGGER("t") AFTER INSERT ON PersonWithIdTable BEGIN {
+                    PersonWithIdTable UPDATE SET(old(PersonWithIdTable.age) AS PersonWithId::age)
+                }
+            }
+        }
+        assertFailsWith<IllegalStateException> {
+            database { PersonWithIdTable SELECT WHERE(new(PersonWithIdTable.age) GT 1) }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { CREATE_TRIGGER("t") AFTER INSERT ON PersonWithIdTable WHEN (new(BookTable.pages) GT 1) BEGIN { RAISE(IGNORE) } }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { CREATE_TRIGGER("t") AFTER INSERT ON ArticleTable BEGIN { RAISE(IGNORE) } }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { CREATE_TRIGGER("t") AFTER INSERT ON PersonWithIdTable BEGIN { } }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { CREATE_TRIGGER("t") AFTER INSERT ON PersonWithIdTable BEGIN { BookTable SELECT X } }
+        }
+        assertFailsWith<IllegalStateException> {
+            database { CREATE_TRIGGER("t") AFTER INSERT ON PersonWithIdTable BEGIN { transaction { RAISE(IGNORE) } } }
+        }
+        assertFailsWith<IllegalStateException> {
+            database { RAISE(ABORT, "outside") }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { CREATE_TRIGGER("t") AFTER UPDATE_OF(BookTable.pages) ON PersonWithIdTable BEGIN { RAISE(IGNORE) } }
+        }
+        assertFailsWith<IllegalStateException> {
+            database { CREATE_TRIGGER("t") AFTER INSERT ON PersonWithIdTable }
+        }
+    }
+
+    /**
+     * Covers a trigger that keeps an FTS table in step with a table, as an observed query of the FTS table sees: it is a
+     * virtual table, which can't have triggers, so the tracker counts its changes through the triggers of the table.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testTriggerWritingFts() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        runTest {
+            database {
+                CREATE(ArticleTable)
+                CREATE_TRIGGER("person_article") AFTER INSERT ON PersonWithIdTable BEGIN {
+                    ArticleTable INSERT listOf(literal("person") AS Article::title, new(PersonWithIdTable.name) AS Article::body)
+                }
+            }
+            val articles = Channel<List<Article>>(Channel.UNLIMITED)
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) { ArticleTable SELECT X }.collect { articles.send(it) }
+            }
+            assertEquals(emptyList(), articles.receive())
+            database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Ann", age = 30) }
+            assertEquals(listOf("Ann"), articles.receive().map { it.body })
+        }
+    }
+
+    /**
      * Covers result columns: expressions, such as aggregate functions, selected into properties of a result type with
      * AS, as in `table SELECT listOf(count(X) AS AuthorStats::books)`, while every other property is read from its
      * column. Each function reads into the type of the values SQLite returns for it, and NULL into a nullable property.

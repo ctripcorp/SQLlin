@@ -35,7 +35,7 @@ internal enum class Changes {
     companion object {
 
         fun of(statement: SingleStatement): Changes = when (statement) {
-            is SelectStatement<*> -> NONE
+            is SelectStatement<*>, is RaiseStatement -> NONE
             is TableStructureStatement -> SCHEMA
             is InsertStatement, is UpdateDeleteStatement, is UpdateStatementWithoutWhereClause<*> -> ROWS
         }
@@ -47,7 +47,7 @@ internal enum class Changes {
             is InsertStatement -> statement.table
             is UpdateDeleteStatement -> statement.table
             is UpdateStatementWithoutWhereClause<*> -> statement.table
-            is SelectStatement<*>, is TableStructureStatement -> null
+            is SelectStatement<*>, is TableStructureStatement, is RaiseStatement -> null
         }
     }
 }

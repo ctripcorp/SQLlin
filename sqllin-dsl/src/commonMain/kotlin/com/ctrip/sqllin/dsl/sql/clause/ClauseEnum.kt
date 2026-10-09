@@ -90,6 +90,8 @@ public class ClauseEnum<T : Enum<T>> internal constructor(
     override fun literalOf(value: T): ClauseEnum<T> =
         ClauseEnum(expressionLiteral(value.ordinal), ExpressionRelation, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = false, columnTables = emptySet(), isLiteral = true)
 
+    override fun rebind(relation: Relation<*>): ClauseEnum<T> = ClauseEnum(valueName, relation, isNullable)
+
     /**
      * Less than (<) comparison using the enum's ordinal value.
      *

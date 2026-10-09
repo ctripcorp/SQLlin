@@ -72,6 +72,8 @@ public class ClauseBlob internal constructor(
     override fun literalOf(value: ByteArray): ClauseBlob =
         ClauseBlob(expressionLiteral(value), ExpressionRelation, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = false, columnTables = emptySet(), isLiteral = true)
 
+    override fun rebind(relation: Relation<*>): ClauseBlob = ClauseBlob(valueName, relation, isNullable)
+
     /**
      * Creates an equality comparison condition (=).
      *

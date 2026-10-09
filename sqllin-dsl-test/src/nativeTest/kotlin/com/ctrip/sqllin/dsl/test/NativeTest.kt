@@ -147,6 +147,18 @@ class NativeTest {
     fun testInsertExpressions() = commonTest.testInsertExpressions()
 
     @Test
+    fun testTrigger() = commonTest.testTrigger()
+
+    @Test
+    fun testTriggerSelectingNewRow() = commonTest.testTriggerSelectingNewRow()
+
+    @Test
+    fun testTriggerChecks() = commonTest.testTriggerChecks()
+
+    @Test
+    fun testTriggerWritingFts() = commonTest.testTriggerWritingFts()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test
