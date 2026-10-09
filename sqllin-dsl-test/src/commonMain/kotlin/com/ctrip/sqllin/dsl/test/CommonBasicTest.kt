@@ -1292,22 +1292,29 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    /**
+     * Checks that the processor generates a column property in `SET {}` for every supported type, of that type: each
+     * assignment only compiles while it is. Reading one is a compile error, as its getter only returns a placeholder.
+     */
     fun testPrimitiveTypeForKSP() {
         TestPrimitiveTypeForKSPTable {
             SET {
-                assertEquals(0, testInt)
-                assertEquals(0L, testLong)
-                assertEquals(0, testShort)
-                assertEquals(0, testByte)
-                assertEquals(0F, testFloat)
-                assertEquals(0.0, testDouble)
-                assertEquals(0U, testUInt)
-                assertEquals(0UL, testULong)
-                assertEquals(0U, testUShort)
-                assertEquals(0U, testUByte)
-                assertEquals(false, testBoolean)
-                assertEquals('0', testChar)
-                assertEquals("", testString)
+                testInt = 1
+                testLong = 1L
+                testShort = 1
+                testByte = 1
+                testFloat = 1F
+                testDouble = 1.0
+                testUInt = 1U
+                testULong = 1UL
+                testUShort = 1U
+                testUByte = 1U
+                testBoolean = null
+                testChar = null
+                testString = "1"
+                testByteArray = byteArrayOf(1)
+                testEnum = Priority.HIGH
+                testTypeAlias = 1
             }
         }
     }
@@ -2757,7 +2764,8 @@ class CommonBasicTest(private val path: DatabasePath) {
      * non-null columns, which is the order that used to leak the key's nullability into every later
      * column. These assignments only compile while `name` and `age` are generated as non-null.
      */
-    @Suppress("unused", "UNUSED_VARIABLE")
+    // Reading the properties is an error, as their getters only return placeholders, but their types are what is checked
+    @Suppress("unused", "UNUSED_VARIABLE", "DEPRECATION_ERROR")
     private fun checkSetClauseNullability(clause: SetClause<PersonWithId>): Unit = with(PersonWithIdTable) {
         val id: Long? = clause.id
         val name: String = clause.name

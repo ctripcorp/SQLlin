@@ -95,6 +95,13 @@ class ClauseProcessor(
         ).map { "$ANNOTATION_PACKAGE.$it" }.toSet()
         const val ANNOTATION_SERIALIZABLE = "kotlinx.serialization.Serializable"
         const val ANNOTATION_TRANSIENT = "kotlinx.serialization.Transient"
+
+        /**
+         * The getter of a column's property in `SET {}` only returns a placeholder, as `0` or `""`, so reading it, as
+         * in `age = age + 1`, would set the column to a value computed from the placeholder. It is an error to read it.
+         */
+        const val SET_CLAUSE_GETTER_DEPRECATION =
+            "        @Deprecated(\"A column in SET {} can only be assigned: reading it gives a placeholder, not the column's value.\", level = DeprecationLevel.ERROR)\n"
     }
 
     /**
@@ -239,6 +246,7 @@ class ClauseProcessor(
                     writer.write("    @ColumnNameDslMaker\n")
                     writer.write("    var SetClause<$className>.$propertyName: ${property.typeName}")
                     writer.write(if (isNotNull) "\n" else "?\n")
+                    writer.write(SET_CLAUSE_GETTER_DEPRECATION)
                     writer.write("        get() = ${getSetClauseGetterValue(property)}\n")
                     writer.write("        set(value) = ${appendFunction(elementName, property, isNotNull)}\n\n")
                 }
@@ -396,6 +404,7 @@ class ClauseProcessor(
                 writer.write("        get() = ${checkNotNull(getClauseElementTypeStr(property))}($elementName, this, ${!isNotNull})\n\n")
                 writer.write("    @ColumnNameDslMaker\n")
                 writer.write("    var SetClause<$className>.$propertyName: ${property.typeName}${if (isNotNull) "" else "?"}\n")
+                writer.write(SET_CLAUSE_GETTER_DEPRECATION)
                 writer.write("        get() = ${getSetClauseGetterValue(property)}\n")
                 writer.write("        set(value) = ${appendFunction(elementName, property, isNotNull)}\n\n")
             }

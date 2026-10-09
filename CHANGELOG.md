@@ -44,6 +44,7 @@
 ### sqllin-processor
 
 * Fix: the generated `createSQL` of a table didn't escape `"`, `\` and `$`, which a Kotlin string literal treats specially, so a `@Default` value holding one could make the generated code fail to compile, or hold another value
+* **Breaking change**: Fix: reading a column's property in `SET {}`, as in `SET { visits = visits + 1 }`, compiled, but its getter only returns a placeholder, such as `0` or `""`, so the column was set to a value computed from it, here `1`. The getter is now deprecated with the level `ERROR`, so reading the property is a compile error, while assigning it is unchanged
 
 ## 2.4.0 / 2026-10-03
 
