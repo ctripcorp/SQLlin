@@ -22,6 +22,7 @@ import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.createSQLIfNotExists
 import com.ctrip.sqllin.dsl.sql.View
 import com.ctrip.sqllin.dsl.sql.clause.ClauseElement
+import com.ctrip.sqllin.dsl.sql.clause.OrderByWay
 import com.ctrip.sqllin.dsl.sql.compiler.appendDBColumnName
 import com.ctrip.sqllin.dsl.sql.compiler.inlineParameters
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
@@ -96,8 +97,14 @@ internal object Create : Operation {
      */
     fun <T> createIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>, isIfNotExists: Boolean = false): SingleStatement {
         require(columns.isNotEmpty()) { "You must create an index for at least one column." }
-        return createIndex(INDEX, table, connection, indexName, *columns, isIfNotExists = isIfNotExists)
+        return createIndex(INDEX, table, connection, indexName, columns.map { it to null }, isIfNotExists = isIfNotExists)
     }
+
+    /**
+     * Builds a CREATE INDEX statement of [columns] in the orders given, as `CREATE INDEX name ON table(age DESC)`.
+     */
+    fun <T> createIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, columns: List<Pair<ClauseElement<*>, OrderByWay>>, isIfNotExists: Boolean = false): SingleStatement =
+        createIndex(INDEX, table, connection, indexName, columns, isIfNotExists = isIfNotExists)
 
     /**
      * Builds a CREATE UNIQUE INDEX statement for the specified table and columns.
@@ -115,8 +122,14 @@ internal object Create : Operation {
      */
     fun <T> createUniqueIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>, isIfNotExists: Boolean = false): SingleStatement {
         require(columns.isNotEmpty()) { "You must create an index for at least one column." }
-        return createIndex(UNIQUE_INDEX, table, connection, indexName, *columns, isIfNotExists = isIfNotExists)
+        return createIndex(UNIQUE_INDEX, table, connection, indexName, columns.map { it to null }, isIfNotExists = isIfNotExists)
     }
+
+    /**
+     * Builds a CREATE UNIQUE INDEX statement of [columns] in the orders given.
+     */
+    fun <T> createUniqueIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, columns: List<Pair<ClauseElement<*>, OrderByWay>>, isIfNotExists: Boolean = false): SingleStatement =
+        createIndex(UNIQUE_INDEX, table, connection, indexName, columns, isIfNotExists = isIfNotExists)
 
     /**
      * Internal helper function to build CREATE INDEX statements with different prefixes.
@@ -127,12 +140,13 @@ internal object Create : Operation {
      * @param table Table definition to create the index on
      * @param connection Database connection for execution
      * @param indexName Name for the new index
-     * @param columns One or more columns to include in the index
+     * @param columns One or more columns to include in the index, with the orders they are sorted in, or null for the
+     * default, ascending
      * @return CREATE INDEX statement ready for execution
      * @throws IllegalArgumentException if no columns are specified, or one reads another table, or has a subquery, an
      * aggregate function or a function that doesn't always give the same result for a row, such as `random()`
      */
-    private fun <T> createIndex(prefix: String, table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>, isIfNotExists: Boolean): SingleStatement {
+    private fun <T> createIndex(prefix: String, table: Table<T>, connection: DatabaseConnection, indexName: String, columns: List<Pair<ClauseElement<*>, OrderByWay?>>, isIfNotExists: Boolean): SingleStatement {
         val sql = buildString {
             append(sqlStr)
             append(prefix)
@@ -144,7 +158,7 @@ internal object Create : Operation {
             append('(')
             if (columns.isEmpty())
                 throw IllegalArgumentException("You must create an index for at least one column.")
-            columns.forEachIndexed { index, column ->
+            columns.forEachIndexed { index, (column, order) ->
                 if (index > 0)
                     append(',')
                 val otherTable = column.columnTables.firstOrNull { it != table.tableName }
@@ -162,6 +176,10 @@ internal object Create : Operation {
                     "The index '$indexName' can't hold '${column.valueName}', which doesn't always give the same result for a row."
                 }
                 append(if (column.isFunction) unqualified(column.valueName, table.tableName) else column.valueName)
+                if (order != null) {
+                    append(' ')
+                    append(order.str)
+                }
             }
             append(')')
         }

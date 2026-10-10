@@ -2063,6 +2063,18 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * The string in the first column of the first row that [sql] returns from the database, which has to exist, or null.
+     */
+    private fun sqliteString(sql: String): String? {
+        val connection = openDatabase(DatabaseConfiguration(name = DATABASE_NAME, path = path, version = 1, create = {}))
+        return try {
+            connection.withQuery(sql) { cursor -> if (cursor.next()) cursor.getString(0) else null }
+        } finally {
+            connection.close()
+        }
+    }
+
+    /**
      * Whether the SQLite of the database, which has to exist, can run [sql], as it can't use a function it doesn't have.
      */
     private fun sqliteHas(sql: String): Boolean {
@@ -2524,6 +2536,28 @@ class CommonBasicTest(private val path: DatabasePath) {
         database { books = BookTable SELECT WHERE(BookTable.author EQ "Sam") }
         assertEquals(listOf("Swift"), books.getResults().map { it.name })
         assertFails { database { REINDEX("no_such_index") } }
+    }
+
+    /**
+     * Covers the orders of the columns of an index, ASC and DESC, in a unique index too, with WHERE and IF NOT EXISTS.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testIndexOrder() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            PersonWithIdTable.CREATE_INDEX("idx_person_age_name", PersonWithIdTable.age to DESC, PersonWithIdTable.name to ASC)
+            PersonWithIdTable.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS("idx_person_name", PersonWithIdTable.name to DESC) WHERE (PersonWithIdTable.age GT 0)
+            PersonWithIdTable.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS("idx_person_name", PersonWithIdTable.name to DESC)
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "Ann", age = 30),
+                PersonWithId(id = null, name = "Bob", age = 40),
+            )
+        }
+        assertEquals(true, sqliteString("SELECT sql FROM sqlite_master WHERE name = 'idx_person_age_name'")?.endsWith("person_with_id(age DESC,name ASC)"))
+        assertEquals(true, sqliteString("SELECT sql FROM sqlite_master WHERE name = 'idx_person_name'")?.endsWith("person_with_id(name DESC) WHERE age>0"))
+        lateinit var people: SelectStatement<PersonWithId>
+        database { people = PersonWithIdTable SELECT ORDER_BY(PersonWithIdTable.age to DESC) }
+        assertEquals(listOf("Bob", "Ann"), people.getResults().map { it.name })
+        assertFails { database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Ann", age = 1) } }
     }
 
     /**

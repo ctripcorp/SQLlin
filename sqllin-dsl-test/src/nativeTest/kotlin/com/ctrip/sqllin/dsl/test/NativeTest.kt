@@ -165,6 +165,9 @@ class NativeTest {
     fun testAnalyzeAndReindex() = commonTest.testAnalyzeAndReindex()
 
     @Test
+    fun testIndexOrder() = commonTest.testIndexOrder()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

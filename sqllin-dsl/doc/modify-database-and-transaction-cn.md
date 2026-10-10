@@ -116,6 +116,9 @@ fun sample() {
 用表的列的函数可以创建表达式索引，比较同一个表达式的查询会用到它，例如用 `lower(name)` 做不区分大小写的查找。索引只能包含它自己
 所在表的列。
 
+索引的每一列都可以像 `ORDER_BY` 那样指定排序方向：`PersonTable.CREATE_INDEX("idx_person_age", PersonTable.age to DESC)` 就是
+`CREATE INDEX idx_person_age ON person(age DESC)`。它是实验性 API。按这个顺序或相反顺序排序的查询，可以按顺序读取索引。
+
 在 `CREATE_INDEX` 或 `CREATE_UNIQUE_INDEX` 后面加上 `WHERE` 就是部分索引：只索引满足条件的行。它比索引所有行的索引更小，唯一的部分
 索引只保证这些行之间的值不相同，例如未删除用户的邮箱。部分索引是实验性 API：
 

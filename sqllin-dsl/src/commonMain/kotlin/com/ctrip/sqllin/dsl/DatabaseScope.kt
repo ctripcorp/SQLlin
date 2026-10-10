@@ -1749,6 +1749,54 @@ public class DatabaseScope internal constructor(
         indexStatement(indexName, Create.createUniqueIndex(this, databaseConnection, indexName, *columns, isIfNotExists = true))
 
     /**
+     * Creates an index on [column] and [columns] of this table, each sorted in the order given, as the SQL
+     * `CREATE INDEX name ON table(column DESC)` does: `CREATE_INDEX("idx_person_age", PersonTable.age to DESC)`.
+     * A query that sorts in that order, or the reverse, reads the index in order.
+     *
+     * @see CREATE_INDEX
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> Table<T>.CREATE_INDEX(indexName: String, column: Pair<ClauseElement<*>, OrderByWay>, vararg columns: Pair<ClauseElement<*>, OrderByWay>): IndexStatement =
+        indexStatement(indexName, Create.createIndex(this, databaseConnection, indexName, listOf(column) + columns))
+
+    /**
+     * Creates a unique index on [column] and [columns] of this table, each sorted in the order given, as the SQL
+     * `CREATE UNIQUE INDEX name ON table(column DESC)` does: `CREATE_UNIQUE_INDEX("idx_person_age", PersonTable.age to DESC)`.
+     * A query that sorts in that order, or the reverse, reads the index in order.
+     *
+     * @see CREATE_UNIQUE_INDEX
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> Table<T>.CREATE_UNIQUE_INDEX(indexName: String, column: Pair<ClauseElement<*>, OrderByWay>, vararg columns: Pair<ClauseElement<*>, OrderByWay>): IndexStatement =
+        indexStatement(indexName, Create.createUniqueIndex(this, databaseConnection, indexName, listOf(column) + columns))
+
+    /**
+     * Creates an index, unless one of that name exists, on [column] and [columns] of this table, each sorted in the order given, as the SQL
+     * `CREATE INDEX name ON table(column DESC)` does: `CREATE_INDEX_IF_NOT_EXISTS("idx_person_age", PersonTable.age to DESC)`.
+     * A query that sorts in that order, or the reverse, reads the index in order.
+     *
+     * @see CREATE_INDEX
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> Table<T>.CREATE_INDEX_IF_NOT_EXISTS(indexName: String, column: Pair<ClauseElement<*>, OrderByWay>, vararg columns: Pair<ClauseElement<*>, OrderByWay>): IndexStatement =
+        indexStatement(indexName, Create.createIndex(this, databaseConnection, indexName, listOf(column) + columns, isIfNotExists = true))
+
+    /**
+     * Creates a unique index, unless one of that name exists, on [column] and [columns] of this table, each sorted in the order given, as the SQL
+     * `CREATE UNIQUE INDEX name ON table(column DESC)` does: `CREATE_UNIQUE_INDEX_IF_NOT_EXISTS("idx_person_age", PersonTable.age to DESC)`.
+     * A query that sorts in that order, or the reverse, reads the index in order.
+     *
+     * @see CREATE_UNIQUE_INDEX
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> Table<T>.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS(indexName: String, column: Pair<ClauseElement<*>, OrderByWay>, vararg columns: Pair<ClauseElement<*>, OrderByWay>): IndexStatement =
+        indexStatement(indexName, Create.createUniqueIndex(this, databaseConnection, indexName, listOf(column) + columns, isIfNotExists = true))
+
+    /**
      * Adds [statement], which creates the index named [indexName] of this table, and returns it for a `WHERE` to make a
      * partial index.
      */

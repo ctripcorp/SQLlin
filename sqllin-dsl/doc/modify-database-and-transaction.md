@@ -123,6 +123,10 @@ fun sample() {
 A function of the table's columns makes an expression index, which the queries that compare the same expression use, as
 `lower(name)` does for case-insensitive lookups. An index can only hold the columns of its own table.
 
+Each column of an index can be given the order it is sorted in, as `ORDER_BY` gives it:
+`PersonTable.CREATE_INDEX("idx_person_age", PersonTable.age to DESC)` is `CREATE INDEX idx_person_age ON person(age DESC)`.
+This is experimental. A query that sorts the columns in that order, or the reverse, reads the index in order.
+
 `WHERE` after `CREATE_INDEX` or `CREATE_UNIQUE_INDEX` makes a partial index: an index of the rows that satisfy a condition
 only. It is smaller than an index of all rows, and a unique one keeps the values unique among those rows only, such as
 the emails of the users that aren't deleted. Partial indexes are experimental:
