@@ -2561,6 +2561,40 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers NULLS FIRST and NULLS LAST in ORDER BY, after a Pair, after ASC or DESC in parentheses, and in a map of an
+     * ORDER_BY after WHERE with the plain ASC and DESC, where the SQLite has them, from 3.30.0. Without them, NULL values sort first in ascending
+     * order.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+    fun testNullsOrdering() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            UserAccountTable INSERT listOf(
+                UserAccount(id = null, username = "ann", email = "ann@mail", status = UserStatus.ACTIVE, priority = Priority.LOW, notes = null),
+                UserAccount(id = null, username = "bob", email = "bob@mail", status = UserStatus.ACTIVE, priority = Priority.HIGH, notes = "b"),
+                UserAccount(id = null, username = "cat", email = "cat@mail", status = UserStatus.INACTIVE, priority = Priority.HIGH, notes = "a"),
+            )
+        }
+        lateinit var ascending: SelectStatement<UserAccount>
+        database { ascending = UserAccountTable SELECT ORDER_BY(UserAccountTable.notes to ASC) }
+        assertEquals(listOf("ann", "cat", "bob"), ascending.getResults().map { it.username })
+        if (!sqliteHas("SELECT 1 ORDER BY 1 NULLS LAST"))
+            return@databaseAutoClose
+        lateinit var nullsLast: SelectStatement<UserAccount>
+        lateinit var nullsFirst: SelectStatement<UserAccount>
+        lateinit var mixed: SelectStatement<UserAccount>
+        database {
+            UserAccountTable { table ->
+                nullsLast = table SELECT ORDER_BY(notes to ASC NULLS LAST)
+                nullsFirst = table SELECT ORDER_BY(notes to (DESC NULLS FIRST))
+                mixed = table SELECT WHERE(username NEQ "") ORDER_BY mapOf(status to DESC, notes to (ASC NULLS LAST))
+            }
+        }
+        assertEquals(listOf("cat", "bob", "ann"), nullsLast.getResults().map { it.username })
+        assertEquals(listOf("ann", "bob", "cat"), nullsFirst.getResults().map { it.username })
+        assertEquals(listOf("cat", "bob", "ann"), mixed.getResults().map { it.username })
+    }
+
+    /**
      * Covers result columns: expressions, such as aggregate functions, selected into properties of a result type with
      * AS, as in `table SELECT listOf(count(X) AS AuthorStats::books)`, while every other property is read from its
      * column. Each function reads into the type of the values SQLite returns for it, and NULL into a nullable property.

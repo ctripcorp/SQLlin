@@ -48,6 +48,11 @@ fun sample() {
 }
 ```
 
+SQLite sorts NULL values first in ascending order, and last in descending order. `NULLS FIRST` and `NULLS LAST` put them
+where you want, as in `ORDER_BY(age to ASC NULLS LAST)`, or `ORDER_BY(age to (DESC NULLS FIRST))` among other pairs.
+They are experimental, and need SQLite 3.30.0, which Android has from API 31 on, so they are marked with
+[`@PlatformDependentSQLiteAPI`](modify-database-and-transaction.md#apis-that-depend-on-the-sqlite-version).
+
 ## Clause Connection
 
 Sometimes we need to use multiple clauses once. In SQL, some clauses must be added after other clauses. For example, the _HAVING_ behind with

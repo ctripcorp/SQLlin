@@ -19,7 +19,6 @@ done. A new item takes the next number.
 * F18: Support DEFERRABLE INITIALLY DEFERRED foreign keys, which are checked when the transaction commits, as rows referring to each other need
 * F19: Support the collations BINARY and RTRIM besides NOCASE, and COLLATE on the columns of an index and in ORDER BY
 * F21: Support FILTER in aggregate functions (SQLite 3.30.0, Android API 31), and ORDER BY in them, as for `group_concat` (SQLite 3.44.0, Android API 35)
-* F22: Support NULLS FIRST and NULLS LAST in ORDER BY (SQLite 3.30.0, Android API 31)
 * F23: Support the other conflict resolutions: INSERT OR ABORT, OR FAIL and OR ROLLBACK, and UPDATE OR IGNORE, OR REPLACE and the others
 * F25: Support ORDER BY and LIMIT in UPDATE and DELETE, which need SQLite's `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` option, which Android's lacks
 * F26: Support INDEXED BY and NOT INDEXED
@@ -51,6 +50,7 @@ done. A new item takes the next number.
 
 ## Supported
 
+* F22: Support NULLS FIRST and NULLS LAST in ORDER BY (2.5.0 ✅)
 * F20: Support ASC and DESC on the columns of an index (2.5.0 ✅)
 * F28: Support ANALYZE, REINDEX and PRAGMA optimize (2.5.0 ✅)
 * F24: Support INSERT ... DEFAULT VALUES (2.5.0 ✅)

@@ -47,6 +47,10 @@ fun sample() {
 }
 ```
 
+SQLite 在升序时把 NULL 排在最前面，在降序时排在最后面。`NULLS FIRST` 和 `NULLS LAST` 可以指定 NULL 的位置，比如
+`ORDER_BY(age to ASC NULLS LAST)`，或者和其他排序项一起写成 `ORDER_BY(age to (DESC NULLS FIRST))`。它们是实验性 API，并且需要
+SQLite 3.30.0，Android 从 API 31 起才有，所以标有 [`@PlatformDependentSQLiteAPI`](modify-database-and-transaction-cn.md#依赖-sqlite-版本的-api)。
+
 ## 子句连接
 
 有时我们会一次使用多个子句。在 SQL 中，有一些子句必须跟在另一些子句之后，比如 _HAVING_ 跟在 _GROUP BY_ 后面。SQLlin

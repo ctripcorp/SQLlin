@@ -168,6 +168,9 @@ class NativeTest {
     fun testIndexOrder() = commonTest.testIndexOrder()
 
     @Test
+    fun testNullsOrdering() = commonTest.testNullsOrdering()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test
