@@ -624,6 +624,25 @@ SQLite 不能在事务中执行 VACUUM，所以在 `transaction {...}` 中调用
 `VACUUM_INTO` 需要 SQLite 3.27.0，Android 从 API 30 起才有，所以它标有 [`@PlatformDependentSQLiteAPI`](#依赖-sqlite-版本的-api)。
 目标文件必须不存在，在 Android 上路径必须是绝对路径。
 
+## ANALYZE 与 REINDEX
+
+`ANALYZE()` 收集所有表和索引的统计信息，查询规划器会据此选择索引；`ANALYZE(table)` 或 `ANALYZE(name)` 只收集一张表或一个索引
+的。`PRAGMA_OPTIMIZE()` 只收集有帮助的统计信息，速度很快，SQLite 建议在关闭数据库前执行，长期打开的数据库每隔几小时执行一次；
+它需要 SQLite 3.18.0，Android 从 API 26 起才有，所以标有 [`@PlatformDependentSQLiteAPI`](#依赖-sqlite-版本的-api)。
+`REINDEX()` 重建所有索引，`REINDEX(table)`、`REINDEX(name)`、`REINDEX(collation)` 分别重建一张表、一个索引，或者使用某个排序
+规则（比如 `NOCASE`）的索引。它们都是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+fun sample() {
+    database {
+        ANALYZE(PersonTable)
+        REINDEX("idx_person_name")
+        PRAGMA_OPTIMIZE()
+    }
+}
+```
+
 ## 接下来
 
 你已经学习了如何使用 _INSERT_、_DELETE_ 以及 _UPDATE_ 语句，接下来你将学习 _SELECT_ 语句。 _SELECT_ 语句相比其他语句更复杂，做好准备哦 :)。

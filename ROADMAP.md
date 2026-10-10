@@ -25,7 +25,6 @@ done. A new item takes the next number.
 * F25: Support ORDER BY and LIMIT in UPDATE and DELETE, which need SQLite's `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` option, which Android's lacks
 * F26: Support INDEXED BY and NOT INDEXED
 * F27: Support choosing how a transaction begins, DEFERRED, IMMEDIATE or EXCLUSIVE, which differs between the platforms now
-* F28: Support ANALYZE, REINDEX and PRAGMA optimize (PRAGMA optimize needs SQLite 3.18.0, Android API 26)
 * F29: Support EXPLAIN QUERY PLAN, to see which indexes a query uses
 * F30: Support more PRAGMAs, such as integrity_check, quick_check, table_info, index_list, wal_checkpoint, defer_foreign_keys and case_sensitive_like
 
@@ -53,6 +52,7 @@ done. A new item takes the next number.
 
 ## Supported
 
+* F28: Support ANALYZE, REINDEX and PRAGMA optimize (2.5.0 ✅)
 * F24: Support INSERT ... DEFAULT VALUES (2.5.0 ✅)
 * F10: Support CREATE TRIGGER and DROP TRIGGER, with BEFORE and AFTER triggers on tables (2.5.0 ✅)
 * F9: Support expressions in UPDATE's SET and in INSERT (2.5.0 ✅)

@@ -662,6 +662,27 @@ may change the rowids of the tables without an INTEGER PRIMARY KEY. `VACUUM_INTO
 from API 30 on, so it is marked with [`@PlatformDependentSQLiteAPI`](#apis-that-depend-on-the-sqlite-version). Its file
 must not exist, and on Android its path has to be absolute.
 
+## ANALYZE and REINDEX
+
+`ANALYZE()` gathers the statistics of the tables and indexes, which the query planner chooses indexes with, and
+`ANALYZE(table)` or `ANALYZE(name)` those of a table or an index. `PRAGMA_OPTIMIZE()` only gathers those that would help,
+quickly, as SQLite advises to run before closing a database, or every few hours in a long-lived one; it needs SQLite
+3.18.0, which Android has from API 26 on, so it is marked with
+[`@PlatformDependentSQLiteAPI`](#apis-that-depend-on-the-sqlite-version). `REINDEX()` rebuilds all indexes, and
+`REINDEX(table)`, `REINDEX(name)` or `REINDEX(collation)` those of a table, an index or a collation, as `NOCASE`. They
+are experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+fun sample() {
+    database {
+        ANALYZE(PersonTable)
+        REINDEX("idx_person_name")
+        PRAGMA_OPTIMIZE()
+    }
+}
+```
+
 ## Next Step
 
 You have learned how to use _INSERT_, _DELETE_ and _UPDATE_ statements. Next step you will learn _SELECT_ statements. The

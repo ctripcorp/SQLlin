@@ -2496,6 +2496,37 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers ANALYZE, which creates the statistics table `sqlite_stat1`, REINDEX of all indexes, of a table, of an
+     * index and of a collation, and PRAGMA optimize. A name of no table or index fails.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+    fun testAnalyzeAndReindex() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            BookTable.CREATE_INDEX("idx_book_author", BookTable.author)
+            BookTable INSERT listOf(
+                Book(name = "Kotlin", author = "Ken", price = 10.0, pages = 100),
+                Book(name = "Swift", author = "Sam", price = 20.0, pages = 30),
+            )
+        }
+        assertEquals(false, sqliteHas("SELECT * FROM sqlite_stat1"))
+        database { ANALYZE(BookTable) }
+        assertEquals(true, sqliteHas("SELECT * FROM sqlite_stat1"))
+        database {
+            ANALYZE()
+            ANALYZE("idx_book_author")
+            REINDEX()
+            REINDEX(BookTable)
+            REINDEX("idx_book_author")
+            REINDEX(NOCASE)
+            PRAGMA_OPTIMIZE()
+        }
+        lateinit var books: SelectStatement<Book>
+        database { books = BookTable SELECT WHERE(BookTable.author EQ "Sam") }
+        assertEquals(listOf("Swift"), books.getResults().map { it.name })
+        assertFails { database { REINDEX("no_such_index") } }
+    }
+
+    /**
      * Covers result columns: expressions, such as aggregate functions, selected into properties of a result type with
      * AS, as in `table SELECT listOf(count(X) AS AuthorStats::books)`, while every other property is read from its
      * column. Each function reads into the type of the values SQLite returns for it, and NULL into a nullable property.

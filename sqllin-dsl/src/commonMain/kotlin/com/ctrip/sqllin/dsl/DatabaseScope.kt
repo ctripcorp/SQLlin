@@ -46,6 +46,7 @@ import com.ctrip.sqllin.dsl.sql.operation.Create
 import com.ctrip.sqllin.dsl.sql.operation.Delete
 import com.ctrip.sqllin.dsl.sql.operation.Drop
 import com.ctrip.sqllin.dsl.sql.operation.Insert
+import com.ctrip.sqllin.dsl.sql.operation.Maintenance
 import com.ctrip.sqllin.dsl.sql.operation.PRAGMA
 import com.ctrip.sqllin.dsl.sql.operation.Select
 import com.ctrip.sqllin.dsl.sql.operation.Trigger
@@ -2060,6 +2061,86 @@ public class DatabaseScope internal constructor(
     public infix fun <T> Table<T>.DROP_COLUMN(column: ClauseElement<*>) {
         val statement = Alter.dropColumn(this, column, databaseConnection)
         addStatement(statement)
+    }
+
+    // ========== ANALYZE, REINDEX and PRAGMA optimize ==========
+
+    /**
+     * Gathers the statistics of all tables and indexes, as the SQL `ANALYZE` does: the query planner chooses indexes
+     * with them, and only reads them when the database is opened. It reads every row, so it takes long for a large
+     * database; `PRAGMA_OPTIMIZE()` only analyzes what would help.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun ANALYZE() {
+        addStatement(Maintenance.analyze(null, databaseConnection))
+    }
+
+    /**
+     * Gathers the statistics of [table] and its indexes, as the SQL `ANALYZE table` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun ANALYZE(table: Table<*>) {
+        addStatement(Maintenance.analyze(table.tableName, databaseConnection))
+    }
+
+    /**
+     * Gathers the statistics of the table or index named [name], as the SQL `ANALYZE name` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun ANALYZE(name: String) {
+        addStatement(Maintenance.analyze(name, databaseConnection))
+    }
+
+    /**
+     * Rebuilds all indexes, as the SQL `REINDEX` does, such as after a change of a collation the app registers.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun REINDEX() {
+        addStatement(Maintenance.reindex(null, databaseConnection))
+    }
+
+    /**
+     * Rebuilds the indexes of [table], as the SQL `REINDEX table` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun REINDEX(table: Table<*>) {
+        addStatement(Maintenance.reindex(table.tableName, databaseConnection))
+    }
+
+    /**
+     * Rebuilds the index named [name], or the indexes of the table named so, as the SQL `REINDEX name` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun REINDEX(name: String) {
+        addStatement(Maintenance.reindex(name, databaseConnection))
+    }
+
+    /**
+     * Rebuilds the indexes that use [collation], as the SQL `REINDEX collation` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun REINDEX(collation: Collation) {
+        addStatement(Maintenance.reindex(collation, databaseConnection))
+    }
+
+    /**
+     * Gathers the statistics that would help the query planner, if any, as the SQL `PRAGMA optimize` does. It is quick,
+     * and SQLite advises to run it before closing a database, or every few hours in a long-lived one.
+     *
+     * `PRAGMA optimize` needs SQLite 3.18.0, which Android has from API 26 on.
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_OPTIMIZE() {
+        addStatement(PRAGMA.optimize(databaseConnection))
     }
 
     // ========== CREATE TRIGGER and DROP TRIGGER ==========

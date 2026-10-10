@@ -162,6 +162,9 @@ class NativeTest {
     fun testInsertDefaultValues() = commonTest.testInsertDefaultValues()
 
     @Test
+    fun testAnalyzeAndReindex() = commonTest.testAnalyzeAndReindex()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test
