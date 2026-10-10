@@ -324,6 +324,9 @@ public annotation class CompositeUnique(vararg val group: Int = [0])
  * @property tableName The name of the parent table being referenced (cannot be blank)
  * @property trigger The action to take when the referenced row is deleted or updated
  * @property constraintName Optional name for the constraint (appears in error messages and schema introspection)
+ * @property deferred Whether the constraint is checked when the transaction commits, rather than after each statement,
+ * as the SQL `DEFERRABLE INITIALLY DEFERRED` makes it, so that rows referring to each other, or a child inserted before
+ * its parent, can be written in one transaction
  *
  * @see ForeignKey
  * @see References
@@ -338,6 +341,7 @@ public annotation class ForeignKeyGroup(
     val tableName: String,
     val trigger: Trigger = Trigger.NULL,
     val constraintName: String = "",
+    val deferred: Boolean = false,
 )
 
 /**
@@ -453,6 +457,9 @@ public annotation class ForeignKeyGroup(
  * @property foreignKeys Array of column names in the parent table to reference (cannot be empty)
  * @property trigger The action to take when the referenced row is deleted or updated (defaults to no action)
  * @property constraintName Optional name for the constraint (useful for error messages and debugging)
+ * @property deferred Whether the constraint is checked when the transaction commits, rather than after each statement,
+ * as the SQL `DEFERRABLE INITIALLY DEFERRED` makes it, so that rows referring to each other, or a child inserted before
+ * its parent, can be written in one transaction
  *
  * @see ForeignKeyGroup
  * @see ForeignKey
@@ -467,6 +474,7 @@ public annotation class References(
     val trigger: Trigger = Trigger.NULL,
     val constraintName: String = "",
     vararg val foreignKeys: String,
+    val deferred: Boolean = false,
 )
 
 /**

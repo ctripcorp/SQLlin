@@ -2595,6 +2595,42 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers deferred foreign keys, of a column and of a group: children inserted before their parent in a transaction,
+     * which is checked when it commits, and a transaction that commits without the parent, which fails and is rolled
+     * back, so that the next transaction can begin.
+     */
+    fun testDeferredForeignKey() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        assertEquals(true, DeferredChildTable.createSQL.contains("REFERENCES deferred_parent(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED"), DeferredChildTable.createSQL)
+        assertEquals(true, DeferredGroupChildTable.createSQL.contains("FOREIGN KEY (parentId) REFERENCES deferred_parent(id) DEFERRABLE INITIALLY DEFERRED"), DeferredGroupChildTable.createSQL)
+        database {
+            CREATE(DeferredParentTable)
+            CREATE(DeferredChildTable)
+            CREATE(DeferredGroupChildTable)
+        }
+        database { PRAGMA_FOREIGN_KEYS(true) }
+        database {
+            transaction {
+                DeferredChildTable INSERT DeferredChild(id = 1, parentId = 10)
+                DeferredGroupChildTable INSERT DeferredGroupChild(id = 1, parentId = 10)
+                DeferredParentTable INSERT DeferredParent(id = 10)
+            }
+        }
+        assertFails {
+            database { transaction { DeferredChildTable INSERT DeferredChild(id = 2, parentId = 99) } }
+        }
+        // The failed transaction is rolled back, so the next one can begin
+        database { transaction { DeferredParentTable INSERT DeferredParent(id = 20) } }
+        lateinit var children: SelectStatement<DeferredChild>
+        lateinit var groupChildren: SelectStatement<DeferredGroupChild>
+        database {
+            children = DeferredChildTable SELECT X
+            groupChildren = DeferredGroupChildTable SELECT X
+        }
+        assertEquals(listOf(DeferredChild(1, 10)), children.getResults())
+        assertEquals(listOf(DeferredGroupChild(1, 10)), groupChildren.getResults())
+    }
+
+    /**
      * Covers result columns: expressions, such as aggregate functions, selected into properties of a result type with
      * AS, as in `table SELECT listOf(count(X) AS AuthorStats::books)`, while every other property is read from its
      * column. Each function reads into the type of the values SQLite returns for it, and NULL into a nullable property.

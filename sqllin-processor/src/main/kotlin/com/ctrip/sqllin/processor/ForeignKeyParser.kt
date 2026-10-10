@@ -79,6 +79,9 @@ class ForeignKeyParser {
     companion object {
         const val ANNOTATION_GROUP = "com.ctrip.sqllin.dsl.annotation.ForeignKeyGroup"
         const val ANNOTATION_REFERENCES = "com.ctrip.sqllin.dsl.annotation.References"
+
+        /** Checks a foreign key when the transaction commits, rather than after each statement. */
+        const val DEFERRED = " DEFERRABLE INITIALLY DEFERRED"
         const val ANNOTATION_FOREIGN_KEY = "com.ctrip.sqllin.dsl.annotation.ForeignKey"
         const val ANNOTATION_DEFAULT = "com.ctrip.sqllin.dsl.annotation.Default"
     }
@@ -123,6 +126,7 @@ class ForeignKeyParser {
                 var triggerEnumName = ""
                 var triggerSQL = ""
                 var constraintName = ""
+                var isDeferred = false
                 annotation.arguments.forEach { argument ->
                     when (argument.name?.asString()) {
                         "group" -> group = argument.value as Int
@@ -139,6 +143,7 @@ class ForeignKeyParser {
                             }
                         }
                         "constraintName" -> constraintName = argument.value as String
+                        "deferred" -> isDeferred = argument.value as? Boolean ?: false
                     }
                 }
 
@@ -152,6 +157,7 @@ class ForeignKeyParser {
                     triggerEnumName = triggerEnumName,
                     triggerSQL = triggerSQL,
                     constraintName = constraintName,
+                    isDeferred = isDeferred,
                     columns = ArrayList(),
                     references = ArrayList(),
                 )
@@ -226,6 +232,7 @@ class ForeignKeyParser {
                                 }
                             }
                             "constraintName" -> columnReferenceEntity.constraintName = argument.value as String
+                            "deferred" -> columnReferenceEntity.isDeferred = argument.value as? Boolean ?: false
                             "foreignKeys" -> {
                                 columnReferenceEntity.foreignKeys = (argument.value as? List<String>)?.filter { it.isNotBlank() }
                                     ?: throw IllegalArgumentException("The parameter `foreignKeys` can't be null.")
@@ -306,6 +313,8 @@ class ForeignKeyParser {
                     append(' ')
                     append(it.triggerSQL)
                 }
+                if (it.isDeferred)
+                    append(DEFERRED)
             }
         }
     }
@@ -387,6 +396,8 @@ class ForeignKeyParser {
                     append(' ')
                     append(entity.triggerSQL)
                 }
+                if (entity.isDeferred)
+                    append(DEFERRED)
             }
         }
     }
@@ -410,6 +421,7 @@ class ForeignKeyParser {
         val triggerEnumName: String,
         val triggerSQL: String,
         val constraintName: String,
+        val isDeferred: Boolean,
         val columns: MutableList<String>,
         val references: MutableList<String>,
     )
@@ -419,5 +431,6 @@ class ForeignKeyParser {
         var triggerSQL: String = "",
         var constraintName: String = "",
         var foreignKeys: List<String> = emptyList(),
+        var isDeferred: Boolean = false,
     )
 }

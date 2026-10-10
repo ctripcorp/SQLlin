@@ -799,6 +799,35 @@ data class RebuildPerson(
 )
 
 /**
+ * A parent of [DeferredChild] and [DeferredGroupChild], whose foreign keys are deferred: checked when the transaction
+ * commits.
+ */
+@DBRow("deferred_parent")
+@Serializable
+data class DeferredParent(@PrimaryKey val id: Long)
+
+@DBRow("deferred_child")
+@Serializable
+data class DeferredChild(
+    @PrimaryKey val id: Long,
+    @com.ctrip.sqllin.dsl.annotation.References(
+        tableName = "deferred_parent",
+        trigger = com.ctrip.sqllin.dsl.annotation.Trigger.ON_DELETE_CASCADE,
+        foreignKeys = ["id"],
+        deferred = true,
+    )
+    val parentId: Long,
+)
+
+@DBRow("deferred_group_child")
+@Serializable
+@com.ctrip.sqllin.dsl.annotation.ForeignKeyGroup(group = 0, tableName = "deferred_parent", deferred = true)
+data class DeferredGroupChild(
+    @PrimaryKey val id: Long,
+    @com.ctrip.sqllin.dsl.annotation.ForeignKey(group = 0, reference = "id") val parentId: Long,
+)
+
+/**
  * A row whose columns all have default values, or are nullable, so that `INSERT DEFAULT VALUES` can insert it.
  */
 @DBRow("default_row")

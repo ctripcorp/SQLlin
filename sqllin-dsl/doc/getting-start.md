@@ -930,6 +930,26 @@ data class Order(
 // Generated SQL: userId BIGINT CONSTRAINT fk_order_user REFERENCES User(id) ON DELETE CASCADE
 ```
 
+#### Deferred Foreign Keys
+
+SQLite checks a foreign key after each statement. With `deferred = true`, on `@References` or `@ForeignKeyGroup`, it
+checks it when the transaction commits instead, as `DEFERRABLE INITIALLY DEFERRED` does, so that a transaction can
+insert a child before its parent, or rows that refer to each other:
+
+```kotlin
+@DBRow
+@Serializable
+data class Order(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], deferred = true)
+    val userId: Long,
+)
+// Generated SQL: userId BIGINT REFERENCES User(id) DEFERRABLE INITIALLY DEFERRED
+```
+
+A transaction that commits while such a key isn't satisfied fails, and is rolled back. Outside a transaction, each
+statement is its own transaction, so it is checked right away.
+
 #### Best Practices
 
 1. **Always enable foreign keys**: Call `PRAGMA_FOREIGN_KEYS(true)` at the start of each database session

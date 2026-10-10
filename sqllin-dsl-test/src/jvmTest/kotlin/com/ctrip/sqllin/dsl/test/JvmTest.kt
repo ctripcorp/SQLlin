@@ -155,6 +155,9 @@ class JvmTest {
     fun testNullsOrdering() = commonTest.testNullsOrdering()
 
     @Test
+    fun testDeferredForeignKey() = commonTest.testDeferredForeignKey()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

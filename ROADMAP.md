@@ -16,7 +16,6 @@ done. A new item takes the next number.
 * F15: Support WITHOUT ROWID tables, which save space and a lookup when the primary key isn't an INTEGER
 * F16: Support STRICT tables, which reject values of other types than their columns' (SQLite 3.37.0, Android API 34)
 * F17: Support conflict clauses on PRIMARY KEY, UNIQUE and NOT NULL constraints, such as `UNIQUE ON CONFLICT REPLACE`
-* F18: Support DEFERRABLE INITIALLY DEFERRED foreign keys, which are checked when the transaction commits, as rows referring to each other need
 * F19: Support the collations BINARY and RTRIM besides NOCASE, and COLLATE on the columns of an index and in ORDER BY
 * F21: Support FILTER in aggregate functions (SQLite 3.30.0, Android API 31), and ORDER BY in them, as for `group_concat` (SQLite 3.44.0, Android API 35)
 * F23: Support the other conflict resolutions: INSERT OR ABORT, OR FAIL and OR ROLLBACK, and UPDATE OR IGNORE, OR REPLACE and the others
@@ -50,6 +49,7 @@ done. A new item takes the next number.
 
 ## Supported
 
+* F18: Support DEFERRABLE INITIALLY DEFERRED foreign keys (2.5.0 ✅)
 * F22: Support NULLS FIRST and NULLS LAST in ORDER BY (2.5.0 ✅)
 * F20: Support ASC and DESC on the columns of an index (2.5.0 ✅)
 * F28: Support ANALYZE, REINDEX and PRAGMA optimize (2.5.0 ✅)

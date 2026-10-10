@@ -913,6 +913,24 @@ data class Order(
 // Generated SQL: userId BIGINT CONSTRAINT fk_order_user REFERENCES User(id) ON DELETE CASCADE
 ```
 
+#### 延迟检查的外键
+
+SQLite 在每条语句之后检查外键。在 `@References` 或 `@ForeignKeyGroup` 上加 `deferred = true`，就会像
+`DEFERRABLE INITIALLY DEFERRED` 那样改为在事务提交时检查，这样一个事务里可以先插入子行再插入父行，或者插入互相引用的行：
+
+```kotlin
+@DBRow
+@Serializable
+data class Order(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], deferred = true)
+    val userId: Long,
+)
+// Generated SQL: userId BIGINT REFERENCES User(id) DEFERRABLE INITIALLY DEFERRED
+```
+
+提交时如果还有这样的外键不满足，事务会失败并被回滚。在事务之外，每条语句本身就是一个事务，所以会立即检查。
+
 #### 最佳实践
 
 1. **始终启用外键**：在每个数据库会话开始时调用 `PRAGMA_FOREIGN_KEYS(true)`
