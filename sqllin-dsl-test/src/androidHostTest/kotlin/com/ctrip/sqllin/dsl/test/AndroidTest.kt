@@ -166,6 +166,9 @@ class AndroidTest {
     fun testDeferredForeignKey() = commonTest.testDeferredForeignKey()
 
     @Test
+    fun testConflictClauses() = commonTest.testConflictClauses()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

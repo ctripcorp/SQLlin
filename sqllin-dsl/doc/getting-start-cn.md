@@ -429,6 +429,26 @@ data class Product(
 )
 ```
 
+#### 冲突子句
+
+`@PrimaryKey`、`@CompositePrimaryKey`、`@Unique` 和 `@CompositeUnique` 的 `onConflict` 参数，像约束的 `ON CONFLICT` 子句一样，
+指定 SQLite 怎样处理会违反该约束的行。它是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow
+@Serializable
+data class Account(
+    @PrimaryKey(onConflict = OnConflict.REPLACE) val id: Long,
+    @Unique(onConflict = OnConflict.IGNORE) val email: String,
+)
+// Generated SQL: CREATE TABLE Account(id INTEGER PRIMARY KEY ON CONFLICT REPLACE,email TEXT NOT NULL UNIQUE ON CONFLICT IGNORE)
+```
+
+`REPLACE` 删除与新行冲突的行，`IGNORE` 跳过新行，`FAIL` 终止语句、但保留它之前做的修改，`ROLLBACK` 回滚整个事务。默认的
+`ABORT` 终止语句并撤销它的修改。复合主键或复合唯一组取任一属性上给出的值，组内属性不能给出不同的值。语句自己的 OR 子句（比如
+`INSERT_OR_IGNORE`）优先于它。
+
 #### @Default - 列默认值
 
 使用 `@Default` 为 CREATE TABLE 语句中的列指定默认值。当插入行时未显式提供这些列的值时，SQLite 会自动使用这些默认值：

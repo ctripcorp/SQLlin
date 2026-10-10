@@ -440,6 +440,27 @@ data class Product(
 )
 ```
 
+#### Conflict Clauses
+
+The `onConflict` of `@PrimaryKey`, `@CompositePrimaryKey`, `@Unique` and `@CompositeUnique` says what SQLite does with
+a row that would break the constraint, as its `ON CONFLICT` clause does. It is experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow
+@Serializable
+data class Account(
+    @PrimaryKey(onConflict = OnConflict.REPLACE) val id: Long,
+    @Unique(onConflict = OnConflict.IGNORE) val email: String,
+)
+// Generated SQL: CREATE TABLE Account(id INTEGER PRIMARY KEY ON CONFLICT REPLACE,email TEXT NOT NULL UNIQUE ON CONFLICT IGNORE)
+```
+
+`REPLACE` deletes the rows the new row conflicts with, `IGNORE` skips the new row, `FAIL` stops the statement keeping the
+changes it made before, and `ROLLBACK` rolls back the transaction. `ABORT`, the default, stops the statement and undoes
+its changes. A composite key or group takes the one given on any of its properties, and they can't give different
+ones. The OR of a statement, as `INSERT_OR_IGNORE`, overrides it.
+
 #### @Default - Column Default Values
 
 Use `@Default` to specify default values for columns in your CREATE TABLE statements. SQLite will automatically use these values when inserting rows without explicitly providing values for these columns:

@@ -2631,6 +2631,41 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers the conflict clauses of constraints: REPLACE on a key and on a composite unique group, which delete the
+     * rows a row conflicts with, and IGNORE on a unique column and on a composite key, which skip the row. ABORT, the
+     * default, writes no clause.
+     */
+    fun testConflictClauses() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        assertEquals(
+            "CREATE TABLE conflict_test(id INTEGER PRIMARY KEY ON CONFLICT REPLACE,email TEXT NOT NULL UNIQUE ON CONFLICT IGNORE,x INT NOT NULL,y INT NOT NULL,UNIQUE(x,y) ON CONFLICT REPLACE)",
+            ConflictTestTable.createSQL,
+        )
+        assertEquals("CREATE TABLE conflict_pair(a TEXT NOT NULL,b TEXT NOT NULL,note TEXT,PRIMARY KEY(a,b) ON CONFLICT IGNORE)", ConflictPairTable.createSQL)
+        database {
+            CREATE(ConflictTestTable)
+            CREATE(ConflictPairTable)
+            ConflictTestTable INSERT ConflictTest(id = 1, email = "a@mail", x = 1, y = 1)
+            // The same email: skipped
+            ConflictTestTable INSERT ConflictTest(id = 2, email = "a@mail", x = 2, y = 2)
+            // The same key: the row 1 is replaced
+            ConflictTestTable INSERT ConflictTest(id = 1, email = "b@mail", x = 3, y = 3)
+            // The same (x, y): the row 1 is replaced again
+            ConflictTestTable INSERT ConflictTest(id = 4, email = "c@mail", x = 3, y = 3)
+            ConflictPairTable INSERT ConflictPair(a = "k", b = "v", note = "first")
+            // The same key: skipped
+            ConflictPairTable INSERT ConflictPair(a = "k", b = "v", note = "second")
+        }
+        lateinit var rows: SelectStatement<ConflictTest>
+        lateinit var pairs: SelectStatement<ConflictPair>
+        database {
+            rows = ConflictTestTable SELECT X
+            pairs = ConflictPairTable SELECT X
+        }
+        assertEquals(listOf(ConflictTest(id = 4, email = "c@mail", x = 3, y = 3)), rows.getResults())
+        assertEquals(listOf(ConflictPair(a = "k", b = "v", note = "first")), pairs.getResults())
+    }
+
+    /**
      * Covers result columns: expressions, such as aggregate functions, selected into properties of a result type with
      * AS, as in `table SELECT listOf(count(X) AS AuthorStats::books)`, while every other property is read from its
      * column. Each function reads into the type of the values SQLite returns for it, and NULL into a nullable property.

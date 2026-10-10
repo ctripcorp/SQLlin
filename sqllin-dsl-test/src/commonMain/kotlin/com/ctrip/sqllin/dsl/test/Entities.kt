@@ -26,6 +26,7 @@ import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.Fts3
 import com.ctrip.sqllin.dsl.annotation.Fts4
 import com.ctrip.sqllin.dsl.annotation.FtsTokenizer
+import com.ctrip.sqllin.dsl.annotation.OnConflict
 import com.ctrip.sqllin.dsl.annotation.PrimaryKey
 import com.ctrip.sqllin.dsl.annotation.Unique
 import kotlinx.serialization.SerialName
@@ -796,6 +797,32 @@ data class RebuildPersonV1(
 data class RebuildPerson(
     @PrimaryKey(autoIncrement = true) val id: Long?,
     @Unique val fullName: String,
+)
+
+/**
+ * A table whose constraints have conflict clauses: the key replaces the row it conflicts with, a duplicate email is
+ * skipped, and the group (x, y) replaces.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow("conflict_test")
+@Serializable
+data class ConflictTest(
+    @PrimaryKey(onConflict = OnConflict.REPLACE) val id: Long,
+    @Unique(onConflict = OnConflict.IGNORE) val email: String,
+    @CompositeUnique(0, onConflict = OnConflict.REPLACE) val x: Int,
+    @CompositeUnique(0) val y: Int,
+)
+
+/**
+ * A table whose composite key skips the rows that conflict with it.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow("conflict_pair")
+@Serializable
+data class ConflictPair(
+    @CompositePrimaryKey(onConflict = OnConflict.IGNORE) val a: String,
+    @CompositePrimaryKey val b: String,
+    val note: String?,
 )
 
 /**

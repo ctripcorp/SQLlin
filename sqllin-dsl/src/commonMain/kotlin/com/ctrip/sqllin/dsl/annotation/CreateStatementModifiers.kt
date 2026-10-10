@@ -53,13 +53,17 @@ package com.ctrip.sqllin.dsl.annotation
  * auto-incrementing strategy that ensures row IDs are never reused.
  * **Important Note**: This parameter requires a property of type `Long?`, the only kind of key the
  * database assigns. Setting it to `true` on any other property is a compile-time error.
+ * @property onConflict What SQLite does with a row whose key is already in the table, as the key's `ON CONFLICT` clause
+ * says: by default, ABORT, which stops the statement
  *
  * @see DBRow
  * @see CompositePrimaryKey
+ * @see OnConflict
  */
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.BINARY)
-public annotation class PrimaryKey(val autoIncrement: Boolean = false)
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+public annotation class PrimaryKey(val autoIncrement: Boolean = false, val onConflict: OnConflict = OnConflict.ABORT)
 
 /**
  * Marks a property as a part of a composite primary key for the table.
@@ -80,13 +84,17 @@ public annotation class PrimaryKey(val autoIncrement: Boolean = false)
  * declared `NOT NULL` in the generated table, because SQLite, unlike standard SQL, does not let
  * `PRIMARY KEY` imply it.
  *
+ * @property onConflict What SQLite does with a row whose key is already in the table, as the key's `ON CONFLICT` clause
+ * says. It can be given on any of the key's properties, which can't give different ones.
+ *
  * @see DBRow
  * @see PrimaryKey
- *
+ * @see OnConflict
  */
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.BINARY)
-public annotation class CompositePrimaryKey
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+public annotation class CompositePrimaryKey(val onConflict: OnConflict = OnConflict.ABORT)
 
 /**
  * Marks a text column to use case-insensitive collation in SQLite.
@@ -153,13 +161,18 @@ public annotation class CollateNoCase
  * - Multiple NULL values are allowed in a UNIQUE column (NULL is not equal to NULL in SQL)
  * - To prevent NULL values, combine with a non-nullable type: `val email: String`
  *
+ * @property onConflict What SQLite does with a row whose value is already in the column, as the constraint's
+ * `ON CONFLICT` clause says: by default, ABORT, which stops the statement
+ *
  * @see DBRow
  * @see CompositeUnique
  * @see CollateNoCase
+ * @see OnConflict
  */
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.BINARY)
-public annotation class Unique
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+public annotation class Unique(val onConflict: OnConflict = OnConflict.ABORT)
 
 /**
  * Marks a property as part of one or more composite UNIQUE constraints.
@@ -220,13 +233,18 @@ public annotation class Unique
  * @property group One or more group numbers (0-based integers) identifying which
  * composite UNIQUE constraint(s) this property belongs to. Properties sharing
  * the same group number are combined into a single `UNIQUE(col1, col2, ...)` clause.
+ * @property onConflict What SQLite does with a row whose values are already in the group's columns, as the constraint's
+ * `ON CONFLICT` clause says, for each group the property is in. It can be given on any of a group's properties, which
+ * can't give different ones.
  *
  * @see DBRow
  * @see Unique
+ * @see OnConflict
  */
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.BINARY)
-public annotation class CompositeUnique(vararg val group: Int = [0])
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+public annotation class CompositeUnique(vararg val group: Int = [0], val onConflict: OnConflict = OnConflict.ABORT)
 
 /**
  * Defines a table-level foreign key constraint that references another table.
@@ -971,3 +989,33 @@ public annotation class Default(val value: String)
 @Target(AnnotationTarget.PROPERTY, AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
 public annotation class Check(val expression: String, val constraintName: String = "")
+
+/**
+ * What SQLite does with a statement that would break a PRIMARY KEY or UNIQUE constraint, as the constraint's
+ * `ON CONFLICT` clause says, the `onConflict` of [PrimaryKey], [CompositePrimaryKey], [Unique] and [CompositeUnique]:
+ * ```kotlin
+ * @Unique(onConflict = OnConflict.REPLACE) val email: String
+ * // Generated: email TEXT NOT NULL UNIQUE ON CONFLICT REPLACE
+ * ```
+ * The OR of a statement, as in INSERT OR IGNORE, overrides it. A composite key or group gets the one given on any of its
+ * properties, and properties of a key or group can't give different ones.
+ *
+ * @author Yuang Qiao
+ */
+@ExperimentalDSLDatabaseAPI
+public enum class OnConflict {
+    /** Stops the statement and rolls back the transaction. */
+    ROLLBACK,
+
+    /** Stops the statement and undoes its changes, as SQLite does by default, so that no clause is written. */
+    ABORT,
+
+    /** Stops the statement, keeping the changes it made to the rows before. */
+    FAIL,
+
+    /** Skips the row that would break the constraint, and goes on with the statement. */
+    IGNORE,
+
+    /** Deletes the rows the row conflicts with, and goes on with the statement. */
+    REPLACE,
+}

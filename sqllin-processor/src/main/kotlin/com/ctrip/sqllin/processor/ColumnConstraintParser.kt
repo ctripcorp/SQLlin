@@ -19,8 +19,10 @@ package com.ctrip.sqllin.processor
 import com.google.devtools.ksp.getClassDeclarationByName
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.symbol.ClassKind
+import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSPropertyDeclaration
+import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSTypeAlias
 import java.io.Writer
 
@@ -115,6 +117,12 @@ class ColumnConstraintParser(resolver: Resolver) {
 
     // Track composite unique constraints: group number → list of column names
     private val compositeUniqueColumns = HashMap<Int, MutableList<String>>()
+
+    /** The conflict resolutions other than the default that the properties of the composite primary key give. */
+    private val compositePrimaryKeyConflicts = LinkedHashSet<String>()
+
+    /** The conflict resolutions other than the default that the properties of each composite unique group give. */
+    private val compositeUniqueConflicts = HashMap<Int, MutableSet<String>>()
 
     /**
      * Parses property annotations and appends corresponding SQLite constraints to the CREATE TABLE statement.
@@ -227,10 +235,10 @@ class ColumnConstraintParser(resolver: Resolver) {
                 isGeneratedByDatabase = isRowIdAlias && !isNotNull
 
                 append(" PRIMARY KEY")
+                val primaryKey = property.annotation(ANNOTATION_PRIMARY_KEY)
+                primaryKey?.onConflict()?.let { append(" ON CONFLICT $it") }
 
-                isAutomaticIncrement = property.annotations.find {
-                    it.annotationType.resolve().declaration.qualifiedName?.asString() == ANNOTATION_PRIMARY_KEY
-                }?.arguments?.firstOrNull()?.value as? Boolean ?: false
+                isAutomaticIncrement = primaryKey?.arguments?.firstOrNull { it.name?.asString() == "autoIncrement" }?.value as? Boolean ?: false
                 if (isAutomaticIncrement) {
                     check(isGeneratedByDatabase) { PROMPT_AUTO_INCREMENT_REQUIRES_NULLABLE_LONG }
                     append(" AUTOINCREMENT")
@@ -239,6 +247,7 @@ class ColumnConstraintParser(resolver: Resolver) {
                 // Handle @CompositePrimaryKey - collect for table-level constraint
                 check(isNotNull) { PROMPT_PRIMARY_KEY_MUST_NOT_NULL }
                 compositePrimaryKeys.add(propertyName)
+                property.annotation(ANNOTATION_COMPOSITE_PRIMARY_KEY)?.onConflict()?.let { compositePrimaryKeyConflicts.add(it) }
             }
 
             // A rowid alias is the only column SQLite itself keeps from being NULL. On a rowid table, PRIMARY KEY
@@ -254,8 +263,10 @@ class ColumnConstraintParser(resolver: Resolver) {
             }
 
             // Handle @Unique annotation - single column uniqueness
-            if (annotationKSType.any { it.isAssignableFrom(uniqueAnnotationName) })
+            if (annotationKSType.any { it.isAssignableFrom(uniqueAnnotationName) }) {
                 append(" UNIQUE")
+                property.annotation(ANNOTATION_UNIQUE)?.onConflict()?.let { append(" ON CONFLICT $it") }
+            }
 
             // Handle @CompositeUnique annotation - collect for table-level constraint
             val compositeUniqueAnnotation = property.annotations
@@ -272,11 +283,14 @@ class ColumnConstraintParser(resolver: Resolver) {
                             it.value as? List<Int> ?: listOf(0)
                         }
                         // Add this property to each specified group
+                        val onConflict = onConflict()
                         list.forEach { group ->
                             val groupList = compositeUniqueColumns[group] ?: ArrayList<String>().also { gl ->
                                 compositeUniqueColumns[group] = gl
                             }
                             groupList.add(propertyName)
+                            if (onConflict != null)
+                                compositeUniqueConflicts.getOrPut(group) { LinkedHashSet() }.add(onConflict)
                         }
                     }
             }
@@ -392,10 +406,11 @@ class ColumnConstraintParser(resolver: Resolver) {
                     append(it[i])
                 }
                 append(')')
+                appendConflict(compositePrimaryKeyConflicts, "the composite primary key")
             }
 
             // Add composite unique constraints for each group
-            compositeUniqueColumns.values.forEach {
+            compositeUniqueColumns.forEach { (group, it) ->
                 if (it.isEmpty())
                     return@forEach
                 append(",UNIQUE(")
@@ -405,8 +420,38 @@ class ColumnConstraintParser(resolver: Resolver) {
                     append(it[i])
                 }
                 append(')')
+                appendConflict(compositeUniqueConflicts[group].orEmpty(), "composite unique group `$group`")
             }
         }
+    }
+
+    /**
+     * Appends the `ON CONFLICT` clause of a composite constraint, whose properties give [conflicts], other than the
+     * default ABORT, which needs no clause.
+     */
+    private fun StringBuilder.appendConflict(conflicts: Set<String>, constraint: String) {
+        check(conflicts.size <= 1) {
+            "The properties of $constraint give different conflict resolutions: ${conflicts.joinToString()}. Give one, on any of them."
+        }
+        conflicts.firstOrNull()?.let { append(" ON CONFLICT $it") }
+    }
+
+    /** The annotation of this property named [name], or null. */
+    private fun KSPropertyDeclaration.annotation(name: String): KSAnnotation? =
+        annotations.find { it.annotationType.resolve().declaration.qualifiedName?.asString() == name }
+
+    /**
+     * The conflict resolution that the `onConflict` of this annotation gives, or null for ABORT, SQLite's default, which
+     * needs no `ON CONFLICT` clause.
+     */
+    private fun KSAnnotation.onConflict(): String? {
+        val value = arguments.firstOrNull { it.name?.asString() == "onConflict" }?.value
+        val name = when (value) {
+            is KSClassDeclaration -> value.takeIf { it.classKind == ClassKind.ENUM_ENTRY }?.simpleName?.asString()
+            is KSType -> value.declaration.simpleName.asString()
+            else -> null
+        }
+        return name?.takeIf { it != "ABORT" }
     }
 
     /**
