@@ -97,7 +97,31 @@ internal class AndroidDatabaseConnection(private val database: SQLiteDatabase) :
     }
 
     override fun beginTransaction() = database.beginTransaction()
-    override fun endTransaction() = database.endTransaction()
+    override fun endTransaction() {
+        try {
+            database.endTransaction()
+        } catch (e: Exception) {
+            rollBackOpenTransaction()
+            throw e
+        }
+    }
+
+    /**
+     * Rolls back the transaction that a failed COMMIT leaves open in SQLite, as one does while a deferred foreign key
+     * isn't satisfied: the framework has already let go of it, so that the next one would fail to begin.
+     *
+     * The framework turns a ROLLBACK given to it into its own end of a transaction, which it has none of, so a TEMP
+     * trigger raises the ROLLBACK. The table and the trigger, created in the transaction, are rolled back with it; the
+     * DROP only removes them where SQLite had already rolled back, as it does for some errors.
+     */
+    private fun rollBackOpenTransaction() {
+        runCatching {
+            database.execSQL("CREATE TEMP TABLE IF NOT EXISTS sqllin_rollback(x)")
+            database.execSQL("CREATE TEMP TRIGGER IF NOT EXISTS sqllin_rollback BEFORE INSERT ON sqllin_rollback BEGIN SELECT RAISE(ROLLBACK, 'rollback'); END")
+            database.execSQL("INSERT INTO sqllin_rollback VALUES (1)")
+        }
+        runCatching { database.execSQL("DROP TABLE IF EXISTS temp.sqllin_rollback") }
+    }
     override fun setTransactionSuccessful() = database.setTransactionSuccessful()
 
     override fun close() = database.close()

@@ -47,6 +47,9 @@ class JvmTest {
     fun testTransaction() = commonTest.testTransaction()
 
     @Test
+    fun testFailedCommit() = commonTest.testFailedCommit()
+
+    @Test
     fun testConcurrency() = commonTest.testConcurrency()
 
     @AfterTest

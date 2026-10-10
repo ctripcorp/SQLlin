@@ -51,6 +51,7 @@
 ### sqllin-driver
 
 * Fix: the JVM driver bound a `UInt`, `UShort` or `UByte` parameter as the bits of a signed number, unlike the Kotlin/Native driver, and the Android driver bound one written through `execSQL` as its string. All of them now bind it as its number, and a `ULong` as the `Long` of the same bits
+* Fix: on the JVM, Kotlin/Native and Android, a transaction whose COMMIT failed, as one does while a deferred foreign key isn't satisfied, wasn't rolled back, but left open in SQLite: the statements after it ran in it, and the next transaction failed to begin, with "cannot start a transaction within a transaction". It is now rolled back. Android's framework lets go of such a transaction and doesn't pass a ROLLBACK through, so the driver raises one with a TEMP trigger
 
 ### sqllin-processor
 
