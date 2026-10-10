@@ -22,6 +22,7 @@ import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.KeyWordDslMaker
 import com.ctrip.sqllin.dsl.annotation.PlatformDependentSQLiteAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
+import com.ctrip.sqllin.dsl.sql.DefaultValues
 import com.ctrip.sqllin.dsl.sql.DerivedTable
 import com.ctrip.sqllin.dsl.sql.From
 import com.ctrip.sqllin.dsl.sql.FtsTable
@@ -474,6 +475,45 @@ public class DatabaseScope internal constructor(
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <T> Table<T>.INSERT_OR_REPLACE(value: ResultColumn<T>): Unit = INSERT_OR_REPLACE(listOf(value))
+
+    /**
+     * `DEFAULT VALUES`, which `table INSERT DEFAULT_VALUES` inserts a row of.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val DEFAULT_VALUES: DefaultValues
+        get() = DefaultValues()
+
+    /**
+     * Inserts a row of the default values of all columns, as SQL's `INSERT INTO table DEFAULT VALUES` does:
+     * `table INSERT DEFAULT_VALUES`. A column without a default value takes NULL, which a NOT NULL one rejects when the
+     * statement runs, and a database-assigned primary key its next value.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT(defaultValues: DefaultValues) {
+        addStatement(Insert.insertDefaultValues("INSERT INTO ", this, databaseConnection))
+    }
+
+    /**
+     * Inserts a row of the default values of all columns, or nothing if it conflicts with a row, as SQL's
+     * `INSERT OR IGNORE INTO table DEFAULT VALUES` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_IGNORE(defaultValues: DefaultValues) {
+        addStatement(Insert.insertDefaultValues("INSERT OR IGNORE INTO ", this, databaseConnection))
+    }
+
+    /**
+     * Inserts a row of the default values of all columns, replacing the rows it conflicts with, as SQL's
+     * `INSERT OR REPLACE INTO table DEFAULT VALUES` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_REPLACE(defaultValues: DefaultValues) {
+        addStatement(Insert.insertDefaultValues("INSERT OR REPLACE INTO ", this, databaseConnection))
+    }
 
     // ========== INSERT INTO ... SELECT ==========
     //

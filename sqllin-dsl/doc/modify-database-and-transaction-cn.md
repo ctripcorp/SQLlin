@@ -460,6 +460,10 @@ fun sample() {
 没写到的列取默认值或 NULL；如果是没有默认值的 `NOT NULL` 列，语句执行时会报错。可能为 NULL 的表达式只能写进可空的列；这些值
 不能读取任何表，因为 SQLite 不允许，要插入其他行的值请用 _SELECT_。`INSERT_OR_IGNORE` 和 `INSERT_OR_REPLACE` 同样可以接受表达式。
 
+`table INSERT DEFAULT_VALUES` 像 `INSERT INTO ... DEFAULT VALUES` 一样插入一行，所有列都取默认值：没有默认值的列取 NULL，
+`NOT NULL` 列会因此报错；由数据库分配的主键取下一个值。它是实验性 API，`INSERT_OR_IGNORE DEFAULT_VALUES` 和
+`INSERT_OR_REPLACE DEFAULT_VALUES` 也一样。
+
 ## 删除
 
 _DELETE_ 语句将会比 _INSERT_ 语句稍微复杂。SQLlin 不像 [Jetpack Room](https://developer.android.com/training/data-storage/room)

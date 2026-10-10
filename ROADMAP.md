@@ -22,7 +22,6 @@ done. A new item takes the next number.
 * F21: Support FILTER in aggregate functions (SQLite 3.30.0, Android API 31), and ORDER BY in them, as for `group_concat` (SQLite 3.44.0, Android API 35)
 * F22: Support NULLS FIRST and NULLS LAST in ORDER BY (SQLite 3.30.0, Android API 31)
 * F23: Support the other conflict resolutions: INSERT OR ABORT, OR FAIL and OR ROLLBACK, and UPDATE OR IGNORE, OR REPLACE and the others
-* F24: Support INSERT ... DEFAULT VALUES
 * F25: Support ORDER BY and LIMIT in UPDATE and DELETE, which need SQLite's `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` option, which Android's lacks
 * F26: Support INDEXED BY and NOT INDEXED
 * F27: Support choosing how a transaction begins, DEFERRED, IMMEDIATE or EXCLUSIVE, which differs between the platforms now
@@ -54,6 +53,7 @@ done. A new item takes the next number.
 
 ## Supported
 
+* F24: Support INSERT ... DEFAULT VALUES (2.5.0 ✅)
 * F10: Support CREATE TRIGGER and DROP TRIGGER, with BEFORE and AFTER triggers on tables (2.5.0 ✅)
 * F9: Support expressions in UPDATE's SET and in INSERT (2.5.0 ✅)
 * F46: Support more expression syntax: CASE, scalar subqueries, COLLATE, bitwise operators and null-safe IS comparisons; REGEXP is left out, as its function differs between the platforms, and the JVM's SQLite has none (2.5.0 ✅)

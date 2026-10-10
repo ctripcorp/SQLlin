@@ -799,6 +799,18 @@ data class RebuildPerson(
 )
 
 /**
+ * A row whose columns all have default values, or are nullable, so that `INSERT DEFAULT VALUES` can insert it.
+ */
+@DBRow("default_row")
+@Serializable
+data class DefaultRow(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @com.ctrip.sqllin.dsl.annotation.Default("'new'") val status: String,
+    @com.ctrip.sqllin.dsl.annotation.Default("0") val count: Int,
+    val note: String?,
+)
+
+/**
  * A log that triggers write the changes of [PersonWithId]s to.
  */
 @DBRow("trigger_audit")

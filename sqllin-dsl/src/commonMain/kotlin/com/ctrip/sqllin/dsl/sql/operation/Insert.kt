@@ -139,4 +139,11 @@ internal object Insert : Operation {
         }
         return InsertStatement(sql, connection, null, table.tableName)
     }
+
+    /**
+     * `INSERT INTO table DEFAULT VALUES`, which inserts a row of the default values of all columns, or NULL where a
+     * column has none.
+     */
+    fun insertDefaultValues(insert: String, table: Table<*>, connection: DatabaseConnection): SingleStatement =
+        InsertStatement("$insert${table.tableName} DEFAULT VALUES", connection, null, table.tableName)
 }

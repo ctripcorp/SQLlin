@@ -2479,6 +2479,23 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers INSERT DEFAULT VALUES: a row of the default values of all columns, NULL where a column has none, and the
+     * next key where the database assigns it. A NOT NULL column without a default rejects it.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testInsertDefaultValues() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            CREATE(DefaultRowTable)
+            DefaultRowTable INSERT DEFAULT_VALUES
+            DefaultRowTable INSERT_OR_IGNORE DEFAULT_VALUES
+        }
+        lateinit var rows: SelectStatement<DefaultRow>
+        database { rows = DefaultRowTable SELECT X }
+        assertEquals(listOf(DefaultRow(1, "new", 0, null), DefaultRow(2, "new", 0, null)), rows.getResults())
+        assertFails { database { PersonWithIdTable INSERT DEFAULT_VALUES } }
+    }
+
+    /**
      * Covers result columns: expressions, such as aggregate functions, selected into properties of a result type with
      * AS, as in `table SELECT listOf(count(X) AS AuthorStats::books)`, while every other property is read from its
      * column. Each function reads into the type of the values SQLite returns for it, and NULL into a nullable property.

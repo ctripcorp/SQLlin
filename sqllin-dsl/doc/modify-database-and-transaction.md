@@ -491,6 +491,10 @@ statement runs. An expression that can be NULL can only be written to a nullable
 table, as SQLite doesn't allow it there: insert the values of other rows with a _SELECT_. `INSERT_OR_IGNORE` and
 `INSERT_OR_REPLACE` take expressions as well.
 
+`table INSERT DEFAULT_VALUES` inserts a row of the default values of all columns, as `INSERT INTO ... DEFAULT VALUES`
+does: a column without a default value takes NULL, which a `NOT NULL` column rejects, and a key the database assigns
+its next value. It is experimental, as are `INSERT_OR_IGNORE DEFAULT_VALUES` and `INSERT_OR_REPLACE DEFAULT_VALUES`.
+
 ## Delete
 
 The _DELETE_ statements will be slightly more complex than _INSERT_. SQLlin doesn't delete objects like

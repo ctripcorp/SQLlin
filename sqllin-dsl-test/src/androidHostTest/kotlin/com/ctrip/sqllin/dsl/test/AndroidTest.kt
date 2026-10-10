@@ -151,6 +151,9 @@ class AndroidTest {
     fun testTriggerWritingFts() = commonTest.testTriggerWritingFts()
 
     @Test
+    fun testInsertDefaultValues() = commonTest.testInsertDefaultValues()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test
