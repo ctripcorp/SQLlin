@@ -185,7 +185,7 @@ With `DSLDBConfiguration`, you can use CREATE, DROP, and ALTER operations direct
 
 Usually, you just need to create one `Database` instance in your component lifecycle. So, you need to close database manually when the lifecycle ended:
 
-> Notice: `DSLDBConfiguration` is experimental, but it will completely replace `DatabaseConfiguration` when it is stable. That means _sqllin-dsl_ will not support to use `DatabaseConfiguration` to create `Database` instances in the future versions.
+> Notice: `DSLDBConfiguration` will completely replace `DatabaseConfiguration`. That means _sqllin-dsl_ will not support to use `DatabaseConfiguration` to create `Database` instances in the future versions.
 
 ```kotlin
 override fun onDestroy() {
@@ -440,6 +440,27 @@ data class Product(
 )
 ```
 
+#### Conflict Clauses
+
+The `onConflict` of `@PrimaryKey`, `@CompositePrimaryKey`, `@Unique` and `@CompositeUnique` says what SQLite does with
+a row that would break the constraint, as its `ON CONFLICT` clause does. It is experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow
+@Serializable
+data class Account(
+    @PrimaryKey(onConflict = OnConflict.REPLACE) val id: Long,
+    @Unique(onConflict = OnConflict.IGNORE) val email: String,
+)
+// Generated SQL: CREATE TABLE Account(id INTEGER PRIMARY KEY ON CONFLICT REPLACE,email TEXT NOT NULL UNIQUE ON CONFLICT IGNORE)
+```
+
+`REPLACE` deletes the rows the new row conflicts with, `IGNORE` skips the new row, `FAIL` stops the statement keeping the
+changes it made before, and `ROLLBACK` rolls back the transaction. `ABORT`, the default, stops the statement and undoes
+its changes. A composite key or group takes the one given on any of its properties, and they can't give different
+ones. The OR of a statement, as `INSERT_OR_IGNORE`, overrides it.
+
 #### @Default - Column Default Values
 
 Use `@Default` to specify default values for columns in your CREATE TABLE statements. SQLite will automatically use these values when inserting rows without explicitly providing values for these columns:
@@ -515,6 +536,83 @@ val status: String
 @Default("'active'")
 val status: String
 ```
+
+#### @Check - Validating Values
+
+Use `@Check` to add a `CHECK` constraint: an SQL expression that every row has to satisfy. SQLite evaluates it whenever
+an _INSERT_ or _UPDATE_ writes a row, and rejects the row if it is false, so invalid data can't get into the table,
+whichever code writes it. `@Check` is experimental, so opt in with `@OptIn(ExperimentalDSLDatabaseAPI::class)`:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow
+@Check("endDate IS NULL OR endDate >= startDate", constraintName = "valid_period")
+@Serializable
+data class Membership(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @Check("length(trim(name)) > 0") val name: String,
+    @Check("level IN (0, 1, 2)") val level: Int,
+    @Check("age BETWEEN 0 AND 150") val age: Int?,
+    val startDate: String,
+    val endDate: String?,
+)
+// Generated SQL: CREATE TABLE Membership(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+//   level INT NOT NULL CHECK (level IN (0, 1, 2)),
+//   age INT CHECK (age BETWEEN 0 AND 150),
+//   startDate TEXT NOT NULL,
+//   endDate TEXT,
+//   CONSTRAINT valid_period CHECK (endDate IS NULL OR endDate >= startDate)
+// )
+```
+
+On a property, `@Check` adds a constraint to its column; on the class, a constraint to the table. SQLite checks them
+alike, and both can refer to any column, so a constraint that compares columns reads best on the class. Both can be
+repeated, and every constraint is checked.
+
+**Naming constraints:**
+
+`constraintName` names a constraint, which SQLite then reports when a row fails it:
+`CHECK constraint failed: valid_period`. An unnamed constraint is reported by its expression from SQLite 3.34 on, but by
+the table's name before, as on Android below API 34, where only names tell a table's constraints apart. A name has to
+be an SQL identifier, and the names of a table's CHECK constraints have to differ.
+
+**NULL passes:**
+
+A row fails a constraint only when its expression is false, and when it is NULL, the row passes. So
+`@Check("age BETWEEN 0 AND 150")` lets a NULL age through; to keep NULL out, make the property non-null. This also
+catches expressions that look right:
+
+```kotlin
+// ❌ Lets every text that isn't a date through: date(day) is NULL for it, and so is the comparison
+@Check("date(day) = day")
+val day: String?
+
+// ✅ Keeps them out: IS compares NULL as a value
+@Check("day IS NULL OR date(day) IS day")
+val day: String?
+```
+
+**The expression:**
+- It is SQL, written into the CREATE TABLE statement as it is, so a mistake in it only shows when the table is created
+- It names columns by their names in the table
+- It can't contain a subquery, so it can't refer to other tables: use [foreign keys](#foreign-key-constraints) for that
+- It can only call deterministic functions: a comparison with the current time, such as `expires > date('now')`, fails
+  when a row is written
+
+**How statements behave:**
+- An _INSERT_ or _UPDATE_ that writes a row failing a constraint fails with the driver's exception, and the _UPDATE_
+  leaves the row as it was
+- `INSERT_OR_IGNORE` skips the rows failing a constraint, and inserts the others
+- `INSERT_OR_REPLACE` fails as an _INSERT_ does: replacing a row doesn't help a row satisfy a constraint
+
+**Existing tables:**
+
+SQLite's `ALTER TABLE` can't add a constraint to a table, and `ALTER_ADD_COLUMN` adds a column without its constraints.
+To add a constraint to an existing table, [rebuild the table](modify-database-and-transaction.md#rebuilding-a-table).
+When a column is dropped, its own constraints are dropped with it, but SQLite refuses to drop a column that another
+column's constraint or the table's refers to.
 
 ### Supported Types
 
@@ -852,6 +950,26 @@ data class Order(
 )
 // Generated SQL: userId BIGINT CONSTRAINT fk_order_user REFERENCES User(id) ON DELETE CASCADE
 ```
+
+#### Deferred Foreign Keys
+
+SQLite checks a foreign key after each statement. With `deferred = true`, on `@References` or `@ForeignKeyGroup`, it
+checks it when the transaction commits instead, as `DEFERRABLE INITIALLY DEFERRED` does, so that a transaction can
+insert a child before its parent, or rows that refer to each other:
+
+```kotlin
+@DBRow
+@Serializable
+data class Order(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], deferred = true)
+    val userId: Long,
+)
+// Generated SQL: userId BIGINT REFERENCES User(id) DEFERRABLE INITIALLY DEFERRED
+```
+
+A transaction that commits while such a key isn't satisfied fails, and is rolled back. Outside a transaction, each
+statement is its own transaction, so it is checked right away.
 
 #### Best Practices
 

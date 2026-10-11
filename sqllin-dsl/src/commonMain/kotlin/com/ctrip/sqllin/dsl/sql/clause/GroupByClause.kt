@@ -38,17 +38,21 @@ import com.ctrip.sqllin.dsl.sql.statement.WhereSelectStatement
  *
  * @author Yuang Qiao
  */
-public class GroupByClause<T> internal constructor(private val columnNames: Iterable<ClauseElement<*>>) : SelectClause<T> {
+public class GroupByClause<T> internal constructor(internal val columnNames: Iterable<ClauseElement<*>>) : SelectClause<T> {
+
+    init {
+        requireNoLiteral(columnNames, "GROUP BY")
+    }
 
     override val clauseStr: String
         get() = buildString {
             append(" GROUP BY ")
             val iterator = columnNames.iterator()
             require(iterator.hasNext()) { "Please provider at least one 'BaseClauseElement' for 'GROUP BY' clause!!!" }
-            append(iterator.next().valueName)
+            iterator.next().appendSQL(this)
             while (iterator.hasNext()) {
                 append(',')
-                append(iterator.next().valueName)
+                iterator.next().appendSQL(this)
             }
         }
 }

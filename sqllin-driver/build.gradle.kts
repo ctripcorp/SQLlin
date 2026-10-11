@@ -103,8 +103,8 @@ gradle.taskGraph.whenReady {
 }
 
 fun KotlinNativeTarget.setupNativeConfig() {
-    val main by compilations.getting
-    val sqlite3 by main.cinterops.creating {
+    val main = compilations.getByName("main")
+    main.cinterops.create("sqlite3") {
         includeDirs("$projectDir/src/include")
     }
     binaries.all {

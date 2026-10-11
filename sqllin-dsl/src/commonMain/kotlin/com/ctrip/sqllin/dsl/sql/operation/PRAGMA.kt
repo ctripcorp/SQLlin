@@ -88,4 +88,9 @@ internal object PRAGMA : Operation {
         }
         return TableStructureStatement(sql, connection)
     }
+
+    /**
+     * `PRAGMA optimize`, which runs ANALYZE on the tables whose statistics would help the query planner, if any.
+     */
+    fun optimize(connection: DatabaseConnection): SingleStatement = TableStructureStatement("${sqlStr}optimize", connection)
 }

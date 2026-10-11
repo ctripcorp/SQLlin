@@ -84,8 +84,18 @@ internal class RealDatabaseConnection(
 
     override fun endTransaction() = transactionLock.withLock {
         try {
-            val sql = if (checkFailTransaction.isSuccessful) "COMMIT;" else "ROLLBACK;"
-            database.rawExecSql(sql)
+            if (checkFailTransaction.isSuccessful) {
+                try {
+                    database.rawExecSql("COMMIT;")
+                } catch (e: Exception) {
+                    // A COMMIT that fails, as one does while a deferred foreign key isn't satisfied, leaves the
+                    // transaction open, so that the statements after it would run in it
+                    runCatching { database.rawExecSql("ROLLBACK;") }
+                    throw e
+                }
+            } else {
+                database.rawExecSql("ROLLBACK;")
+            }
         } finally {
             transaction.value = null
         }

@@ -138,7 +138,7 @@ val database = Database(
 
 ### 使用 DSLDBConfiguration 进行类型安全的模式管理
 
-除此之外，你还可以使用新的试验性 API `DSLDBConfiguration`，它允许你在 `create` 和 `upgrade` 回调中使用类型安全的 SQL DSL，而不是原始的 SQL 字符串：
+除此之外，你还可以使用 `DSLDBConfiguration`，它允许你在 `create` 和 `upgrade` 回调中使用类型安全的 SQL DSL，而不是原始的 SQL 字符串：
 
 ```kotlin
 import com.ctrip.sqllin.driver.DSLDBConfiguration
@@ -176,7 +176,7 @@ val database = Database(
 
 通常你只需要在你的组件的生命周期内创建一个 `Database` 对象，所以你需要在组件的生命周期结束时手动关闭数据库：
 
-> 注意: `DSLDBConfiguration` 处于实验性阶段，但当其稳定后会彻底取代 `DatabaseConfiguration`, 也就是说在未来版本中 _sqllin-dsl_ 将不再支持使用 `DatabaseConfiguration` 创建 `Database` 实例。
+> 注意: `DSLDBConfiguration` 将会彻底取代 `DatabaseConfiguration`，也就是说在未来版本中 _sqllin-dsl_ 将不再支持使用 `DatabaseConfiguration` 创建 `Database` 实例。
 
 ```kotlin
 override fun onDestroy() {
@@ -429,6 +429,26 @@ data class Product(
 )
 ```
 
+#### 冲突子句
+
+`@PrimaryKey`、`@CompositePrimaryKey`、`@Unique` 和 `@CompositeUnique` 的 `onConflict` 参数，像约束的 `ON CONFLICT` 子句一样，
+指定 SQLite 怎样处理会违反该约束的行。它是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow
+@Serializable
+data class Account(
+    @PrimaryKey(onConflict = OnConflict.REPLACE) val id: Long,
+    @Unique(onConflict = OnConflict.IGNORE) val email: String,
+)
+// Generated SQL: CREATE TABLE Account(id INTEGER PRIMARY KEY ON CONFLICT REPLACE,email TEXT NOT NULL UNIQUE ON CONFLICT IGNORE)
+```
+
+`REPLACE` 删除与新行冲突的行，`IGNORE` 跳过新行，`FAIL` 终止语句、但保留它之前做的修改，`ROLLBACK` 回滚整个事务。默认的
+`ABORT` 终止语句并撤销它的修改。复合主键或复合唯一组取任一属性上给出的值，组内属性不能给出不同的值。语句自己的 OR 子句（比如
+`INSERT_OR_IGNORE`）优先于它。
+
 #### @Default - 列默认值
 
 使用 `@Default` 为 CREATE TABLE 语句中的列指定默认值。当插入行时未显式提供这些列的值时，SQLite 会自动使用这些默认值：
@@ -504,6 +524,77 @@ val status: String
 @Default("'active'")
 val status: String
 ```
+
+#### @Check - 校验列值
+
+使用 `@Check` 添加 `CHECK` 约束：一个每一行都必须满足的 SQL 表达式。每当 _INSERT_ 或 _UPDATE_ 写入一行时，SQLite 都会对它
+求值，结果为假就拒绝这一行。这样无论是哪里的代码写入，不合法的数据都进不了这张表。`@Check` 是实验性 API，使用时需要
+`@OptIn(ExperimentalDSLDatabaseAPI::class)`：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow
+@Check("endDate IS NULL OR endDate >= startDate", constraintName = "valid_period")
+@Serializable
+data class Membership(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @Check("length(trim(name)) > 0") val name: String,
+    @Check("level IN (0, 1, 2)") val level: Int,
+    @Check("age BETWEEN 0 AND 150") val age: Int?,
+    val startDate: String,
+    val endDate: String?,
+)
+// 生成的 SQL：CREATE TABLE Membership(
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+//   level INT NOT NULL CHECK (level IN (0, 1, 2)),
+//   age INT CHECK (age BETWEEN 0 AND 150),
+//   startDate TEXT NOT NULL,
+//   endDate TEXT,
+//   CONSTRAINT valid_period CHECK (endDate IS NULL OR endDate >= startDate)
+// )
+```
+
+`@Check` 写在属性上，就是给这一列加约束；写在类上，就是给整张表加约束。SQLite 对两者的检查方式相同，两者也都可以引用任意列，
+所以比较多列的约束写在类上更清楚。两者都可以重复使用，每个约束都会被检查。
+
+**给约束命名：**
+
+`constraintName` 给约束命名，之后某一行违反它时，SQLite 会报出这个名字：`CHECK constraint failed: valid_period`。没有名字的
+约束，SQLite 3.34 起报的是它的表达式，更早的版本报的则是表名，Android 在 API 34 之前就是这样，这时只有名字能区分一张表的各个
+约束。名字必须是 SQL 标识符，同一张表的 CHECK 约束名不能重复。
+
+**NULL 会通过：**
+
+只有表达式的结果为假，这一行才算违反约束；结果为 NULL 时，这一行会通过。所以 `@Check("age BETWEEN 0 AND 150")` 会放行为
+NULL 的 age；要拦住 NULL，请把属性声明为非空类型。看起来正确的表达式也可能因此失效：
+
+```kotlin
+// ❌ 不是日期的文本都能通过：对它们 date(day) 是 NULL，比较的结果也是 NULL
+@Check("date(day) = day")
+val day: String?
+
+// ✅ 能拦住它们：IS 把 NULL 当作一个值来比较
+@Check("day IS NULL OR date(day) IS day")
+val day: String?
+```
+
+**表达式：**
+- 它是 SQL，原样写进 CREATE TABLE 语句，所以其中的错误要到建表时才会暴露
+- 用列在表中的名字引用列
+- 不能包含子查询，所以不能引用其他表，这种需求请用[外键](#外键约束)
+- 只能调用确定性函数：和当前时间比较的表达式，比如 `expires > date('now')`，会在写入行时失败
+
+**语句的行为：**
+- 写入违反约束的行的 _INSERT_ 或 _UPDATE_ 会失败，抛出驱动的异常，_UPDATE_ 不会修改这一行
+- `INSERT_OR_IGNORE` 会跳过违反约束的行，插入其余的行
+- `INSERT_OR_REPLACE` 和 _INSERT_ 一样会失败：替换已有的行并不能让新行满足约束
+
+**已有的表：**
+
+SQLite 的 `ALTER TABLE` 不能给表添加约束，`ALTER_ADD_COLUMN` 添加的列也不带约束。要给已有的表添加约束，请
+[重建表](modify-database-and-transaction-cn.md#重建表)。删除某一列时，它自己的约束会随之删除，但如果其他列的约束或表的约束
+引用了这一列，SQLite 会拒绝删除。
 
 ### 支持的类型
 
@@ -841,6 +932,24 @@ data class Order(
 )
 // Generated SQL: userId BIGINT CONSTRAINT fk_order_user REFERENCES User(id) ON DELETE CASCADE
 ```
+
+#### 延迟检查的外键
+
+SQLite 在每条语句之后检查外键。在 `@References` 或 `@ForeignKeyGroup` 上加 `deferred = true`，就会像
+`DEFERRABLE INITIALLY DEFERRED` 那样改为在事务提交时检查，这样一个事务里可以先插入子行再插入父行，或者插入互相引用的行：
+
+```kotlin
+@DBRow
+@Serializable
+data class Order(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @References(tableName = "User", foreignKeys = ["id"], deferred = true)
+    val userId: Long,
+)
+// Generated SQL: userId BIGINT REFERENCES User(id) DEFERRABLE INITIALLY DEFERRED
+```
+
+提交时如果还有这样的外键不满足，事务会失败并被回滚。在事务之外，每条语句本身就是一个事务，所以会立即检查。
 
 #### 最佳实践
 

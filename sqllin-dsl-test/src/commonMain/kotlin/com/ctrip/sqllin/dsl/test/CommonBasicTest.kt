@@ -18,11 +18,16 @@ package com.ctrip.sqllin.dsl.test
 
 import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.DatabasePath
+import com.ctrip.sqllin.driver.deleteDatabase
+import com.ctrip.sqllin.driver.openDatabase
+import com.ctrip.sqllin.driver.withQuery
 import com.ctrip.sqllin.dsl.DSLDBConfiguration
 import com.ctrip.sqllin.dsl.Database
 import com.ctrip.sqllin.dsl.DatabaseScope
 import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
+import com.ctrip.sqllin.dsl.annotation.PlatformDependentSQLiteAPI
+import com.ctrip.sqllin.dsl.sql.FtsTable
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.withName
 import com.ctrip.sqllin.dsl.sql.clause.*
@@ -31,9 +36,12 @@ import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
@@ -44,11 +52,11 @@ import kotlin.test.assertNotEquals
  * @author Yuang Qiao
  */
 
-@OptIn(ExperimentalDSLDatabaseAPI::class)
 class CommonBasicTest(private val path: DatabasePath) {
 
     companion object {
         const val DATABASE_NAME = "BookStore.db"
+        const val BACKUP_DATABASE_NAME = "BookStoreBackup.db"
         const val SQL_CREATE_BOOK = "create table book (id integer primary key autoincrement, name text, author text, pages integer, price real)"
         const val SQL_CREATE_CATEGORY = "create table category (id integer primary key autoincrement, name text, code integer)"
     }
@@ -271,6 +279,109 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals("Ken Kousen", resultOfGroupByAndHaving.first().author)
     }
 
+    /**
+     * Covers compound SELECTs: UNION, UNION ALL, INTERSECT and EXCEPT combine two SELECTs of the same result type, as
+     * in SQL, from any tables. A member that ends with ORDER BY or LIMIT keeps them to itself, a compound on the right
+     * is combined as a whole, and the compound takes its own ORDER BY and LIMIT.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testCompoundSelect() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        database {
+            BookTable INSERT listOf(
+                Book(name = "The Da Vinci Code", author = "Dan Brown", price = 16.96, pages = 454),
+                Book(name = "The Lost Symbol", author = "Dan Brown", price = 19.95, pages = 510),
+                Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251),
+            )
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "Ann", age = 30),
+                PersonWithId(id = null, name = "Kotlin Cookbook", age = 40),
+            )
+        }
+
+        // The four operators, on projections. The INTERSECT only gives Dan Brown if the WHERE parameters keep their
+        // order; swapped, both SELECTs would match every book.
+        lateinit var member: SelectStatement<BookAuthor>
+        lateinit var union: SelectStatement<BookAuthor>
+        lateinit var unionAll: SelectStatement<BookAuthor>
+        lateinit var intersect: SelectStatement<BookAuthor>
+        lateinit var except: SelectStatement<BookAuthor>
+        database {
+            BookTable { table ->
+                member = table SELECT WHERE<BookAuthor>(price LT 20.0)
+                union = member UNION (table SELECT WHERE<BookAuthor>(price GT 10.0))
+                unionAll = (table SELECT WHERE<BookAuthor>(price LT 20.0)) UNION_ALL (table SELECT WHERE<BookAuthor>(price GT 30.0))
+                intersect = (table SELECT WHERE<BookAuthor>(price LT 20.0)) INTERSECT (table SELECT WHERE<BookAuthor>(pages GT 500))
+                except = (table SELECT WHERE<BookAuthor>(price GT 0.0)) EXCEPT (table SELECT WHERE<BookAuthor>(price LT 20.0))
+            }
+        }
+        assertEquals(listOf("Dan Brown", "Ken Kousen"), union.getResults().map { it.author }.sorted())
+        assertEquals(listOf("Dan Brown", "Dan Brown", "Ken Kousen"), unionAll.getResults().map { it.author }.sorted())
+        assertEquals(listOf("Dan Brown"), intersect.getResults().map { it.author })
+        assertEquals(listOf("Ken Kousen"), except.getResults().map { it.author })
+        // A SELECT that became part of a compound no longer runs on its own
+        assertFailsWith<IllegalStateException> { member.getResults() }
+
+        // Rows of different tables, projected into the same type
+        lateinit var names: SelectStatement<NameOnly>
+        database {
+            names = (BookTable SELECT X<NameOnly>()) INTERSECT (PersonWithIdTable SELECT X<NameOnly>())
+        }
+        assertEquals(listOf(NameOnly("Kotlin Cookbook")), names.getResults())
+
+        // A member's ORDER BY and LIMIT stay its own, here giving the longest and the shortest book. Written as they
+        // are, SQLite would reject the first ORDER BY, and apply the last one to the whole compound.
+        lateinit var extremes: SelectStatement<NameOnly>
+        database {
+            BookTable { table ->
+                extremes = (table SELECT ORDER_BY<NameOnly>(pages to DESC) LIMIT 1) UNION_ALL (table SELECT ORDER_BY<NameOnly>(pages to ASC) LIMIT 1)
+            }
+        }
+        assertEquals(listOf("Kotlin Cookbook", "The Lost Symbol"), extremes.getResults().map { it.name }.sorted())
+
+        // The compound's own ORDER BY, LIMIT and OFFSET apply to all of it
+        lateinit var page: SelectStatement<NameOnly>
+        database {
+            page = (BookTable SELECT X<NameOnly>()) UNION (PersonWithIdTable SELECT X<NameOnly>()) ORDER_BY (BookTable.name to ASC) LIMIT 2 OFFSET 1
+        }
+        assertEquals(listOf("Kotlin Cookbook", "The Da Vinci Code"), page.getResults().map { it.name })
+
+        // Chained operators are evaluated from left to right, as in SQL, and parentheses group them
+        lateinit var leftToRight: SelectStatement<NameOnly>
+        lateinit var grouped: SelectStatement<NameOnly>
+        database {
+            PersonWithIdTable { table ->
+                val ann = { table SELECT WHERE<NameOnly>(name EQ "Ann") }
+                leftToRight = ann() UNION ann() UNION_ALL ann() // (Ann UNION Ann) UNION ALL Ann
+                grouped = ann() UNION (ann() UNION_ALL ann()) // Ann UNION (Ann UNION ALL Ann)
+            }
+        }
+        assertEquals(2, leftToRight.getResults().size)
+        assertEquals(1, grouped.getResults().size)
+
+        // Result columns combine too, and an incomplete member is rejected when it is combined: without GROUP BY,
+        // 'author' would be NULL when no rows match
+        lateinit var counts: SelectStatement<BookCount>
+        database {
+            BookTable { table ->
+                counts = (table SELECT (count(X) AS BookCount::books) WHERE (author EQ "Dan Brown")) UNION_ALL
+                    (table SELECT (count(X) AS BookCount::books) WHERE (author EQ "Ken Kousen"))
+            }
+        }
+        assertEquals(listOf(1L, 2L), counts.getResults().map { it.books }.sorted())
+        val ungrouped = assertFailsWith<IllegalArgumentException> {
+            database {
+                BookTable { table ->
+                    (table SELECT (count(X) AS AuthorBookCount::books)) UNION (table SELECT (count(X) AS AuthorBookCount::books) GROUP_BY author)
+                }
+            }
+        }
+        assertEquals(true, ungrouped.message!!.contains("without GROUP BY"))
+    }
+
+    /**
+     * Covers the deprecated `UNION {}` block, which keeps working for the table's own rows until it is removed.
+     */
+    @Suppress("DEPRECATION")
     fun testUnionSelect() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         val book0 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         val book1 = Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72)
@@ -411,6 +522,740 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(outerJoinStatementWithOn?.getResults()?.size, books.size)
     }
 
+    /**
+     * Covers observed queries: the flow emits the SELECT's results when it is collected, and again when a statement run
+     * through the database changes a table the SELECT reads and the results differ. A join watches all of its tables.
+     * A change to another table, an UPDATE that matches no rows or leaves the results as they were, and a rolled back
+     * transaction emit nothing, and an observed table that is dropped and created again is still watched.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, ExperimentalDSLDatabaseAPI::class)
+    fun testObserve() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        runTest {
+            val books = Channel<List<Book>>(Channel.UNLIMITED)
+            val joined = Channel<List<Joiner>>(Channel.UNLIMITED)
+            // The queries run in the test's own context, so that runCurrent() lets them catch up
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) { BookTable SELECT X }.collect { books.send(it) }
+            }
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) {
+                    BookTable SELECT INNER_JOIN<Joiner>(CategoryTable) USING BookTable.name
+                }.collect { joined.send(it) }
+            }
+            fun assertNoNewBooks() {
+                runCurrent()
+                assertEquals(true, books.tryReceive().isFailure)
+            }
+
+            assertEquals(emptyList(), books.receive())
+            assertEquals(emptyList(), joined.receive())
+
+            val book = Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251)
+            database { BookTable INSERT book }
+            assertEquals(listOf(book), books.receive())
+
+            // Nothing new: a change to another table, an UPDATE that matches no rows, one that leaves the results as
+            // they were, and a transaction that is rolled back
+            database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Ann", age = 30) }
+            assertNoNewBooks()
+            database { BookTable { table -> table UPDATE SET { pages = 1 } WHERE (name EQ "No Such Book") } }
+            assertNoNewBooks()
+            database { BookTable { table -> table UPDATE SET { pages = 251 } WHERE (name EQ "Kotlin Cookbook") } }
+            assertNoNewBooks()
+            assertFails {
+                database {
+                    transaction {
+                        BookTable INSERT Book(name = "Rolled Back", author = "Nobody", price = 1.0, pages = 1)
+                        UniqueEmailTestTable INSERT listOf(
+                            UniqueEmailTest(id = null, email = "same@example.com", name = "One"),
+                            UniqueEmailTest(id = null, email = "same@example.com", name = "Two"),
+                        )
+                    }
+                }
+            }
+            assertNoNewBooks()
+
+            database { BookTable { table -> table UPDATE SET { pages = 300 } WHERE (name EQ "Kotlin Cookbook") } }
+            assertEquals(listOf(book.copy(pages = 300)), books.receive())
+
+            // The join watches the category table too
+            database { CategoryTable INSERT Category(name = "Kotlin Cookbook", code = 1) }
+            assertEquals(listOf("Kotlin Cookbook"), joined.receive().map { it.name })
+
+            // A dropped and created table loses its triggers, which come back
+            database {
+                DROP(BookTable)
+                CREATE(BookTable)
+            }
+            assertEquals(emptyList(), books.receive())
+            database { BookTable INSERT book }
+            assertEquals(listOf(book), books.receive())
+        }
+    }
+
+    /**
+     * Covers an observed query of a table that only a foreign key action changes: SQLite reports the rows that
+     * ON DELETE CASCADE deletes, though no statement names their table.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, ExperimentalDSLDatabaseAPI::class)
+    fun testObserveForeignKeyAction() = Database(getForeignKeyDBConfig()).databaseAutoClose { database ->
+        runTest {
+            database {
+                PRAGMA_FOREIGN_KEYS(true)
+            }
+            database {
+                FKUserTable INSERT FKUser(id = null, email = "alice@example.com", name = "Alice")
+                FKOrderTable INSERT FKOrder(id = null, userId = 1L, amount = 99.99, orderDate = "2025-01-15")
+            }
+            val orders = Channel<List<FKOrder>>(Channel.UNLIMITED)
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) { FKOrderTable SELECT X }.collect { orders.send(it) }
+            }
+            assertEquals(1, orders.receive().size)
+            database { FKUserTable DELETE WHERE(FKUserTable.id EQ 1L) }
+            assertEquals(emptyList(), orders.receive())
+        }
+    }
+
+    /**
+     * Covers views: `CREATE_VIEW` creates one from a SELECT of its row type, with the SELECT's values written into its
+     * SQL, as a view can't take parameters. A SELECT reads the view like a table, an observed query of it watches the
+     * tables it reads, and `DROP` drops it.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, ExperimentalDSLDatabaseAPI::class)
+    fun testView() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        runTest {
+            database {
+                PersonWithIdTable INSERT listOf(
+                    PersonWithId(id = null, name = "Ann", age = 30),
+                    PersonWithId(id = null, name = "Bob", age = 15),
+                    PersonWithId(id = null, name = "Cat?", age = 40),
+                    PersonWithId(id = null, name = "It's", age = 50),
+                )
+                // The literals of the SELECT go into the view: 18, 'Cat' and 'It''s'. The '?' in replace(name,'?','')
+                // is a string, not a parameter, and stays as it is.
+                PersonWithIdTable { table ->
+                    CREATE_VIEW(AdultPersonView) AS (
+                        table SELECT WHERE<AdultPerson>((age GTE 18) AND (replace(name, "?", "") NEQ "Cat") AND (name NEQ "It's"))
+                    )
+                }
+            }
+
+            lateinit var adults: SelectStatement<AdultPerson>
+            lateinit var olderThan25: SelectStatement<AdultPerson>
+            database {
+                adults = AdultPersonView SELECT X
+                AdultPersonView { view ->
+                    olderThan25 = view SELECT WHERE(age GT 25)
+                }
+            }
+            assertEquals(listOf(AdultPerson("Ann", 30)), adults.getResults())
+            assertEquals(listOf(AdultPerson("Ann", 30)), olderThan25.getResults())
+
+            // An observed query of the view watches the person table
+            val observed = Channel<List<AdultPerson>>(Channel.UNLIMITED)
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) { AdultPersonView SELECT X }.collect { observed.send(it) }
+            }
+            assertEquals(listOf(AdultPerson("Ann", 30)), observed.receive())
+            database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Dan", age = 20) }
+            assertEquals(listOf("Ann", "Dan"), observed.receive().map { it.name }.sorted())
+
+            database { DROP(AdultPersonView) }
+            assertEquals(true, database.selectFails { AdultPersonView SELECT X })
+        }
+    }
+
+    /**
+     * Covers how unsigned values are stored: as the numbers they are, which SQLite's 64-bit integers hold, so that SQL
+     * compares, orders and sums them as Kotlin does, whether an INSERT or an UPDATE wrote them. Stored as the bits of
+     * signed numbers, a UByte of 200 read back as 200, but compared as -56.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testUnsignedValues() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = { CREATE(TestPrimitiveTypeForKSPTable) },
+        )
+        fun row(testInt: Int, uByte: UByte, uShort: UShort, uInt: UInt) = TestPrimitiveTypeForKSP(
+            testInt = testInt, testLong = 1, testShort = 1, testByte = 1, testFloat = 1f, testDouble = 1.0,
+            testUInt = uInt, testULong = 1u, testUShort = uShort, testUByte = uByte, testBoolean = true, testChar = 'c',
+            testString = "s", testByteArray = byteArrayOf(1), testEnum = Priority.LOW, testTypeAlias = 1,
+        )
+        Database(config).databaseAutoClose { database ->
+            database {
+                TestPrimitiveTypeForKSPTable INSERT listOf(row(1, 200u, 40_000u, 3_000_000_000u), row(2, 100u, 100u, 100u))
+            }
+            lateinit var all: SelectStatement<TestPrimitiveTypeForKSP>
+            lateinit var bigBytes: SelectStatement<TestPrimitiveTypeForKSP>
+            lateinit var bigShorts: SelectStatement<TestPrimitiveTypeForKSP>
+            lateinit var bigInts: SelectStatement<TestPrimitiveTypeForKSP>
+            lateinit var byUInt: SelectStatement<TestPrimitiveTypeForKSP>
+            lateinit var totals: SelectStatement<UIntTotals>
+            database {
+                TestPrimitiveTypeForKSPTable { table ->
+                    all = table SELECT X
+                    bigBytes = table SELECT WHERE(testUByte GT 150)
+                    bigShorts = table SELECT WHERE(testUShort GT 30_000)
+                    bigInts = table SELECT WHERE(testUInt GT 2_000_000_000L)
+                    byUInt = table SELECT ORDER_BY(testUInt to DESC)
+                    totals = table SELECT listOf(sum(testUInt) AS UIntTotals::total, max(testUInt) AS UIntTotals::highest)
+                }
+            }
+            val first = all.getResults().single { it.testInt == 1 }
+            assertEquals(200u.toUByte(), first.testUByte)
+            assertEquals(40_000u.toUShort(), first.testUShort)
+            assertEquals(3_000_000_000u, first.testUInt)
+            assertEquals(listOf(1), bigBytes.getResults().map { it.testInt })
+            assertEquals(listOf(1), bigShorts.getResults().map { it.testInt })
+            assertEquals(listOf(1), bigInts.getResults().map { it.testInt })
+            assertEquals(listOf(1, 2), byUInt.getResults().map { it.testInt })
+            assertEquals(UIntTotals(total = 3_000_000_100L, highest = 3_000_000_000u), totals.getResults().single())
+
+            // An UPDATE stores them the same way
+            database {
+                TestPrimitiveTypeForKSPTable { table ->
+                    table UPDATE SET { testUByte = 250u; testUInt = 4_000_000_000u } WHERE (testInt EQ 2)
+                }
+            }
+            lateinit var updatedBytes: SelectStatement<TestPrimitiveTypeForKSP>
+            lateinit var updatedInts: SelectStatement<TestPrimitiveTypeForKSP>
+            database {
+                TestPrimitiveTypeForKSPTable { table ->
+                    updatedBytes = table SELECT WHERE(testUByte GT 150)
+                    updatedInts = table SELECT WHERE(testUInt GT 3_500_000_000L)
+                }
+            }
+            assertEquals(listOf(1, 2), updatedBytes.getResults().map { it.testInt }.sorted())
+            assertEquals(listOf(2), updatedInts.getResults().map { it.testInt })
+        }
+    }
+
+    /**
+     * Covers FTS4 tables: their CREATE VIRTUAL TABLE statement, rowids SQLite assigns, MATCH over the whole table and
+     * over one column with terms, stems, prefixes, OR and phrases, a column that isn't indexed, snippet, offsets and
+     * matchinfo, UPDATE and DELETE, an observed query, and rebuilding the table under another name.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, ExperimentalDSLDatabaseAPI::class)
+    fun testFts4() = Database(getFtsDBConfig()).databaseAutoClose { database ->
+        runTest {
+            assertEquals(
+                "CREATE VIRTUAL TABLE articles USING fts4(title,body,note,tokenize=porter,prefix=\"2\",notindexed=note)",
+                ArticleTable.createSQL,
+            )
+            database {
+                ArticleTable INSERT listOf(
+                    Article(rowid = null, title = "Kotlin Coroutines", body = "Running suspending functions concurrently", note = "draft"),
+                    Article(rowid = null, title = "SQLite Full-Text Search", body = "Indexes documents for searching", note = "kotlin"),
+                    Article(rowid = null, title = "Kotlin Multiplatform", body = "Sharing code between platforms", note = null),
+                )
+            }
+            fun matches(block: ArticleTable.() -> SelectCondition): List<Long?> {
+                lateinit var statement: SelectStatement<Article>
+                database {
+                    statement = ArticleTable SELECT WHERE(ArticleTable.block())
+                }
+                return statement.getResults().map { it.rowid }
+            }
+            // "kotlin" is only in a column that isn't indexed of article 2
+            assertEquals(listOf(1L, 3L), matches { this MATCH "kotlin" })
+            assertEquals(listOf(1L), matches { this MATCH "run" })
+            assertEquals(listOf(1L), matches { this MATCH "corout*" })
+            assertEquals(listOf(1L, 2L), matches { this MATCH "coroutines OR search" })
+            assertEquals(listOf(3L), matches { this MATCH "\"kotlin multiplatform\"" })
+            assertEquals(listOf(3L), matches { this MATCH "body:sharing" })
+            assertEquals(emptyList(), matches { this MATCH "draft" })
+            assertEquals(listOf(3L), matches { body MATCH "platform" })
+            assertEquals(emptyList(), matches { title MATCH "code" })
+            assertFailsWith<IllegalArgumentException> { BookTable.name MATCH "kotlin" }
+
+            lateinit var all: SelectStatement<Article>
+            lateinit var snippets: SelectStatement<ArticleMatch>
+            lateinit var bodySnippets: SelectStatement<ArticleMatch>
+            lateinit var offsets: SelectStatement<ArticleMatch>
+            lateinit var matchInfo: SelectStatement<ArticleMatchInfo>
+            database {
+                ArticleTable { table ->
+                    all = table SELECT X
+                    snippets = table SELECT listOf(table.snippet() AS ArticleMatch::excerpt) WHERE (table MATCH "search")
+                    bodySnippets = table SELECT listOf(table.snippet("[", "]", column = 1) AS ArticleMatch::excerpt) WHERE (table MATCH "run")
+                    offsets = table SELECT listOf(table.offsets() AS ArticleMatch::excerpt) WHERE (table MATCH "coroutines")
+                    matchInfo = table SELECT listOf(table.matchinfo() AS ArticleMatchInfo::info) WHERE (table MATCH "kotlin")
+                }
+            }
+            assertEquals("draft", all.getResults().first().note)
+            assertEquals(listOf(ArticleMatch("SQLite Full-Text Search", "SQLite Full-Text <b>Search</b>")), snippets.getResults())
+            assertEquals(listOf(ArticleMatch("Kotlin Coroutines", "[Running] suspending functions concurrently")), bodySnippets.getResults())
+            // Column 0, term 0 of the query, at byte 7, 10 bytes long
+            assertEquals(listOf(ArticleMatch("Kotlin Coroutines", "0 0 7 10")), offsets.getResults())
+            // "pcx": 1 phrase, 3 columns, and 3 numbers for each of them, of 4 bytes each
+            assertEquals(listOf(44, 44), matchInfo.getResults().map { it.info.size })
+
+            database {
+                ArticleTable { table ->
+                    table UPDATE SET { body = "Structured concurrency" } WHERE (rowid EQ 1L)
+                    table DELETE WHERE (table MATCH "multiplatform")
+                }
+            }
+            assertEquals(listOf(1L), matches { this MATCH "structured" })
+            assertEquals(emptyList(), matches { this MATCH "running" })
+            assertEquals(listOf(1L), matches { this MATCH "kotlin" })
+
+            // A virtual table has no triggers, but its observed queries see SQLlin's statements that write to it
+            val kotlinArticles = Channel<List<Article>>(Channel.UNLIMITED)
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) { ArticleTable SELECT WHERE(ArticleTable MATCH "kotlin") }
+                    .collect { kotlinArticles.send(it) }
+            }
+            assertEquals(listOf(1L), kotlinArticles.receive().map { it.rowid })
+            database { ArticleTable INSERT Article(rowid = null, title = "Kotlin Flows", body = "Cold streams", note = null) }
+            assertEquals(listOf("Kotlin Coroutines", "Kotlin Flows"), kotlinArticles.receive().map { it.title })
+            database { BookTable INSERT Book(name = "Kotlin in Action", author = "Dmitry Jemerov", price = 40.0, pages = 360) }
+            runCurrent()
+            assertEquals(true, kotlinArticles.tryReceive().isFailure)
+
+            // Rebuilt under another name, with its rowids, and renamed back, it is still watched. The rebuild itself
+            // leaves the results as they were, so it emits nothing.
+            val newArticles = ArticleTable.withName("articles_new")
+            assertEquals(true, newArticles is FtsTable<*>)
+            assertEquals(ArticleTable.createSQL.replace(" articles ", " articles_new "), newArticles.createSQL)
+            database {
+                CREATE(newArticles)
+                newArticles INSERT (ArticleTable SELECT X)
+                DROP(ArticleTable)
+                "articles_new" ALTER_RENAME_TABLE_TO ArticleTable
+            }
+            database { ArticleTable DELETE WHERE (ArticleTable MATCH "flows") }
+            assertEquals(listOf(1L), kotlinArticles.receive().map { it.rowid })
+        }
+    }
+
+    /**
+     * Covers FTS3 tables: a tokenizer with an argument, which here removes diacritics, and a rowid named docid that the
+     * caller supplies, through INSERT, INSERT_OR_REPLACE, UPDATE and DELETE.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testFts3() = Database(getFtsDBConfig()).databaseAutoClose { database ->
+        assertEquals("CREATE VIRTUAL TABLE notes USING fts3(text,tokenize=unicode61 \"remove_diacritics=1\")", NoteTable.createSQL)
+        fun matches(block: NoteTable.() -> SelectCondition): List<Note> {
+            lateinit var statement: SelectStatement<Note>
+            database {
+                statement = NoteTable SELECT WHERE(NoteTable.block())
+            }
+            return statement.getResults()
+        }
+        database {
+            NoteTable INSERT listOf(Note(docid = 5, text = "Crème brûlée"), Note(docid = 9, text = "Café au lait"))
+        }
+        assertEquals(listOf(Note(docid = 5, text = "Crème brûlée")), matches { this MATCH "creme" })
+        assertEquals(listOf(9L), matches { text MATCH "cafe" }.map { it.docid })
+
+        database {
+            NoteTable { table ->
+                table INSERT_OR_REPLACE Note(docid = 5, text = "Tarte Tatin")
+                table UPDATE SET { text = "Crêpe" } WHERE (docid EQ 9L)
+            }
+        }
+        assertEquals(listOf(5L), matches { this MATCH "tatin" }.map { it.docid })
+        assertEquals(emptyList(), matches { this MATCH "creme" })
+        assertEquals(listOf(9L), matches { this MATCH "crepe" }.map { it.docid })
+
+        database { NoteTable DELETE WHERE (NoteTable MATCH "tatin") }
+        lateinit var all: SelectStatement<Note>
+        database {
+            all = NoteTable SELECT X
+        }
+        assertEquals(listOf(Note(docid = 9, text = "Crêpe")), all.getResults())
+    }
+
+    /**
+     * Covers CHECK constraints: their SQL, with a column's unnamed ones before its named ones, rows that pass them,
+     * NULL included, rows that fail one, which SQLite reports by its name, an UPDATE that fails one and leaves the row
+     * as it was, and an INSERT_OR_IGNORE that skips the rows failing one. SQLite reports an unnamed one by its
+     * expression from 3.34 on, and by the table's name before, as on Android below API 34.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testCheckConstraint() {
+        assertEquals(
+            "CREATE TABLE CheckedMembership(id INTEGER PRIMARY KEY," +
+                "name TEXT NOT NULL CHECK (length(trim(name)) > 0) CONSTRAINT lower_case_name CHECK (lower(name) = name)," +
+                "age INT CHECK (age BETWEEN 0 AND 150),level INT NOT NULL CHECK (level IN (0, 1, 2)),startDate TEXT NOT NULL," +
+                "endDate TEXT CHECK (endDate IS NULL OR date(endDate) IS endDate)," +
+                "CONSTRAINT valid_period CHECK (endDate IS NULL OR endDate >= startDate))",
+            CheckedMembershipTable.createSQL,
+        )
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = { CREATE(CheckedMembershipTable) },
+        )
+        fun member(name: String = "ann", age: Int? = 30, level: Int = 0, endDate: String? = null) =
+            CheckedMembership(id = null, name = name, age = age, level = level, startDate = "2026-01-01", endDate = endDate)
+        Database(config).databaseAutoClose { database ->
+            fun failure(block: DatabaseScope.() -> Unit): String = assertFails { database(block) }.message.orEmpty()
+            fun assertReports(message: String, name: String?, expression: String?) {
+                val reported = if (name != null)
+                    name in message
+                else
+                    expression!! in message || "CHECK constraint failed: CheckedMembership" in message
+                assertEquals(true, reported, "'$message' doesn't report the constraint '${name ?: expression}'")
+            }
+            fun names(): List<String> {
+                lateinit var statement: SelectStatement<CheckedMembership>
+                database {
+                    statement = CheckedMembershipTable SELECT X
+                }
+                return statement.getResults().map { it.name }
+            }
+
+            // NULL passes a constraint, as it isn't false
+            database {
+                CheckedMembershipTable INSERT listOf(member(), member(name = "bob", age = null, level = 2, endDate = "2026-12-31"))
+            }
+            assertEquals(listOf("ann", "bob"), names())
+
+            // The rows failing a named constraint, and those failing an unnamed one, with its expression
+            val namedFailures = mapOf(
+                member(name = "Cat") to "lower_case_name",
+                member(endDate = "2025-12-31") to "valid_period",
+            )
+            val unnamedFailures = mapOf(
+                member(name = "   ") to "length(trim(name)) > 0",
+                member(age = 200) to "age BETWEEN 0 AND 150",
+                member(level = 3) to "level IN (0, 1, 2)",
+                member(endDate = "2026-13-01") to "date(endDate) IS endDate",
+            )
+            for ((row, name) in namedFailures)
+                assertReports(failure { CheckedMembershipTable INSERT row }, name = name, expression = null)
+            for ((row, expression) in unnamedFailures)
+                assertReports(failure { CheckedMembershipTable INSERT row }, name = null, expression = expression)
+            assertEquals(listOf("ann", "bob"), names())
+
+            val message = failure {
+                CheckedMembershipTable { table -> table UPDATE SET { level = 5 } WHERE (name EQ "ann") }
+            }
+            assertReports(message, name = null, expression = "level IN (0, 1, 2)")
+            lateinit var levels: SelectStatement<CheckedMembership>
+            database {
+                levels = CheckedMembershipTable SELECT ORDER_BY(CheckedMembershipTable.name)
+            }
+            assertEquals(listOf(0, 2), levels.getResults().map { it.level })
+
+            database {
+                CheckedMembershipTable INSERT_OR_IGNORE listOf(member(name = "dan"), member(name = "Eve"), member(name = "fay", age = -1))
+            }
+            assertEquals(listOf("ann", "bob", "dan"), names())
+        }
+    }
+
+    /**
+     * Covers subqueries: derived tables in FROM and in a join, one joining a table with itself, IN with a subquery
+     * combined with other conditions, correlated EXISTS, NOT, subqueries in UPDATE and DELETE, IN subqueries that don't
+     * fit, and observed queries that watch the tables their subqueries read. Parameters of the subqueries and of the
+     * queries they are in are bound in the order the SQL has them.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, ExperimentalDSLDatabaseAPI::class)
+    fun testSubquery() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        runTest {
+            database {
+                BookTable INSERT listOf(
+                    Book(name = "The Da Vinci Code", author = "Dan Brown", price = 16.96, pages = 454),
+                    Book(name = "The Lost Symbol", author = "Dan Brown", price = 19.95, pages = 510),
+                    Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251),
+                    Book(name = "Cheap Book", author = "Dan Brown", price = 5.0, pages = 10),
+                )
+                PersonWithIdTable INSERT listOf(
+                    PersonWithId(id = null, name = "Dan Brown", age = 61),
+                    PersonWithId(id = null, name = "Ken Kousen", age = 60),
+                    PersonWithId(id = null, name = "Ann", age = 30),
+                )
+            }
+
+            lateinit var prolific: SelectStatement<AuthorBooks>
+            lateinit var personBooks: SelectStatement<PersonBooks>
+            lateinit var pairs: SelectStatement<YoungerAndElder>
+            database {
+                // The books over 10 of each author; a derived table can be read by several queries
+                val authorBooks = BookTable { table ->
+                    table SELECT listOf(count(X) AS AuthorBooks::books) WHERE (price GT 10.0) GROUP_BY author
+                } AS AuthorBooksView
+                prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
+                personBooks = PersonWithIdTable SELECT INNER_JOIN<PersonBooks>(authorBooks) ON (PersonWithIdTable.name EQ AuthorBooksView.author)
+                // The persons under other names join their table with itself
+                val elders = PersonWithIdTable { table ->
+                    table SELECT listOf(name AS Elder::elderName, age AS Elder::elderAge)
+                } AS ElderView
+                pairs = PersonWithIdTable SELECT INNER_JOIN<YoungerAndElder>(elders) ON (ElderView.elderAge GT PersonWithIdTable.age)
+            }
+            assertEquals(listOf(AuthorBooks("Dan Brown", 2)), prolific.getResults())
+            assertEquals(
+                listOf(PersonBooks("Dan Brown", 61, 2), PersonBooks("Ken Kousen", 60, 1)),
+                personBooks.getResults().sortedBy { it.name },
+            )
+            assertEquals(
+                listOf(YoungerAndElder("Ann", "Dan Brown"), YoungerAndElder("Ann", "Ken Kousen"), YoungerAndElder("Ken Kousen", "Dan Brown")),
+                pairs.getResults().sortedWith(compareBy({ it.name }, { it.elderName })),
+            )
+
+            lateinit var expensiveAuthors: SelectStatement<PersonWithId>
+            lateinit var shortBookAuthors: SelectStatement<PersonWithId>
+            lateinit var withoutBooks: SelectStatement<PersonWithId>
+            lateinit var middleAged: SelectStatement<PersonWithId>
+            database {
+                PersonWithIdTable { table ->
+                    expensiveAuthors = table SELECT WHERE((age GT 50) AND (name IN (BookTable SELECT WHERE<BookAuthor>(BookTable.price GT 30.0))))
+                    shortBookAuthors = table SELECT WHERE(EXISTS(BookTable SELECT WHERE((BookTable.author EQ name) AND (BookTable.pages LT 300) AND (BookTable.price GT 6.0))))
+                    withoutBooks = table SELECT WHERE(NOT(EXISTS(BookTable SELECT WHERE(BookTable.author EQ name))))
+                    middleAged = table SELECT WHERE(NOT((age LT 40) OR (age GT 60)))
+                }
+            }
+            assertEquals(listOf("Ken Kousen"), expensiveAuthors.getResults().map { it.name })
+            assertEquals(listOf("Ken Kousen"), shortBookAuthors.getResults().map { it.name })
+            assertEquals(listOf("Ann"), withoutBooks.getResults().map { it.name })
+            assertEquals(listOf("Ken Kousen"), middleAged.getResults().map { it.name })
+
+            // IN compares with a single column of values of the same kind
+            assertFailsWith<IllegalArgumentException> {
+                database { PersonWithIdTable SELECT WHERE(PersonWithIdTable.age IN (BookTable SELECT X<BookAuthor>())) }
+            }
+            assertFailsWith<IllegalArgumentException> {
+                database { PersonWithIdTable SELECT WHERE(PersonWithIdTable.name IN (BookTable SELECT X<BookTitle>())) }
+            }
+
+            // Subqueries in UPDATE and DELETE, after the parameters of SET
+            database {
+                PersonWithIdTable { table ->
+                    table UPDATE SET { age = 62 } WHERE (name IN (BookTable SELECT WHERE<BookAuthor>(BookTable.pages GT 500)))
+                }
+                PersonWithIdTable DELETE WHERE(NOT(PersonWithIdTable.name IN (BookTable SELECT X<BookAuthor>())))
+            }
+            lateinit var persons: SelectStatement<PersonWithId>
+            database {
+                persons = PersonWithIdTable SELECT X
+            }
+            assertEquals(listOf("Dan Brown" to 62, "Ken Kousen" to 60), persons.getResults().map { it.name to it.age }.sortedBy { it.first })
+
+            // Observed queries watch the tables their derived tables and IN subqueries read
+            val books = Channel<List<PersonBooks>>(Channel.UNLIMITED)
+            val oldest = Channel<List<PersonWithId>>(Channel.UNLIMITED)
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) {
+                    val authorBooks = BookTable { table -> table SELECT listOf(count(X) AS AuthorBooks::books) GROUP_BY author } AS AuthorBooksView
+                    PersonWithIdTable SELECT INNER_JOIN<PersonBooks>(authorBooks) ON (PersonWithIdTable.name EQ AuthorBooksView.author)
+                }.collect { books.send(it) }
+            }
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) {
+                    PersonWithIdTable { table -> table SELECT WHERE(age IN (table SELECT listOf(max(age) AS PersonAge::age))) }
+                }.collect { oldest.send(it) }
+            }
+            assertEquals(listOf(3L, 1L), books.receive().sortedBy { it.name }.map { it.books })
+            assertEquals(listOf("Dan Brown"), oldest.receive().map { it.name })
+            database { BookTable INSERT Book(name = "Inferno", author = "Ken Kousen", price = 18.0, pages = 480) }
+            assertEquals(listOf(3L, 2L), books.receive().sortedBy { it.name }.map { it.books })
+            database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Old Timer", age = 99) }
+            assertEquals(listOf("Old Timer"), oldest.receive().map { it.name })
+        }
+    }
+
+    /**
+     * Covers conditions combined with AND and OR, which apply in the order they are written, as Kotlin's infix functions
+     * do, though SQL gives AND precedence over OR: a condition that combines others with the other operator is put in
+     * parentheses, while one that combines them with the same operator isn't.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testConditionPrecedence() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        database {
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "a", age = 1),
+                PersonWithId(id = null, name = "x", age = 2),
+                PersonWithId(id = null, name = "y", age = 1),
+                PersonWithId(id = null, name = "x", age = 3),
+            )
+        }
+        fun select(condition: PersonWithIdTable.() -> SelectCondition): SelectStatement<PersonWithId> {
+            lateinit var statement: SelectStatement<PersonWithId>
+            database {
+                statement = PersonWithIdTable SELECT WHERE(PersonWithIdTable.condition())
+            }
+            return statement
+        }
+        fun names(condition: PersonWithIdTable.() -> SelectCondition): List<String> =
+            select(condition).getResults().map { it.name }.sorted()
+
+        val statement = select { (age EQ 1) OR (age EQ 2) AND (name EQ "x") }
+        assertEquals(
+            "SELECT id,name,age FROM person_with_id WHERE (person_with_id.age=? OR person_with_id.age=?) AND person_with_id.name=?",
+            statement.sqlStr,
+        )
+        assertEquals(listOf("x"), statement.getResults().map { it.name })
+        assertEquals(listOf("a", "x", "y"), names { (age EQ 1) OR ((age EQ 2) AND (name EQ "x")) })
+        assertEquals(listOf("x"), names { (name EQ "x") AND ((age EQ 2) OR (age EQ 1)) })
+        assertEquals(listOf("a", "x", "y"), names { (name EQ "x") AND (age EQ 3) OR (age EQ 1) })
+        assertEquals(listOf("a", "x", "x", "y"), names { (age EQ 1) OR (age EQ 2) OR (age EQ 3) })
+        assertEquals(listOf("x"), names { NOT((age EQ 1) OR (age EQ 2)) AND (name EQ "x") })
+    }
+
+    /**
+     * Covers a condition kept in a variable and used in several statements: combining it with others leaves its own
+     * parameters as they were, so that each statement binds the parameters its SQL has.
+     */
+    fun testConditionReuse() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        database {
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "a", age = 1),
+                PersonWithId(id = null, name = "x", age = 2),
+                PersonWithId(id = null, name = "y", age = 3),
+            )
+        }
+        val older = PersonWithIdTable.age GTE 2
+        lateinit var combined: SelectStatement<PersonWithId>
+        lateinit var alone: SelectStatement<PersonWithId>
+        lateinit var either: SelectStatement<PersonWithId>
+        database {
+            PersonWithIdTable { table ->
+                combined = table SELECT WHERE(older AND (name EQ "x"))
+                alone = table SELECT WHERE(older)
+                either = table SELECT WHERE(older OR (name EQ "a"))
+            }
+        }
+        assertEquals(listOf("x"), combined.getResults().map { it.name })
+        assertEquals(listOf("x", "y"), alone.getResults().map { it.name }.sorted())
+        assertEquals(listOf("a", "x", "y"), either.getResults().map { it.name }.sorted())
+    }
+
+    /**
+     * Covers joins of relations: USING and NATURAL joins, which merge the columns of the same name, result columns with
+     * GROUP BY on an outer join, three joined tables, CROSS JOIN, a derived table joined with parameters in the
+     * subquery, the ON condition and WHERE, the checks of the type rows are read into, RIGHT and FULL OUTER JOIN where
+     * SQLite has them, and an observed query of a join.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+    fun testJoinedRelation() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        runTest {
+            database {
+                BookTable INSERT listOf(
+                    Book(name = "The Da Vinci Code", author = "Dan Brown", price = 16.96, pages = 454),
+                    Book(name = "The Lost Symbol", author = "Dan Brown", price = 19.95, pages = 510),
+                    Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251),
+                )
+                CategoryTable INSERT listOf(
+                    Category(name = "The Da Vinci Code", code = 1),
+                    Category(name = "Kotlin Cookbook", code = 2),
+                    Category(name = "Unwritten", code = 3),
+                )
+                PersonWithIdTable INSERT listOf(
+                    PersonWithId(id = null, name = "Dan Brown", age = 61),
+                    PersonWithId(id = null, name = "Ken Kousen", age = 60),
+                    PersonWithId(id = null, name = "Ann", age = 30),
+                )
+            }
+
+            lateinit var using: SelectStatement<Joiner>
+            lateinit var natural: SelectStatement<Joiner>
+            lateinit var stats: SelectStatement<PersonBookStats>
+            lateinit var titles: SelectStatement<PersonBookTitle>
+            lateinit var codes: SelectStatement<AuthorCode>
+            lateinit var crossCount: SelectStatement<BookCount>
+            lateinit var prolific: SelectStatement<PersonBooks>
+            database {
+                // USING and NATURAL merge 'name', which book and category both have
+                using = (FROM(BookTable) INNER_JOIN CategoryTable USING BookTable.name) SELECT WHERE<Joiner>(CategoryTable.code GT 0)
+                natural = (FROM(BookTable) NATURAL_JOIN CategoryTable) SELECT X<Joiner>()
+                // Ann has no books: count is 0, while max is NULL
+                stats = (FROM(PersonWithIdTable) LEFT_OUTER_JOIN BookTable ON (PersonWithIdTable.name EQ BookTable.author)) SELECT listOf(
+                    PersonWithIdTable.name AS PersonBookStats::name,
+                    PersonWithIdTable.count(BookTable.name) AS PersonBookStats::books,
+                    PersonWithIdTable.max(BookTable.price) AS PersonBookStats::highest,
+                ) GROUP_BY PersonWithIdTable.name
+                titles = (FROM(PersonWithIdTable) LEFT_OUTER_JOIN BookTable ON (PersonWithIdTable.name EQ BookTable.author)) SELECT listOf(
+                    BookTable.name AS PersonBookTitle::title,
+                ) WHERE (PersonWithIdTable.age LT 40)
+                codes = (
+                    FROM(PersonWithIdTable)
+                        INNER_JOIN BookTable ON (PersonWithIdTable.name EQ BookTable.author)
+                        INNER_JOIN CategoryTable ON (BookTable.name EQ CategoryTable.name)
+                ) SELECT X<AuthorCode>()
+                crossCount = (FROM(BookTable) CROSS_JOIN CategoryTable) SELECT listOf(BookTable.count(X) AS BookCount::books)
+                // Parameters of the derived table, of ON and of WHERE, in this order
+                val authorBooks = BookTable { table ->
+                    table SELECT listOf(count(X) AS AuthorBooks::books) WHERE (price GT 10.0) GROUP_BY author
+                } AS AuthorBooksView
+                prolific = (FROM(PersonWithIdTable) INNER_JOIN authorBooks ON ((PersonWithIdTable.name EQ AuthorBooksView.author) AND (AuthorBooksView.books GT 1))) SELECT WHERE<PersonBooks>(PersonWithIdTable.age GT 50)
+            }
+            assertEquals(listOf("Kotlin Cookbook" to 2, "The Da Vinci Code" to 1), using.getResults().map { it.name to it.code }.sortedBy { it.first })
+            assertEquals(using.getResults().sortedBy { it.name }, natural.getResults().sortedBy { it.name })
+            assertEquals(
+                listOf(PersonBookStats("Ann", 0, null), PersonBookStats("Dan Brown", 2, 19.95), PersonBookStats("Ken Kousen", 1, 37.72)),
+                stats.getResults().sortedBy { it.name },
+            )
+            assertEquals(listOf(PersonBookTitle(30, null)), titles.getResults())
+            assertEquals(listOf(AuthorCode(60, 2), AuthorCode(61, 1)), codes.getResults().sortedBy { it.age })
+            assertEquals(listOf(BookCount(9)), crossCount.getResults())
+            assertEquals(listOf(PersonBooks("Dan Brown", 61, 2)), prolific.getResults())
+
+            // The type rows are read into is checked against the joined relations
+            val ambiguous = assertFailsWith<IllegalArgumentException> {
+                database { (FROM(BookTable) INNER_JOIN CategoryTable ON (BookTable.name EQ CategoryTable.name)) SELECT X<Joiner>() }
+            }
+            assertEquals(true, "can't be told apart" in ambiguous.message!!, ambiguous.message)
+            val outerColumn = assertFailsWith<IllegalArgumentException> {
+                database { (FROM(PersonWithIdTable) LEFT_OUTER_JOIN BookTable ON (PersonWithIdTable.name EQ BookTable.author)) SELECT X<BookAuthor>() }
+            }
+            assertEquals(true, "outer join" in outerColumn.message!!, outerColumn.message)
+            val outerExpression = assertFailsWith<IllegalArgumentException> {
+                database {
+                    (FROM(PersonWithIdTable) LEFT_OUTER_JOIN BookTable ON (PersonWithIdTable.name EQ BookTable.author)) SELECT listOf(BookTable.name AS NameOnly::name)
+                }
+            }
+            assertEquals(true, "outer join" in outerExpression.message!!, outerExpression.message)
+            assertFailsWith<IllegalArgumentException> {
+                database { (FROM(BookTable) INNER_JOIN BookTable ON (BookTable.name EQ BookTable.name)) SELECT X<BookAuthor>() }
+            }
+            val otherTable = assertFailsWith<IllegalArgumentException> {
+                database { (FROM(BookTable) CROSS_JOIN CategoryTable) SELECT listOf(PersonWithIdTable.name AS NameOnly::name) }
+            }
+            assertEquals(true, "belongs to table 'person_with_id'" in otherTable.message!!, otherTable.message)
+
+            // RIGHT and FULL OUTER JOIN need SQLite 3.39.0, which Android has from API 34 on
+            val outerJoins = try {
+                lateinit var right: SelectStatement<Joiner>
+                lateinit var full: SelectStatement<Joiner>
+                database {
+                    right = (FROM(BookTable) RIGHT_OUTER_JOIN CategoryTable USING BookTable.name) SELECT X<Joiner>()
+                    full = (FROM(BookTable) FULL_OUTER_JOIN CategoryTable USING BookTable.name) SELECT X<Joiner>()
+                }
+                right.getResults() to full.getResults()
+            } catch (e: Exception) {
+                assertEquals(true, "RIGHT and FULL OUTER JOINs are not currently supported" in e.message.orEmpty(), e.message)
+                null
+            }
+            outerJoins?.let { (right, full) ->
+                assertEquals(listOf(1, 2, 3), right.map { it.code }.sortedBy { it })
+                assertEquals(listOf(null), right.filter { it.code == 3 }.map { it.author })
+                assertEquals(4, full.size)
+            }
+
+            // An observed query of a join watches all its tables
+            val observed = Channel<List<PersonBookStats>>(Channel.UNLIMITED)
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) {
+                    (FROM(PersonWithIdTable) LEFT_OUTER_JOIN BookTable ON (PersonWithIdTable.name EQ BookTable.author)) SELECT listOf(
+                        PersonWithIdTable.name AS PersonBookStats::name,
+                        PersonWithIdTable.count(BookTable.name) AS PersonBookStats::books,
+                        PersonWithIdTable.max(BookTable.price) AS PersonBookStats::highest,
+                    ) GROUP_BY PersonWithIdTable.name
+                }.collect { observed.send(it) }
+            }
+            assertEquals(0L, observed.receive().single { it.name == "Ann" }.books)
+            database { BookTable INSERT Book(name = "Ann's Book", author = "Ann", price = 9.0, pages = 99) }
+            assertEquals(1L, observed.receive().single { it.name == "Ann" }.books)
+        }
+    }
+
     @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
     fun testConcurrency() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         runTest {
@@ -447,22 +1292,29 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    /**
+     * Checks that the processor generates a column property in `SET {}` for every supported type, of that type: each
+     * assignment only compiles while it is. Reading one is a compile error, as its getter only returns a placeholder.
+     */
     fun testPrimitiveTypeForKSP() {
         TestPrimitiveTypeForKSPTable {
             SET {
-                assertEquals(0, testInt)
-                assertEquals(0L, testLong)
-                assertEquals(0, testShort)
-                assertEquals(0, testByte)
-                assertEquals(0F, testFloat)
-                assertEquals(0.0, testDouble)
-                assertEquals(0U, testUInt)
-                assertEquals(0UL, testULong)
-                assertEquals(0U, testUShort)
-                assertEquals(0U, testUByte)
-                assertEquals(false, testBoolean)
-                assertEquals('0', testChar)
-                assertEquals("", testString)
+                testInt = 1
+                testLong = 1L
+                testShort = 1
+                testByte = 1
+                testFloat = 1F
+                testDouble = 1.0
+                testUInt = 1U
+                testULong = 1UL
+                testUShort = 1U
+                testUByte = 1U
+                testBoolean = null
+                testChar = null
+                testString = "1"
+                testByteArray = byteArrayOf(1)
+                testEnum = Priority.HIGH
+                testTypeAlias = 1
             }
         }
     }
@@ -853,6 +1705,967 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers DISTINCT in aggregate functions: `count`, `sum`, `avg` and `group_concat` of the distinct values, next to
+     * the aggregates of all values.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testDistinctAggregate() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            BookTable INSERT listOf(
+                Book(name = "The Da Vinci Code", author = "Dan Brown", price = 10.0, pages = 100),
+                Book(name = "The Lost Symbol", author = "Dan Brown", price = 10.0, pages = 200),
+                Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 20.0, pages = 100),
+            )
+        }
+        lateinit var totals: SelectStatement<DistinctBookTotals>
+        database {
+            BookTable { table ->
+                totals = table SELECT listOf(
+                    count(DISTINCT(author)) AS DistinctBookTotals::authors,
+                    count(author) AS DistinctBookTotals::books,
+                    sum(DISTINCT(price)) AS DistinctBookTotals::distinctPrice,
+                    sum(price) AS DistinctBookTotals::totalPrice,
+                    sum(DISTINCT(pages)) AS DistinctBookTotals::distinctPages,
+                    avg(DISTINCT(pages)) AS DistinctBookTotals::averageDistinctPages,
+                    group_concat(DISTINCT(author)) AS DistinctBookTotals::authorNames,
+                )
+            }
+        }
+        val total = totals.getResults().single()
+        assertEquals(2L, total.authors)
+        assertEquals(3L, total.books)
+        assertEquals(30.0, total.distinctPrice!!, 1e-9)
+        assertEquals(40.0, total.totalPrice!!, 1e-9)
+        assertEquals(300L, total.distinctPages)
+        assertEquals(150.0, total.averageDistinctPages!!, 1e-9)
+        val authorNames = total.authorNames!!.split(',')
+        assertEquals(setOf("Dan Brown", "Ken Kousen"), authorNames.toSet())
+        assertEquals(2, authorNames.size)
+
+        // In HAVING, as any aggregate function
+        lateinit var prolificAuthors: SelectStatement<Book>
+        database {
+            prolificAuthors = BookTable SELECT GROUP_BY(BookTable.author) HAVING (BookTable.count(DISTINCT(BookTable.pages)) GT 1)
+        }
+        assertEquals(listOf("Dan Brown"), prolificAuthors.getResults().map { it.author })
+    }
+
+    /**
+     * Covers LIKE with ESCAPE: `%` and `_` after the escape character match only themselves, while without it they are
+     * wildcards; the escaped LIKE combines with other conditions as any condition does.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testLikeEscape() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            ProductTable INSERT listOf(
+                Product(sku = "SKU-1", name = "100% cotton", price = 1.0),
+                Product(sku = "SKU-2", name = "1000 threads", price = 2.0),
+                Product(sku = "SKU-3", name = "a_b", price = 3.0),
+                Product(sku = "SKU-4", name = "axb", price = 4.0),
+            )
+        }
+        lateinit var percent: SelectStatement<Product>
+        lateinit var wildcard: SelectStatement<Product>
+        lateinit var underscore: SelectStatement<Product>
+        lateinit var combined: SelectStatement<Product>
+        database {
+            percent = ProductTable SELECT WHERE (ProductTable.name LIKE "100\\%%" ESCAPE '\\')
+            wildcard = ProductTable SELECT WHERE (ProductTable.name LIKE "100%") ORDER_BY (ProductTable.sku to ASC)
+            underscore = ProductTable SELECT WHERE (ProductTable.name LIKE "a!_b" ESCAPE '!')
+            combined = ProductTable SELECT WHERE ((ProductTable.price GT 3.5) OR (ProductTable.name LIKE "a!_%" ESCAPE '!')) ORDER_BY (ProductTable.sku to ASC)
+        }
+        assertEquals(listOf("SKU-1"), percent.getResults().map { it.sku })
+        assertEquals(listOf("SKU-1", "SKU-2"), wildcard.getResults().map { it.sku })
+        assertEquals(listOf("SKU-3"), underscore.getResults().map { it.sku })
+        assertEquals(listOf("SKU-3", "SKU-4"), combined.getResults().map { it.sku })
+    }
+
+    /**
+     * Covers arithmetic and concatenation: the operators of numbers of the same type, with values too, a division by
+     * zero being NULL, a negative value written so as not to start a comment, and `+` of strings. Expressions work in
+     * WHERE and ORDER BY too, but a literal on its own in ORDER BY or GROUP BY is rejected, as SQLite would read it as
+     * the number of a result column, and an expression that can be NULL in a non-null property is rejected.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testArithmetic() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            BookTable INSERT listOf(
+                Book(name = "Kotlin", author = "Ken", price = 10.0, pages = 100),
+                Book(name = "Swift", author = "Sam", price = 20.0, pages = 30),
+            )
+        }
+        lateinit var math: SelectStatement<BookMath>
+        lateinit var expensive: SelectStatement<Book>
+        lateinit var byNegatedPrice: SelectStatement<Book>
+        database {
+            BookTable { table ->
+                math = table SELECT listOf(
+                    (price * 2.0) AS BookMath::doubledPrice,
+                    (CAST(pages AS DOUBLE) / price) AS BookMath::pagesPerPrice,
+                    (-pages) AS BookMath::negatedPages,
+                    (pages - (-1)) AS BookMath::nextPage,
+                    (name + " by " + author) AS BookMath::label,
+                    (pages % 7) AS BookMath::remainder,
+                    (pages / 0) AS BookMath::perZero,
+                ) ORDER_BY (name to ASC)
+                expensive = table SELECT WHERE((price * 2.0) GT 30.0)
+                byNegatedPrice = table SELECT ORDER_BY((price * -1.0) to ASC)
+            }
+        }
+        assertEquals(
+            listOf(
+                BookMath("Kotlin", doubledPrice = 20.0, pagesPerPrice = 10.0, negatedPages = -100, nextPage = 101, label = "Kotlin by Ken", remainder = 2, perZero = null),
+                BookMath("Swift", doubledPrice = 40.0, pagesPerPrice = 1.5, negatedPages = -30, nextPage = 31, label = "Swift by Sam", remainder = 2, perZero = null),
+            ),
+            math.getResults(),
+        )
+        assertEquals(listOf("Swift"), expensive.getResults().map { it.name })
+        assertEquals(listOf("Swift", "Kotlin"), byNegatedPrice.getResults().map { it.name })
+
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable SELECT ORDER_BY(literal(1) to ASC) }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable SELECT GROUP_BY(literal(1)) }
+        }
+        // A division by zero is NULL, so it can't be read into a non-null property
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable { table -> table SELECT ((pages / 0) AS BookPages::pages) } }
+        }
+    }
+
+    /**
+     * Covers CAST to the types SQLlin names the columns of: a real number is truncated, a string read as far as it is a
+     * number, and numbers of different types computed with after a CAST.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testCast() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            BookTable INSERT Book(name = "Kotlin", author = "Ken", price = 10.5, pages = 100)
+        }
+        lateinit var casts: SelectStatement<BookCasts>
+        database {
+            BookTable { table ->
+                casts = table SELECT listOf(
+                    CAST(price AS INT) AS BookCasts::wholePrice,
+                    CAST(pages AS TEXT) AS BookCasts::pagesText,
+                    CAST(name AS BLOB) AS BookCasts::nameBytes,
+                    CAST(literal("12abc") AS INT) AS BookCasts::leadingDigits,
+                    (CAST(pages AS DOUBLE) * price) AS BookCasts::weighted,
+                )
+            }
+        }
+        val cast = casts.getResults().single()
+        assertEquals(10, cast.wholePrice)
+        assertEquals("100", cast.pagesText)
+        assertEquals("Kotlin", cast.nameBytes.decodeToString())
+        assertEquals(12, cast.leadingDigits)
+        assertEquals(1050.0, cast.weighted, 1e-9)
+    }
+
+    /**
+     * Covers the functions that replace NULL, with a value or another expression, and are NULL only where all their
+     * arguments can be, NULLIF, which can always be NULL, and the scalar max and min of several expressions.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testNullFunctions() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            UserAccountTable INSERT listOf(
+                UserAccount(id = null, username = "ann", email = "ann@mail", status = UserStatus.ACTIVE, priority = Priority.LOW, notes = null),
+                UserAccount(id = null, username = "bob", email = "bob@mail", status = UserStatus.ACTIVE, priority = Priority.HIGH, notes = "vip"),
+            )
+        }
+        lateinit var results: SelectStatement<NullFunctionResults>
+        database {
+            UserAccountTable { table ->
+                results = table SELECT listOf(
+                    coalesce(notes, "none") AS NullFunctionResults::notesOrNone,
+                    coalesce(notes, email) AS NullFunctionResults::notesOrEmail,
+                    ifnull(notes, "none") AS NullFunctionResults::ifNullNotes,
+                    nullif(username, "bob") AS NullFunctionResults::notBob,
+                    max(username, email) AS NullFunctionResults::greater,
+                    min(username, email) AS NullFunctionResults::lesser,
+                ) ORDER_BY (username to ASC)
+            }
+        }
+        assertEquals(
+            listOf(
+                NullFunctionResults("ann", notesOrNone = "none", notesOrEmail = "ann@mail", ifNullNotes = "none", notBob = "ann", greater = "ann@mail", lesser = "ann"),
+                NullFunctionResults("bob", notesOrNone = "vip", notesOrEmail = "vip", ifNullNotes = "vip", notBob = null, greater = "bob@mail", lesser = "bob"),
+            ),
+            results.getResults(),
+        )
+        // NULLIF can be NULL, and so can COALESCE of expressions that all can be
+        assertFailsWith<IllegalArgumentException> {
+            database { UserAccountTable { table -> table SELECT (nullif(username, "bob") AS NullFunctionResults::greater) } }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { UserAccountTable { table -> table SELECT (coalesce(notes, notes) AS NullFunctionResults::greater) } }
+        }
+    }
+
+    /**
+     * Covers more string, BLOB and number functions, whose arguments are expressions as well as values, and `total`,
+     * which is 0.0 rather than NULL when no rows match.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testMoreFunctions() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        lateinit var noTotals: SelectStatement<PriceTotals>
+        database {
+            BookTable { table ->
+                noTotals = table SELECT listOf(total(price) AS PriceTotals::total, total(DISTINCT(price)) AS PriceTotals::distinctTotal)
+            }
+        }
+        assertEquals(listOf(PriceTotals(0.0, 0.0)), noTotals.getResults())
+
+        database {
+            BookTable INSERT listOf(
+                Book(name = "Kotlin", author = "0Ken0", price = 10.5, pages = 100),
+                Book(name = "Swift", author = "Sam", price = 10.5, pages = 30),
+                Book(name = "Rust", author = "Rob", price = 20.0, pages = 50),
+            )
+        }
+        lateinit var texts: SelectStatement<TextFunctions>
+        lateinit var totals: SelectStatement<PriceTotals>
+        database {
+            BookTable { table ->
+                texts = table SELECT listOf(
+                    hex(name) AS TextFunctions::hexName,
+                    quote(name) AS TextFunctions::quoted,
+                    unicode(name) AS TextFunctions::firstCode,
+                    trim(author, "0") AS TextFunctions::trimmed,
+                    substr(name, 3) AS TextFunctions::tail,
+                    substr(name, literal(2), literal(3)) AS TextFunctions::middle,
+                    replace(name, literal("Kot"), author) AS TextFunctions::replaced,
+                    instr(name, literal("lin")) AS TextFunctions::position,
+                    printf("%s has %d pages", name, pages) AS TextFunctions::formatted,
+                    round(price) AS TextFunctions::rounded,
+                    length(zeroblob(3)) AS TextFunctions::zeros,
+                    length(randomblob(4)) AS TextFunctions::randomBytes,
+                ) WHERE (name EQ "Kotlin")
+                totals = table SELECT listOf(total(price) AS PriceTotals::total, total(DISTINCT(price)) AS PriceTotals::distinctTotal)
+            }
+        }
+        assertEquals(
+            TextFunctions(
+                hexName = "4B6F746C696E",
+                quoted = "'Kotlin'",
+                firstCode = 75,
+                trimmed = "Ken",
+                tail = "tlin",
+                middle = "otl",
+                replaced = "0Ken0lin",
+                position = 4,
+                formatted = "Kotlin has 100 pages",
+                rounded = 11.0,
+                zeros = 3,
+                randomBytes = 4,
+            ),
+            texts.getResults().single(),
+        )
+        assertEquals(listOf(PriceTotals(total = 41.0, distinctTotal = 30.5)), totals.getResults())
+    }
+
+    /**
+     * Covers the date and time functions, of strings, string and number expressions, with modifiers, and that a function
+     * of the current time, or of the local time, which isn't deterministic, can't be in an index or a partial index's
+     * WHERE, while one of a column can.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testDateTimeFunctions() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            BookTable INSERT Book(name = "2026-01-31", author = "Ken", price = 10.0, pages = 100)
+        }
+        lateinit var times: SelectStatement<DateTimes>
+        database {
+            BookTable { table ->
+                times = table SELECT listOf(
+                    date("2026-10-07 12:30:00") AS DateTimes::day,
+                    date(name, "+1 day") AS DateTimes::nextDay,
+                    time("2026-10-07 12:30:00", "+90 minutes") AS DateTimes::later,
+                    datetime(literal(0), "unixepoch") AS DateTimes::epochStart,
+                    strftime("%Y/%m", "2026-10-07") AS DateTimes::yearMonth,
+                    julianday("2000-01-01 12:00:00") AS DateTimes::julian,
+                    datetime("now") AS DateTimes::now,
+                )
+            }
+        }
+        val result = times.getResults().single()
+        assertEquals(
+            DateTimes(day = "2026-10-07", nextDay = "2026-02-01", later = "14:00:00", epochStart = "1970-01-01 00:00:00", yearMonth = "2026/10", julian = 2451545.0, now = result.now),
+            result,
+        )
+        assertEquals(19, result.now.length)
+        // With a modifier, which may not be valid, it can be NULL
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable { table -> table SELECT (datetime("now", "localtime") AS DateTimes::now) } }
+        }
+
+        database { BookTable.CREATE_INDEX("idx_book_day", BookTable.date(BookTable.name)) }
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable.CREATE_INDEX("idx_book_random", BookTable.random()) }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable.CREATE_INDEX("idx_book_local_day", BookTable.date(BookTable.name, "localtime")) }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable.CREATE_INDEX("idx_book_recent", BookTable.name) WHERE (BookTable.name GT BookTable.datetime("now")) }
+        }
+    }
+
+    /**
+     * Covers the functions that need a newer SQLite, or its math functions, each checked only where the SQLite has it:
+     * Android has no math functions at any API level.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+    fun testPlatformDependentFunctions() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            BookTable INSERT Book(name = "Kotlin", author = "Ken", price = 16.0, pages = 10)
+        }
+        if (sqliteHas("SELECT sqrt(4)")) {
+            lateinit var math: SelectStatement<MathResults>
+            database {
+                BookTable { table ->
+                    math = table SELECT listOf(
+                        sqrt(price) AS MathResults::root,
+                        ceil(literal(1.2)) AS MathResults::ceiling,
+                        floor(pages) AS MathResults::flooredPages,
+                        trunc(literal(-1.5)) AS MathResults::truncated,
+                        pow(pages, literal(2)) AS MathResults::power,
+                        pow(pages, 3.0) AS MathResults::powerOf,
+                        mod(pages, literal(3)) AS MathResults::remainder,
+                        mod(price, 5.0) AS MathResults::remainderOf,
+                        pi() AS MathResults::piValue,
+                        exp(literal(0)) AS MathResults::exponential,
+                        ln(literal(1)) AS MathResults::natural,
+                        log10(literal(100)) AS MathResults::decimal,
+                        log2(literal(8)) AS MathResults::binary,
+                    )
+                }
+            }
+            val result = math.getResults().single()
+            assertEquals(
+                MathResults(root = 4.0, ceiling = 2.0, flooredPages = 10, truncated = -1.0, power = 100.0, powerOf = 1000.0, remainder = 1.0, remainderOf = 1.0, piValue = result.piValue, exponential = 1.0, natural = 0.0, decimal = 2.0, binary = 3.0),
+                result,
+            )
+            assertEquals(kotlin.math.PI, result.piValue, 1e-12)
+        }
+        if (sqliteHas("SELECT sign(1)")) {
+            lateinit var signs: SelectStatement<SignResult>
+            database { BookTable { table -> signs = table SELECT (sign(literal(-3)) AS SignResult::signOf) } }
+            assertEquals(listOf(SignResult(-1)), signs.getResults())
+        }
+        if (sqliteHas("SELECT unixepoch('2020-01-01')")) {
+            lateinit var epochs: SelectStatement<EpochResult>
+            database { BookTable { table -> epochs = table SELECT (unixepoch("2020-01-01") AS EpochResult::epoch) } }
+            assertEquals(listOf(EpochResult(1577836800)), epochs.getResults())
+        }
+    }
+
+    /**
+     * The string in the first column of the first row that [sql] returns from the database, which has to exist, or null.
+     */
+    private fun sqliteString(sql: String): String? {
+        val connection = openDatabase(DatabaseConfiguration(name = DATABASE_NAME, path = path, version = 1, create = {}))
+        return try {
+            connection.withQuery(sql) { cursor -> if (cursor.next()) cursor.getString(0) else null }
+        } finally {
+            connection.close()
+        }
+    }
+
+    /**
+     * Whether the SQLite of the database, which has to exist, can run [sql], as it can't use a function it doesn't have.
+     */
+    private fun sqliteHas(sql: String): Boolean {
+        val connection = openDatabase(DatabaseConfiguration(name = DATABASE_NAME, path = path, version = 1, create = {}))
+        return try {
+            connection.withQuery(sql) { cursor -> cursor.forEachRow { } }
+            true
+        } catch (e: Exception) {
+            false
+        } finally {
+            connection.close()
+        }
+    }
+
+    /**
+     * Covers CASE: the value of the first branch whose condition holds, ELSE where none does, and NULL without ELSE, so
+     * that it can only be read into a nullable property. CASE works in conditions and ORDER BY too, and the values of
+     * its conditions, a quote among them, are written into the SQL.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testCaseExpression() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            BookTable INSERT listOf(
+                Book(name = "Kotlin", author = "Ken", price = 20.0, pages = 300),
+                Book(name = "Swift", author = "Sam", price = 10.0, pages = 30),
+                Book(name = "It's Go", author = "Gus", price = 12.0, pages = 120),
+            )
+        }
+        lateinit var categories: SelectStatement<BookCategory>
+        lateinit var shortBooks: SelectStatement<Book>
+        lateinit var quotedFirst: SelectStatement<Book>
+        database {
+            BookTable { table ->
+                categories = table SELECT listOf(
+                    CASE(
+                        WHEN(pages LT 50) THEN literal("short"),
+                        WHEN(pages LT 200) THEN literal("medium"),
+                        ELSE = literal("long"),
+                    ) AS BookCategory::size,
+                    CASE(WHEN(price GT 15.0) THEN (price * 0.1)) AS BookCategory::discount,
+                ) ORDER_BY (name to ASC)
+                shortBooks = table SELECT WHERE(CASE(WHEN(pages LT 50) THEN literal("short"), ELSE = literal("long")) EQ "short")
+                quotedFirst = table SELECT ORDER_BY(CASE(WHEN(name EQ "It's Go") THEN literal(0), ELSE = literal(1)) to ASC)
+            }
+        }
+        assertEquals(
+            listOf(
+                BookCategory("It's Go", size = "medium", discount = null),
+                BookCategory("Kotlin", size = "long", discount = 2.0),
+                BookCategory("Swift", size = "short", discount = null),
+            ),
+            categories.getResults(),
+        )
+        assertEquals(listOf("Swift"), shortBooks.getResults().map { it.name })
+        assertEquals("It's Go", quotedFirst.getResults().first().name)
+
+        // Without ELSE, CASE can be NULL
+        assertFailsWith<IllegalArgumentException> {
+            database { BookTable { table -> table SELECT (CASE(WHEN(pages LT 50) THEN pages) AS BookPages::pages) } }
+        }
+    }
+
+    /**
+     * Covers scalar subqueries: a SELECT of a single column used as a value, which is NULL when the SELECT returns no
+     * rows, in conditions and result columns. An observed query watches the tables of its scalar subqueries. A SELECT of
+     * more than one column is rejected.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testScalarSubquery() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        runTest {
+            val olderThanPages = Channel<List<PersonWithId>>(Channel.UNLIMITED)
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) {
+                    PersonWithIdTable SELECT WHERE(PersonWithIdTable.age GT (BookTable SELECT listOf(BookTable.max(BookTable.pages) AS MaxPages::value))[MaxPages::value])
+                }.collect { olderThanPages.send(it) }
+            }
+            database {
+                PersonWithIdTable INSERT listOf(
+                    PersonWithId(id = null, name = "Ann", age = 30),
+                    PersonWithId(id = null, name = "Bob", age = 10),
+                )
+            }
+            // No books: the subquery is NULL, so no one is older
+            assertEquals(emptyList(), olderThanPages.receive())
+            runCurrent()
+            while (olderThanPages.tryReceive().isSuccess) Unit
+
+            database {
+                BookTable INSERT listOf(
+                    Book(name = "Kotlin", author = "Ken", price = 20.0, pages = 20),
+                    Book(name = "Swift", author = "Sam", price = 10.0, pages = 5),
+                )
+            }
+            // A change to the subquery's table is seen
+            assertEquals(listOf("Ann"), olderThanPages.receive().map { it.name })
+
+            lateinit var expensive: SelectStatement<Book>
+            lateinit var withMax: SelectStatement<BookWithMaxPages>
+            database {
+                expensive = BookTable SELECT WHERE(BookTable.price GT (BookTable SELECT listOf(BookTable.avg(BookTable.price) AS AveragePrice::value))[AveragePrice::value])
+                BookTable { table ->
+                    withMax = table SELECT ((BookTable SELECT listOf(max(pages) AS MaxPages::value))[MaxPages::value] AS BookWithMaxPages::maxPages) ORDER_BY (name to ASC)
+                }
+            }
+            assertEquals(listOf("Kotlin"), expensive.getResults().map { it.name })
+            assertEquals(listOf(BookWithMaxPages("Kotlin", 20), BookWithMaxPages("Swift", 20)), withMax.getResults())
+
+            assertFailsWith<IllegalArgumentException> {
+                database { BookTable SELECT WHERE(BookTable.name EQ (BookTable SELECT X)[Book::name]) }
+            }
+        }
+    }
+
+    /**
+     * Covers the null-safe comparisons of expressions, IS and IS NOT, which are true or false where EQ and NEQ would be
+     * NULL; the COLLATE operator, in a condition and in ORDER BY; and the bitwise operators.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testExpressionOperators() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            UserAccountTable INSERT listOf(
+                UserAccount(id = null, username = "ann", email = "ann@mail", status = UserStatus.ACTIVE, priority = Priority.LOW, notes = null),
+                UserAccount(id = null, username = "Bob", email = "bob@mail", status = UserStatus.ACTIVE, priority = Priority.HIGH, notes = "vip"),
+                UserAccount(id = null, username = "cat", email = "cat@mail", status = UserStatus.ACTIVE, priority = Priority.HIGH, notes = "new"),
+            )
+            PersonWithIdTable INSERT PersonWithId(id = null, name = "Ann", age = 13)
+        }
+        lateinit var vip: SelectStatement<UserAccount>
+        lateinit var notVip: SelectStatement<UserAccount>
+        lateinit var notVipByNeq: SelectStatement<UserAccount>
+        lateinit var bob: SelectStatement<UserAccount>
+        lateinit var byName: SelectStatement<UserAccount>
+        lateinit var bits: SelectStatement<AgeBits>
+        database {
+            UserAccountTable { table ->
+                vip = table SELECT WHERE(notes IS literal("vip"))
+                notVip = table SELECT WHERE(notes ISNOT literal("vip")) ORDER_BY (username to ASC)
+                notVipByNeq = table SELECT WHERE(notes NEQ literal("vip"))
+                bob = table SELECT WHERE((username COLLATE NOCASE) EQ "BOB")
+                byName = table SELECT ORDER_BY((username COLLATE NOCASE) to ASC)
+            }
+            PersonWithIdTable { table ->
+                bits = table SELECT listOf(
+                    (age and 4) AS AgeBits::anded,
+                    (age or 2) AS AgeBits::ored,
+                    (age shl 2) AS AgeBits::shifted,
+                    (age shr 1) AS AgeBits::halved,
+                    age.inv() AS AgeBits::inverted,
+                )
+            }
+        }
+        assertEquals(listOf("Bob"), vip.getResults().map { it.username })
+        // IS NOT is true for NULL, while != is NULL, so it leaves 'ann' out
+        assertEquals(listOf("ann", "cat"), notVip.getResults().map { it.username })
+        assertEquals(listOf("cat"), notVipByNeq.getResults().map { it.username })
+        assertEquals(listOf("Bob"), bob.getResults().map { it.username })
+        assertEquals(listOf("ann", "Bob", "cat"), byName.getResults().map { it.username })
+        assertEquals(listOf(AgeBits(anded = 4, ored = 15, shifted = 52, halved = 6, inverted = -14)), bits.getResults())
+    }
+
+    /**
+     * Covers SET with expressions: columns set from the row's own columns, functions, literals and a scalar subquery
+     * made non-null with coalesce. An expression that can be NULL can't set a non-null column, nor can an aggregate
+     * function or a column of another table.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testSetExpressions() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "Ann", age = 30),
+                PersonWithId(id = null, name = "Bob", age = 10),
+            )
+            BookTable INSERT Book(name = "Kotlin", author = "Ken", price = 20.0, pages = 99)
+        }
+        database {
+            PersonWithIdTable { table ->
+                table UPDATE SET(listOf((age + 1) AS PersonWithId::age, (name + "!") AS PersonWithId::name)) WHERE (name EQ "Ann")
+                table UPDATE SET(coalesce((BookTable SELECT listOf(BookTable.max(BookTable.pages) AS MaxPages::value))[MaxPages::value], 0) AS PersonWithId::age) WHERE (name EQ "Bob")
+            }
+        }
+        lateinit var people: SelectStatement<PersonWithId>
+        database { people = PersonWithIdTable SELECT ORDER_BY(PersonWithIdTable.id to ASC) }
+        assertEquals(listOf("Ann!" to 31, "Bob" to 99), people.getResults().map { it.name to it.age })
+
+        database { PersonWithIdTable { table -> table UPDATE SET(literal(5) AS PersonWithId::age) } }
+        database { people = PersonWithIdTable SELECT X }
+        assertEquals(listOf(5, 5), people.getResults().map { it.age })
+
+        // A scalar subquery can be NULL, and 'age' isn't nullable
+        assertFailsWith<IllegalArgumentException> {
+            database {
+                PersonWithIdTable UPDATE SET((BookTable SELECT listOf(BookTable.max(BookTable.pages) AS MaxPages::value))[MaxPages::value] AS PersonWithId::age)
+            }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { PersonWithIdTable UPDATE SET(PersonWithIdTable.max(PersonWithIdTable.age) AS PersonWithId::age) }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { PersonWithIdTable UPDATE SET(BookTable.pages AS PersonWithId::age) }
+        }
+    }
+
+    /**
+     * Covers INSERT of expressions: a row of literals and expressions of them, its other columns taking their default
+     * values, and INSERT OR IGNORE, which skips a row that conflicts. The values can't read a table, and an expression
+     * that can be NULL can't be written to a non-null column.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testInsertExpressions() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            PersonWithIdTable INSERT listOf(literal("Zed") AS PersonWithId::name, (literal(20) * 2) AS PersonWithId::age)
+            UserAccountTable INSERT listOf(
+                literal("ann") AS UserAccount::username,
+                (literal("ann") + "@mail") AS UserAccount::email,
+                literal(UserStatus.SUSPENDED) AS UserAccount::status,
+                literal(Priority.HIGH) AS UserAccount::priority,
+            )
+        }
+        lateinit var people: SelectStatement<PersonWithId>
+        lateinit var accounts: SelectStatement<UserAccount>
+        database {
+            people = PersonWithIdTable SELECT X
+            accounts = UserAccountTable SELECT X
+        }
+        assertEquals(listOf(PersonWithId(id = 1, name = "Zed", age = 40)), people.getResults())
+        assertEquals(
+            listOf(UserAccount(id = 1, username = "ann", email = "ann@mail", status = UserStatus.SUSPENDED, priority = Priority.HIGH, notes = null)),
+            accounts.getResults(),
+        )
+
+        // The key exists, so the row is skipped
+        database {
+            PersonWithIdTable INSERT_OR_IGNORE listOf(literal(1L) AS PersonWithId::id, literal("Dup") AS PersonWithId::name, literal(1) AS PersonWithId::age)
+        }
+        database { people = PersonWithIdTable SELECT X }
+        assertEquals(listOf("Zed"), people.getResults().map { it.name })
+
+        // 'age' is NOT NULL and has no default, which SQLite reports when the statement runs
+        assertFails {
+            database { PersonWithIdTable INSERT (literal("Nobody") AS PersonWithId::name) }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { PersonWithIdTable INSERT listOf(PersonWithIdTable.name AS PersonWithId::name, literal(1) AS PersonWithId::age) }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { PersonWithIdTable INSERT listOf(PersonWithIdTable.nullif(literal("a"), "a") AS PersonWithId::name, literal(1) AS PersonWithId::age) }
+        }
+    }
+
+    /**
+     * Covers triggers: on INSERT, keeping a count with an UPDATE of an expression and logging the new row with an
+     * INSERT of expressions; on DELETE, logging the old row; BEFORE INSERT with WHEN and RAISE(ABORT), which stops the
+     * statement with its message, and RAISE(IGNORE), which skips the row; and on UPDATE OF a column, with WHEN comparing
+     * the new and old rows. IF NOT EXISTS skips a trigger that exists, and DROP_TRIGGER drops one.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testTrigger() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            CREATE(TriggerAuditTable)
+            CREATE(TriggerCounterTable)
+            TriggerCounterTable INSERT TriggerCounter(id = 1, count = 0)
+            CREATE_TRIGGER("person_inserted") AFTER INSERT ON PersonWithIdTable BEGIN {
+                TriggerCounterTable { table -> table UPDATE SET((count + 1) AS TriggerCounter::count) WHERE (id EQ 1) }
+                TriggerAuditTable { table ->
+                    table INSERT listOf(
+                        new(PersonWithIdTable.id) AS TriggerAudit::personId,
+                        literal("insert") AS TriggerAudit::action,
+                        datetime("now") AS TriggerAudit::at,
+                    )
+                }
+            }
+            CREATE_TRIGGER("person_deleted") AFTER DELETE ON PersonWithIdTable BEGIN {
+                TriggerAuditTable INSERT listOf(old(PersonWithIdTable.id) AS TriggerAudit::personId, literal("delete") AS TriggerAudit::action)
+            }
+            CREATE_TRIGGER("no_negative_age") BEFORE INSERT ON PersonWithIdTable WHEN (new(PersonWithIdTable.age) LT 0) BEGIN {
+                RAISE(ABORT, "age can't be negative")
+            }
+            CREATE_TRIGGER("no_babies") BEFORE INSERT ON PersonWithIdTable WHEN ((new(PersonWithIdTable.age) GTE 0) AND (new(PersonWithIdTable.age) LT 1)) BEGIN {
+                RAISE(IGNORE)
+            }
+            CREATE_TRIGGER("age_changed") AFTER UPDATE_OF(PersonWithIdTable.age) ON PersonWithIdTable WHEN (new(PersonWithIdTable.age) ISNOT old(PersonWithIdTable.age)) BEGIN {
+                TriggerAuditTable INSERT listOf(new(PersonWithIdTable.id) AS TriggerAudit::personId, literal("age") AS TriggerAudit::action)
+            }
+        }
+        database {
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "Ann", age = 30),
+                PersonWithId(id = null, name = "Bob", age = 10),
+            )
+        }
+        val error = assertFails { database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Neg", age = -1) } }
+        assertEquals(true, error.message?.contains("age can't be negative"), error.message)
+        // Skipped, without an error
+        database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Baby", age = 0) }
+        database { PersonWithIdTable { table -> table UPDATE SET { name = "Bobby" } WHERE (name EQ "Bob") } }
+        database { PersonWithIdTable { table -> table UPDATE SET { age = 11 } WHERE (name EQ "Bobby") } }
+        database { PersonWithIdTable { table -> table UPDATE SET { age = 11 } WHERE (name EQ "Bobby") } }
+        database { PersonWithIdTable DELETE WHERE (PersonWithIdTable.name EQ "Ann") }
+
+        lateinit var audits: SelectStatement<TriggerAudit>
+        lateinit var counters: SelectStatement<TriggerCounter>
+        lateinit var people: SelectStatement<PersonWithId>
+        database {
+            audits = TriggerAuditTable SELECT ORDER_BY(TriggerAuditTable.id to ASC)
+            counters = TriggerCounterTable SELECT X
+            people = PersonWithIdTable SELECT X
+        }
+        assertEquals(listOf(1L to "insert", 2L to "insert", 2L to "age", 1L to "delete"), audits.getResults().map { it.personId to it.action })
+        assertEquals(true, audits.getResults().first().at != null)
+        assertEquals(listOf(TriggerCounter(id = 1, count = 2)), counters.getResults())
+        assertEquals(listOf("Bobby"), people.getResults().map { it.name })
+
+        // It exists, so creating it again fails, unless IF NOT EXISTS
+        assertFails {
+            database { CREATE_TRIGGER("person_deleted") AFTER DELETE ON PersonWithIdTable BEGIN { RAISE(IGNORE) } }
+        }
+        database {
+            CREATE_TRIGGER_IF_NOT_EXISTS("person_deleted") AFTER DELETE ON PersonWithIdTable BEGIN { RAISE(IGNORE) }
+            DROP_TRIGGER("person_inserted")
+            DROP_TRIGGER_IF_EXISTS("person_inserted")
+        }
+        database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Cat", age = 5) }
+        database { counters = TriggerCounterTable SELECT X }
+        assertEquals(2, counters.getResults().single().count)
+        assertFails { database { DROP_TRIGGER("person_inserted") } }
+    }
+
+    /**
+     * Covers a trigger whose body inserts the result of a SELECT that reads the trigger's new row in a result column.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testTriggerSelectingNewRow() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            CREATE(TriggerCounterTable)
+            TriggerCounterTable INSERT TriggerCounter(id = 1, count = 0)
+            CREATE_TRIGGER("copy_age") AFTER INSERT ON PersonWithIdTable BEGIN {
+                TriggerCounterTable INSERT_OR_REPLACE (TriggerCounterTable SELECT (new(PersonWithIdTable.age) AS TriggerCounter::count) WHERE (TriggerCounterTable.id EQ 1))
+            }
+        }
+        database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Ann", age = 42) }
+        lateinit var counters: SelectStatement<TriggerCounter>
+        database { counters = TriggerCounterTable SELECT X }
+        assertEquals(listOf(TriggerCounter(id = 1, count = 42)), counters.getResults())
+    }
+
+    /**
+     * Covers what a trigger rejects when it is built: `new()` in a trigger on DELETE and `old()` in one on INSERT, which
+     * SQLite would only report when the trigger fires; `new()` outside a trigger, or of a column of another table; a
+     * trigger on an FTS table; a body without statements, or with a SELECT or a transaction; `RAISE` outside a trigger;
+     * UPDATE OF a column of another table; and a trigger without BEGIN, which would never be created.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testTriggerChecks() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        assertFailsWith<IllegalArgumentException> {
+            database { CREATE_TRIGGER("t") AFTER DELETE ON PersonWithIdTable WHEN (new(PersonWithIdTable.age) GT 1) BEGIN { RAISE(IGNORE) } }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database {
+                CREATE_TRIGGER("t") AFTER INSERT ON PersonWithIdTable BEGIN {
+                    PersonWithIdTable UPDATE SET(old(PersonWithIdTable.age) AS PersonWithId::age)
+                }
+            }
+        }
+        assertFailsWith<IllegalStateException> {
+            database { PersonWithIdTable SELECT WHERE(new(PersonWithIdTable.age) GT 1) }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { CREATE_TRIGGER("t") AFTER INSERT ON PersonWithIdTable WHEN (new(BookTable.pages) GT 1) BEGIN { RAISE(IGNORE) } }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { CREATE_TRIGGER("t") AFTER INSERT ON ArticleTable BEGIN { RAISE(IGNORE) } }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { CREATE_TRIGGER("t") AFTER INSERT ON PersonWithIdTable BEGIN { } }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { CREATE_TRIGGER("t") AFTER INSERT ON PersonWithIdTable BEGIN { BookTable SELECT X } }
+        }
+        assertFailsWith<IllegalStateException> {
+            database { CREATE_TRIGGER("t") AFTER INSERT ON PersonWithIdTable BEGIN { transaction { RAISE(IGNORE) } } }
+        }
+        assertFailsWith<IllegalStateException> {
+            database { RAISE(ABORT, "outside") }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database { CREATE_TRIGGER("t") AFTER UPDATE_OF(BookTable.pages) ON PersonWithIdTable BEGIN { RAISE(IGNORE) } }
+        }
+        assertFailsWith<IllegalStateException> {
+            database { CREATE_TRIGGER("t") AFTER INSERT ON PersonWithIdTable }
+        }
+    }
+
+    /**
+     * Covers a trigger that keeps an FTS table in step with a table, as an observed query of the FTS table sees: it is a
+     * virtual table, which can't have triggers, so the tracker counts its changes through the triggers of the table.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testTriggerWritingFts() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        runTest {
+            database {
+                CREATE(ArticleTable)
+                CREATE_TRIGGER("person_article") AFTER INSERT ON PersonWithIdTable BEGIN {
+                    ArticleTable INSERT listOf(literal("person") AS Article::title, new(PersonWithIdTable.name) AS Article::body)
+                }
+            }
+            val articles = Channel<List<Article>>(Channel.UNLIMITED)
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) { ArticleTable SELECT X }.collect { articles.send(it) }
+            }
+            assertEquals(emptyList(), articles.receive())
+            database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Ann", age = 30) }
+            assertEquals(listOf("Ann"), articles.receive().map { it.body })
+        }
+    }
+
+    /**
+     * Covers INSERT DEFAULT VALUES: a row of the default values of all columns, NULL where a column has none, and the
+     * next key where the database assigns it. A NOT NULL column without a default rejects it.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testInsertDefaultValues() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            CREATE(DefaultRowTable)
+            DefaultRowTable INSERT DEFAULT_VALUES
+            DefaultRowTable INSERT_OR_IGNORE DEFAULT_VALUES
+        }
+        lateinit var rows: SelectStatement<DefaultRow>
+        database { rows = DefaultRowTable SELECT X }
+        assertEquals(listOf(DefaultRow(1, "new", 0, null), DefaultRow(2, "new", 0, null)), rows.getResults())
+        assertFails { database { PersonWithIdTable INSERT DEFAULT_VALUES } }
+    }
+
+    /**
+     * Covers ANALYZE, which creates the statistics table `sqlite_stat1`, REINDEX of all indexes, of a table, of an
+     * index and of a collation, and PRAGMA optimize. A name of no table or index fails.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+    fun testAnalyzeAndReindex() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            BookTable.CREATE_INDEX("idx_book_author", BookTable.author)
+            BookTable INSERT listOf(
+                Book(name = "Kotlin", author = "Ken", price = 10.0, pages = 100),
+                Book(name = "Swift", author = "Sam", price = 20.0, pages = 30),
+            )
+        }
+        assertEquals(false, sqliteHas("SELECT * FROM sqlite_stat1"))
+        database { ANALYZE(BookTable) }
+        assertEquals(true, sqliteHas("SELECT * FROM sqlite_stat1"))
+        database {
+            ANALYZE()
+            ANALYZE("idx_book_author")
+            REINDEX()
+            REINDEX(BookTable)
+            REINDEX("idx_book_author")
+            REINDEX(NOCASE)
+            PRAGMA_OPTIMIZE()
+        }
+        lateinit var books: SelectStatement<Book>
+        database { books = BookTable SELECT WHERE(BookTable.author EQ "Sam") }
+        assertEquals(listOf("Swift"), books.getResults().map { it.name })
+        assertFails { database { REINDEX("no_such_index") } }
+    }
+
+    /**
+     * Covers the orders of the columns of an index, ASC and DESC, in a unique index too, with WHERE and IF NOT EXISTS.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testIndexOrder() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            PersonWithIdTable.CREATE_INDEX("idx_person_age_name", PersonWithIdTable.age to DESC, PersonWithIdTable.name to ASC)
+            PersonWithIdTable.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS("idx_person_name", PersonWithIdTable.name to DESC) WHERE (PersonWithIdTable.age GT 0)
+            PersonWithIdTable.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS("idx_person_name", PersonWithIdTable.name to DESC)
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "Ann", age = 30),
+                PersonWithId(id = null, name = "Bob", age = 40),
+            )
+        }
+        assertEquals(true, sqliteString("SELECT sql FROM sqlite_master WHERE name = 'idx_person_age_name'")?.endsWith("person_with_id(age DESC,name ASC)"))
+        assertEquals(true, sqliteString("SELECT sql FROM sqlite_master WHERE name = 'idx_person_name'")?.endsWith("person_with_id(name DESC) WHERE age>0"))
+        lateinit var people: SelectStatement<PersonWithId>
+        database { people = PersonWithIdTable SELECT ORDER_BY(PersonWithIdTable.age to DESC) }
+        assertEquals(listOf("Bob", "Ann"), people.getResults().map { it.name })
+        assertFails { database { PersonWithIdTable INSERT PersonWithId(id = null, name = "Ann", age = 1) } }
+    }
+
+    /**
+     * Covers NULLS FIRST and NULLS LAST in ORDER BY, after a Pair, after ASC or DESC in parentheses, and in a map of an
+     * ORDER_BY after WHERE with the plain ASC and DESC, where the SQLite has them, from 3.30.0. Without them, NULL values sort first in ascending
+     * order.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+    fun testNullsOrdering() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            UserAccountTable INSERT listOf(
+                UserAccount(id = null, username = "ann", email = "ann@mail", status = UserStatus.ACTIVE, priority = Priority.LOW, notes = null),
+                UserAccount(id = null, username = "bob", email = "bob@mail", status = UserStatus.ACTIVE, priority = Priority.HIGH, notes = "b"),
+                UserAccount(id = null, username = "cat", email = "cat@mail", status = UserStatus.INACTIVE, priority = Priority.HIGH, notes = "a"),
+            )
+        }
+        lateinit var ascending: SelectStatement<UserAccount>
+        database { ascending = UserAccountTable SELECT ORDER_BY(UserAccountTable.notes to ASC) }
+        assertEquals(listOf("ann", "cat", "bob"), ascending.getResults().map { it.username })
+        if (!sqliteHas("SELECT 1 ORDER BY 1 NULLS LAST"))
+            return@databaseAutoClose
+        lateinit var nullsLast: SelectStatement<UserAccount>
+        lateinit var nullsFirst: SelectStatement<UserAccount>
+        lateinit var mixed: SelectStatement<UserAccount>
+        database {
+            UserAccountTable { table ->
+                nullsLast = table SELECT ORDER_BY(notes to ASC NULLS LAST)
+                nullsFirst = table SELECT ORDER_BY(notes to (DESC NULLS FIRST))
+                mixed = table SELECT WHERE(username NEQ "") ORDER_BY mapOf(status to DESC, notes to (ASC NULLS LAST))
+            }
+        }
+        assertEquals(listOf("cat", "bob", "ann"), nullsLast.getResults().map { it.username })
+        assertEquals(listOf("ann", "bob", "cat"), nullsFirst.getResults().map { it.username })
+        assertEquals(listOf("cat", "bob", "ann"), mixed.getResults().map { it.username })
+    }
+
+    /**
+     * Covers deferred foreign keys, of a column and of a group: children inserted before their parent in a transaction,
+     * which is checked when it commits, and a transaction that commits without the parent, which fails and is rolled
+     * back, so that the next transaction can begin.
+     */
+    fun testDeferredForeignKey() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        assertEquals(true, DeferredChildTable.createSQL.contains("REFERENCES deferred_parent(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED"), DeferredChildTable.createSQL)
+        assertEquals(true, DeferredGroupChildTable.createSQL.contains("FOREIGN KEY (parentId) REFERENCES deferred_parent(id) DEFERRABLE INITIALLY DEFERRED"), DeferredGroupChildTable.createSQL)
+        database {
+            CREATE(DeferredParentTable)
+            CREATE(DeferredChildTable)
+            CREATE(DeferredGroupChildTable)
+        }
+        database { PRAGMA_FOREIGN_KEYS(true) }
+        database {
+            transaction {
+                DeferredChildTable INSERT DeferredChild(id = 1, parentId = 10)
+                DeferredGroupChildTable INSERT DeferredGroupChild(id = 1, parentId = 10)
+                DeferredParentTable INSERT DeferredParent(id = 10)
+            }
+        }
+        assertFails {
+            database { transaction { DeferredChildTable INSERT DeferredChild(id = 2, parentId = 99) } }
+        }
+        // The failed transaction is rolled back, so the next one can begin
+        database { transaction { DeferredParentTable INSERT DeferredParent(id = 20) } }
+        lateinit var children: SelectStatement<DeferredChild>
+        lateinit var groupChildren: SelectStatement<DeferredGroupChild>
+        database {
+            children = DeferredChildTable SELECT X
+            groupChildren = DeferredGroupChildTable SELECT X
+        }
+        assertEquals(listOf(DeferredChild(1, 10)), children.getResults())
+        assertEquals(listOf(DeferredGroupChild(1, 10)), groupChildren.getResults())
+    }
+
+    /**
+     * Covers the conflict clauses of constraints: REPLACE on a key and on a composite unique group, which delete the
+     * rows a row conflicts with, and IGNORE on a unique column and on a composite key, which skip the row. ABORT, the
+     * default, writes no clause.
+     */
+    fun testConflictClauses() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        assertEquals(
+            "CREATE TABLE conflict_test(id INTEGER PRIMARY KEY ON CONFLICT REPLACE,email TEXT NOT NULL UNIQUE ON CONFLICT IGNORE,x INT NOT NULL,y INT NOT NULL,UNIQUE(x,y) ON CONFLICT REPLACE)",
+            ConflictTestTable.createSQL,
+        )
+        assertEquals("CREATE TABLE conflict_pair(a TEXT NOT NULL,b TEXT NOT NULL,note TEXT,PRIMARY KEY(a,b) ON CONFLICT IGNORE)", ConflictPairTable.createSQL)
+        database {
+            CREATE(ConflictTestTable)
+            CREATE(ConflictPairTable)
+            ConflictTestTable INSERT ConflictTest(id = 1, email = "a@mail", x = 1, y = 1)
+            // The same email: skipped
+            ConflictTestTable INSERT ConflictTest(id = 2, email = "a@mail", x = 2, y = 2)
+            // The same key: the row 1 is replaced
+            ConflictTestTable INSERT ConflictTest(id = 1, email = "b@mail", x = 3, y = 3)
+            // The same (x, y): the row 1 is replaced again
+            ConflictTestTable INSERT ConflictTest(id = 4, email = "c@mail", x = 3, y = 3)
+            ConflictPairTable INSERT ConflictPair(a = "k", b = "v", note = "first")
+            // The same key: skipped
+            ConflictPairTable INSERT ConflictPair(a = "k", b = "v", note = "second")
+        }
+        lateinit var rows: SelectStatement<ConflictTest>
+        lateinit var pairs: SelectStatement<ConflictPair>
+        database {
+            rows = ConflictTestTable SELECT X
+            pairs = ConflictPairTable SELECT X
+        }
+        assertEquals(listOf(ConflictTest(id = 4, email = "c@mail", x = 3, y = 3)), rows.getResults())
+        assertEquals(listOf(ConflictPair(a = "k", b = "v", note = "first")), pairs.getResults())
+    }
+
+    /**
      * Covers result columns: expressions, such as aggregate functions, selected into properties of a result type with
      * AS, as in `table SELECT listOf(count(X) AS AuthorStats::books)`, while every other property is read from its
      * column. Each function reads into the type of the values SQLite returns for it, and NULL into a nullable property.
@@ -1022,7 +2835,7 @@ class CommonBasicTest(private val path: DatabasePath) {
                 }
             }
         }
-        assertEquals(true, nullInGroup.message!!.contains("'group_concat(notes,',')' can be NULL, so property 'notes' has to be nullable"))
+        assertEquals(true, nullInGroup.message!!.contains("'group_concat(user_account.notes,',')' can be NULL, so property 'notes' has to be nullable"))
         val twice = assertFailsWith<IllegalArgumentException> {
             database {
                 BookTable { table ->
@@ -1136,7 +2949,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * table's row type insert the rows it returns, and the SELECT no longer runs on its own. The target is a copy of a
      * table made with `withName`.
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testInsertSelect() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
         val bookCopy = BookTable.withName("book_copy")
         assertEquals(true, bookCopy.createSQL.startsWith("CREATE TABLE book_copy("))
@@ -1226,7 +3038,8 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Covers rebuilding a table in a migration, for a change `ALTER TABLE` can't make: the new structure is created
      * under a temporary name with `withName`, filled with `INSERT INTO ... SELECT` from the old one, which is dropped,
      * and renamed to the table's name. Renaming the new table rather than the old one leaves the foreign keys of other
-     * tables pointing at the rebuilt table.
+     * tables pointing at the rebuilt table. A view that reads the table is dropped before and created again after: had
+     * it been kept, the rename would fail where SQLite's `legacy_alter_table` is off, as on the JVM.
      */
     @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testTableRebuild() {
@@ -1237,6 +3050,7 @@ class CommonBasicTest(private val path: DatabasePath) {
             create = {
                 CREATE(RebuildPersonV1Table)
                 CREATE(RebuildPetTable)
+                CREATE_VIEW(RebuildPersonIdView) AS (RebuildPersonV1Table SELECT X<RebuildPersonId>())
             },
         )
         Database(version1).databaseAutoClose { database ->
@@ -1256,9 +3070,11 @@ class CommonBasicTest(private val path: DatabasePath) {
             create = {
                 CREATE(RebuildPersonTable)
                 CREATE(RebuildPetTable)
+                CREATE_VIEW(RebuildPersonIdView) AS (RebuildPersonTable SELECT X<RebuildPersonId>())
             },
             upgrade = { oldVersion, _ ->
                 if (oldVersion < 2) {
+                    DROP(RebuildPersonIdView)
                     val newPerson = RebuildPersonTable.withName("rebuild_person_new")
                     CREATE(newPerson)
                     RebuildPersonV1Table { table ->
@@ -1266,6 +3082,7 @@ class CommonBasicTest(private val path: DatabasePath) {
                     }
                     DROP(RebuildPersonV1Table)
                     "rebuild_person_new" ALTER_RENAME_TABLE_TO RebuildPersonTable
+                    CREATE_VIEW(RebuildPersonIdView) AS (RebuildPersonTable SELECT X<RebuildPersonId>())
                 }
             },
         )
@@ -1277,6 +3094,13 @@ class CommonBasicTest(private val path: DatabasePath) {
             }
             assertEquals(listOf(RebuildPerson(1, "Ann"), RebuildPerson(2, "Bob")), people.getResults().sortedBy { it.id })
             assertEquals(true, database.selectFails { RebuildPersonV1Table SELECT X })
+
+            // The view, created again, reads the rebuilt table
+            lateinit var ids: SelectStatement<RebuildPersonId>
+            database {
+                ids = RebuildPersonIdView SELECT X
+            }
+            assertEquals(listOf(1L, 2L), ids.getResults().map { it.id }.sortedBy { it })
 
             // The new constraint holds
             assertFails {
@@ -1614,7 +3438,6 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testDropAndCreateTable() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             // Test 1: DROP using global function
@@ -1719,7 +3542,7 @@ class CommonBasicTest(private val path: DatabasePath) {
      * table through the entity matching the shape it should have at that point, so a step that does
      * not actually run makes the test fail instead of passing quietly.
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    @OptIn(PlatformDependentSQLiteAPI::class)
     fun testSchemaModification() {
         Database(getNewAPIDBConfig()).databaseAutoClose { database ->
             database {
@@ -1839,7 +3662,8 @@ class CommonBasicTest(private val path: DatabasePath) {
      * non-null columns, which is the order that used to leak the key's nullability into every later
      * column. These assignments only compile while `name` and `age` are generated as non-null.
      */
-    @Suppress("unused", "UNUSED_VARIABLE")
+    // Reading the properties is an error, as their getters only return placeholders, but their types are what is checked
+    @Suppress("unused", "UNUSED_VARIABLE", "DEPRECATION_ERROR")
     private fun checkSetClauseNullability(clause: SetClause<PersonWithId>): Unit = with(PersonWithIdTable) {
         val id: Long? = clause.id
         val name: String = clause.name
@@ -1852,7 +3676,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * and a key of any other type is supplied by the caller and declared `NOT NULL`, which SQLite would
      * otherwise not imply for it.
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testPrimaryKeyNullability() {
         // Both Long keys are rowid aliases; only the non-Long key needs NOT NULL spelled out.
         assertEquals(true, PersonWithIdTable.createSQL.contains("id INTEGER PRIMARY KEY,"))
@@ -2330,10 +4153,210 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers expression indexes: a function of the table's columns, written without the table's name, which SQLite
+     * doesn't allow in an index, while a string literal holding that name keeps it. Unique indexes of `lower(name)`
+     * and of `replace(name, 'product.', '')` show that the expressions are indexed, and an expression of another table
+     * is rejected.
+     */
+    fun testExpressionIndex() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            ProductTable.CREATE_UNIQUE_INDEX("idx_product_lower_name", ProductTable.lower(ProductTable.name))
+            ProductTable.CREATE_UNIQUE_INDEX("idx_product_bare_name", ProductTable.replace(ProductTable.name, "product.", ""))
+            ProductTable INSERT Product(sku = "SKU-1", name = "Widget", price = 1.0)
+        }
+        fun insertFails(product: Product): Boolean = try {
+            database { ProductTable INSERT product }
+            false
+        } catch (e: Exception) {
+            true
+        }
+        assertEquals(true, insertFails(Product(sku = "SKU-2", name = "WIDGET", price = 2.0)))
+        assertEquals(true, insertFails(Product(sku = "SKU-3", name = "product.Widget", price = 3.0)))
+        assertEquals(false, insertFails(Product(sku = "SKU-4", name = "Gadget", price = 4.0)))
+        assertFailsWith<IllegalArgumentException> {
+            database { ProductTable.CREATE_INDEX("idx_other_table", BookTable.lower(BookTable.name)) }
+        }
+    }
+
+    /**
+     * Covers DROP_INDEX: a unique index keeps out a duplicate until it is dropped, and dropping an index that doesn't
+     * exist fails.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testDropIndex() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        fun insertFails(product: Product): Boolean = try {
+            database { ProductTable INSERT product }
+            false
+        } catch (e: Exception) {
+            true
+        }
+        database {
+            ProductTable.CREATE_UNIQUE_INDEX("idx_product_name", ProductTable.name)
+            ProductTable INSERT Product(sku = "SKU-1", name = "Widget", price = 1.0)
+        }
+        assertEquals(true, insertFails(Product(sku = "SKU-2", name = "Widget", price = 2.0)))
+        database { DROP_INDEX("idx_product_name") }
+        assertEquals(false, insertFails(Product(sku = "SKU-3", name = "Widget", price = 3.0)))
+        assertFails { database { DROP_INDEX("idx_product_name") } }
+    }
+
+    /**
+     * Covers IF NOT EXISTS and IF EXISTS: creating a table, an FTS table, indexes and a view that exist does nothing, as
+     * does dropping a table, a view and an index that don't, while the statements without them fail.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testIfNotExists() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        // BookTable exists already
+        assertFails { database { CREATE(BookTable) } }
+        database {
+            CREATE_IF_NOT_EXISTS(BookTable)
+            ArticleTable.CREATE_IF_NOT_EXISTS()
+            ArticleTable.CREATE_IF_NOT_EXISTS()
+            BookTable.CREATE_INDEX_IF_NOT_EXISTS("idx_book_author", BookTable.author)
+            BookTable.CREATE_INDEX_IF_NOT_EXISTS("idx_book_author", BookTable.author)
+            ProductTable.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS("idx_product_name", ProductTable.name)
+            ProductTable.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS("idx_product_name", ProductTable.name)
+            CREATE_VIEW_IF_NOT_EXISTS(AdultPersonView) AS (PersonWithIdTable SELECT WHERE<AdultPerson>(PersonWithIdTable.age GTE 18))
+            CREATE_VIEW_IF_NOT_EXISTS(AdultPersonView) AS (PersonWithIdTable SELECT WHERE<AdultPerson>(PersonWithIdTable.age GTE 18))
+            ArticleTable INSERT Article(rowid = null, title = "Kotlin", body = "Coroutines", note = null)
+            PersonWithIdTable INSERT PersonWithId(id = null, name = "Ann", age = 30)
+        }
+        lateinit var articles: SelectStatement<Article>
+        lateinit var adults: SelectStatement<AdultPerson>
+        database {
+            articles = ArticleTable SELECT X
+            adults = AdultPersonView SELECT X
+        }
+        assertEquals(listOf("Kotlin"), articles.getResults().map { it.title })
+        assertEquals(listOf("Ann"), adults.getResults().map { it.name })
+        assertFails { database { BookTable.CREATE_INDEX("idx_book_author", BookTable.author) } }
+
+        database {
+            DROP_IF_EXISTS(AdultPersonView)
+            DROP_IF_EXISTS(AdultPersonView)
+            DROP_INDEX_IF_EXISTS("idx_book_author")
+            DROP_INDEX_IF_EXISTS("idx_book_author")
+            ArticleTable.DROP_IF_EXISTS()
+            DROP_IF_EXISTS(ArticleTable)
+        }
+        assertFails { database { DROP(ArticleTable) } }
+        assertEquals(true, database.selectFails { ArticleTable SELECT X })
+        assertEquals(true, database.selectFails { AdultPersonView SELECT X })
+    }
+
+    /**
+     * Covers partial indexes: a unique index with WHERE keeps out the duplicates of the rows that satisfy its condition
+     * only, with the values of the condition, a quote among them, written into the SQL; a subquery there, and a second
+     * WHERE, are rejected.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testPartialIndex() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        fun insertFails(product: Product): Boolean = try {
+            database { ProductTable INSERT product }
+            false
+        } catch (e: Exception) {
+            true
+        }
+        database {
+            ProductTable.CREATE_UNIQUE_INDEX("idx_product_name_on_sale", ProductTable.name) WHERE
+                ((ProductTable.price GT 0.0) AND (ProductTable.name NEQ "It's free"))
+            ProductTable INSERT Product(sku = "SKU-1", name = "Widget", price = 1.0)
+            // Not on sale, so not in the index
+            ProductTable INSERT Product(sku = "SKU-2", name = "Widget", price = 0.0)
+            ProductTable INSERT Product(sku = "SKU-3", name = "Widget", price = 0.0)
+            ProductTable INSERT Product(sku = "SKU-4", name = "It's free", price = 1.0)
+        }
+        assertEquals(true, insertFails(Product(sku = "SKU-5", name = "Widget", price = 2.0)))
+        assertEquals(false, insertFails(Product(sku = "SKU-6", name = "It's free", price = 2.0)))
+        lateinit var widgets: SelectStatement<Product>
+        database {
+            widgets = ProductTable SELECT WHERE ((ProductTable.name EQ "Widget") AND (ProductTable.price GT 0.0))
+        }
+        assertEquals(listOf("SKU-1"), widgets.getResults().map { it.sku })
+
+        assertFailsWith<IllegalArgumentException> {
+            database {
+                ProductTable.CREATE_INDEX("idx_product_book_name", ProductTable.name) WHERE
+                    (ProductTable.name IN (BookTable SELECT WHERE<BookAuthor>(BookTable.price GT 30.0)))
+            }
+        }
+        assertFailsWith<IllegalStateException> {
+            database {
+                val index = ProductTable.CREATE_INDEX("idx_product_price", ProductTable.price)
+                index WHERE (ProductTable.price GT 0.0)
+                index WHERE (ProductTable.price GT 1.0)
+            }
+        }
+    }
+
+    /**
+     * Covers VACUUM and VACUUM INTO: VACUUM keeps the rows, VACUUM INTO writes a copy that a database can be opened
+     * from, and neither can run inside a transaction. VACUUM INTO needs SQLite 3.27.0, so it is only checked where the
+     * SQLite is as new.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+    fun testVacuum() {
+        Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+            database {
+                BookTable INSERT List(100) { Book(name = "Book $it", author = "Author", price = 1.0, pages = it) }
+            }
+            database { BookTable DELETE WHERE (BookTable.pages GTE 10) }
+            database { VACUUM() }
+            lateinit var books: SelectStatement<Book>
+            database { books = BookTable SELECT X }
+            assertEquals((0 until 10).toList(), books.getResults().map { it.pages })
+            assertFailsWith<IllegalStateException> {
+                database { transaction { VACUUM() } }
+            }
+            assertFailsWith<IllegalStateException> {
+                database { transaction { VACUUM_INTO("never.db") } }
+            }
+        }
+
+        // The file of the database, and the SQLite version, from a connection of the driver
+        val connection = openDatabase(DatabaseConfiguration(name = DATABASE_NAME, path = path, version = 1, create = {}))
+        val (file, version) = try {
+            val file = connection.withQuery("PRAGMA database_list") { cursor ->
+                var main: String? = null
+                cursor.forEachRow { if (cursor.getString(1) == "main") main = cursor.getString(2) }
+                main!!
+            }
+            val version = connection.withQuery("SELECT sqlite_version()") { cursor ->
+                var version = ""
+                cursor.forEachRow { version = cursor.getString(0)!! }
+                version
+            }
+            file to version
+        } finally {
+            connection.close()
+        }
+        val (major, minor) = version.split('.').map { it.toInt() }
+        if (major == 3 && minor < 27)
+            return
+        val separator = maxOf(file.lastIndexOf('/'), file.lastIndexOf('\\'))
+        val backup = file.substring(0, separator + 1) + BACKUP_DATABASE_NAME
+        deleteDatabase(path, BACKUP_DATABASE_NAME)
+        try {
+            Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+                database { VACUUM_INTO(backup) }
+                // The file exists now
+                assertFails { database { VACUUM_INTO(backup) } }
+            }
+            val backupConfig = DSLDBConfiguration(name = BACKUP_DATABASE_NAME, path = path, version = 1, create = {})
+            Database(backupConfig, true).databaseAutoClose { database ->
+                lateinit var books: SelectStatement<Book>
+                database { books = BookTable SELECT X }
+                assertEquals((0 until 10).toList(), books.getResults().map { it.pages })
+            }
+        } finally {
+            deleteDatabase(path, BACKUP_DATABASE_NAME)
+        }
+    }
+
+    /**
      * Test for CREATE_INDEX and CREATE_UNIQUE_INDEX operations
      * Verifies index creation functionality
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testIndexOperations() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
         // Test 1: CREATE_INDEX on single column
         database {
@@ -2909,7 +4932,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test PRAGMA_FOREIGN_KEYS function
      * Verifies foreign key enforcement can be enabled/disabled
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testPragmaForeignKeys() {
         Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
             // Test 1: Enable foreign keys
@@ -2959,7 +4981,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test CASCADE delete behavior with @References
      * Verifies that child rows are automatically deleted when parent is deleted
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testForeignKeyCascadeDelete() {
         Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
             // Enable foreign keys
@@ -3022,7 +5043,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test SET_NULL delete behavior with @References
      * Verifies that child foreign keys are set to NULL when parent is deleted
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testForeignKeySetNullDelete() {
         Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
             // Enable foreign keys
@@ -3081,7 +5101,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test RESTRICT delete behavior with @References
      * Verifies that parent deletion is prevented when child rows exist
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testForeignKeyRestrictDelete() {
         Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
             // Enable foreign keys
@@ -3151,7 +5170,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test composite foreign keys with @ForeignKey annotation
      * Verifies multi-column foreign key constraints work correctly
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testCompositeForeignKey() {
         Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
             // Enable foreign keys
@@ -3219,7 +5237,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test multiple foreign keys to different tables
      * Verifies a table can have foreign keys to multiple parent tables
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testMultipleForeignKeys() {
         Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
             // Enable foreign keys
@@ -3335,7 +5352,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test foreign key constraint without PRAGMA_FOREIGN_KEYS enabled
      * Verifies that constraints are not enforced when PRAGMA is not enabled
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testForeignKeyWithoutPragma() {
         Database(getForeignKeyDBConfig(), true).databaseAutoClose { database ->
             // Note: NOT enabling PRAGMA_FOREIGN_KEYS
@@ -3471,7 +5487,6 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Test for @Default annotation with foreign key ON_DELETE_SET_DEFAULT trigger
      * Verifies that default values are correctly included in CREATE TABLE statements with foreign keys
      */
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun testDefaultValuesWithForeignKey() {
         val config = DSLDBConfiguration(
             name = DATABASE_NAME,
@@ -3561,7 +5576,6 @@ class CommonBasicTest(private val path: DatabasePath) {
             }
         )
 
-    @OptIn(ExperimentalDSLDatabaseAPI::class)
     private fun getResultColumnDBConfig(): DSLDBConfiguration =
         DSLDBConfiguration(
             name = DATABASE_NAME,
@@ -3575,6 +5589,18 @@ class CommonBasicTest(private val path: DatabasePath) {
         )
 
     @OptIn(ExperimentalDSLDatabaseAPI::class)
+    private fun getFtsDBConfig(): DSLDBConfiguration =
+        DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(ArticleTable)
+                CREATE(NoteTable)
+                CREATE(BookTable)
+            }
+        )
+
     private fun getForeignKeyDBConfig(): DSLDBConfiguration =
         DSLDBConfiguration(
             name = DATABASE_NAME,

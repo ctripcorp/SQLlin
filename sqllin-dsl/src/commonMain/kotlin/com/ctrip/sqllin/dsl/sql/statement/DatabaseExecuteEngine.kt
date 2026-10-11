@@ -42,9 +42,31 @@ internal class DatabaseExecuteEngine(
             throw IllegalStateException("Current statement can't append clause.")
     }
 
+    override fun replaceStatement(statement: SingleStatement, newStatement: SingleStatement) {
+        val index = statementList.indexOf(statement)
+        check(index >= 0) { "The statement to replace isn't one of the scope's." }
+        statementList[index] = newStatement
+    }
+
     infix fun addStatement(statement: ExecutableStatement) {
         statementList.add(statement)
     }
+
+    /**
+     * What the statements may change when they run, so that the queries observing the tables can be refreshed.
+     */
+    val changes: Changes
+        get() = statementList.fold(Changes.NONE) { changes, statement ->
+            maxOf(changes, if (statement is TransactionStatementsGroup) statement.changes else Changes.of(statement as SingleStatement))
+        }
+
+    /**
+     * The tables the statements write rows to, as INSERT, UPDATE and DELETE name them.
+     */
+    val writtenTables: Set<String>
+        get() = statementList.flatMapTo(LinkedHashSet()) {
+            if (it is TransactionStatementsGroup) it.writtenTables else Changes.writtenTable(it as SingleStatement)?.let(::setOf).orEmpty()
+        }
 
     override infix fun removeStatement(statement: SingleStatement) {
         statementList.remove(statement)

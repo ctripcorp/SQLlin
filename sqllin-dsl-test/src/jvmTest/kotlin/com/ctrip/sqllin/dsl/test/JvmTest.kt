@@ -41,6 +41,126 @@ class JvmTest {
     fun testUnionSelect() = commonTest.testUnionSelect()
 
     @Test
+    fun testCompoundSelect() = commonTest.testCompoundSelect()
+
+    @Test
+    fun testObserve() = commonTest.testObserve()
+
+    @Test
+    fun testObserveForeignKeyAction() = commonTest.testObserveForeignKeyAction()
+
+    @Test
+    fun testView() = commonTest.testView()
+
+    @Test
+    fun testUnsignedValues() = commonTest.testUnsignedValues()
+
+    @Test
+    fun testFts4() = commonTest.testFts4()
+
+    @Test
+    fun testFts3() = commonTest.testFts3()
+
+    @Test
+    fun testCheckConstraint() = commonTest.testCheckConstraint()
+
+    @Test
+    fun testSubquery() = commonTest.testSubquery()
+
+    @Test
+    fun testConditionPrecedence() = commonTest.testConditionPrecedence()
+
+    @Test
+    fun testConditionReuse() = commonTest.testConditionReuse()
+
+    @Test
+    fun testJoinedRelation() = commonTest.testJoinedRelation()
+
+    @Test
+    fun testExpressionIndex() = commonTest.testExpressionIndex()
+
+    @Test
+    fun testDropIndex() = commonTest.testDropIndex()
+
+    @Test
+    fun testIfNotExists() = commonTest.testIfNotExists()
+
+    @Test
+    fun testPartialIndex() = commonTest.testPartialIndex()
+
+    @Test
+    fun testDistinctAggregate() = commonTest.testDistinctAggregate()
+
+    @Test
+    fun testLikeEscape() = commonTest.testLikeEscape()
+
+    @Test
+    fun testVacuum() = commonTest.testVacuum()
+
+    @Test
+    fun testArithmetic() = commonTest.testArithmetic()
+
+    @Test
+    fun testCast() = commonTest.testCast()
+
+    @Test
+    fun testNullFunctions() = commonTest.testNullFunctions()
+
+    @Test
+    fun testMoreFunctions() = commonTest.testMoreFunctions()
+
+    @Test
+    fun testDateTimeFunctions() = commonTest.testDateTimeFunctions()
+
+    @Test
+    fun testPlatformDependentFunctions() = commonTest.testPlatformDependentFunctions()
+
+    @Test
+    fun testCaseExpression() = commonTest.testCaseExpression()
+
+    @Test
+    fun testScalarSubquery() = commonTest.testScalarSubquery()
+
+    @Test
+    fun testExpressionOperators() = commonTest.testExpressionOperators()
+
+    @Test
+    fun testSetExpressions() = commonTest.testSetExpressions()
+
+    @Test
+    fun testInsertExpressions() = commonTest.testInsertExpressions()
+
+    @Test
+    fun testTrigger() = commonTest.testTrigger()
+
+    @Test
+    fun testTriggerSelectingNewRow() = commonTest.testTriggerSelectingNewRow()
+
+    @Test
+    fun testTriggerChecks() = commonTest.testTriggerChecks()
+
+    @Test
+    fun testTriggerWritingFts() = commonTest.testTriggerWritingFts()
+
+    @Test
+    fun testInsertDefaultValues() = commonTest.testInsertDefaultValues()
+
+    @Test
+    fun testAnalyzeAndReindex() = commonTest.testAnalyzeAndReindex()
+
+    @Test
+    fun testIndexOrder() = commonTest.testIndexOrder()
+
+    @Test
+    fun testNullsOrdering() = commonTest.testNullsOrdering()
+
+    @Test
+    fun testDeferredForeignKey() = commonTest.testDeferredForeignKey()
+
+    @Test
+    fun testConflictClauses() = commonTest.testConflictClauses()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

@@ -16,6 +16,8 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.sql.operation.parametersOf
+
 /**
  * Represents a condition expression used in WHERE or HAVING clauses.
  *
@@ -31,43 +33,76 @@ package com.ctrip.sqllin.dsl.sql.clause
  *
  * @property conditionSQL The SQL condition expression (may contain ? placeholders)
  * @property parameters Parameterized query values (String, ByteArray, etc.), or null if none
+ * @property tables The tables and views that the subqueries of the condition read, which an observed query watches
+ * @property operator The operator, `AND` or `OR`, that this condition combines others with, or null if it doesn't
+ * @property isDeterministic Whether the condition always gives the same result for the same row, which the condition
+ * of a partial index needs
  *
  * @author Yuang Qiao
  */
-public class SelectCondition internal constructor(
+public open class SelectCondition internal constructor(
     internal val conditionSQL: String,
     internal val parameters: MutableList<Any?>?,
+    internal val tables: Set<String> = emptySet(),
+    private val operator: String? = null,
+    internal val isDeterministic: Boolean = true,
 ) {
 
     /**
      * Combines this condition with another using OR.
      *
-     * Creates: `(condition1) OR (condition2)`
+     * Creates: `condition1 OR condition2`, with a condition that combines others with AND in parentheses.
      */
     internal infix fun or(next: SelectCondition): SelectCondition = append("OR", next)
 
     /**
      * Combines this condition with another using AND.
      *
-     * Creates: `(condition1) AND (condition2)`
+     * Creates: `condition1 AND condition2`, with a condition that combines others with OR in parentheses.
      */
     internal infix fun and(next: SelectCondition): SelectCondition = append("AND", next)
 
     private fun append(symbol: String, next: SelectCondition): SelectCondition {
         val sql = buildString {
-            append(conditionSQL)
+            appendOperand(this, symbol)
             append(" $symbol ")
-            append(next.conditionSQL)
+            next.appendOperand(this, symbol)
         }
-        val combinedParameters = when {
-            parameters == null && next.parameters != null -> next.parameters
-            parameters != null && next.parameters == null -> parameters
-            parameters == null && next.parameters == null -> null
-            else -> {
-                parameters!!.addAll(next.parameters!!)
-                parameters
-            }
-        }
-        return SelectCondition(sql, combinedParameters)
+        // A new list, as this condition may be kept in a variable and used again, with its own parameters
+        return SelectCondition(sql, parametersOf(parameters, next.parameters), tables + next.tables, symbol, isDeterministic && next.isDeterministic)
     }
+
+    /**
+     * Appends this condition to [builder] as an operand of [symbol]: in parentheses if it combines others with the
+     * other operator. The infix AND and OR apply in the order they are written, as Kotlin's infix functions do, while
+     * SQL gives AND precedence over OR, so `(a OR b) AND c` would otherwise become `a OR (b AND c)`.
+     */
+    private fun appendOperand(builder: StringBuilder, symbol: String) {
+        if (operator != null && operator != symbol) {
+            builder.append('(')
+            builder.append(conditionSQL)
+            builder.append(')')
+        } else {
+            builder.append(conditionSQL)
+        }
+    }
+}
+
+/**
+ * A LIKE condition, which [ESCAPE] can follow to give its pattern an escape character.
+ *
+ * @author Yuang Qiao
+ */
+public class LikeCondition internal constructor(
+    conditionSQL: String,
+    parameters: MutableList<Any?>,
+    tables: Set<String>,
+    isDeterministic: Boolean,
+) : SelectCondition(conditionSQL, parameters, tables, isDeterministic = isDeterministic) {
+
+    /**
+     * This condition with [escape] as the escape character of its pattern: `column LIKE ? ESCAPE ?`.
+     */
+    internal infix fun escape(escape: Char): SelectCondition =
+        SelectCondition("$conditionSQL ESCAPE ?", parametersOf(parameters, listOf(escape.toString())), tables, isDeterministic = isDeterministic)
 }

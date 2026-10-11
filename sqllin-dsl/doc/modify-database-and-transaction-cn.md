@@ -4,7 +4,7 @@
 
 ## 表结构操作
 
-SQLlin 提供了用于管理表结构的类型安全 DSL 操作：CREATE、DROP 和 ALTER。
+SQLlin 提供了用于管理表结构的类型安全 DSL 操作：CREATE、DROP 和 ALTER，以及视图、索引和触发器的操作。
 
 ### CREATE - 创建表
 
@@ -59,6 +59,157 @@ fun sample() {
 
 **⚠️ 警告**：DROP 是一个破坏性操作。执行后，表及其所有数据将被永久删除。请谨慎使用。
 
+### CREATE VIEW - 创建视图
+
+视图是保存在数据库里的一条 _SELECT_，查询时可以像表一样读取它。用 `@DBView` 声明视图的行，就像用 `@DBRow` 声明表的行一样，
+_sqllin-processor_ 会生成一个以类名加 `View` 后缀命名的视图对象。视图是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBView("adults")
+@Serializable
+data class Adult(
+    val name: String,
+    val age: Int,
+)
+
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // CREATE VIEW adults(name,age) AS SELECT name,age FROM person WHERE person.age>=18
+        CREATE_VIEW(AdultView) AS (PersonTable SELECT WHERE<Adult>(PersonTable.age GTE 18))
+    }
+    lateinit var olderAdults: SelectStatement<Adult>
+    database {
+        AdultView { view ->
+            olderAdults = view SELECT WHERE(age GT 60)
+        }
+    }
+}
+```
+
+`AS` 后面的 _SELECT_ 读出的必须是视图的行类型，这一点在编译期检查。它可以是任何 _SELECT_：投影、结果列、Join 或组合查询都可以。
+SQLite 不允许视图带参数，所以 SQLlin 会把 _SELECT_ 中的值直接写进视图的 SQL。
+
+查询视图的方式和查询表一样，视图对象的属性就是它的列，也可以用在 Join 和组合查询中，`Database#observe` 会观察它读取的表。
+视图不能写入：它的对象不是 `Table`，所以对它使用 `INSERT`、`UPDATE`、`DELETE`、`CREATE` 和 `ALTER` 都无法编译，它的属性也不能
+加约束注解。`DROP(AdultView)` 会删除视图。视图的定义属于数据库结构的一部分：要修改它，就在 `upgrade` 中先删除、再重新创建。
+
+### CREATE INDEX - 创建索引
+
+索引能让按其列查找行的查询变快。`CREATE_INDEX` 在表的列上创建索引，`CREATE_UNIQUE_INDEX` 创建的索引还会保证任意两行在这些列上的值
+不相同：
+
+```kotlin
+fun sample() {
+    database {
+        // CREATE INDEX idx_person_name ON person(name)
+        PersonTable.CREATE_INDEX("idx_person_name", PersonTable.name)
+        // CREATE UNIQUE INDEX idx_person_name_age ON person(name,age)
+        PersonTable.CREATE_UNIQUE_INDEX("idx_person_name_age", PersonTable.name, PersonTable.age)
+        // CREATE INDEX idx_person_lower_name ON person(lower(name))
+        PersonTable.CREATE_INDEX("idx_person_lower_name", PersonTable.lower(PersonTable.name))
+    }
+}
+```
+
+用表的列的函数可以创建表达式索引，比较同一个表达式的查询会用到它，例如用 `lower(name)` 做不区分大小写的查找。索引只能包含它自己
+所在表的列。
+
+索引的每一列都可以像 `ORDER_BY` 那样指定排序方向：`PersonTable.CREATE_INDEX("idx_person_age", PersonTable.age to DESC)` 就是
+`CREATE INDEX idx_person_age ON person(age DESC)`。它是实验性 API。按这个顺序或相反顺序排序的查询，可以按顺序读取索引。
+
+在 `CREATE_INDEX` 或 `CREATE_UNIQUE_INDEX` 后面加上 `WHERE` 就是部分索引：只索引满足条件的行。它比索引所有行的索引更小，唯一的部分
+索引只保证这些行之间的值不相同，例如未删除用户的邮箱。部分索引是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // CREATE UNIQUE INDEX idx_user_email ON user(email) WHERE isDeleted<=0
+        UserTable.CREATE_UNIQUE_INDEX("idx_user_email", UserTable.email) WHERE (UserTable.isDeleted IS false)
+    }
+}
+```
+
+SQLite 不允许索引的条件中带参数，也不允许子查询，所以 SQLlin 会把条件中的值直接写进 SQL，带子查询的条件会抛出
+`IllegalArgumentException`。只有当查询的 _WHERE_ 能推出索引的条件时，查询才会用到部分索引。
+
+`DROP_INDEX` 按名字删除索引，它是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        DROP_INDEX("idx_person_name")
+    }
+}
+```
+
+### IF NOT EXISTS 与 IF EXISTS
+
+表已存在时 `CREATE` 会失败，表不存在时 `DROP` 会失败。它们的 `IF NOT EXISTS` 和 `IF EXISTS` 版本则什么也不做，适用于表、视图和索引。
+它们是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // CREATE TABLE IF NOT EXISTS person(...)
+        CREATE_IF_NOT_EXISTS(PersonTable)  // 或 PersonTable.CREATE_IF_NOT_EXISTS()
+        PersonTable.CREATE_INDEX_IF_NOT_EXISTS("idx_person_name", PersonTable.name)
+        PersonTable.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS("idx_person_name_age", PersonTable.name, PersonTable.age)
+        CREATE_VIEW_IF_NOT_EXISTS(AdultView) AS (PersonTable SELECT WHERE<Adult>(PersonTable.age GTE 18))
+
+        DROP_IF_EXISTS(AdultView)  // 或 AdultView.DROP_IF_EXISTS()
+        DROP_INDEX_IF_EXISTS("idx_person_name")
+        DROP_IF_EXISTS(PersonTable)  // 或 PersonTable.DROP_IF_EXISTS()
+    }
+}
+```
+
+`IF NOT EXISTS` 只检查名字：如果同名的表已经存在但列不同，它会保持原样。
+
+### CREATE TRIGGER - 创建触发器
+
+触发器会在表的某一行被插入、删除或更新之前或之后执行一组语句，可以带一个条件。触发器是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // CREATE TRIGGER person_deleted AFTER DELETE ON person
+        // BEGIN INSERT INTO audit(personId,action,at) VALUES (OLD.id,'delete',datetime('now')); END
+        CREATE_TRIGGER("person_deleted") AFTER DELETE ON PersonTable BEGIN {
+            AuditTable { table ->
+                table INSERT listOf(
+                    old(PersonTable.id) AS Audit::personId,
+                    literal("delete") AS Audit::action,
+                    datetime("now") AS Audit::at,
+                )
+            }
+        }
+        // CREATE TRIGGER no_negative_age BEFORE INSERT ON person WHEN NEW.age<0
+        // BEGIN SELECT RAISE(ABORT,'age can''t be negative'); END
+        CREATE_TRIGGER("no_negative_age") BEFORE INSERT ON PersonTable WHEN (new(PersonTable.age) LT 0) BEGIN {
+            RAISE(ABORT, "age can't be negative")
+        }
+    }
+}
+```
+
+- `BEFORE` 或 `AFTER` 指定时机，`INSERT`、`DELETE`、`UPDATE` 或 `UPDATE_OF(列)` 指定事件。`WHEN` 可以指定条件。
+- `new(列)` 和 `old(列)` 读取正在写入的行：INSERT 触发器有新行，DELETE 触发器有旧行，UPDATE 触发器两者都有。读取触发器没有的
+  行会在构建语句时被拒绝，而 SQLite 要等触发器触发时才会报错。
+- 触发器体中可以插入、更新和删除行，并使用 `SET` 和 `INSERT` 的[表达式](sql-functions-cn.md#表达式)。`RAISE(ABORT, 消息)`
+  以这条消息终止触发它的语句，`FAIL` 和 `ROLLBACK` 也会终止语句，只是处理方式不同；`RAISE(IGNORE)` 跳过这一行。
+- 这些语句在触发器触发时执行，而不是在作用域结束时。SQLite 不允许触发器带参数，所以触发器 SQL 中的值都是字面量。
+
+`CREATE_TRIGGER_IF_NOT_EXISTS` 在触发器已存在时什么也不做，`DROP_TRIGGER(name)` 和 `DROP_TRIGGER_IF_EXISTS(name)` 删除触发器。
+FTS 表是虚拟表，不能有触发器。删除一张表会同时删除它的触发器。
+
+触发器写入的行会被[可观察查询](advanced-query-cn.md#可观察查询)计为修改，FTS 表也一样。
+
 ### ALTER - 修改表结构
 
 SQLlin 提供了多种 ALTER 操作来修改现有的表结构：
@@ -99,11 +250,20 @@ fun sample() {
 }
 ```
 
+#### 依赖 SQLite 版本的 API
+
+有些 API 需要某个版本的 SQLite，或者 SQLite 的某个编译选项，而有的平台没有。SQLlin 运行在哪个 SQLite 上取决于平台：Android 系统的
+SQLite 在 API 24（SQLlin 的最低版本）上是 3.9，API 34 以下是 3.32，API 34 起是 3.39，并且没有数学函数等编译选项；Apple 系统的 SQLite
+取决于系统版本；在 Linux 和 Windows 上，则是你的应用链接的 SQLite。这样的 API 在缺少所需条件的 SQLite 上会在运行时失败，所以它们都
+标有 `@PlatformDependentSQLiteAPI`：不用 `@OptIn(PlatformDependentSQLiteAPI::class)` 声明同意就会编译报错。请只在你的应用的所有平台
+都满足 API 文档中写明的条件时才这样做。
+
 #### 重命名列
 
-重命名表中的列：
+重命名表中的列。`ALTER TABLE ... RENAME COLUMN` 需要 SQLite 3.25.0，Android 从 API 30 起才具备：
 
 ```kotlin
+@OptIn(PlatformDependentSQLiteAPI::class)
 fun sample() {
     database {
         // Using ClauseElement references (type-safe)
@@ -117,9 +277,10 @@ fun sample() {
 
 #### 删除列
 
-从现有表中删除列：
+从现有表中删除列。`ALTER TABLE ... DROP COLUMN` 需要 SQLite 3.35.0：
 
 ```kotlin
+@OptIn(PlatformDependentSQLiteAPI::class)
 fun sample() {
     database {
         PersonTable DROP_COLUMN PersonTable.email
@@ -193,7 +354,7 @@ val database = Database(
                 val newPerson = PersonTable.withName("person_new")
                 CREATE(newPerson)
                 PersonV1Table { table ->
-                    // INSERT INTO person_new(id,fullName) SELECT id,name AS fullName FROM person
+                    // INSERT INTO person_new(id,fullName) SELECT id,person.name AS fullName FROM person
                     newPerson INSERT (table SELECT (name AS Person::fullName))
                 }
                 DROP(PersonV1Table)
@@ -204,13 +365,28 @@ val database = Database(
 )
 ```
 
-要重命名的是新表，而不是旧表。在 SQLite 的默认设置下，重命名一张表时，其他表外键中对它的引用也会跟着改名，所以如果先重命名
-旧表，这些引用就会跟着旧表走，等旧表被删除后，它们就指向了一张不存在的表。索引会随旧表一起删除，所以要在重建后的表上重新创建。
+要重命名的是新表，而不是旧表。SQLite 的 `legacy_alter_table` 设置关闭时（JVM、Linux 和 Windows 上默认如此），重命名一张表，
+其他表外键中对它的引用也会跟着改名，所以如果先重命名旧表，这些引用就会跟着旧表走，等旧表被删除后，它们就指向了一张不存在的表。
+Android 和 Apple 平台上这个设置是开启的，只有在启用了外键约束时引用才会跟着改名。索引会随旧表一起删除，所以要在重建后的表上重新
+创建。
+
+读取这张表的视图、读取这些视图的视图，以及其他表上写入或读取这张表的触发器，要在删除旧表之前删掉，改名之后再重新创建。
+`legacy_alter_table` 关闭时，重命名表会检查每个视图和触发器读取的表是否都存在，只要还有一个读取已删除的旧表，改名就会失败。
+先删掉它们、之后再重建，在所有平台上都可行。这张表自己的触发器会随旧表一起删除，所以也要重新创建：
+
+```kotlin
+DROP(PersonNameView)  // 一个读取 'person' 的视图
+// 按上面的步骤创建新表、拷贝数据、删除旧表、给新表改名
+CREATE_VIEW(PersonNameView) AS (PersonTable SELECT X<PersonName>())
+```
 
 `withName` 返回的表与原表有相同的列、约束和行类型，但没有列属性，因为那些属性指向的是原表。它用于针对整张表的语句：
 `CREATE`、`INSERT`、`DROP` 和 `ALTER_RENAME_TABLE_TO`。
+对于 [FTS 表](advanced-query-cn.md#全文搜索)，它返回的是选项相同的 FTS 表，所以要修改 FTS 表的列或选项，也是用同样的方法
+重建。
 
-数据的转换由 `SELECT` 完成，可以使用投影或结果列，详见[《高级查询》](advanced-query-cn.md)。转换值类型、替换 `NULL` 的函数目前还不支持。
+数据的转换由 `SELECT` 完成，可以使用投影或结果列，详见[《高级查询》](advanced-query-cn.md)，还可以使用[表达式](sql-functions-cn.md#表达式)：
+`CAST` 转换值的类型，`ifnull` 替换 `NULL`，比如 `ifnull(nickname, "")`。
 
 ## 插入
 
@@ -269,6 +445,28 @@ fun sample() {
 这条 _SELECT_ 会成为 _INSERT_ 的一部分，所以它不再单独执行，也无法读取它的结果。主键按查询出的值原样拷贝。
 `INSERT_OR_IGNORE` 和 `INSERT_OR_REPLACE` 同样可以接受 _SELECT_。
 
+_INSERT_ 还可以像 `INSERT INTO ... VALUES` 那样插入一行[表达式](sql-functions-cn.md#表达式)，每个表达式用 `AS` 交给行类型的
+一个属性。它是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        AuditTable { table ->
+            // INSERT INTO audit(action,at) VALUES ('purge',datetime('now'))
+            table INSERT listOf(literal("purge") AS Audit::action, datetime("now") AS Audit::at)
+        }
+    }
+}
+```
+
+没写到的列取默认值或 NULL；如果是没有默认值的 `NOT NULL` 列，语句执行时会报错。可能为 NULL 的表达式只能写进可空的列；这些值
+不能读取任何表，因为 SQLite 不允许，要插入其他行的值请用 _SELECT_。`INSERT_OR_IGNORE` 和 `INSERT_OR_REPLACE` 同样可以接受表达式。
+
+`table INSERT DEFAULT_VALUES` 像 `INSERT INTO ... DEFAULT VALUES` 一样插入一行，所有列都取默认值：没有默认值的列取 NULL，
+`NOT NULL` 列会因此报错；由数据库分配的主键取下一个值。它是实验性 API，`INSERT_OR_IGNORE DEFAULT_VALUES` 和
+`INSERT_OR_REPLACE DEFAULT_VALUES` 也一样。
+
 ## 删除
 
 _DELETE_ 语句将会比 _INSERT_ 语句稍微复杂。SQLlin 不像 [Jetpack Room](https://developer.android.com/training/data-storage/room)
@@ -306,6 +504,23 @@ SQL 操作符与 SQLlin 操作符的对应关系如下表：
 |GLOB|GLOB|
 |OR|OR|
 |AND|AND|
+|LIKE ... ESCAPE|LIKE ... ESCAPE|
+
+在 _LIKE_ 的模式中，`%` 匹配任意多个字符，`_` 匹配任意一个字符。要匹配它们本身，可以用 `ESCAPE` 给模式指定一个转义字符（实验性
+API）：转义字符之后的 `%`、`_` 和转义字符本身都只匹配它们自己。
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        PersonTable { table ->
+            // 删除名字中带下划线的人：
+            // DELETE FROM person WHERE person.name LIKE ? ESCAPE ?，参数为 "%\_%" 和 "\"
+            table DELETE WHERE (name LIKE "%\\_%" ESCAPE '\\')
+        }
+    }
+}
+```
 
 有时候，我们想要删除表中的所有数据，这时 _DELETE_ 语句可以省略 _WHERE_ 子句：
 
@@ -343,6 +558,27 @@ fun sample() {
 _SET_ 子句与其他子句不同，它接收一个 lambda 表达式作为参数，你可以在 lambda 中给列设置一个新值。lambda 表达式中的 `age` 是一个由 KSP
 生成的可写属性，并且它仅在 _SET_ 子句中可用，它与 _WHERE_ 子句中的只读属性 `age` 不同。
 
+_SET_ lambda 中的属性只能赋值。读取它（比如 `age = age + 1`）会编译报错：它保存的不是列的值，只是一个占位值，读取的话列会被设成由
+占位值算出来的结果。
+
+要把列设成一个[表达式](sql-functions-cn.md#表达式)，比如由这一行的列算出来的值，可以给 `SET` 传一组表达式，每个表达式用 `AS`
+交给行类型的一个属性，`AS` 会在编译期检查类型。它是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        PersonTable { table ->
+            // UPDATE person SET age=(person.age + 1),name=(person.name || '!') WHERE person.name!=?
+            table UPDATE SET(listOf((age + 1) AS Person::age, (name + "!") AS Person::name)) WHERE (name NEQ "Tom")
+        }
+    }
+}
+```
+
+`SET(expression AS Person::age)` 只设置一列。可能为 NULL 的表达式只能设置可空的列；表达式只能读取被更新的表的列，也不能是聚合
+函数，这些在构建语句时检查。表达式中需要单独的值时，用 `literal(5)`。
+
 你也可以编写没有 _WHERE_ 子句的 _UPDATE_ 语句用于更新所有的行，但使用它的时候你应该谨慎。
 
 ## 事务
@@ -368,6 +604,47 @@ fun sample() {
 ```
 
 `transaction {...}` 是 `Database` 的成员函数，将它写在 `TABLE(databaseName) {...}` 函数的内部或外部没有特别限制。
+
+## VACUUM
+
+删除行并不会让数据库文件变小，因为 SQLite 会留着空闲页以便复用。`VACUUM()` 会重建数据库文件，把它压缩到最小的磁盘空间；
+`VACUUM_INTO(file)` 则把压缩后的数据库副本写到另一个文件：这是正在使用的数据库在某一时刻的一致备份。两者都是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+fun sample() {
+    database {
+        VACUUM()
+    }
+    database {
+        VACUUM_INTO("/absolute/path/to/backup.db")
+    }
+}
+```
+
+SQLite 不能在事务中执行 VACUUM，所以在 `transaction {...}` 中调用两者都会抛出 `IllegalStateException`。VACUUM 会重写整个数据库，
+所以数据库大时耗时较长，并且需要最多两倍于数据库大小的空闲磁盘空间；它还可能改变没有 INTEGER PRIMARY KEY 的表的 rowid。
+`VACUUM_INTO` 需要 SQLite 3.27.0，Android 从 API 30 起才有，所以它标有 [`@PlatformDependentSQLiteAPI`](#依赖-sqlite-版本的-api)。
+目标文件必须不存在，在 Android 上路径必须是绝对路径。
+
+## ANALYZE 与 REINDEX
+
+`ANALYZE()` 收集所有表和索引的统计信息，查询规划器会据此选择索引；`ANALYZE(table)` 或 `ANALYZE(name)` 只收集一张表或一个索引
+的。`PRAGMA_OPTIMIZE()` 只收集有帮助的统计信息，速度很快，SQLite 建议在关闭数据库前执行，长期打开的数据库每隔几小时执行一次；
+它需要 SQLite 3.18.0，Android 从 API 26 起才有，所以标有 [`@PlatformDependentSQLiteAPI`](#依赖-sqlite-版本的-api)。
+`REINDEX()` 重建所有索引，`REINDEX(table)`、`REINDEX(name)`、`REINDEX(collation)` 分别重建一张表、一个索引，或者使用某个排序
+规则（比如 `NOCASE`）的索引。它们都是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+fun sample() {
+    database {
+        ANALYZE(PersonTable)
+        REINDEX("idx_person_name")
+        PRAGMA_OPTIMIZE()
+    }
+}
+```
 
 ## 接下来
 

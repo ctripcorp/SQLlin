@@ -18,6 +18,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 
 /**
@@ -118,9 +119,21 @@ public infix fun ClauseString<*>.NEQ(str: String?): SelectCondition = neq(str)
 @StatementDslMaker
 public infix fun ClauseString<*>.NEQ(clauseString: ClauseString<*>): SelectCondition = neq(clauseString)
 
-// SQL LIKE operator
+// SQL LIKE operator, which ESCAPE can follow
 @StatementDslMaker
-public infix fun ClauseString<*>.LIKE(regex: String): SelectCondition = like(regex)
+public infix fun ClauseString<*>.LIKE(regex: String): LikeCondition = like(regex)
+
+/**
+ * Gives the pattern of this LIKE an escape character, before which `%`, `_` and the escape character itself match
+ * only themselves, as the SQL `LIKE pattern ESCAPE escape` does:
+ * ```kotlin
+ * ProductTable SELECT WHERE (ProductTable.name LIKE "100\\%%" ESCAPE '\\')
+ * // Matches the names that start with "100%"
+ * ```
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun LikeCondition.ESCAPE(escape: Char): SelectCondition = escape(escape)
 
 // SQL GLOB operator
 @StatementDslMaker
@@ -285,3 +298,69 @@ public infix fun SelectCondition.OR(prediction: SelectCondition): SelectConditio
 // Condition 'AND' operator
 @StatementDslMaker
 public infix fun SelectCondition.AND(prediction: SelectCondition): SelectCondition = and(prediction)
+
+/**
+ * Negates [condition]: `NOT (condition)`, as in `NOT(EXISTS(select))`, `NOT(age IN listOf(1, 2))` or
+ * `NOT((age LT 18) OR (age GT 65))`.
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public fun NOT(condition: SelectCondition): SelectCondition =
+    SelectCondition("NOT (${condition.conditionSQL})", condition.parameters, condition.tables, isDeterministic = condition.isDeterministic)
+
+// Null-safe comparisons of two expressions, SQL's IS and IS NOT: like EQ and NEQ, but NULL equals NULL, so a
+// comparison with NULL is true or false rather than NULL. They do what IS DISTINCT FROM does, on every SQLite version.
+
+/** Whether this number equals [other], NULL equaling NULL: `this IS other`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun ClauseNumber<*>.IS(other: ClauseNumber<*>): SelectCondition = nullSafe("IS", other)
+
+/** Whether this number differs from [other], NULL equaling NULL: `this IS NOT other`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun ClauseNumber<*>.ISNOT(other: ClauseNumber<*>): SelectCondition = nullSafe("IS NOT", other)
+
+/** Whether this string equals [other], NULL equaling NULL: `this IS other`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun ClauseString<*>.IS(other: ClauseString<*>): SelectCondition = nullSafe("IS", other)
+
+/** Whether this string differs from [other], NULL equaling NULL: `this IS NOT other`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun ClauseString<*>.ISNOT(other: ClauseString<*>): SelectCondition = nullSafe("IS NOT", other)
+
+/** Whether this BLOB equals [other], NULL equaling NULL: `this IS other`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun ClauseBlob.IS(other: ClauseBlob): SelectCondition = nullSafe("IS", other)
+
+/** Whether this BLOB differs from [other], NULL equaling NULL: `this IS NOT other`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun ClauseBlob.ISNOT(other: ClauseBlob): SelectCondition = nullSafe("IS NOT", other)
+
+/** Whether this Boolean equals [other], NULL equaling NULL: `this IS other`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun ClauseBoolean.IS(other: ClauseBoolean): SelectCondition = nullSafe("IS", other)
+
+/** Whether this Boolean differs from [other], NULL equaling NULL: `this IS NOT other`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun ClauseBoolean.ISNOT(other: ClauseBoolean): SelectCondition = nullSafe("IS NOT", other)
+
+/** Whether this enum entry equals [other], NULL equaling NULL: `this IS other`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <T : Enum<T>> ClauseEnum<T>.IS(other: ClauseEnum<T>): SelectCondition = nullSafe("IS", other)
+
+/** Whether this enum entry differs from [other], NULL equaling NULL: `this IS NOT other`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <T : Enum<T>> ClauseEnum<T>.ISNOT(other: ClauseEnum<T>): SelectCondition = nullSafe("IS NOT", other)
+
+private fun ClauseElement<*>.nullSafe(operator: String, other: ClauseElement<*>): SelectCondition =
+    condition("$sql $operator ${other.sql}", null, other)
+
