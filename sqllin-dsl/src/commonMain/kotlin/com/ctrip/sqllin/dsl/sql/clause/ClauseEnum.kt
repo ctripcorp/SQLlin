@@ -16,7 +16,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
-import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.Relation
 
 /**
  * Wrapper for enum column references in SQL clauses.
@@ -62,23 +62,35 @@ import com.ctrip.sqllin.dsl.sql.Table
  */
 public class ClauseEnum<T : Enum<T>> internal constructor(
     valueName: String,
-    table: Table<*>,
+    table: Relation<*>,
     isFunction: Boolean,
     isNullable: Boolean,
     isAggregate: Boolean,
     isNullOnNoRows: Boolean,
-) : ClauseElement<T>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows) {
+    columnTables: Set<String>? = null,
+    tables: Set<String> = emptySet(),
+    isDeterministic: Boolean = true,
+    isLiteral: Boolean = false,
+) : ClauseElement<T>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables, tables, isDeterministic, isLiteral) {
 
     /**
      * Creates the element of a column, as the code generated for a table does.
      *
      * @param isNullable Whether the column is nullable
      */
-    public constructor(valueName: String, table: Table<*>, isNullable: Boolean) :
+    public constructor(valueName: String, table: Relation<*>, isNullable: Boolean) :
         this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
 
-    override fun toAggregate(valueName: String, table: Table<*>): ClauseEnum<T> =
-        ClauseEnum(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true)
+    override fun toAggregate(valueName: String, table: Relation<*>): ClauseEnum<T> =
+        ClauseEnum(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables, tables = tables, isDeterministic = isDeterministic)
+
+    override fun derive(valueName: String, traits: Traits): ClauseEnum<T> =
+        ClauseEnum(valueName, table, isFunction = true, isNullable = traits.isNullable, isAggregate = traits.isAggregate, isNullOnNoRows = traits.isNullOnNoRows, columnTables = traits.columnTables, tables = traits.tables, isDeterministic = traits.isDeterministic)
+
+    override fun literalOf(value: T): ClauseEnum<T> =
+        ClauseEnum(expressionLiteral(value.ordinal), ExpressionRelation, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = false, columnTables = emptySet(), isLiteral = true)
+
+    override fun rebind(relation: Relation<*>): ClauseEnum<T> = ClauseEnum(valueName, relation, isNullable)
 
     /**
      * Less than (<) comparison using the enum's ordinal value.
@@ -218,7 +230,7 @@ public class ClauseEnum<T : Enum<T>> internal constructor(
             append(valueName)
             append(symbol)
         }
-        return SelectCondition(sql, mutableListOf(entry.ordinal))
+        return condition(sql, mutableListOf(entry.ordinal))
     }
 
     /**
@@ -247,7 +259,7 @@ public class ClauseEnum<T : Enum<T>> internal constructor(
             builder.append('?')
             mutableListOf<Any?>(entry.ordinal)
         }
-        return SelectCondition(builder.toString(), parameters)
+        return condition(builder.toString(), parameters)
     }
 
     /**
@@ -267,7 +279,7 @@ public class ClauseEnum<T : Enum<T>> internal constructor(
             append(symbol)
             clauseEnum.appendSQL(this)
         }
-        return SelectCondition(sql, null)
+        return condition(sql, null, clauseEnum)
     }
 
     override fun hashCode(): Int = valueName.hashCode() + table.tableName.hashCode()

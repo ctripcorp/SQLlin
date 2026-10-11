@@ -109,14 +109,16 @@ internal class InsertValuesEncoder(
     override fun encodeNull() = appendAny(null)
 
     /**
-     * Handles inline values (including ByteArray).
+     * Handles inline values (including ByteArray) and unsigned values.
      *
      * ByteArray is treated as an inline value in kotlinx.serialization, so we need to extract
-     * the actual ByteArray value and append it as a parameter.
+     * the actual ByteArray value and append it as a parameter. An unsigned value is appended as the
+     * number it is, as [storedValue] explains, where its serializer would encode its bits as a signed one.
      */
     override fun <T> encodeSerializableValue(serializer: SerializationStrategy<T>, value: T) =
-        if (value is ByteArray)
-            appendAny(value)
-        else
-            super.encodeSerializableValue(serializer, value)
+        when (value) {
+            is ByteArray -> appendAny(value)
+            is UByte, is UShort, is UInt, is ULong -> appendAny(storedValue(value))
+            else -> super.encodeSerializableValue(serializer, value)
+        }
 }

@@ -16,8 +16,8 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
+import com.ctrip.sqllin.dsl.sql.Relation
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
-import com.ctrip.sqllin.dsl.sql.Table
 
 /**
  * CROSS JOIN clause - returns the Cartesian product of two tables.
@@ -32,7 +32,7 @@ import com.ctrip.sqllin.dsl.sql.Table
  *
  * @author Yuang Qiao
  */
-internal class CrossJoinClause<R>(vararg tables: Table<*>) : NaturalJoinClause<R>(*tables) {
+internal class CrossJoinClause<R>(vararg tables: Relation<*>) : NaturalJoinClause<R>(*tables) {
     override val clauseName: String = " CROSS JOIN "
 }
 
@@ -46,7 +46,12 @@ internal class CrossJoinClause<R>(vararg tables: Table<*>) : NaturalJoinClause<R
  * ```
  *
  * **Warning**: Returns (left rows) × (right rows) results.
+ *
+ * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+ * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+ * against the joined relations, and can join more than two. See
+ * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
  */
 @Suppress("DSL_MARKER_APPLIED_TO_WRONG_TARGET")
 @StatementDslMaker
-public fun <R> CROSS_JOIN(vararg tables: Table<*>): NaturalJoinClause<R> = CrossJoinClause(*tables)
+public fun <R> CROSS_JOIN(vararg tables: Relation<*>): NaturalJoinClause<R> = CrossJoinClause(*tables)

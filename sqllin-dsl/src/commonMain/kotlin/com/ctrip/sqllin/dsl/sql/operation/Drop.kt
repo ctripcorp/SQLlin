@@ -17,7 +17,9 @@
 package com.ctrip.sqllin.dsl.sql.operation
 
 import com.ctrip.sqllin.driver.DatabaseConnection
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.View
 import com.ctrip.sqllin.dsl.sql.statement.SingleStatement
 import com.ctrip.sqllin.dsl.sql.statement.TableStructureStatement
 
@@ -51,11 +53,32 @@ internal object Drop : Operation {
      * @param connection The database connection for executing the statement
      * @return A [TableStructureStatement] representing the DROP TABLE operation
      */
-    fun drop(table: Table<*>, connection: DatabaseConnection): SingleStatement {
+    fun drop(table: Table<*>, connection: DatabaseConnection, isIfExists: Boolean = false): SingleStatement {
         val sql = buildString {
             append(sqlStr)
+            if (isIfExists)
+                append(IF_EXISTS)
             append(table.tableName)
         }
         return TableStructureStatement(sql, connection)
     }
+
+    /**
+     * Creates a DROP VIEW statement for the specified view.
+     *
+     * @param view The view to drop
+     * @param connection The database connection for executing the statement
+     * @return A [TableStructureStatement] representing the DROP VIEW operation
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun dropView(view: View<*>, connection: DatabaseConnection, isIfExists: Boolean = false): SingleStatement =
+        TableStructureStatement("DROP VIEW ${if (isIfExists) IF_EXISTS else ""}${view.tableName}", connection)
+
+    /**
+     * Builds a DROP INDEX statement for the index named [indexName].
+     */
+    fun dropIndex(indexName: String, connection: DatabaseConnection, isIfExists: Boolean = false): SingleStatement =
+        TableStructureStatement("DROP INDEX ${if (isIfExists) IF_EXISTS else ""}$indexName", connection)
+
+    private const val IF_EXISTS = "IF EXISTS "
 }

@@ -16,7 +16,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
-import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.Relation
 
 /**
  * Wrapper for Boolean column/function references in SQL clauses.
@@ -30,23 +30,35 @@ import com.ctrip.sqllin.dsl.sql.Table
  */
 public class ClauseBoolean internal constructor(
     valueName: String,
-    table: Table<*>,
+    table: Relation<*>,
     isFunction: Boolean,
     isNullable: Boolean,
     isAggregate: Boolean,
     isNullOnNoRows: Boolean,
-) : ClauseElement<Boolean>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows) {
+    columnTables: Set<String>? = null,
+    tables: Set<String> = emptySet(),
+    isDeterministic: Boolean = true,
+    isLiteral: Boolean = false,
+) : ClauseElement<Boolean>(valueName, table, isFunction, isNullable, isAggregate, isNullOnNoRows, columnTables, tables, isDeterministic, isLiteral) {
 
     /**
      * Creates the element of a column, as the code generated for a table does.
      *
      * @param isNullable Whether the column is nullable
      */
-    public constructor(valueName: String, table: Table<*>, isNullable: Boolean) :
+    public constructor(valueName: String, table: Relation<*>, isNullable: Boolean) :
         this(valueName, table, isFunction = false, isNullable = isNullable, isAggregate = false, isNullOnNoRows = true)
 
-    override fun toAggregate(valueName: String, table: Table<*>): ClauseBoolean =
-        ClauseBoolean(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true)
+    override fun toAggregate(valueName: String, table: Relation<*>): ClauseBoolean =
+        ClauseBoolean(valueName, table, isFunction = true, isNullable = isNullable, isAggregate = true, isNullOnNoRows = true, columnTables = columnTables, tables = tables, isDeterministic = isDeterministic)
+
+    override fun derive(valueName: String, traits: Traits): ClauseBoolean =
+        ClauseBoolean(valueName, table, isFunction = true, isNullable = traits.isNullable, isAggregate = traits.isAggregate, isNullOnNoRows = traits.isNullOnNoRows, columnTables = traits.columnTables, tables = traits.tables, isDeterministic = traits.isDeterministic)
+
+    override fun literalOf(value: Boolean): ClauseBoolean =
+        ClauseBoolean(expressionLiteral(value), ExpressionRelation, isFunction = true, isNullable = false, isAggregate = false, isNullOnNoRows = false, columnTables = emptySet(), isLiteral = true)
+
+    override fun rebind(relation: Relation<*>): ClauseBoolean = ClauseBoolean(valueName, relation, isNullable)
 
     /**
      * Creates a condition comparing this Boolean column/function to a value.
@@ -75,7 +87,7 @@ public class ClauseBoolean internal constructor(
                 }
             )
         }
-        return SelectCondition(sql, null)
+        return condition(sql, null)
     }
 
     /**
@@ -112,7 +124,7 @@ public class ClauseBoolean internal constructor(
                 }
             )
         }
-        return SelectCondition(sql, null)
+        return condition(sql, null)
     }
 
     override fun hashCode(): Int = valueName.hashCode() + table.tableName.hashCode()

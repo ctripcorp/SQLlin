@@ -44,4 +44,9 @@ internal interface StatementContainer {
      * Removes [statement] if this container holds it, wherever it is.
      */
     infix fun removeStatement(statement: SingleStatement)
+
+    /**
+     * Replaces [statement] with [newStatement], where [statement] is, as when a clause completes it.
+     */
+    fun replaceStatement(statement: SingleStatement, newStatement: SingleStatement)
 }

@@ -16,10 +16,17 @@
 
 package com.ctrip.sqllin.dsl.test
 
+import com.ctrip.sqllin.dsl.annotation.Check
 import com.ctrip.sqllin.dsl.annotation.CollateNoCase
 import com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey
 import com.ctrip.sqllin.dsl.annotation.CompositeUnique
 import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.DBView
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
+import com.ctrip.sqllin.dsl.annotation.Fts3
+import com.ctrip.sqllin.dsl.annotation.Fts4
+import com.ctrip.sqllin.dsl.annotation.FtsTokenizer
+import com.ctrip.sqllin.dsl.annotation.OnConflict
 import com.ctrip.sqllin.dsl.annotation.PrimaryKey
 import com.ctrip.sqllin.dsl.annotation.Unique
 import kotlinx.serialization.SerialName
@@ -535,6 +542,12 @@ data class BookTitle(val name: String, val author: String)
 data class BookAuthor(val author: String)
 
 /**
+ * The `name` of a [Book] or a [PersonWithId]: a projection both tables fit, so that a compound SELECT can combine them.
+ */
+@Serializable
+data class NameOnly(val name: String)
+
+/**
  * A projection of [UserAccount] that reads its nullable `notes` column into a nullable property.
  */
 @Serializable
@@ -573,6 +586,159 @@ data class BookTotals(val books: Long, val maxPages: PageCount?, val averagePric
 
 @Serializable
 data class BookCount(val books: Long)
+
+/**
+ * Arithmetic and concatenation of the columns of a [Book], next to its `name`, read from its column.
+ */
+@Serializable
+data class BookMath(
+    val name: String,
+    val doubledPrice: Double,
+    val pagesPerPrice: Double?,
+    val negatedPages: PageCount,
+    val nextPage: PageCount,
+    val label: String,
+    val remainder: PageCount,
+    val perZero: PageCount?,
+)
+
+/**
+ * The pages of a [Book], to select an expression into.
+ */
+@Serializable
+data class BookPages(val pages: PageCount)
+
+/**
+ * The columns of a [Book] converted to other types with CAST.
+ */
+@Serializable
+data class BookCasts(
+    val wholePrice: Int,
+    val pagesText: String,
+    val nameBytes: ByteArray,
+    val leadingDigits: Int,
+    val weighted: Double,
+)
+
+/**
+ * The functions that replace NULL, and the scalar max and min, of the columns of a [UserAccount].
+ */
+@Serializable
+data class NullFunctionResults(
+    val username: String,
+    val notesOrNone: String,
+    val notesOrEmail: String,
+    val ifNullNotes: String,
+    val notBob: String?,
+    val greater: String,
+    val lesser: String,
+)
+
+/**
+ * String, BLOB and number functions of the columns of a [Book].
+ */
+@Serializable
+data class TextFunctions(
+    val hexName: String,
+    val quoted: String,
+    val firstCode: Long?,
+    val trimmed: String,
+    val tail: String,
+    val middle: String,
+    val replaced: String,
+    val position: Long,
+    val formatted: String,
+    val rounded: Double,
+    val zeros: Long,
+    val randomBytes: Long,
+)
+
+/**
+ * The `total` of the prices of the books, which is 0.0 rather than NULL when no rows match.
+ */
+@Serializable
+data class PriceTotals(val total: Double, val distinctTotal: Double)
+
+/**
+ * Date and time functions: all can be NULL, but `datetime('now')`.
+ */
+@Serializable
+data class DateTimes(
+    val day: String?,
+    val nextDay: String?,
+    val later: String?,
+    val epochStart: String?,
+    val yearMonth: String?,
+    val julian: Double?,
+    val now: String,
+)
+
+/**
+ * The math functions, which only some platforms' SQLite has.
+ */
+@Serializable
+data class MathResults(
+    val root: Double?,
+    val ceiling: Double,
+    val flooredPages: PageCount,
+    val truncated: Double,
+    val power: Double?,
+    val powerOf: Double?,
+    val remainder: Double?,
+    val remainderOf: Double?,
+    val piValue: Double,
+    val exponential: Double?,
+    val natural: Double?,
+    val decimal: Double?,
+    val binary: Double?,
+)
+
+@Serializable
+data class SignResult(val signOf: Long)
+
+@Serializable
+data class EpochResult(val epoch: Long?)
+
+/**
+ * A [Book] sorted into categories with CASE.
+ */
+@Serializable
+data class BookCategory(val name: String, val size: String, val discount: Double?)
+
+/**
+ * The single column of a SELECT used as a value, a scalar subquery.
+ */
+@Serializable
+data class AveragePrice(val value: Double?)
+
+@Serializable
+data class MaxPages(val value: PageCount?)
+
+/**
+ * A [Book] next to the most pages of any book, from a scalar subquery.
+ */
+@Serializable
+data class BookWithMaxPages(val name: String, val maxPages: PageCount?)
+
+/**
+ * Bitwise operators of the age of a [PersonWithId].
+ */
+@Serializable
+data class AgeBits(val anded: Age, val ored: Age, val shifted: Age, val halved: Age, val inverted: Age)
+
+/**
+ * Aggregates of the distinct values of the columns of the books, next to those of all values.
+ */
+@Serializable
+data class DistinctBookTotals(
+    val authors: Long,
+    val books: Long,
+    val distinctPrice: Double?,
+    val totalPrice: Double?,
+    val distinctPages: Long?,
+    val averageDistinctPages: Double?,
+    val authorNames: String?,
+)
 
 /**
  * Scalar functions of the columns of a book, next to its `name`, which is read from its column.
@@ -634,6 +800,101 @@ data class RebuildPerson(
 )
 
 /**
+ * A table whose constraints have conflict clauses: the key replaces the row it conflicts with, a duplicate email is
+ * skipped, and the group (x, y) replaces.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow("conflict_test")
+@Serializable
+data class ConflictTest(
+    @PrimaryKey(onConflict = OnConflict.REPLACE) val id: Long,
+    @Unique(onConflict = OnConflict.IGNORE) val email: String,
+    @CompositeUnique(0, onConflict = OnConflict.REPLACE) val x: Int,
+    @CompositeUnique(0) val y: Int,
+)
+
+/**
+ * A table whose composite key skips the rows that conflict with it.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow("conflict_pair")
+@Serializable
+data class ConflictPair(
+    @CompositePrimaryKey(onConflict = OnConflict.IGNORE) val a: String,
+    @CompositePrimaryKey val b: String,
+    val note: String?,
+)
+
+/**
+ * A parent of [DeferredChild] and [DeferredGroupChild], whose foreign keys are deferred: checked when the transaction
+ * commits.
+ */
+@DBRow("deferred_parent")
+@Serializable
+data class DeferredParent(@PrimaryKey val id: Long)
+
+@DBRow("deferred_child")
+@Serializable
+data class DeferredChild(
+    @PrimaryKey val id: Long,
+    @com.ctrip.sqllin.dsl.annotation.References(
+        tableName = "deferred_parent",
+        trigger = com.ctrip.sqllin.dsl.annotation.Trigger.ON_DELETE_CASCADE,
+        foreignKeys = ["id"],
+        deferred = true,
+    )
+    val parentId: Long,
+)
+
+@DBRow("deferred_group_child")
+@Serializable
+@com.ctrip.sqllin.dsl.annotation.ForeignKeyGroup(group = 0, tableName = "deferred_parent", deferred = true)
+data class DeferredGroupChild(
+    @PrimaryKey val id: Long,
+    @com.ctrip.sqllin.dsl.annotation.ForeignKey(group = 0, reference = "id") val parentId: Long,
+)
+
+/**
+ * A row whose columns all have default values, or are nullable, so that `INSERT DEFAULT VALUES` can insert it.
+ */
+@DBRow("default_row")
+@Serializable
+data class DefaultRow(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @com.ctrip.sqllin.dsl.annotation.Default("'new'") val status: String,
+    @com.ctrip.sqllin.dsl.annotation.Default("0") val count: Int,
+    val note: String?,
+)
+
+/**
+ * A log that triggers write the changes of [PersonWithId]s to.
+ */
+@DBRow("trigger_audit")
+@Serializable
+data class TriggerAudit(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    val personId: Long?,
+    val action: String,
+    val at: String?,
+)
+
+/**
+ * A count that a trigger keeps.
+ */
+@DBRow("trigger_counter")
+@Serializable
+data class TriggerCounter(@PrimaryKey val id: Long, val count: Int)
+
+/**
+ * A view of the ids in `rebuild_person`, which a rebuild of the table has to drop before dropping the old table, and
+ * create again after the rename.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBView("rebuild_person_ids")
+@Serializable
+data class RebuildPersonId(val id: Long?)
+
+/**
  * References `rebuild_person`, so its foreign key shows whether the rebuild left the reference in place.
  */
 @DBRow("rebuild_pet")
@@ -643,3 +904,118 @@ data class RebuildPet(
     @com.ctrip.sqllin.dsl.annotation.References(tableName = "rebuild_person", foreignKeys = ["id"])
     val ownerId: Long,
 )
+
+/**
+ * A view of the [PersonWithId]s who are adults, which `CREATE_VIEW` creates from a SELECT of this type.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBView("adult_person")
+@Serializable
+data class AdultPerson(val name: String, val age: Age)
+
+/**
+ * Aggregates of the unsigned `testUInt` column of [TestPrimitiveTypeForKSP], which are only right if it holds the
+ * numbers, not their bits as signed numbers.
+ */
+@Serializable
+data class UIntTotals(val total: Long?, val highest: UInt?)
+
+/**
+ * An FTS4 table: the porter tokenizer, so that "running" matches "run", prefixes of two letters indexed, and a column
+ * it stores but doesn't index. Its rowid is assigned by SQLite.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow("articles")
+@Fts4(tokenizer = FtsTokenizer.PORTER, prefix = [2], notIndexed = ["note"])
+@Serializable
+data class Article(@PrimaryKey val rowid: Long?, val title: String, val body: String, val note: String?)
+
+/**
+ * A match of [Article] with a text that describes it: a snippet, or offsets.
+ */
+@Serializable
+data class ArticleMatch(val title: String, val excerpt: String)
+
+/**
+ * A match of [Article] with its matchinfo.
+ */
+@Serializable
+class ArticleMatchInfo(val title: String, val info: ByteArray)
+
+/**
+ * An FTS3 table whose tokenizer takes an argument, with its rowid named docid and supplied by the caller.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow("notes")
+@Fts3(tokenizer = FtsTokenizer.UNICODE61, tokenizerArgs = ["remove_diacritics=1"])
+@Serializable
+data class Note(@PrimaryKey val docid: Long, val text: String)
+
+/**
+ * A table with CHECK constraints: of columns, two of them on one column, written named first to check that the unnamed
+ * one comes first, and a named one of the table that compares two columns.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow
+@Check("endDate IS NULL OR endDate >= startDate", constraintName = "valid_period")
+@Serializable
+data class CheckedMembership(
+    @PrimaryKey val id: Long?,
+    @Check("lower(name) = name", constraintName = "lower_case_name") @Check("length(trim(name)) > 0") val name: String,
+    @Check("age BETWEEN 0 AND 150") val age: Int?,
+    @Check("level IN (0, 1, 2)") val level: Int,
+    val startDate: String,
+    @Check("endDate IS NULL OR date(endDate) IS endDate") val endDate: String?,
+)
+
+/**
+ * The number of books of each author, declared as a view to name a derived table of book: no such view is created.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBView("author_books")
+@Serializable
+data class AuthorBooks(val author: String, val books: Long)
+
+/**
+ * A person with the number of their books, from a join with the derived table [AuthorBooks].
+ */
+@Serializable
+data class PersonBooks(val name: String, val age: Age, val books: Long)
+
+/**
+ * The persons under other names, as a derived table that joins person_with_id with itself.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBView("elder")
+@Serializable
+data class Elder(val elderName: String, val elderAge: Age)
+
+/**
+ * A person with someone older, from person_with_id joined with itself.
+ */
+@Serializable
+data class YoungerAndElder(val name: String, val elderName: String)
+
+/**
+ * The age of the oldest person: a SELECT of a single column, which an IN subquery compares with.
+ */
+@Serializable
+data class PersonAge(val age: Age?)
+
+/**
+ * A person with the number of their books and the highest price of one, from person_with_id outer joined with book.
+ */
+@Serializable
+data class PersonBookStats(val name: String, val books: Long, val highest: Double?)
+
+/**
+ * The age of a person with the name of one of their books, which an outer join leaves NULL for a person without one.
+ */
+@Serializable
+data class PersonBookTitle(val age: Age, val title: String?)
+
+/**
+ * The age of an author with the code of the category of one of their books, from three joined tables.
+ */
+@Serializable
+data class AuthorCode(val age: Age, val code: Code)

@@ -53,13 +53,17 @@ package com.ctrip.sqllin.dsl.annotation
  * auto-incrementing strategy that ensures row IDs are never reused.
  * **Important Note**: This parameter requires a property of type `Long?`, the only kind of key the
  * database assigns. Setting it to `true` on any other property is a compile-time error.
+ * @property onConflict What SQLite does with a row whose key is already in the table, as the key's `ON CONFLICT` clause
+ * says: by default, ABORT, which stops the statement
  *
  * @see DBRow
  * @see CompositePrimaryKey
+ * @see OnConflict
  */
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.BINARY)
-public annotation class PrimaryKey(val autoIncrement: Boolean = false)
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+public annotation class PrimaryKey(val autoIncrement: Boolean = false, val onConflict: OnConflict = OnConflict.ABORT)
 
 /**
  * Marks a property as a part of a composite primary key for the table.
@@ -80,13 +84,17 @@ public annotation class PrimaryKey(val autoIncrement: Boolean = false)
  * declared `NOT NULL` in the generated table, because SQLite, unlike standard SQL, does not let
  * `PRIMARY KEY` imply it.
  *
+ * @property onConflict What SQLite does with a row whose key is already in the table, as the key's `ON CONFLICT` clause
+ * says. It can be given on any of the key's properties, which can't give different ones.
+ *
  * @see DBRow
  * @see PrimaryKey
- *
+ * @see OnConflict
  */
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.BINARY)
-public annotation class CompositePrimaryKey
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+public annotation class CompositePrimaryKey(val onConflict: OnConflict = OnConflict.ABORT)
 
 /**
  * Marks a text column to use case-insensitive collation in SQLite.
@@ -153,13 +161,18 @@ public annotation class CollateNoCase
  * - Multiple NULL values are allowed in a UNIQUE column (NULL is not equal to NULL in SQL)
  * - To prevent NULL values, combine with a non-nullable type: `val email: String`
  *
+ * @property onConflict What SQLite does with a row whose value is already in the column, as the constraint's
+ * `ON CONFLICT` clause says: by default, ABORT, which stops the statement
+ *
  * @see DBRow
  * @see CompositeUnique
  * @see CollateNoCase
+ * @see OnConflict
  */
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.BINARY)
-public annotation class Unique
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+public annotation class Unique(val onConflict: OnConflict = OnConflict.ABORT)
 
 /**
  * Marks a property as part of one or more composite UNIQUE constraints.
@@ -220,13 +233,18 @@ public annotation class Unique
  * @property group One or more group numbers (0-based integers) identifying which
  * composite UNIQUE constraint(s) this property belongs to. Properties sharing
  * the same group number are combined into a single `UNIQUE(col1, col2, ...)` clause.
+ * @property onConflict What SQLite does with a row whose values are already in the group's columns, as the constraint's
+ * `ON CONFLICT` clause says, for each group the property is in. It can be given on any of a group's properties, which
+ * can't give different ones.
  *
  * @see DBRow
  * @see Unique
+ * @see OnConflict
  */
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.BINARY)
-public annotation class CompositeUnique(vararg val group: Int = [0])
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+public annotation class CompositeUnique(vararg val group: Int = [0], val onConflict: OnConflict = OnConflict.ABORT)
 
 /**
  * Defines a table-level foreign key constraint that references another table.
@@ -324,6 +342,9 @@ public annotation class CompositeUnique(vararg val group: Int = [0])
  * @property tableName The name of the parent table being referenced (cannot be blank)
  * @property trigger The action to take when the referenced row is deleted or updated
  * @property constraintName Optional name for the constraint (appears in error messages and schema introspection)
+ * @property deferred Whether the constraint is checked when the transaction commits, rather than after each statement,
+ * as the SQL `DEFERRABLE INITIALLY DEFERRED` makes it, so that rows referring to each other, or a child inserted before
+ * its parent, can be written in one transaction
  *
  * @see ForeignKey
  * @see References
@@ -338,6 +359,7 @@ public annotation class ForeignKeyGroup(
     val tableName: String,
     val trigger: Trigger = Trigger.NULL,
     val constraintName: String = "",
+    val deferred: Boolean = false,
 )
 
 /**
@@ -453,6 +475,9 @@ public annotation class ForeignKeyGroup(
  * @property foreignKeys Array of column names in the parent table to reference (cannot be empty)
  * @property trigger The action to take when the referenced row is deleted or updated (defaults to no action)
  * @property constraintName Optional name for the constraint (useful for error messages and debugging)
+ * @property deferred Whether the constraint is checked when the transaction commits, rather than after each statement,
+ * as the SQL `DEFERRABLE INITIALLY DEFERRED` makes it, so that rows referring to each other, or a child inserted before
+ * its parent, can be written in one transaction
  *
  * @see ForeignKeyGroup
  * @see ForeignKey
@@ -467,6 +492,7 @@ public annotation class References(
     val trigger: Trigger = Trigger.NULL,
     val constraintName: String = "",
     vararg val foreignKeys: String,
+    val deferred: Boolean = false,
 )
 
 /**
@@ -908,3 +934,88 @@ public enum class Trigger {
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.BINARY)
 public annotation class Default(val value: String)
+/**
+ * Adds a `CHECK` constraint to a table: an SQL expression that every row has to satisfy, checked by SQLite whenever
+ * an INSERT or UPDATE writes a row, which fails if the expression is false for it.
+ *
+ * On a property, it is a constraint of the property's column; on a class annotated with [DBRow], a constraint of the
+ * table, after its columns. SQLite checks them alike, and both can refer to any column of the table, so a constraint
+ * that compares columns reads best on the class. They only differ when a column is dropped: the column's own
+ * constraints are dropped with it, while SQLite refuses to drop a column that another column's constraint or the
+ * table's refers to. Both can be repeated, and every constraint is checked.
+ *
+ * ```kotlin
+ * @OptIn(ExperimentalDSLDatabaseAPI::class)
+ * @DBRow
+ * @Check("endDate IS NULL OR endDate >= startDate", constraintName = "valid_period")
+ * @Serializable
+ * data class Membership(
+ *     @PrimaryKey val id: Long?,
+ *     @Check("level IN (0, 1, 2)") val level: Int,
+ *     val startDate: String,
+ *     val endDate: String?,
+ * )
+ * // CREATE TABLE Membership(id INTEGER PRIMARY KEY,level INT NOT NULL CHECK (level IN (0, 1, 2)),startDate TEXT NOT NULL,
+ * //     endDate TEXT,CONSTRAINT valid_period CHECK (endDate IS NULL OR endDate >= startDate))
+ * ```
+ *
+ * ### NULL Passes
+ * A row fails only when the expression is false: when it is NULL, the row passes. So `CHECK (age >= 0)` lets a NULL
+ * age through, which only a non-null property keeps out. This also catches expressions that look right: `date(day)`
+ * is NULL for a text that isn't a date, so `CHECK (date(day) = day)` lets every such text through, while
+ * `CHECK (day IS NULL OR date(day) IS day)` keeps them out.
+ *
+ * ### The Expression
+ * The expression is SQL, written into the CREATE TABLE statement as it is, and so only checked by SQLite when the table
+ * is created. It names columns by their names in the table, can't contain a subquery, so it can't refer to other
+ * tables, and can only call deterministic functions: a comparison with the current time such as
+ * `expires > date('now')` fails when a row is written.
+ *
+ * A row that fails the constraint makes its INSERT or UPDATE fail with the driver's exception, and an
+ * `INSERT_OR_IGNORE` skip the row, while an `INSERT_OR_REPLACE` fails as an INSERT does. SQLite's `ALTER TABLE` can't
+ * add a constraint to a table, and `ALTER_ADD_COLUMN` adds a column without its constraints: to add one to an existing
+ * table, rebuild the table, as `withName` describes.
+ *
+ * @property expression The SQL expression every row has to satisfy, such as `age BETWEEN 0 AND 150`
+ * @property constraintName The name of the constraint, which SQLite reports when a row fails it, or empty for none.
+ * SQLite reports an unnamed constraint by its expression from 3.34 on, but by the table's name before, as on Android
+ * below API 34, where only the names tell a table's constraints apart. It has to be an SQL identifier, and the names
+ * of a table's CHECK constraints have to differ
+ *
+ * @see DBRow
+ */
+@ExperimentalDSLDatabaseAPI
+@Repeatable
+@Target(AnnotationTarget.PROPERTY, AnnotationTarget.CLASS)
+@Retention(AnnotationRetention.BINARY)
+public annotation class Check(val expression: String, val constraintName: String = "")
+
+/**
+ * What SQLite does with a statement that would break a PRIMARY KEY or UNIQUE constraint, as the constraint's
+ * `ON CONFLICT` clause says, the `onConflict` of [PrimaryKey], [CompositePrimaryKey], [Unique] and [CompositeUnique]:
+ * ```kotlin
+ * @Unique(onConflict = OnConflict.REPLACE) val email: String
+ * // Generated: email TEXT NOT NULL UNIQUE ON CONFLICT REPLACE
+ * ```
+ * The OR of a statement, as in INSERT OR IGNORE, overrides it. A composite key or group gets the one given on any of its
+ * properties, and properties of a key or group can't give different ones.
+ *
+ * @author Yuang Qiao
+ */
+@ExperimentalDSLDatabaseAPI
+public enum class OnConflict {
+    /** Stops the statement and rolls back the transaction. */
+    ROLLBACK,
+
+    /** Stops the statement and undoes its changes, as SQLite does by default, so that no clause is written. */
+    ABORT,
+
+    /** Stops the statement, keeping the changes it made to the rows before. */
+    FAIL,
+
+    /** Skips the row that would break the constraint, and goes on with the statement. */
+    IGNORE,
+
+    /** Deletes the rows the row conflicts with, and goes on with the statement. */
+    REPLACE,
+}

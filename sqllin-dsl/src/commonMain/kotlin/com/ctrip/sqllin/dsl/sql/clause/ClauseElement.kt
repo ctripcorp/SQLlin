@@ -16,7 +16,7 @@
 
 package com.ctrip.sqllin.dsl.sql.clause
 
-import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.Relation
 
 /**
  * Base class for elements used in SQL clauses.
@@ -54,23 +54,65 @@ import com.ctrip.sqllin.dsl.sql.Table
  * an aggregate query
  * @property isNullOnNoRows Whether the element is NULL when an aggregate query without GROUP BY matches no rows. Such a
  * query still returns one row, in which a column, and every aggregate function except `count`, is NULL.
+ * @property columnTables The names of the tables whose columns the element reads: a column's own table, and the tables
+ * of a function's arguments, which an outer join can fill with NULL
+ * @property tables The tables and views that the subqueries in the element read, which an observed query watches
+ * @property isDeterministic Whether the element always gives the same result for the same row, which an index needs:
+ * `random()` doesn't
+ * @property isLiteral Whether the element is a literal on its own, such as `5`, which ORDER BY and GROUP BY would read
+ * as the number of a result column
  *
  * @author Yuang Qiao
  */
 public sealed class ClauseElement<V : Any>(
     internal val valueName: String,
-    internal val table: Table<*>,
+    internal val table: Relation<*>,
     internal val isFunction: Boolean,
     internal val isNullable: Boolean,
     internal val isAggregate: Boolean,
     internal val isNullOnNoRows: Boolean,
+    columnTables: Set<String>? = null,
+    internal val tables: Set<String> = emptySet(),
+    internal val isDeterministic: Boolean = true,
+    internal val isLiteral: Boolean = false,
 ) {
+
+    internal val columnTables: Set<String> = columnTables ?: if (isFunction) emptySet() else setOf(table.tableName)
 
     /**
      * Creates the element of an aggregate function of this element that has values of the same type, as `max` and
      * `min` do.
      */
-    internal abstract fun toAggregate(valueName: String, table: Table<*>): ClauseElement<V>
+    internal abstract fun toAggregate(valueName: String, table: Relation<*>): ClauseElement<V>
+
+    /**
+     * Creates the element of an expression of this element that has values of the same type, as an operator or a
+     * function does, with [valueName] as its SQL and [traits] as what is known about it.
+     */
+    internal abstract fun derive(valueName: String, traits: Traits): ClauseElement<V>
+
+    /**
+     * Creates the literal of [value], of the same type as the values of this element, as an operator or a function
+     * makes of a value given to it.
+     */
+    internal abstract fun literalOf(value: V): ClauseElement<V>
+
+    /**
+     * Creates the element of this column of another [relation], such as the row a trigger reads.
+     */
+    internal abstract fun rebind(relation: Relation<*>): ClauseElement<V>
+
+    /**
+     * Creates the condition [sql] of this element, compared with [other] if given, with its [parameters]: it reads the
+     * tables that the subqueries of the elements read.
+     */
+    internal fun condition(sql: String, parameters: MutableList<Any?>?, other: ClauseElement<*>? = null): SelectCondition =
+        SelectCondition(
+            conditionSQL = sql,
+            parameters = parameters,
+            tables = if (other == null) tables else tables + other.tables,
+            isDeterministic = isDeterministic && other?.isDeterministic != false,
+        )
 
     /**
      * Appends this element as SQL to [builder]: a column qualified by its table's name, so that it can be told apart
@@ -83,4 +125,11 @@ public sealed class ClauseElement<V : Any>(
         }
         builder.append(valueName)
     }
+
+    /**
+     * This element as SQL, as [appendSQL] writes it, which a function writes for its argument, so that a column is told
+     * apart from a column of the same name of another table in a join.
+     */
+    internal val sql: String
+        get() = buildString { appendSQL(this) }
 }

@@ -24,6 +24,7 @@ import com.ctrip.sqllin.driver.withTransaction
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 
 /**
  * The sqllin-driver common basic test.
@@ -196,6 +197,30 @@ class CommonBasicTest(private val path: DatabasePath) {
                     assertEquals(price, cursor.getDouble(4))
                 }
             }
+        }
+    }
+
+    /**
+     * A COMMIT that fails, as one does while a deferred foreign key isn't satisfied, leaves SQLite's transaction open, so
+     * it has to be rolled back: its rows are gone, and the next transaction can begin.
+     */
+    fun testFailedCommit() {
+        openDatabase(getDefaultDBConfig(false)) {
+            it.execSQL("PRAGMA foreign_keys = ON")
+            it.execSQL("CREATE TABLE parent(id INTEGER PRIMARY KEY)")
+            it.execSQL("CREATE TABLE child(parentId INT REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED)")
+            assertFails {
+                it.withTransaction { connection ->
+                    connection.executeInsert("INSERT INTO child VALUES (?)", arrayOf(1L))
+                }
+            }
+            fun children(): Long = it.withQuery("SELECT count(*) FROM child") { cursor -> cursor.next(); cursor.getLong(0) }
+            assertEquals(0L, children())
+            it.withTransaction { connection ->
+                connection.executeInsert("INSERT INTO child VALUES (?)", arrayOf(1L))
+                connection.executeInsert("INSERT INTO parent VALUES (?)", arrayOf(1L))
+            }
+            assertEquals(1L, children())
         }
     }
 

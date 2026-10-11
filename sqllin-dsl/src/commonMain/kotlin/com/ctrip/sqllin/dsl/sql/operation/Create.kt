@@ -17,8 +17,15 @@
 package com.ctrip.sqllin.dsl.sql.operation
 
 import com.ctrip.sqllin.driver.DatabaseConnection
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.createSQLIfNotExists
+import com.ctrip.sqllin.dsl.sql.View
 import com.ctrip.sqllin.dsl.sql.clause.ClauseElement
+import com.ctrip.sqllin.dsl.sql.clause.OrderByWay
+import com.ctrip.sqllin.dsl.sql.compiler.appendDBColumnName
+import com.ctrip.sqllin.dsl.sql.compiler.inlineParameters
+import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.SingleStatement
 import com.ctrip.sqllin.dsl.sql.statement.TableStructureStatement
 
@@ -38,6 +45,32 @@ internal object Create : Operation {
 
     private const val INDEX = "INDEX "
     private const val UNIQUE_INDEX = "UNIQUE INDEX "
+    private const val IF_NOT_EXISTS = "IF NOT EXISTS "
+
+    /**
+     * Builds a CREATE VIEW statement for [view], defined by [select].
+     *
+     * Generates SQL in the format: `CREATE VIEW view_name(column1, column2, ...) AS SELECT ...`, naming the view's
+     * columns after the properties of its row type. SQLite doesn't let a view take parameters, so the values of
+     * [select] are written into the SQL as literals.
+     *
+     * @return A [TableStructureStatement] representing the CREATE VIEW operation
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun <T> createView(view: View<T>, select: SelectStatement<T>, connection: DatabaseConnection, isIfNotExists: Boolean = false): SingleStatement {
+        val sql = buildString {
+            append(sqlStr)
+            append("VIEW ")
+            if (isIfNotExists)
+                append(IF_NOT_EXISTS)
+            append(view.tableName)
+            append('(')
+            appendDBColumnName(view.kSerializer().descriptor)
+            append(") AS ")
+            append(inlineParameters(select.sqlStr, select.parameters))
+        }
+        return TableStructureStatement(sql, connection)
+    }
 
     /**
      * Builds a CREATE TABLE statement for the given table definition.
@@ -46,8 +79,8 @@ internal object Create : Operation {
      * @param connection Database connection for execution
      * @return CREATE statement ready for execution
      */
-    fun <T> createTable(table: Table<T>, connection: DatabaseConnection): SingleStatement =
-        TableStructureStatement(table.createSQL, connection)
+    fun <T> createTable(table: Table<T>, connection: DatabaseConnection, isIfNotExists: Boolean = false): SingleStatement =
+        TableStructureStatement(if (isIfNotExists) table.createSQLIfNotExists() else table.createSQL, connection)
 
     /**
      * Builds a CREATE INDEX statement for the specified table and columns.
@@ -62,10 +95,16 @@ internal object Create : Operation {
      * @return CREATE INDEX statement ready for execution
      * @throws IllegalArgumentException if no columns are specified
      */
-    fun <T> createIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>): SingleStatement {
+    fun <T> createIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>, isIfNotExists: Boolean = false): SingleStatement {
         require(columns.isNotEmpty()) { "You must create an index for at least one column." }
-        return createIndex(INDEX, table, connection, indexName, *columns)
+        return createIndex(INDEX, table, connection, indexName, columns.map { it to null }, isIfNotExists = isIfNotExists)
     }
+
+    /**
+     * Builds a CREATE INDEX statement of [columns] in the orders given, as `CREATE INDEX name ON table(age DESC)`.
+     */
+    fun <T> createIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, columns: List<Pair<ClauseElement<*>, OrderByWay>>, isIfNotExists: Boolean = false): SingleStatement =
+        createIndex(INDEX, table, connection, indexName, columns, isIfNotExists = isIfNotExists)
 
     /**
      * Builds a CREATE UNIQUE INDEX statement for the specified table and columns.
@@ -81,10 +120,16 @@ internal object Create : Operation {
      * @return CREATE UNIQUE INDEX statement ready for execution
      * @throws IllegalArgumentException if no columns are specified
      */
-    fun <T> createUniqueIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>): SingleStatement {
+    fun <T> createUniqueIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>, isIfNotExists: Boolean = false): SingleStatement {
         require(columns.isNotEmpty()) { "You must create an index for at least one column." }
-        return createIndex(UNIQUE_INDEX, table, connection, indexName, *columns)
+        return createIndex(UNIQUE_INDEX, table, connection, indexName, columns.map { it to null }, isIfNotExists = isIfNotExists)
     }
+
+    /**
+     * Builds a CREATE UNIQUE INDEX statement of [columns] in the orders given.
+     */
+    fun <T> createUniqueIndex(table: Table<T>, connection: DatabaseConnection, indexName: String, columns: List<Pair<ClauseElement<*>, OrderByWay>>, isIfNotExists: Boolean = false): SingleStatement =
+        createIndex(UNIQUE_INDEX, table, connection, indexName, columns, isIfNotExists = isIfNotExists)
 
     /**
      * Internal helper function to build CREATE INDEX statements with different prefixes.
@@ -95,31 +140,83 @@ internal object Create : Operation {
      * @param table Table definition to create the index on
      * @param connection Database connection for execution
      * @param indexName Name for the new index
-     * @param columns One or more columns to include in the index
+     * @param columns One or more columns to include in the index, with the orders they are sorted in, or null for the
+     * default, ascending
      * @return CREATE INDEX statement ready for execution
-     * @throws IllegalArgumentException if no columns are specified
+     * @throws IllegalArgumentException if no columns are specified, or one reads another table, or has a subquery, an
+     * aggregate function or a function that doesn't always give the same result for a row, such as `random()`
      */
-    private fun <T> createIndex(prefix: String, table: Table<T>, connection: DatabaseConnection, indexName: String, vararg columns: ClauseElement<*>): SingleStatement {
+    private fun <T> createIndex(prefix: String, table: Table<T>, connection: DatabaseConnection, indexName: String, columns: List<Pair<ClauseElement<*>, OrderByWay?>>, isIfNotExists: Boolean): SingleStatement {
         val sql = buildString {
             append(sqlStr)
             append(prefix)
+            if (isIfNotExists)
+                append(IF_NOT_EXISTS)
             append(indexName)
             append(" ON ")
             append(table.tableName)
             append('(')
-            val iterator = columns.iterator()
-            if (!iterator.hasNext())
+            if (columns.isEmpty())
                 throw IllegalArgumentException("You must create an index for at least one column.")
-            // Extract column name without table prefix (e.g., "book.name" -> "name")
-            val firstColumn = iterator.next().valueName.substringAfterLast('.')
-            append(firstColumn)
-            while (iterator.hasNext()) {
-                append(',')
-                val columnName = iterator.next().valueName.substringAfterLast('.')
-                append(columnName)
+            columns.forEachIndexed { index, (column, order) ->
+                if (index > 0)
+                    append(',')
+                val otherTable = column.columnTables.firstOrNull { it != table.tableName }
+                require(otherTable == null) {
+                    "The index '$indexName' of table '${table.tableName}' can only hold the columns of that table, but '${column.valueName}' reads table '$otherTable'."
+                }
+                // SQLite rejects these too, but a function that isn't deterministic only once the table has rows
+                require(column.tables.isEmpty()) {
+                    "The index '$indexName' can't hold '${column.valueName}', which has a subquery."
+                }
+                require(!column.isAggregate) {
+                    "The index '$indexName' can't hold '${column.valueName}', which is an aggregate function."
+                }
+                require(column.isDeterministic) {
+                    "The index '$indexName' can't hold '${column.valueName}', which doesn't always give the same result for a row."
+                }
+                append(if (column.isFunction) unqualified(column.valueName, table.tableName) else column.valueName)
+                if (order != null) {
+                    append(' ')
+                    append(order.str)
+                }
             }
             append(')')
         }
         return TableStructureStatement(sql, connection)
     }
+
+    /**
+     * Returns the SQL of a function without the name [table] before its columns, outside its string literals, as
+     * SQLite doesn't allow `.` in the expressions of an index, which can only read the indexed table anyway.
+     */
+    internal fun unqualified(sql: String, table: String): String = buildString {
+        val prefix = "$table."
+        var quote: Char? = null
+        var index = 0
+        while (index < sql.length) {
+            val char = sql[index]
+            when {
+                quote != null -> {
+                    // A quote doubled to escape it closes the literal and opens it again
+                    if (char == quote)
+                        quote = null
+                    append(char)
+                    index++
+                }
+                char == '\'' || char == '"' -> {
+                    quote = char
+                    append(char)
+                    index++
+                }
+                sql.startsWith(prefix, index) && (index == 0 || !sql[index - 1].isIdentifierPart()) -> index += prefix.length
+                else -> {
+                    append(char)
+                    index++
+                }
+            }
+        }
+    }
+
+    private fun Char.isIdentifierPart(): Boolean = isLetterOrDigit() || this == '_'
 }

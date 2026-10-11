@@ -67,9 +67,16 @@ internal class JdbcDatabaseConnection(private val connection: Connection) : Abst
     }
 
     override fun endTransaction() = try {
-        if (isTransactionSuccess.get())
-            connection.commit()
-        else
+        if (isTransactionSuccess.get()) {
+            try {
+                connection.commit()
+            } catch (e: Exception) {
+                // A COMMIT that fails, as one does while a deferred foreign key isn't satisfied, leaves the
+                // transaction open, so that the statements after it would run in it
+                runCatching { connection.rollback() }
+                throw e
+            }
+        } else
             connection.rollback()
     } finally {
         connection.autoCommit = true

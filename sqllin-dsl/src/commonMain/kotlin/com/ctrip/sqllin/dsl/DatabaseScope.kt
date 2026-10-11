@@ -19,25 +19,48 @@ package com.ctrip.sqllin.dsl
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
+import com.ctrip.sqllin.dsl.annotation.KeyWordDslMaker
+import com.ctrip.sqllin.dsl.annotation.PlatformDependentSQLiteAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
-import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.DefaultValues
+import com.ctrip.sqllin.dsl.sql.DerivedTable
+import com.ctrip.sqllin.dsl.sql.From
+import com.ctrip.sqllin.dsl.sql.FtsTable
 import com.ctrip.sqllin.dsl.sql.ProjectedX
+import com.ctrip.sqllin.dsl.sql.RaiseIgnore
+import com.ctrip.sqllin.dsl.sql.RaiseResolution
+import com.ctrip.sqllin.dsl.sql.Relation
+import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.TriggerDefinition
+import com.ctrip.sqllin.dsl.sql.TriggerEvent
+import com.ctrip.sqllin.dsl.sql.TriggerName
+import com.ctrip.sqllin.dsl.sql.TriggerTiming
+import com.ctrip.sqllin.dsl.sql.View
+import com.ctrip.sqllin.dsl.sql.ViewDefinition
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.clause.*
+import com.ctrip.sqllin.dsl.sql.compiler.inlineParameters
+import com.ctrip.sqllin.dsl.sql.compiler.sqlLiteral
 import com.ctrip.sqllin.dsl.sql.operation.Alter
 import com.ctrip.sqllin.dsl.sql.operation.Create
 import com.ctrip.sqllin.dsl.sql.operation.Delete
 import com.ctrip.sqllin.dsl.sql.operation.Drop
 import com.ctrip.sqllin.dsl.sql.operation.Insert
+import com.ctrip.sqllin.dsl.sql.operation.Maintenance
 import com.ctrip.sqllin.dsl.sql.operation.PRAGMA
 import com.ctrip.sqllin.dsl.sql.operation.Select
+import com.ctrip.sqllin.dsl.sql.operation.Trigger
 import com.ctrip.sqllin.dsl.sql.operation.Update
+import com.ctrip.sqllin.dsl.sql.operation.Vacuum
 import com.ctrip.sqllin.dsl.sql.statement.*
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.serializer
 import kotlin.concurrent.Volatile
 import kotlin.jvm.JvmName
+import kotlin.reflect.KProperty1
 
 /**
  * Scope for executing type-safe SQL DSL statements.
@@ -119,6 +142,7 @@ public class DatabaseScope internal constructor(
      * @return `true` if transaction started successfully, `false` if already in a transaction
      */
     public fun beginTransaction(): Boolean {
+        check(triggerBody == null) { "A transaction can't begin in the body of a trigger, which runs in the statement that fires it." }
         if (isInTransaction)
             return false
         transactionStatementsGroup = TransactionStatementsGroup(databaseConnection, enableSimpleSQLLog)
@@ -159,11 +183,19 @@ public class DatabaseScope internal constructor(
     private val executiveEngine = DatabaseExecuteEngine(enableSimpleSQLLog)
 
     private fun addStatement(statement: SingleStatement) {
-        if (isInTransaction)
-            transactionStatementsGroup!!.addStatement(statement)
-        else
-            executiveEngine.addStatement(statement)
+        val body = triggerBody
+        when {
+            body != null -> body.addStatement(statement)
+            isInTransaction -> transactionStatementsGroup!!.addStatement(statement)
+            else -> executiveEngine.addStatement(statement)
+        }
     }
+
+    /**
+     * The container the statements are added to: the body of the trigger being defined, the transaction, or the scope.
+     */
+    private val currentContainer: StatementContainer
+        get() = triggerBody ?: transactionStatementsGroup ?: executiveEngine
 
     private fun <T> addSelectStatement(statement: SelectStatement<T>) {
         if (unionSelectStatementGroupStack.isNotEmpty())
@@ -172,7 +204,24 @@ public class DatabaseScope internal constructor(
             addStatement(statement)
     }
 
-    internal fun executeAllStatements() = executiveEngine.executeAllStatement()
+    internal fun executeAllStatements() {
+        check(definingTrigger == null) {
+            "The trigger '${definingTrigger?.timing?.trigger?.name}' has no BEGIN with its statements, so it would never be created."
+        }
+        executiveEngine.executeAllStatement()
+    }
+
+    /**
+     * What the statements of this scope may change when they run.
+     */
+    internal val changes: Changes
+        get() = executiveEngine.changes
+
+    /**
+     * The tables the statements of this scope write rows to.
+     */
+    internal val writtenTables: Set<String>
+        get() = executiveEngine.writtenTables
 
     // ========== INSERT Operations ==========
 
@@ -367,6 +416,106 @@ public class DatabaseScope internal constructor(
     public infix fun <T> Table<T>.INSERT_OR_IGNORE(entity: T): Unit =
         INSERT_OR_IGNORE(listOf(entity))
 
+    // ========== INSERT of expressions ==========
+
+    /**
+     * Inserts a row of expressions, as SQL's `INSERT INTO table(columns) VALUES (expressions)` does, each given to a
+     * property of the row type with `AS`, which checks its type at compile time:
+     * ```kotlin
+     * // INSERT INTO audit(action,at) VALUES ('purge',datetime('now'))
+     * AuditTable INSERT listOf(literal("purge") AS Audit::action, AuditTable.datetime("now") AS Audit::at)
+     * ```
+     * The columns left out take their default values, or NULL, which a NOT NULL column without a default rejects when
+     * the statement runs. An expression that can be NULL can only be written to a nullable column, and the values can't
+     * read any table, but the rows of a trigger: use `INSERT` with a SELECT to insert the values of other rows.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("insertExpressions")
+    public infix fun <T> Table<T>.INSERT(values: Iterable<ResultColumn<T>>) {
+        addStatement(Insert.insert("INSERT INTO ", this, databaseConnection, values))
+    }
+
+    /**
+     * Inserts a row of a single expression, as `INSERT(listOf(value))` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT(value: ResultColumn<T>): Unit = INSERT(listOf(value))
+
+    /**
+     * Inserts a row of expressions, or nothing if it conflicts with a row, as SQL's `INSERT OR IGNORE` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("insertOrIgnoreExpressions")
+    public infix fun <T> Table<T>.INSERT_OR_IGNORE(values: Iterable<ResultColumn<T>>) {
+        addStatement(Insert.insert("INSERT OR IGNORE INTO ", this, databaseConnection, values))
+    }
+
+    /**
+     * Inserts a row of a single expression, or nothing if it conflicts with a row.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_IGNORE(value: ResultColumn<T>): Unit = INSERT_OR_IGNORE(listOf(value))
+
+    /**
+     * Inserts a row of expressions, replacing the rows it conflicts with, as SQL's `INSERT OR REPLACE` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("insertOrReplaceExpressions")
+    public infix fun <T> Table<T>.INSERT_OR_REPLACE(values: Iterable<ResultColumn<T>>) {
+        addStatement(Insert.insert("INSERT OR REPLACE INTO ", this, databaseConnection, values))
+    }
+
+    /**
+     * Inserts a row of a single expression, replacing the rows it conflicts with.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_REPLACE(value: ResultColumn<T>): Unit = INSERT_OR_REPLACE(listOf(value))
+
+    /**
+     * `DEFAULT VALUES`, which `table INSERT DEFAULT_VALUES` inserts a row of.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val DEFAULT_VALUES: DefaultValues
+        get() = DefaultValues()
+
+    /**
+     * Inserts a row of the default values of all columns, as SQL's `INSERT INTO table DEFAULT VALUES` does:
+     * `table INSERT DEFAULT_VALUES`. A column without a default value takes NULL, which a NOT NULL one rejects when the
+     * statement runs, and a database-assigned primary key its next value.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT(defaultValues: DefaultValues) {
+        addStatement(Insert.insertDefaultValues("INSERT INTO ", this, databaseConnection))
+    }
+
+    /**
+     * Inserts a row of the default values of all columns, or nothing if it conflicts with a row, as SQL's
+     * `INSERT OR IGNORE INTO table DEFAULT VALUES` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_IGNORE(defaultValues: DefaultValues) {
+        addStatement(Insert.insertDefaultValues("INSERT OR IGNORE INTO ", this, databaseConnection))
+    }
+
+    /**
+     * Inserts a row of the default values of all columns, replacing the rows it conflicts with, as SQL's
+     * `INSERT OR REPLACE INTO table DEFAULT VALUES` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_REPLACE(defaultValues: DefaultValues) {
+        addStatement(Insert.insertDefaultValues("INSERT OR REPLACE INTO ", this, databaseConnection))
+    }
+
     // ========== INSERT INTO ... SELECT ==========
     //
     // These insert the rows a SELECT returns, as in `PersonTable INSERT (PersonV1Table SELECT X<Person>())`. The
@@ -438,13 +587,7 @@ public class DatabaseScope internal constructor(
      */
     @StatementDslMaker
     public infix fun <T> Table<T>.UPDATE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
-        transactionStatementsGroup?.let {
-            val statement = Update.update(this, databaseConnection, it, clause)
-            it addStatement statement
-            statement
-        } ?: Update.update(this, databaseConnection, executiveEngine, clause).also {
-            executiveEngine addStatement it
-        }
+        Update.update(this, databaseConnection, currentContainer, clause).also { addStatement(it) }
 
     // ========== DELETE Operations ==========
 
@@ -487,19 +630,19 @@ public class DatabaseScope internal constructor(
      * ```
      */
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT(x: X): FinalSelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT(x: X): FinalSelectStatement<T> =
         select(kSerializer(), false)
 
     /**
      * Selects distinct records from the table.
      */
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(x: X): FinalSelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT_DISTINCT(x: X): FinalSelectStatement<T> =
         select(kSerializer(), true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, isDistinct: Boolean): FinalSelectStatement<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, isDistinct: Boolean): FinalSelectStatement<R> {
         val container = getSelectStatementGroup()
-        val statement = Select.select(this, isDistinct, serializer, databaseConnection, container)
+        val statement = Select.select(From.of(this), isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
     }
@@ -515,16 +658,16 @@ public class DatabaseScope internal constructor(
      * ```
      */
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT(clause: WhereClause<T>): WhereSelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT(clause: WhereClause<T>): WhereSelectStatement<T> =
         select(kSerializer(), clause, false)
 
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: WhereClause<T>): WhereSelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT_DISTINCT(clause: WhereClause<T>): WhereSelectStatement<T> =
         select(kSerializer(), clause, true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: WhereClause<R>, isDistinct: Boolean): WhereSelectStatement<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: WhereClause<R>, isDistinct: Boolean): WhereSelectStatement<R> {
         val container = getSelectStatementGroup()
-        val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
+        val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
     }
@@ -538,16 +681,16 @@ public class DatabaseScope internal constructor(
      * ```
      */
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
         select(kSerializer(), clause, false)
 
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT_DISTINCT(clause: OrderByClause<T>): OrderBySelectStatement<T> =
         select(kSerializer(), clause, true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: OrderByClause<R>, isDistinct: Boolean): OrderBySelectStatement<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: OrderByClause<R>, isDistinct: Boolean): OrderBySelectStatement<R> {
         val container = getSelectStatementGroup()
-        val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
+        val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
     }
@@ -561,16 +704,16 @@ public class DatabaseScope internal constructor(
      * ```
      */
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT(clause: LimitClause<T>): LimitSelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT(clause: LimitClause<T>): LimitSelectStatement<T> =
         select(kSerializer(), clause, false)
 
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: LimitClause<T>): LimitSelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT_DISTINCT(clause: LimitClause<T>): LimitSelectStatement<T> =
         select(kSerializer(), clause, true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: LimitClause<R>, isDistinct: Boolean): LimitSelectStatement<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: LimitClause<R>, isDistinct: Boolean): LimitSelectStatement<R> {
         val container = getSelectStatementGroup()
-        val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
+        val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
     }
@@ -584,16 +727,16 @@ public class DatabaseScope internal constructor(
      * ```
      */
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
         select(kSerializer(), clause, false)
 
     @StatementDslMaker
-    public inline infix fun <reified T> Table<T>.SELECT_DISTINCT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
+    public inline infix fun <reified T> Relation<T>.SELECT_DISTINCT(clause: GroupByClause<T>): GroupBySelectStatement<T> =
         select(kSerializer(), clause, true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: GroupByClause<R>, isDistinct: Boolean): GroupBySelectStatement<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: GroupByClause<R>, isDistinct: Boolean): GroupBySelectStatement<R> {
         val container = getSelectStatementGroup()
-        val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
+        val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
     }
@@ -624,7 +767,7 @@ public class DatabaseScope internal constructor(
      * is of a different type from its column, or isn't nullable while its column is
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(x: ProjectedX<R>): FinalSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(x: ProjectedX<R>): FinalSelectStatement<R> =
         select(getKSerializer<R>(), false)
 
     /**
@@ -639,7 +782,7 @@ public class DatabaseScope internal constructor(
      * is of a different type from its column, or isn't nullable while its column is
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(x: ProjectedX<R>): FinalSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(x: ProjectedX<R>): FinalSelectStatement<R> =
         select(getKSerializer<R>(), true)
 
     /**
@@ -655,7 +798,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectWhereProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(clause: WhereClause<R>): WhereSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(clause: WhereClause<R>): WhereSelectStatement<R> =
         select(getKSerializer<R>(), clause, false)
 
     /**
@@ -666,7 +809,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectDistinctWhereProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: WhereClause<R>): WhereSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: WhereClause<R>): WhereSelectStatement<R> =
         select(getKSerializer<R>(), clause, true)
 
     /**
@@ -682,7 +825,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectOrderByProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(clause: OrderByClause<R>): OrderBySelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(clause: OrderByClause<R>): OrderBySelectStatement<R> =
         select(getKSerializer<R>(), clause, false)
 
     /**
@@ -693,7 +836,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectDistinctOrderByProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: OrderByClause<R>): OrderBySelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: OrderByClause<R>): OrderBySelectStatement<R> =
         select(getKSerializer<R>(), clause, true)
 
     /**
@@ -709,7 +852,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectLimitProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(clause: LimitClause<R>): LimitSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(clause: LimitClause<R>): LimitSelectStatement<R> =
         select(getKSerializer<R>(), clause, false)
 
     /**
@@ -720,7 +863,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectDistinctLimitProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: LimitClause<R>): LimitSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: LimitClause<R>): LimitSelectStatement<R> =
         select(getKSerializer<R>(), clause, true)
 
     /**
@@ -736,7 +879,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectGroupByProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(clause: GroupByClause<R>): GroupBySelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(clause: GroupByClause<R>): GroupBySelectStatement<R> =
         select(getKSerializer<R>(), clause, false)
 
     /**
@@ -747,7 +890,7 @@ public class DatabaseScope internal constructor(
      */
     @JvmName("selectDistinctGroupByProjection")
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: GroupByClause<R>): GroupBySelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: GroupByClause<R>): GroupBySelectStatement<R> =
         select(getKSerializer<R>(), clause, true)
 
     // ========== SELECT with Result Columns ==========
@@ -774,7 +917,7 @@ public class DatabaseScope internal constructor(
      * non-null in a group of GROUP BY is reported when the scope ends, before anything runs, if no GROUP BY follows.
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(column: ResultColumn<R>): ResultColumnSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(column: ResultColumn<R>): ResultColumnSelectStatement<R> =
         select(getKSerializer<R>(), listOf(column), false)
 
     /**
@@ -784,7 +927,7 @@ public class DatabaseScope internal constructor(
      * @throws IllegalArgumentException if [R] doesn't fit the query, as for [SELECT]
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(column: ResultColumn<R>): ResultColumnSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(column: ResultColumn<R>): ResultColumnSelectStatement<R> =
         select(getKSerializer<R>(), listOf(column), true)
 
     /**
@@ -798,7 +941,7 @@ public class DatabaseScope internal constructor(
      * val stats = BookTable { table ->
      *     table SELECT listOf(count(X) AS AuthorStats::books, sum(pages) AS AuthorStats::totalPages) GROUP_BY author
      * }
-     * // SELECT author,count(*) AS books,sum(pages) AS totalPages FROM book GROUP BY author
+     * // SELECT author,count(*) AS books,sum(book.pages) AS totalPages FROM book GROUP BY book.author
      * ```
      *
      * Can be followed by WHERE, GROUP BY, ORDER BY, or LIMIT.
@@ -807,7 +950,7 @@ public class DatabaseScope internal constructor(
      * expressions, or none at all
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(columns: Iterable<ResultColumn<R>>): ResultColumnSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(columns: Iterable<ResultColumn<R>>): ResultColumnSelectStatement<R> =
         select(getKSerializer<R>(), columns, false)
 
     /**
@@ -817,21 +960,303 @@ public class DatabaseScope internal constructor(
      * @throws IllegalArgumentException if [R] doesn't fit the query, as for [SELECT]
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(columns: Iterable<ResultColumn<R>>): ResultColumnSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(columns: Iterable<ResultColumn<R>>): ResultColumnSelectStatement<R> =
         select(getKSerializer<R>(), columns, true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, columns: Iterable<ResultColumn<R>>, isDistinct: Boolean): ResultColumnSelectStatement<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, columns: Iterable<ResultColumn<R>>, isDistinct: Boolean): ResultColumnSelectStatement<R> {
         val container = getSelectStatementGroup()
-        val statement = Select.select(this, columns, isDistinct, serializer, databaseConnection, container)
+        val statement = Select.select(From.of(this), columns, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
     }
 
-    // ========== UNION Operations ==========
+    // ========== Compound SELECT ==========
+    //
+    // These combine two SELECTs of the same result type, as in SQL: `(select1) UNION (select2)`. Each SELECT is put in
+    // parentheses, as SELECT and these operators are infix functions of the same precedence. Chained, they are
+    // evaluated from left to right, as SQLite does, and parentheses group them: `a UNION (b UNION_ALL c)`.
+
+    /**
+     * Combines the rows of this SELECT and [select], without duplicates, as the SQL `select1 UNION select2` does.
+     *
+     * Example:
+     * ```kotlin
+     * PersonTable { table ->
+     *     (table SELECT WHERE(age LT 18)) UNION (table SELECT WHERE(age GTE 65))
+     * }
+     * ```
+     *
+     * Both SELECTs read rows of the same type, which is checked at compile time, from any tables: with a projection,
+     * result columns or a join, they can combine rows of different tables. They become part of the compound, so they
+     * no longer run on their own. A SELECT that ends with ORDER BY or LIMIT keeps them to itself, and the compound can
+     * be followed by its own ORDER BY and LIMIT.
+     *
+     * @return The compound, which can be followed by another compound operator, ORDER BY or LIMIT
+     * @throws IllegalArgumentException if either SELECT is incomplete, as an aggregate query that needs GROUP BY
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <R> SelectStatement<R>.UNION(select: SelectStatement<R>): CompoundSelectStatement<R> =
+        compound(" UNION ", select)
+
+    /**
+     * Combines the rows of this SELECT and [select], keeping duplicates, as the SQL `select1 UNION ALL select2` does.
+     *
+     * @see UNION
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <R> SelectStatement<R>.UNION_ALL(select: SelectStatement<R>): CompoundSelectStatement<R> =
+        compound(" UNION ALL ", select)
+
+    /**
+     * Keeps the rows of this SELECT that [select] also returns, as the SQL `select1 INTERSECT select2` does.
+     *
+     * @see UNION
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <R> SelectStatement<R>.INTERSECT(select: SelectStatement<R>): CompoundSelectStatement<R> =
+        compound(" INTERSECT ", select)
+
+    /**
+     * Keeps the rows of this SELECT that [select] doesn't return, as the SQL `select1 EXCEPT select2` does.
+     *
+     * @see UNION
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <R> SelectStatement<R>.EXCEPT(select: SelectStatement<R>): CompoundSelectStatement<R> =
+        compound(" EXCEPT ", select)
+
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    private fun <R> SelectStatement<R>.compound(operator: String, select: SelectStatement<R>): CompoundSelectStatement<R> {
+        checkComplete()
+        select.checkComplete()
+        container removeStatement this
+        select.container removeStatement select
+        val statement = Select.compound(this, operator, select, getSelectStatementGroup())
+        addSelectStatement(statement)
+        return statement
+    }
+
+    // ========== Subqueries ==========
+    //
+    // A SELECT can be a derived table, in the FROM clause or a JOIN of another query, or the subquery of an IN or
+    // EXISTS condition. It becomes part of that query, so it no longer runs on its own.
+
+    /**
+     * Makes this SELECT a derived table named after [view], which a query reads like a table: `(SELECT ...) AS name`.
+     *
+     * The derived table has [view]'s rows, which the SELECT has to return, as is checked at compile time, and [view]'s
+     * column properties name its columns. [view] is the object generated for a class annotated with `@DBView`, which
+     * only declares the rows and their name here: no such view has to exist in the database.
+     *
+     * Example:
+     * ```kotlin
+     * @DBView("author_books")
+     * @Serializable
+     * data class AuthorBooks(val authorId: Long, val books: Long)
+     *
+     * val authorBooks = BookTable { table ->
+     *     table SELECT listOf(count(X) AS AuthorBooks::books) GROUP_BY authorId
+     * } AS AuthorBooksView
+     * (FROM(PersonTable) INNER_JOIN authorBooks ON (PersonTable.id EQ AuthorBooksView.authorId)) SELECT X<Author>()
+     * // SELECT ... FROM person INNER JOIN (SELECT authorId,count(*) AS books FROM book GROUP BY book.authorId) AS author_books
+     * //     ON person.id=author_books.authorId
+     * ```
+     *
+     * As each derived table is named after its view, a query can't read two derived tables of the same view. A
+     * derived table of a table's rows gives that table another name, which a query joining the table with itself
+     * needs: `(PersonTable SELECT X) AS ManagerView`.
+     *
+     * @return The derived table, which can be selected from and joined like a table or a view, but not written to
+     * @throws IllegalArgumentException if this SELECT is incomplete, as an aggregate query that needs GROUP BY
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <R> SelectStatement<R>.AS(view: View<R>): Relation<R> {
+        takeAsSubquery()
+        return DerivedTable(view, this)
+    }
+
+    /**
+     * Whether this number is among the values the single column of [select] returns: `column IN (SELECT ...)`.
+     *
+     * Example:
+     * ```kotlin
+     * @Serializable
+     * data class AuthorId(val authorId: Long)
+     *
+     * PersonTable SELECT WHERE(PersonTable.id IN (BookTable SELECT X<AuthorId>()))
+     * // SELECT ... FROM person WHERE person.id IN (SELECT authorId FROM book)
+     * ```
+     *
+     * @throws IllegalArgumentException if [select] doesn't return one column of numbers, or is incomplete
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun ClauseNumber<*>.IN(select: SelectStatement<*>): SelectCondition =
+        subqueryIn(this, select, "numbers") { it.serialName.removeSuffix("?") in NUMBER_TYPES }
+
+    /**
+     * Whether this text is among the values the single column of [select] returns: `column IN (SELECT ...)`.
+     *
+     * @throws IllegalArgumentException if [select] doesn't return one column of text, or is incomplete
+     * @see IN
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun ClauseString<*>.IN(select: SelectStatement<*>): SelectCondition =
+        subqueryIn(this, select, "text") { it.serialName.removeSuffix("?") in TEXT_TYPES }
+
+    /**
+     * Whether this BLOB is among the values the single column of [select] returns: `column IN (SELECT ...)`.
+     *
+     * @throws IllegalArgumentException if [select] doesn't return one column of BLOBs, or is incomplete
+     * @see IN
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun ClauseBlob.IN(select: SelectStatement<*>): SelectCondition =
+        subqueryIn(this, select, "BLOBs") { it.serialName.removeSuffix("?") == BYTE_ARRAY_TYPE }
+
+    /**
+     * Whether [select] returns any row: `EXISTS (SELECT ...)`.
+     *
+     * The SELECT can refer to the columns of the query it is in, as columns are written with their tables' names,
+     * which makes it run for each of that query's rows:
+     * ```kotlin
+     * PersonTable SELECT WHERE(EXISTS(BookTable SELECT WHERE(BookTable.authorId EQ PersonTable.id)))
+     * // SELECT ... FROM person WHERE EXISTS (SELECT ... FROM book WHERE book.authorId=person.id)
+     * ```
+     * Inside the SELECT, a column of a table that both queries read is the SELECT's own, as both have the same name,
+     * so it can't refer to the other query's rows of that table. `NOT(EXISTS(select))` checks that it returns no rows.
+     *
+     * @throws IllegalArgumentException if [select] is incomplete, as an aggregate query that needs GROUP BY
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun EXISTS(select: SelectStatement<*>): SelectCondition {
+        select.takeAsSubquery()
+        return SelectCondition("EXISTS (${select.sqlStr})", select.parameters?.toMutableList(), select.tables)
+    }
+
+    /**
+     * Takes this SELECT out of the statements the scope runs, as it becomes a subquery of another one.
+     */
+    // A SELECT of a single column can also be a value, a scalar subquery: `select[R::property]` names the column, so
+    // that the value has the property's type.
+
+    /**
+     * This SELECT as a number, a scalar subquery: the value of its single column, [property], in its first row, or NULL
+     * if it returns no rows, as in `price GT (BookTable SELECT listOf(avg(price) AS AveragePrice::value))[AveragePrice::value]`.
+     * It can be NULL, and the values of the SELECT are written into the SQL, as the values of any expression are.
+     *
+     * @throws IllegalArgumentException if the SELECT returns more than one column
+     */
+    @ExperimentalDSLDatabaseAPI
+    public operator fun <R, V : Number> SelectStatement<R>.get(property: KProperty1<R, V?>): ClauseNumber<V> =
+        scalar(this, property) { sql, tables -> ClauseNumber(sql, ExpressionRelation, isFunction = true, isNullable = true, isAggregate = false, isNullOnNoRows = true, columnTables = emptySet(), tables = tables) }
+
+    /**
+     * This SELECT as a string, a scalar subquery: the value of its single column, [property], in its first row, or NULL
+     * if it returns no rows.
+     *
+     * @throws IllegalArgumentException if the SELECT returns more than one column
+     */
+    @ExperimentalDSLDatabaseAPI
+    @JvmName("getString")
+    public operator fun <R> SelectStatement<R>.get(property: KProperty1<R, String?>): ClauseString<String> =
+        scalar(this, property) { sql, tables -> ClauseString(sql, ExpressionRelation, isFunction = true, isNullable = true, isAggregate = false, isNullOnNoRows = true, columnTables = emptySet(), tables = tables) }
+
+    /**
+     * This SELECT as a Boolean, a scalar subquery: the value of its single column, [property], in its first row, or NULL
+     * if it returns no rows.
+     *
+     * @throws IllegalArgumentException if the SELECT returns more than one column
+     */
+    @ExperimentalDSLDatabaseAPI
+    @JvmName("getBoolean")
+    public operator fun <R> SelectStatement<R>.get(property: KProperty1<R, Boolean?>): ClauseBoolean =
+        scalar(this, property) { sql, tables -> ClauseBoolean(sql, ExpressionRelation, isFunction = true, isNullable = true, isAggregate = false, isNullOnNoRows = true, columnTables = emptySet(), tables = tables) }
+
+    /**
+     * This SELECT as a BLOB, a scalar subquery: the value of its single column, [property], in its first row, or NULL if
+     * it returns no rows.
+     *
+     * @throws IllegalArgumentException if the SELECT returns more than one column
+     */
+    @ExperimentalDSLDatabaseAPI
+    @JvmName("getBlob")
+    public operator fun <R> SelectStatement<R>.get(property: KProperty1<R, ByteArray?>): ClauseBlob =
+        scalar(this, property) { sql, tables -> ClauseBlob(sql, ExpressionRelation, isFunction = true, isNullable = true, isAggregate = false, isNullOnNoRows = true, columnTables = emptySet(), tables = tables) }
+
+    /**
+     * This SELECT as an enum entry, a scalar subquery: the value of its single column, [property], in its first row, or
+     * NULL if it returns no rows.
+     *
+     * @throws IllegalArgumentException if the SELECT returns more than one column
+     */
+    @ExperimentalDSLDatabaseAPI
+    @JvmName("getEnum")
+    public operator fun <R, T : Enum<T>> SelectStatement<R>.get(property: KProperty1<R, T?>): ClauseEnum<T> =
+        scalar(this, property) { sql, tables -> ClauseEnum(sql, ExpressionRelation, isFunction = true, isNullable = true, isAggregate = false, isNullOnNoRows = true, columnTables = emptySet(), tables = tables) }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun <E : ClauseElement<*>> scalar(select: SelectStatement<*>, property: KProperty1<*, *>, element: (String, Set<String>) -> E): E {
+        val descriptor = select.deserializer.descriptor
+        require(descriptor.elementsCount == 1 && descriptor.getElementName(0) == property.name) {
+            "A SELECT of '${descriptor.serialName}' can't be the value '${property.name}': a scalar subquery returns a single column, so its result type has to have that property only."
+        }
+        select.takeAsSubquery()
+        return element("(${inlineParameters(select.sqlStr, select.parameters)})", select.tables)
+    }
+
+    private fun SelectStatement<*>.takeAsSubquery() {
+        checkComplete()
+        container removeStatement this
+    }
+
+    /**
+     * Returns the condition that [element] is among the values of the single column of [select], checking that the
+     * column [holds] values [element] can be compared with, which are [values].
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun subqueryIn(element: ClauseElement<*>, select: SelectStatement<*>, values: String, holds: (SerialDescriptor) -> Boolean): SelectCondition {
+        val descriptor = select.deserializer.descriptor
+        val prefix = "Can't find '${element.valueName}' IN the results of a SELECT of '${descriptor.serialName}'"
+        require(descriptor.elementsCount == 1) {
+            "$prefix: it returns ${descriptor.elementsCount} columns, while IN compares with one. Select a type with a single property."
+        }
+        val column = descriptor.getElementDescriptor(0)
+        require(holds(column)) {
+            "$prefix: its column '${descriptor.getElementName(0)}' holds ${column.serialName.removeSuffix("?")}, while '${element.valueName}' holds $values."
+        }
+        select.takeAsSubquery()
+        val sql = buildString {
+            element.appendSQL(this)
+            append(" IN (")
+            append(select.sqlStr)
+            append(')')
+        }
+        return SelectCondition(sql, select.parameters?.toMutableList(), select.tables)
+    }
+
+    private companion object {
+        val NUMBER_TYPES = setOf(
+            "kotlin.Byte", "kotlin.Short", "kotlin.Int", "kotlin.Long", "kotlin.Float", "kotlin.Double",
+            "kotlin.UByte", "kotlin.UShort", "kotlin.UInt", "kotlin.ULong",
+        )
+        val TEXT_TYPES = setOf("kotlin.String", "kotlin.Char")
+        const val BYTE_ARRAY_TYPE = "kotlin.ByteArray"
+    }
+
+    // ========== UNION Operations (deprecated) ==========
 
     private val unionSelectStatementGroupStack by lazy { ArrayDeque<UnionSelectStatementGroup<*>>() }
 
-    private fun getSelectStatementGroup(): StatementContainer = unionSelectStatementGroupStack.lastOrNull() ?: transactionStatementsGroup ?: executiveEngine
+    private fun getSelectStatementGroup(): StatementContainer = unionSelectStatementGroupStack.lastOrNull() ?: currentContainer
 
     /**
      * Combines multiple SELECT statements with UNION (removes duplicates).
@@ -843,7 +1268,15 @@ public class DatabaseScope internal constructor(
      *     it SELECT WHERE(age GTE 65)
      * }
      * ```
+     *
+     * **Deprecated**: the result is typed by the table's row type, but read into the first SELECT's result type, so
+     * a union of projections, result columns or joins fails with a `ClassCastException` when its results are used.
+     * A nested block is flattened into the SQL, which SQLite evaluates from left to right, so it changes its meaning
+     * when it isn't the first statement. Use the infix [UNION] instead: `(select1) UNION (select2)`.
      */
+    @Deprecated("The UNION {} block reads the rows into its first SELECT's result type while returning the table's row type, so a union of projections, result columns or joins fails with a ClassCastException when its results are used, and a nested block is flattened into the SQL, which changes its meaning. " +
+            "Use the infix operators instead, as in (select1) UNION (select2), which also offer INTERSECT and EXCEPT. This block will be removed in a future version.")
+    @Suppress("DEPRECATION") // Its body calls the plumbing deprecated with it
     public inline fun <T> Table<T>.UNION(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
         beginUnion<T>()
         var selectStatement: SelectStatement<T>? = null
@@ -858,7 +1291,13 @@ public class DatabaseScope internal constructor(
 
     /**
      * Combines multiple SELECT statements with UNION ALL (keeps duplicates).
+     *
+     * **Deprecated** for the reasons given for the `UNION {}` block. Use the infix [UNION_ALL] instead:
+     * `(select1) UNION_ALL (select2)`.
      */
+    @Deprecated("The UNION {} block reads the rows into its first SELECT's result type while returning the table's row type, so a union of projections, result columns or joins fails with a ClassCastException when its results are used, and a nested block is flattened into the SQL, which changes its meaning. " +
+            "Use the infix operators instead, as in (select1) UNION (select2), which also offer INTERSECT and EXCEPT. This block will be removed in a future version.")
+    @Suppress("DEPRECATION") // Its body calls the plumbing deprecated with it
     @StatementDslMaker
     public inline fun <T> Table<T>.UNION_ALL(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
         beginUnion<T>()
@@ -875,6 +1314,7 @@ public class DatabaseScope internal constructor(
     /**
      * Begins a UNION statement group (for advanced usage).
      */
+    @Deprecated("Part of the deprecated UNION {} block, which will be removed in a future version. Use the infix UNION instead.")
     public fun <T> beginUnion() {
         unionSelectStatementGroupStack.add(UnionSelectStatementGroup<T>())
     }
@@ -882,6 +1322,7 @@ public class DatabaseScope internal constructor(
     /**
      * Creates the final UNION select statement from accumulated SELECT statements.
      */
+    @Deprecated("Part of the deprecated UNION {} block, which will be removed in a future version. Use the infix UNION instead.")
     public fun <T> createUnionSelectStatement(isUnionAll: Boolean): FinalSelectStatement<T> {
         check(unionSelectStatementGroupStack.isNotEmpty()) { "Please invoke the 'beginUnion' before you invoke this function!!!" }
         return (unionSelectStatementGroupStack.last() as UnionSelectStatementGroup<T>).unionStatements(isUnionAll)
@@ -890,9 +1331,224 @@ public class DatabaseScope internal constructor(
     /**
      * Ends the UNION statement group and adds the final statement.
      */
+    @Deprecated("Part of the deprecated UNION {} block, which will be removed in a future version. Use the infix UNION instead.")
     public fun <T> endUnion(selectStatement: SelectStatement<T>?) {
         unionSelectStatementGroupStack.removeLast()
         selectStatement?.let { addSelectStatement(it) }
+    }
+
+    // ========== SELECT from Joins ==========
+    //
+    // A join of relations, such as `PersonTable INNER_JOIN BookTable ON (...)`, is selected from like a table, but has
+    // to be given the type its rows are read into, as rows of a join have no type of their own.
+
+    /**
+     * Selects rows of this join into [R], with X<R>(), checking [R] against the joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT(x: ProjectedX<R>): FinalSelectStatement<R> =
+        select(getKSerializer<R>(), isDistinct = false)
+
+    /**
+     * Selects rows of this join into [R], with X<R>(), returning distinct rows, checking [R] against the joined
+     * relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT_DISTINCT(x: ProjectedX<R>): FinalSelectStatement<R> =
+        select(getKSerializer<R>(), isDistinct = true)
+
+    /**
+     * Selects rows of this join into [R], with WHERE<R>(...), checking [R] against the joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT(clause: WhereClause<R>): WhereSelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = false)
+
+    /**
+     * Selects rows of this join into [R], with WHERE<R>(...), returning distinct rows, checking [R] against the joined
+     * relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT_DISTINCT(clause: WhereClause<R>): WhereSelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = true)
+
+    /**
+     * Selects rows of this join into [R], with ORDER_BY<R>(...), checking [R] against the joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT(clause: OrderByClause<R>): OrderBySelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = false)
+
+    /**
+     * Selects rows of this join into [R], with ORDER_BY<R>(...), returning distinct rows, checking [R] against the
+     * joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT_DISTINCT(clause: OrderByClause<R>): OrderBySelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = true)
+
+    /**
+     * Selects rows of this join into [R], with LIMIT<R>(...), checking [R] against the joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT(clause: LimitClause<R>): LimitSelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = false)
+
+    /**
+     * Selects rows of this join into [R], with LIMIT<R>(...), returning distinct rows, checking [R] against the joined
+     * relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT_DISTINCT(clause: LimitClause<R>): LimitSelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = true)
+
+    /**
+     * Selects rows of this join into [R], with GROUP_BY<R>(...), checking [R] against the joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT(clause: GroupByClause<R>): GroupBySelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = false)
+
+    /**
+     * Selects rows of this join into [R], with GROUP_BY<R>(...), returning distinct rows, checking [R] against the
+     * joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT_DISTINCT(clause: GroupByClause<R>): GroupBySelectStatement<R> =
+        select(getKSerializer<R>(), clause, isDistinct = true)
+
+    /**
+     * Selects rows of this join into [R], with a result column, checking [R] against the joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT(column: ResultColumn<R>): ResultColumnSelectStatement<R> =
+        select(getKSerializer<R>(), listOf(column), isDistinct = false)
+
+    /**
+     * Selects rows of this join into [R], with a result column, returning distinct rows, checking [R] against the
+     * joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT_DISTINCT(column: ResultColumn<R>): ResultColumnSelectStatement<R> =
+        select(getKSerializer<R>(), listOf(column), isDistinct = true)
+
+    /**
+     * Selects rows of this join into [R], with result columns, checking [R] against the joined relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT(columns: Iterable<ResultColumn<R>>): ResultColumnSelectStatement<R> =
+        select(getKSerializer<R>(), columns, isDistinct = false)
+
+    /**
+     * Selects rows of this join into [R], with result columns, returning distinct rows, checking [R] against the joined
+     * relations.
+     *
+     * @throws IllegalArgumentException if [R] doesn't fit the join
+     * @see JoinedRelation
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public inline infix fun <reified R> JoinedRelation.SELECT_DISTINCT(columns: Iterable<ResultColumn<R>>): ResultColumnSelectStatement<R> =
+        select(getKSerializer<R>(), columns, isDistinct = true)
+
+    @ExperimentalDSLDatabaseAPI
+    public fun <R> JoinedRelation.select(serializer: KSerializer<R>, isDistinct: Boolean): FinalSelectStatement<R> {
+        val container = getSelectStatementGroup()
+        val statement = Select.select(from, isDistinct, serializer, databaseConnection, container)
+        addSelectStatement(statement)
+        return statement
+    }
+
+    @ExperimentalDSLDatabaseAPI
+    public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: WhereClause<R>, isDistinct: Boolean): WhereSelectStatement<R> {
+        val container = getSelectStatementGroup()
+        val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
+        addSelectStatement(statement)
+        return statement
+    }
+
+    @ExperimentalDSLDatabaseAPI
+    public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: OrderByClause<R>, isDistinct: Boolean): OrderBySelectStatement<R> {
+        val container = getSelectStatementGroup()
+        val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
+        addSelectStatement(statement)
+        return statement
+    }
+
+    @ExperimentalDSLDatabaseAPI
+    public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: LimitClause<R>, isDistinct: Boolean): LimitSelectStatement<R> {
+        val container = getSelectStatementGroup()
+        val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
+        addSelectStatement(statement)
+        return statement
+    }
+
+    @ExperimentalDSLDatabaseAPI
+    public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: GroupByClause<R>, isDistinct: Boolean): GroupBySelectStatement<R> {
+        val container = getSelectStatementGroup()
+        val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
+        addSelectStatement(statement)
+        return statement
+    }
+
+    @ExperimentalDSLDatabaseAPI
+    public fun <R> JoinedRelation.select(serializer: KSerializer<R>, columns: Iterable<ResultColumn<R>>, isDistinct: Boolean): ResultColumnSelectStatement<R> {
+        val container = getSelectStatementGroup()
+        val statement = Select.select(from, columns, isDistinct, serializer, databaseConnection, container)
+        addSelectStatement(statement)
+        return statement
     }
 
     // ========== JOIN Operations ==========
@@ -904,16 +1560,29 @@ public class DatabaseScope internal constructor(
      * ```kotlin
      * val joined = PersonTable SELECT INNER_JOIN(AddressTable) ON ...
      * ```
+     *
+     * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+     * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+     * against the joined relations, and can join more than two. See
+     * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
         select(getKSerializer(), clause, false)
 
+    /**
+     * Selects distinct rows with a JOIN clause, which ON or USING completes.
+     *
+     * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+     * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+     * against the joined relations, and can join more than two. See
+     * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
+     */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
         select(getKSerializer(), clause, true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: JoinClause<R>, isDistinct: Boolean): JoinStatementWithoutCondition<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: JoinClause<R>, isDistinct: Boolean): JoinStatementWithoutCondition<R> {
         val container = getSelectStatementGroup()
         return Select.select(this, clause, isDistinct, serializer, databaseConnection, container, ::addSelectStatement)
     }
@@ -925,16 +1594,29 @@ public class DatabaseScope internal constructor(
      * ```kotlin
      * val joined = PersonTable SELECT NATURAL_INNER_JOIN(AddressTable)
      * ```
+     *
+     * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+     * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+     * against the joined relations, and can join more than two. See
+     * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
      */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
         select(getKSerializer(), clause, false)
 
+    /**
+     * Selects distinct rows with a NATURAL or CROSS JOIN clause.
+     *
+     * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
+     * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
+     * against the joined relations, and can join more than two. See
+     * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
+     */
     @StatementDslMaker
-    public inline infix fun <T, reified R> Table<T>.SELECT_DISTINCT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
+    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
         select(getKSerializer(), clause, true)
 
-    public fun <T, R> Table<T>.select(serializer: KSerializer<R>, clause: NaturalJoinClause<R>, isDistinct: Boolean): JoinSelectStatement<R> {
+    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: NaturalJoinClause<R>, isDistinct: Boolean): JoinSelectStatement<R> {
         val container = getSelectStatementGroup()
         val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
@@ -953,7 +1635,6 @@ public class DatabaseScope internal constructor(
      * PersonTable.CREATE()
      * ```
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <T> CREATE(table: Table<T>) {
         val statement = Create.createTable(table, databaseConnection)
@@ -963,10 +1644,31 @@ public class DatabaseScope internal constructor(
     /**
      * Creates this table from its definition (extension function variant).
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     @JvmName("create")
     public fun <T> Table<T>.CREATE(): Unit = CREATE(this)
+
+    /**
+     * Creates [table] unless a table of its name exists, as the SQL `CREATE TABLE IF NOT EXISTS` does, so that a
+     * migration step can run more than once. An FTS table is created with `CREATE VIRTUAL TABLE IF NOT EXISTS`.
+     *
+     * The existing table isn't checked against [table]'s structure: if it differs, it stays as it is.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> CREATE_IF_NOT_EXISTS(table: Table<T>) {
+        addStatement(Create.createTable(table, databaseConnection, isIfNotExists = true))
+    }
+
+    /**
+     * Creates this table unless a table of its name exists.
+     *
+     * @see CREATE_IF_NOT_EXISTS
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("createIfNotExists")
+    public fun <T> Table<T>.CREATE_IF_NOT_EXISTS(): Unit = CREATE_IF_NOT_EXISTS(this)
 
     /**
      * Creates an index on the specified columns of this table.
@@ -975,24 +1677,26 @@ public class DatabaseScope internal constructor(
      * However, they also consume additional storage space and may slow down INSERT, UPDATE,
      * and DELETE operations.
      *
+     * A function of the table's columns makes an expression index, which the queries comparing the same expression
+     * use, as `lower(email)` for case-insensitive lookups. `WHERE` after it makes a partial index of the rows that
+     * satisfy a condition.
+     *
      * Example:
      * ```kotlin
      * database {
      *     UserTable.CREATE_INDEX("idx_user_email", UserTable.email)
      *     UserTable.CREATE_INDEX("idx_user_name_age", UserTable.name, UserTable.age)
+     *     UserTable.CREATE_INDEX("idx_user_lower_email", UserTable.lower(UserTable.email))
      * }
      * ```
      *
      * @param indexName The name of the index to create
-     * @param columns One or more column elements to include in the index
-     * @throws IllegalArgumentException if no columns are specified
+     * @param columns One or more columns, or functions of them, to include in the index
+     * @throws IllegalArgumentException if no columns are specified, or one reads another table
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public fun <T> Table<T>.CREATE_INDEX(indexName: String, vararg columns: ClauseElement<*>) {
-        val statement = Create.createIndex(this, databaseConnection, indexName, *columns)
-        addStatement(statement)
-    }
+    public fun <T> Table<T>.CREATE_INDEX(indexName: String, vararg columns: ClauseElement<*>): IndexStatement =
+        indexStatement(indexName, Create.createIndex(this, databaseConnection, indexName, *columns))
 
     /**
      * Creates a unique index on the specified columns of this table.
@@ -1005,18 +1709,100 @@ public class DatabaseScope internal constructor(
      * database {
      *     UserTable.CREATE_UNIQUE_INDEX("idx_unique_email", UserTable.email)
      *     ProductTable.CREATE_UNIQUE_INDEX("idx_unique_sku", ProductTable.sku)
+     *     UserTable.CREATE_UNIQUE_INDEX("idx_unique_lower_email", UserTable.lower(UserTable.email))
      * }
      * ```
      *
+     * A function of the table's columns makes the values of that expression unique, as `lower(email)` does for emails
+     * that differ only in case. `WHERE` after it makes the columns unique among the rows that satisfy a condition only,
+     * as `CREATE_UNIQUE_INDEX("idx_user_email", UserTable.email) WHERE (UserTable.isDeleted IS false)` does for the
+     * users that aren't deleted.
+     *
      * @param indexName The name of the unique index to create
-     * @param columns One or more column elements to include in the unique index
-     * @throws IllegalArgumentException if no columns are specified
+     * @param columns One or more columns, or functions of them, to include in the unique index
+     * @throws IllegalArgumentException if no columns are specified, or one reads another table
+     */
+    @StatementDslMaker
+    public fun <T> Table<T>.CREATE_UNIQUE_INDEX(indexName: String, vararg columns: ClauseElement<*>): IndexStatement =
+        indexStatement(indexName, Create.createUniqueIndex(this, databaseConnection, indexName, *columns))
+
+    /**
+     * Creates an index on [columns] of this table unless an index named [indexName] exists, as the SQL
+     * `CREATE INDEX IF NOT EXISTS` does.
+     *
+     * @see CREATE_INDEX
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public fun <T> Table<T>.CREATE_UNIQUE_INDEX(indexName: String, vararg columns: ClauseElement<*>) {
-        val statement = Create.createUniqueIndex(this, databaseConnection, indexName, *columns)
+    public fun <T> Table<T>.CREATE_INDEX_IF_NOT_EXISTS(indexName: String, vararg columns: ClauseElement<*>): IndexStatement =
+        indexStatement(indexName, Create.createIndex(this, databaseConnection, indexName, *columns, isIfNotExists = true))
+
+    /**
+     * Creates a unique index on [columns] of this table unless an index named [indexName] exists, as the SQL
+     * `CREATE UNIQUE INDEX IF NOT EXISTS` does.
+     *
+     * @see CREATE_UNIQUE_INDEX
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> Table<T>.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS(indexName: String, vararg columns: ClauseElement<*>): IndexStatement =
+        indexStatement(indexName, Create.createUniqueIndex(this, databaseConnection, indexName, *columns, isIfNotExists = true))
+
+    /**
+     * Creates an index on [column] and [columns] of this table, each sorted in the order given, as the SQL
+     * `CREATE INDEX name ON table(column DESC)` does: `CREATE_INDEX("idx_person_age", PersonTable.age to DESC)`.
+     * A query that sorts in that order, or the reverse, reads the index in order.
+     *
+     * @see CREATE_INDEX
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> Table<T>.CREATE_INDEX(indexName: String, column: Pair<ClauseElement<*>, OrderByWay>, vararg columns: Pair<ClauseElement<*>, OrderByWay>): IndexStatement =
+        indexStatement(indexName, Create.createIndex(this, databaseConnection, indexName, listOf(column) + columns))
+
+    /**
+     * Creates a unique index on [column] and [columns] of this table, each sorted in the order given, as the SQL
+     * `CREATE UNIQUE INDEX name ON table(column DESC)` does: `CREATE_UNIQUE_INDEX("idx_person_age", PersonTable.age to DESC)`.
+     * A query that sorts in that order, or the reverse, reads the index in order.
+     *
+     * @see CREATE_UNIQUE_INDEX
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> Table<T>.CREATE_UNIQUE_INDEX(indexName: String, column: Pair<ClauseElement<*>, OrderByWay>, vararg columns: Pair<ClauseElement<*>, OrderByWay>): IndexStatement =
+        indexStatement(indexName, Create.createUniqueIndex(this, databaseConnection, indexName, listOf(column) + columns))
+
+    /**
+     * Creates an index, unless one of that name exists, on [column] and [columns] of this table, each sorted in the order given, as the SQL
+     * `CREATE INDEX name ON table(column DESC)` does: `CREATE_INDEX_IF_NOT_EXISTS("idx_person_age", PersonTable.age to DESC)`.
+     * A query that sorts in that order, or the reverse, reads the index in order.
+     *
+     * @see CREATE_INDEX
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> Table<T>.CREATE_INDEX_IF_NOT_EXISTS(indexName: String, column: Pair<ClauseElement<*>, OrderByWay>, vararg columns: Pair<ClauseElement<*>, OrderByWay>): IndexStatement =
+        indexStatement(indexName, Create.createIndex(this, databaseConnection, indexName, listOf(column) + columns, isIfNotExists = true))
+
+    /**
+     * Creates a unique index, unless one of that name exists, on [column] and [columns] of this table, each sorted in the order given, as the SQL
+     * `CREATE UNIQUE INDEX name ON table(column DESC)` does: `CREATE_UNIQUE_INDEX_IF_NOT_EXISTS("idx_person_age", PersonTable.age to DESC)`.
+     * A query that sorts in that order, or the reverse, reads the index in order.
+     *
+     * @see CREATE_UNIQUE_INDEX
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> Table<T>.CREATE_UNIQUE_INDEX_IF_NOT_EXISTS(indexName: String, column: Pair<ClauseElement<*>, OrderByWay>, vararg columns: Pair<ClauseElement<*>, OrderByWay>): IndexStatement =
+        indexStatement(indexName, Create.createUniqueIndex(this, databaseConnection, indexName, listOf(column) + columns, isIfNotExists = true))
+
+    /**
+     * Adds [statement], which creates the index named [indexName] of this table, and returns it for a `WHERE` to make a
+     * partial index.
+     */
+    private fun Table<*>.indexStatement(indexName: String, statement: SingleStatement): IndexStatement {
         addStatement(statement)
+        return IndexStatement(this, indexName, databaseConnection, currentContainer, statement)
     }
 
     // ========== DROP Operations ==========
@@ -1038,7 +1824,6 @@ public class DatabaseScope internal constructor(
      *
      * @param table The table to drop
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <T> DROP(table: Table<T>) {
         val statement = Drop.drop(table, databaseConnection)
@@ -1058,10 +1843,137 @@ public class DatabaseScope internal constructor(
      * }
      * ```
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     @JvmName("drop")
     public fun <T> Table<T>.DROP(): Unit = DROP(this)
+
+    /**
+     * Drops [table] if it exists, as the SQL `DROP TABLE IF EXISTS` does, so that a migration step can run more than
+     * once.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> DROP_IF_EXISTS(table: Table<T>) {
+        addStatement(Drop.drop(table, databaseConnection, isIfExists = true))
+    }
+
+    /**
+     * Drops this table if it exists.
+     *
+     * @see DROP_IF_EXISTS
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("dropIfExists")
+    public fun <T> Table<T>.DROP_IF_EXISTS(): Unit = DROP_IF_EXISTS(this)
+
+    /**
+     * Drops the index named [indexName], as the SQL `DROP INDEX name` does, such as one that [CREATE_INDEX] or
+     * [CREATE_UNIQUE_INDEX] created.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     DROP_INDEX("idx_user_email")
+     * }
+     * ```
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_INDEX(indexName: String) {
+        addStatement(Drop.dropIndex(indexName, databaseConnection))
+    }
+
+    /**
+     * Drops the index named [indexName] if it exists, as the SQL `DROP INDEX IF EXISTS` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_INDEX_IF_EXISTS(indexName: String) {
+        addStatement(Drop.dropIndex(indexName, databaseConnection, isIfExists = true))
+    }
+
+    // ========== CREATE VIEW and DROP VIEW ==========
+
+    /**
+     * Starts the creation of [view], which `AS` completes with the SELECT that defines it.
+     *
+     * Example:
+     * ```kotlin
+     * CREATE_VIEW(AdultView) AS (PersonTable SELECT WHERE<Adult>(PersonTable.age GTE 18))
+     * // CREATE VIEW adults(name,age) AS SELECT name,age FROM person WHERE person.age>=18
+     * ```
+     *
+     * @return The view to create, which becomes a statement once `AS` gives it its SELECT
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> CREATE_VIEW(view: View<T>): ViewDefinition<T> = ViewDefinition(view)
+
+    /**
+     * Starts the definition of [view] unless a view of its name exists, as the SQL `CREATE VIEW IF NOT EXISTS` does,
+     * which [AS] completes with the SELECT that defines it.
+     *
+     * The existing view isn't checked against the SELECT: if it differs, it stays as it is.
+     *
+     * @see CREATE_VIEW
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun <T> CREATE_VIEW_IF_NOT_EXISTS(view: View<T>): ViewDefinition<T> = ViewDefinition(view, isIfNotExists = true)
+
+    /**
+     * Creates the view, defined by [select], as the SQL `CREATE VIEW view AS SELECT ...` does.
+     *
+     * [select] reads rows of the view's row type, which is checked at compile time, from any tables, through a
+     * projection, result columns, a join or a compound SELECT. It becomes part of this statement, so it no longer runs
+     * on its own. As SQLite doesn't let a view take parameters, its values are written into the view's SQL.
+     *
+     * @throws IllegalArgumentException if [select] is incomplete, as an aggregate query that needs GROUP BY
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> ViewDefinition<T>.AS(select: SelectStatement<T>) {
+        select.checkComplete()
+        select.container removeStatement select
+        addStatement(Create.createView(view, select, databaseConnection, isIfNotExists))
+    }
+
+    /**
+     * Drops [view], as the SQL `DROP VIEW view` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> DROP(view: View<T>) {
+        addStatement(Drop.dropView(view, databaseConnection))
+    }
+
+    /**
+     * Drops this view (extension function variant).
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("drop")
+    public fun <T> View<T>.DROP(): Unit = DROP(this)
+
+    /**
+     * Drops [view] if it exists, as the SQL `DROP VIEW IF EXISTS` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> DROP_IF_EXISTS(view: View<T>) {
+        addStatement(Drop.dropView(view, databaseConnection, isIfExists = true))
+    }
+
+    /**
+     * Drops this view if it exists.
+     *
+     * @see DROP_IF_EXISTS
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("dropIfExists")
+    public fun <T> View<T>.DROP_IF_EXISTS(): Unit = DROP_IF_EXISTS(this)
 
     // ========== ALTER Operations ==========
 
@@ -1081,7 +1993,6 @@ public class DatabaseScope internal constructor(
      *
      * @param column The column definition to add to the table
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <T> Table<T>.ALTER_ADD_COLUMN(column: ClauseElement<*>) {
         val statement = Alter.addColumn(this, column, databaseConnection)
@@ -1100,7 +2011,6 @@ public class DatabaseScope internal constructor(
      *
      * @param newTable The new table definition containing the target name
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <T> Table<T>.ALTER_RENAME_TABLE_TO(newTable: Table<*>) {
         val statement = Alter.renameTable(tableName, newTable, databaseConnection)
@@ -1122,7 +2032,6 @@ public class DatabaseScope internal constructor(
      * @receiver The current name of the table to rename
      * @param newTable The new table definition containing the target name
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun String.ALTER_RENAME_TABLE_TO(newTable: Table<*>) {
         val statement = Alter.renameTable(this, newTable, databaseConnection)
@@ -1142,10 +2051,12 @@ public class DatabaseScope internal constructor(
      * }
      * ```
      *
+     * `ALTER TABLE ... RENAME COLUMN` needs SQLite 3.25.0, which Android has from API 30 on.
+     *
      * @param oldColumn The current column to rename
      * @param newColumn The new column definition with the target name
      */
-    @ExperimentalDSLDatabaseAPI
+    @PlatformDependentSQLiteAPI
     @StatementDslMaker
     public fun <T, R : ClauseElement<*>> Table<T>.RENAME_COLUMN(oldColumn: R, newColumn: R) {
         val statement = Alter.renameColumn(this, oldColumn.valueName, newColumn, databaseConnection)
@@ -1165,10 +2076,12 @@ public class DatabaseScope internal constructor(
      * }
      * ```
      *
+     * `ALTER TABLE ... RENAME COLUMN` needs SQLite 3.25.0, which Android has from API 30 on.
+     *
      * @param oldColumnName The current name of the column to rename
      * @param newColumn The new column definition with the target name
      */
-    @ExperimentalDSLDatabaseAPI
+    @PlatformDependentSQLiteAPI
     @StatementDslMaker
     public fun <T> Table<T>.RENAME_COLUMN(oldColumnName: String, newColumn: ClauseElement<*>) {
         val statement = Alter.renameColumn(this, oldColumnName, newColumn, databaseConnection)
@@ -1179,8 +2092,8 @@ public class DatabaseScope internal constructor(
      * Removes a column from this table.
      *
      * **⚠️ WARNING**: This permanently deletes the column and all its data.
-     * Note: SQLite has limited support for DROP COLUMN (added in version 3.35.0).
-     * Older SQLite versions may require table recreation to drop columns.
+     * `ALTER TABLE ... DROP COLUMN` needs SQLite 3.35.0, which Android has from API 34 on. Where SQLite is older,
+     * rebuild the table without the column, as `withName` describes.
      *
      * Example:
      * ```kotlin
@@ -1191,11 +2104,388 @@ public class DatabaseScope internal constructor(
      *
      * @param column The column to remove from the table
      */
-    @ExperimentalDSLDatabaseAPI
+    @PlatformDependentSQLiteAPI
     @StatementDslMaker
     public infix fun <T> Table<T>.DROP_COLUMN(column: ClauseElement<*>) {
         val statement = Alter.dropColumn(this, column, databaseConnection)
         addStatement(statement)
+    }
+
+    // ========== ANALYZE, REINDEX and PRAGMA optimize ==========
+
+    /**
+     * Gathers the statistics of all tables and indexes, as the SQL `ANALYZE` does: the query planner chooses indexes
+     * with them, and only reads them when the database is opened. It reads every row, so it takes long for a large
+     * database; `PRAGMA_OPTIMIZE()` only analyzes what would help.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun ANALYZE() {
+        addStatement(Maintenance.analyze(null, databaseConnection))
+    }
+
+    /**
+     * Gathers the statistics of [table] and its indexes, as the SQL `ANALYZE table` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun ANALYZE(table: Table<*>) {
+        addStatement(Maintenance.analyze(table.tableName, databaseConnection))
+    }
+
+    /**
+     * Gathers the statistics of the table or index named [name], as the SQL `ANALYZE name` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun ANALYZE(name: String) {
+        addStatement(Maintenance.analyze(name, databaseConnection))
+    }
+
+    /**
+     * Rebuilds all indexes, as the SQL `REINDEX` does, such as after a change of a collation the app registers.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun REINDEX() {
+        addStatement(Maintenance.reindex(null, databaseConnection))
+    }
+
+    /**
+     * Rebuilds the indexes of [table], as the SQL `REINDEX table` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun REINDEX(table: Table<*>) {
+        addStatement(Maintenance.reindex(table.tableName, databaseConnection))
+    }
+
+    /**
+     * Rebuilds the index named [name], or the indexes of the table named so, as the SQL `REINDEX name` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun REINDEX(name: String) {
+        addStatement(Maintenance.reindex(name, databaseConnection))
+    }
+
+    /**
+     * Rebuilds the indexes that use [collation], as the SQL `REINDEX collation` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun REINDEX(collation: Collation) {
+        addStatement(Maintenance.reindex(collation, databaseConnection))
+    }
+
+    /**
+     * Gathers the statistics that would help the query planner, if any, as the SQL `PRAGMA optimize` does. It is quick,
+     * and SQLite advises to run it before closing a database, or every few hours in a long-lived one.
+     *
+     * `PRAGMA optimize` needs SQLite 3.18.0, which Android has from API 26 on.
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_OPTIMIZE() {
+        addStatement(PRAGMA.optimize(databaseConnection))
+    }
+
+    // ========== CREATE TRIGGER and DROP TRIGGER ==========
+
+    /** The trigger being defined, from ON to the end of BEGIN, whose rows `new()` and `old()` read. */
+    private var definingTrigger: TriggerDefinition? = null
+
+    /** The body of the trigger being defined, which collects the statements written in BEGIN. */
+    private var triggerBody: TriggerBody? = null
+
+    /**
+     * Creates a trigger named [name], as the SQL `CREATE TRIGGER` does: statements that run whenever a row of a table is
+     * inserted, deleted or updated, before or after, where a condition holds:
+     * ```kotlin
+     * // CREATE TRIGGER person_visits AFTER UPDATE OF visits ON person WHEN NEW.visits>OLD.visits
+     * // BEGIN UPDATE stats SET visits=(stats.visits + 1); END
+     * CREATE_TRIGGER("person_visits") AFTER UPDATE_OF(PersonTable.visits) ON PersonTable WHEN (new(PersonTable.visits) GT old(PersonTable.visits)) BEGIN {
+     *     StatsTable UPDATE SET((StatsTable.visits + 1) AS Stats::visits)
+     * }
+     * ```
+     * `new(column)` and `old(column)` read the row being written, in the condition and the statements: a trigger on
+     * INSERT has a new row, one on DELETE an old row, and one on UPDATE both. The body can insert, update and delete
+     * rows, and `RAISE` can stop the statement that fired the trigger. Its values are written into the SQL, as SQLite
+     * doesn't let a trigger take parameters.
+     *
+     * A trigger can't be created on an FTS table, which is a virtual table, nor on a view, as an INSTEAD OF trigger is
+     * of no use while SQLlin can't write to views. Dropping a table drops its triggers.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun CREATE_TRIGGER(name: String): TriggerName = TriggerName(name, isIfNotExists = false)
+
+    /**
+     * Creates a trigger named [name] unless one of that name exists, as the SQL `CREATE TRIGGER IF NOT EXISTS` does.
+     *
+     * @see CREATE_TRIGGER
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun CREATE_TRIGGER_IF_NOT_EXISTS(name: String): TriggerName = TriggerName(name, isIfNotExists = true)
+
+    /** The event of a trigger that fires when a row is inserted, which has a new row. */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val INSERT: TriggerEvent
+        get() = TriggerEvent("INSERT", hasNewRow = true, hasOldRow = false)
+
+    /** The event of a trigger that fires when a row is deleted, which has an old row. */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val DELETE: TriggerEvent
+        get() = TriggerEvent("DELETE", hasNewRow = false, hasOldRow = true)
+
+    /** The event of a trigger that fires when a row is updated, which has a new row and an old row. */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val UPDATE: TriggerEvent
+        get() = TriggerEvent("UPDATE", hasNewRow = true, hasOldRow = true)
+
+    /**
+     * The event of a trigger that fires when any of [columns] of a row is updated, as the SQL `UPDATE OF` does.
+     *
+     * @throws IllegalArgumentException if there are no columns
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun UPDATE_OF(vararg columns: ClauseElement<*>): TriggerEvent {
+        require(columns.isNotEmpty()) { "UPDATE OF needs at least one column." }
+        return TriggerEvent("UPDATE OF ${columns.joinToString(",") { it.valueName }}", hasNewRow = true, hasOldRow = true, columns.toList())
+    }
+
+    /** Makes this trigger fire before its event, so that it can stop it with `RAISE`. */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun TriggerName.BEFORE(event: TriggerEvent): TriggerTiming = TriggerTiming(this, "BEFORE", event)
+
+    /** Makes this trigger fire after its event. */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun TriggerName.AFTER(event: TriggerEvent): TriggerTiming = TriggerTiming(this, "AFTER", event)
+
+    /**
+     * Gives this trigger the [table] whose rows fire it.
+     *
+     * @throws IllegalArgumentException if [table] is an FTS table, on which SQLite can't create a trigger, or a column of
+     * `UPDATE_OF` isn't a column of [table]
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> TriggerTiming.ON(table: Table<T>): TriggerDefinition {
+        check(triggerBody == null) { "A trigger can't be created in the body of another." }
+        require(table !is FtsTable<*>) { "SQLite can't create a trigger on '${table.tableName}', which is an FTS table, a virtual table." }
+        for (column in event.columns) {
+            require(!column.isFunction && column.table.tableName == table.tableName) {
+                "The trigger '${trigger.name}' on '${table.tableName}' can only fire on an UPDATE OF its columns, but '${column.valueName}' isn't one."
+            }
+        }
+        return TriggerDefinition(this, table).also { definingTrigger = it }
+    }
+
+    /**
+     * Makes this trigger fire only for the rows where [condition] holds, as the SQL `WHEN` does. It can read the rows
+     * being written with `new()` and `old()`.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun TriggerDefinition.WHEN(condition: SelectCondition): TriggerDefinition {
+        check(this.condition == null) { "The trigger '${timing.trigger.name}' already has a WHEN." }
+        return TriggerDefinition(timing, table, condition).also { definingTrigger = it }
+    }
+
+    /**
+     * Gives this trigger its statements, which [body] writes as it writes any: INSERT, UPDATE, DELETE and `RAISE`. They
+     * run when the trigger fires, not when the scope ends, and can read the rows being written with `new()` and `old()`.
+     *
+     * @throws IllegalArgumentException if [body] writes no statement, or another one, such as a SELECT
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun TriggerDefinition.BEGIN(body: () -> Unit) {
+        val collected = TriggerBody()
+        definingTrigger = this
+        triggerBody = collected
+        try {
+            body()
+        } finally {
+            triggerBody = null
+            definingTrigger = null
+        }
+        val name = timing.trigger.name
+        require(collected.statements.isNotEmpty()) { "The trigger '$name' needs at least one statement." }
+        for (statement in collected.statements) {
+            require(statement is InsertStatement || statement is UpdateDeleteStatement || statement is UpdateStatementWithoutWhereClause<*> || statement is RaiseStatement) {
+                "The trigger '$name' can only run INSERT, UPDATE, DELETE and RAISE, but not: ${statement.sqlStr}"
+            }
+        }
+        addStatement(Trigger.create(this, collected.statements, databaseConnection))
+    }
+
+    /**
+     * The [column] of the new row of the trigger being defined, `NEW.column`: the row inserted, or a row as it is
+     * updated to. It can only be used in the WHEN and the body of a trigger on INSERT or UPDATE.
+     *
+     * @throws IllegalStateException if no trigger is being defined
+     * @throws IllegalArgumentException if the trigger has no new row, which SQLite would only report when it fires, or
+     * [column] isn't a column of its table
+     */
+    @ExperimentalDSLDatabaseAPI
+    public fun <E : ClauseElement<*>> new(column: E): E = rowColumn(column, NEW_ROW)
+
+    /**
+     * The [column] of the old row of the trigger being defined, `OLD.column`: the row deleted, or a row as it was before
+     * it is updated. It can only be used in the WHEN and the body of a trigger on UPDATE or DELETE.
+     *
+     * @throws IllegalStateException if no trigger is being defined
+     * @throws IllegalArgumentException if the trigger has no old row, which SQLite would only report when it fires, or
+     * [column] isn't a column of its table
+     */
+    @ExperimentalDSLDatabaseAPI
+    public fun <E : ClauseElement<*>> old(column: E): E = rowColumn(column, OLD_ROW)
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <E : ClauseElement<*>> rowColumn(column: E, row: String): E {
+        val definition = checkNotNull(definingTrigger) { "${row.lowercase()}() can only be used in the WHEN or the body of a trigger." }
+        val event = definition.timing.event
+        require(if (row == NEW_ROW) event.hasNewRow else event.hasOldRow) {
+            "The trigger '${definition.timing.trigger.name}' on ${event.sql.substringBefore(' ')} has no $row row, which SQLite would only report when it fires."
+        }
+        require(!column.isFunction && column.table.tableName == definition.table.tableName) {
+            "${row.lowercase()}() takes a column of '${definition.table.tableName}', the table of the trigger '${definition.timing.trigger.name}', but '${column.valueName}' isn't one."
+        }
+        return column.rebind(RowRelation(row, definition.table)) as E
+    }
+
+    /** `RAISE(ABORT, ...)`: stops the statement that fired the trigger and undoes its changes. */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val ABORT: RaiseResolution
+        get() = RaiseResolution("ABORT")
+
+    /** `RAISE(FAIL, ...)`: stops the statement that fired the trigger, keeping the changes it made before. */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val FAIL: RaiseResolution
+        get() = RaiseResolution("FAIL")
+
+    /** `RAISE(ROLLBACK, ...)`: stops the statement that fired the trigger and rolls back the transaction. */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val ROLLBACK: RaiseResolution
+        get() = RaiseResolution("ROLLBACK")
+
+    /** `RAISE(IGNORE)`: skips the row that fired the trigger, and the rest of the trigger. */
+    @ExperimentalDSLDatabaseAPI
+    @KeyWordDslMaker
+    public val IGNORE: RaiseIgnore
+        get() = RaiseIgnore()
+
+    /**
+     * Stops the statement that fired the trigger with [message], which SQLite reports as the error, as the SQL
+     * `RAISE(resolution, message)` does: `RAISE(ABORT, "age can't be negative")`. It can only be in the body of a
+     * trigger, where it is usually run where the WHEN of the trigger holds.
+     *
+     * @throws IllegalStateException if no trigger is being defined
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun RAISE(resolution: RaiseResolution, message: String) {
+        addRaise("RAISE(${resolution.sql},${sqlLiteral(message)})")
+    }
+
+    /**
+     * Skips the row that fired the trigger, and the rest of the trigger, as the SQL `RAISE(IGNORE)` does.
+     *
+     * @throws IllegalStateException if no trigger is being defined
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun RAISE(ignore: RaiseIgnore) {
+        addRaise("RAISE(IGNORE)")
+    }
+
+    private fun addRaise(raise: String) {
+        check(triggerBody != null) { "RAISE can only be in the body of a trigger." }
+        addStatement(RaiseStatement("SELECT $raise"))
+    }
+
+    /**
+     * Drops the trigger named [name], as the SQL `DROP TRIGGER` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_TRIGGER(name: String) {
+        addStatement(Trigger.drop(name, isIfExists = false, databaseConnection))
+    }
+
+    /**
+     * Drops the trigger named [name] if it exists, as the SQL `DROP TRIGGER IF EXISTS` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_TRIGGER_IF_EXISTS(name: String) {
+        addStatement(Trigger.drop(name, isIfExists = true, databaseConnection))
+    }
+
+    // ========== VACUUM ==========
+
+    /**
+     * Rebuilds the database file, repacking it into the minimum disk space, as the SQL `VACUUM` does: the file doesn't
+     * shrink when rows are deleted, as SQLite keeps the free pages to reuse them.
+     *
+     * VACUUM rewrites the whole database, so it takes long for a large one, and needs free disk space of up to twice
+     * its size. It may change the rowids of the tables without an INTEGER PRIMARY KEY.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     LogTable DELETE WHERE (LogTable.time LT expired)
+     * }
+     * database {
+     *     VACUUM()
+     * }
+     * ```
+     *
+     * @throws IllegalStateException if it is called inside a transaction, where SQLite can't vacuum
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun VACUUM() {
+        check(!isInTransaction) { "SQLite can't VACUUM inside a transaction." }
+        addStatement(Vacuum.vacuum(databaseConnection))
+    }
+
+    /**
+     * Writes a vacuumed copy of the database to [file], as the SQL `VACUUM INTO file` does, leaving the database as it
+     * is: a backup, consistent as of one moment, of a database that is in use.
+     *
+     * [file] is a path of the file system, so on Android, where the working directory can't be written, it has to be
+     * absolute. It must not exist, or SQLite fails.
+     *
+     * `VACUUM INTO` needs SQLite 3.27.0, which Android has from API 30 on.
+     *
+     * Example:
+     * ```kotlin
+     * database {
+     *     VACUUM_INTO("/data/data/com.example/backup/notes.db")
+     * }
+     * ```
+     *
+     * @throws IllegalStateException if it is called inside a transaction, where SQLite can't vacuum
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun VACUUM_INTO(file: String) {
+        check(!isInTransaction) { "SQLite can't VACUUM inside a transaction." }
+        addStatement(Vacuum.vacuumInto(file, databaseConnection))
     }
 
     /**
@@ -1237,7 +2527,6 @@ public class DatabaseScope internal constructor(
      * @see ForeignKey
      * @see References
      */
-    @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun PRAGMA_FOREIGN_KEYS(flag: Boolean) {
         val statement = PRAGMA.foreignKeys(flag, databaseConnection)
