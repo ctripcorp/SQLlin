@@ -45,6 +45,7 @@ done. A new item takes the next number.
 * F48: Support virtual tables other than FTS and R*Tree, such as dbstat
 * F63: Support INSTEAD OF triggers on views, together with INSERT, UPDATE and DELETE on a view, which the DSL doesn't allow, as a view isn't a `Table`, so that such a trigger can be used; left out of the first version of CREATE TRIGGER (F10)
 * F64: Support the JSON functions and JSON's `->` and `->>` operators (SQLite 3.38.0, Android API 34), left out of F46
+* F65: Support the conflict clause of NOT NULL, as `NOT NULL ON CONFLICT REPLACE`, which writes the default value instead of NULL, left out of F17: a property's type declares NOT NULL, so no annotation can hold the clause yet; it could be a new annotation, or a parameter of `@Default`. SQLlin's statements rarely write NULL to a non-null column, so it is of little use for now
 
 ## Supported
 
