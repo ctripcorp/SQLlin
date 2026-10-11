@@ -6,6 +6,7 @@
 
 ### All
 
+* Update `Kotlin`'s version to `2.4.21`
 * Rebuild the SQLite static libraries in `libs`, which the native tests on Linux and Windows link, from SQLite 3.51.1 with FTS3, FTS4 (with the enhanced query syntax), FTS5, R*Tree, Geopoly, the math functions, `dbstat` and column metadata enabled, and without debug information, which held paths of the machine that built them
 
 ### sqllin-dsl

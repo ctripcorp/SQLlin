@@ -1,6 +1,6 @@
 [versions]
 
-kotlin = "2.4.20"
+kotlin = "2.4.21"
 agp = "9.4.1"
 ksp = "2.3.12"
 serialization = "1.11.0"
