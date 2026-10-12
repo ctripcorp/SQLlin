@@ -37,7 +37,7 @@ internal value class AndroidDatabasePath(val context: Context) : DatabasePath
 public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnection {
     val isEqualsOrHigherThanAndroidP = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
     if (isEqualsOrHigherThanAndroidP && config.inMemory)
-        return AndroidDatabaseConnection(createInMemory(config.toAndroidOpenParams()))
+        return AndroidDatabaseConnection(createInMemory(config.toAndroidOpenParams()).apply { setBusyTimeout(config.busyTimeout) })
     val helper = if (isEqualsOrHigherThanAndroidP)
         AndroidDBHelper(config)
     else
@@ -61,6 +61,8 @@ private class OldAndroidDBHelper(
     private val config: DatabaseConfiguration,
 ) : SQLiteOpenHelper((config.path as AndroidDatabasePath).context, config.name, null, config.version) {
 
+    override fun onConfigure(db: SQLiteDatabase) = db.setBusyTimeout(config.busyTimeout)
+
     override fun onCreate(db: SQLiteDatabase) =
         config.create(AndroidDatabaseConnection(db))
 
@@ -76,6 +78,8 @@ private class AndroidDBHelper(
     private val config: DatabaseConfiguration,
 ) : SQLiteOpenHelper((config.path as AndroidDatabasePath).context, config.name, config.version, config.toAndroidOpenParams()) {
 
+    override fun onConfigure(db: SQLiteDatabase) = db.setBusyTimeout(config.busyTimeout)
+
     override fun onCreate(db: SQLiteDatabase) =
         config.create(AndroidDatabaseConnection(db))
 
@@ -87,14 +91,27 @@ private class AndroidDBHelper(
  * Converts [DatabaseConfiguration] to Android's OpenParams for API level 28+.
  */
 @RequiresApi(Build.VERSION_CODES.P)
-@Suppress("DEPRECATION")
 private fun DatabaseConfiguration.toAndroidOpenParams(): OpenParams = OpenParams
     .Builder()
     .setJournalMode(journalMode.name)
     .setSynchronousMode(synchronousMode.name)
-    .setIdleConnectionTimeout(busyTimeout.toLong())
     .setLookasideConfig(lookasideSlotSize, lookasideSlotCount)
     .build()
+
+/**
+ * Sets how long SQLite waits for a lock that another connection holds, which the framework sets to 2500 ms.
+ *
+ * From Android 13 on, a database in WAL mode reads through several connections, so the PRAGMA is run on each of them,
+ * and on those opened later; the framework only runs a PRAGMA that returns a row, as this one does, from Android 13 on.
+ * Before, a database that SQLlin opens has a single connection.
+ */
+private fun SQLiteDatabase.setBusyTimeout(milliseconds: Int) {
+    val sql = "PRAGMA busy_timeout = $milliseconds"
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        execPerConnectionSQL(sql, null)
+    else
+        rawQuery(sql, null).use { it.moveToFirst() }
+}
 
 public actual fun deleteDatabase(path: DatabasePath, name: String): Boolean =
     (path as? AndroidDatabasePath)?.context?.deleteDatabase(name)

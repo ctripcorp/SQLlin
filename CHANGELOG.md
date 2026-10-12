@@ -2,6 +2,12 @@
 
 - Date format: YYYY-MM-dd
 
+## 2.6.0 / 2026-xx-xx
+
+### sqllin-driver
+
+* Fix: on Android, `busyTimeout` didn't take effect, so SQLite waited 2500 ms, as the framework sets it, for a lock that another connection held. On Android 9 and higher, it was given to `SQLiteDatabase.OpenParams.Builder#setIdleConnectionTimeout`, which is deprecated and means another thing, how long a connection may be idle before the framework closes it, and which `SQLiteOpenHelper` drops anyway. `busyTimeout` is now set with `PRAGMA busy_timeout`: from Android 13 on, on every connection of the database, as one in WAL mode reads through several, and below, on its only connection. The guides to getting started listed `busyTimeout`, and in Chinese `journalMode`, among the parameters that only work on Android 9 and higher; only `inMemory`, `lookasideSlotSize` and `lookasideSlotCount` do
+
 ## 2.5.0 / 2026-10-11
 
 ### All

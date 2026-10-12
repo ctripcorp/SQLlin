@@ -224,6 +224,15 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
     }
 
+    /**
+     * SQLite waits as long as `busyTimeout` for a lock that another connection holds.
+     */
+    fun testBusyTimeout() {
+        openDatabase(getDefaultDBConfig(false).copy(busyTimeout = 1234)) {
+            assertEquals(1234L, it.withQuery("PRAGMA busy_timeout") { cursor -> cursor.next(); cursor.getLong(0) })
+        }
+    }
+
     @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
     fun testConcurrency() = runTest {
         val readWriteConfig = getDefaultDBConfig(false)

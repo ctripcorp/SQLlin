@@ -141,7 +141,7 @@ val database = Database(
 )
 ```
 
-Note, because of limitation by Android Framework, the `inMemory`, `busyTimeout`, `lookasideSlotSize`, `lookasideSlotCount`
+Note, because of limitation by Android Framework, the `inMemory`, `lookasideSlotSize`, `lookasideSlotCount`
 only work on Android 9 and higher. And, because [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)(SQLlin is based on it on JVM) doesn't support
 `sqlite3_config()`, the `lookasideSlotSize` and `lookasideSlotCount` don't work on JVM target.
 

@@ -58,6 +58,9 @@ class AndroidTest {
     fun testFailedCommit() = commonTest.testFailedCommit()
 
     @Test
+    fun testBusyTimeout() = commonTest.testBusyTimeout()
+
+    @Test
     fun testConcurrency() = commonTest.testConcurrency()
 
     @AfterTest
