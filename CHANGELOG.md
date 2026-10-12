@@ -4,8 +4,13 @@
 
 ## 2.6.0 / 2026-xx-xx
 
+### sqllin-dsl
+
+* Fix: the default `lookasideSlotSize` and `lookasideSlotCount` of `DSLDBConfiguration` disabled SQLite's lookaside memory allocator on Kotlin/Native and on Android 9 and higher, as those of `DatabaseConfiguration` did; they are now -1, see sqllin-driver
+
 ### sqllin-driver
 
+* Fix: the default `lookasideSlotSize` and `lookasideSlotCount` of `DatabaseConfiguration`, 0, which its documentation said left SQLite's default configuration, disabled SQLite's lookaside memory allocator on Kotlin/Native and on Android 9 and higher, as `sqlite3_db_config` and `setLookasideConfig` take 0 to disable it, while the JVM and lower versions of Android kept SQLite's default configuration. Their default is now -1, which leaves SQLite's default configuration on every platform, and 0 still disables the allocator. The guides to getting started now say so, and that sqlite-jdbc doesn't support `sqlite3_db_config()`, rather than `sqlite3_config()`
 * Fix: on Android, `busyTimeout` didn't take effect, so SQLite waited 2500 ms, as the framework sets it, for a lock that another connection held. On Android 9 and higher, it was given to `SQLiteDatabase.OpenParams.Builder#setIdleConnectionTimeout`, which is deprecated and means another thing, how long a connection may be idle before the framework closes it, and which `SQLiteOpenHelper` drops anyway. `busyTimeout` is now set with `PRAGMA busy_timeout`: from Android 13 on, on every connection of the database, as one in WAL mode reads through several, and below, on its only connection. The guides to getting started listed `busyTimeout`, and in Chinese `journalMode`, among the parameters that only work on Android 9 and higher; only `inMemory`, `lookasideSlotSize` and `lookasideSlotCount` do
 
 ## 2.5.0 / 2026-10-11

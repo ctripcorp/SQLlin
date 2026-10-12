@@ -89,13 +89,19 @@ private class AndroidDBHelper(
 
 /**
  * Converts [DatabaseConfiguration] to Android's OpenParams for API level 28+.
+ *
+ * The lookaside configuration is only set when both of its values are 0 or more, as `setLookasideConfig(0, 0)`
+ * disables the allocator, and leaving it unset keeps SQLite's default configuration.
  */
 @RequiresApi(Build.VERSION_CODES.P)
-private fun DatabaseConfiguration.toAndroidOpenParams(): OpenParams = OpenParams
+internal fun DatabaseConfiguration.toAndroidOpenParams(): OpenParams = OpenParams
     .Builder()
     .setJournalMode(journalMode.name)
     .setSynchronousMode(synchronousMode.name)
-    .setLookasideConfig(lookasideSlotSize, lookasideSlotCount)
+    .apply {
+        if (lookasideSlotSize >= 0 && lookasideSlotCount >= 0)
+            setLookasideConfig(lookasideSlotSize, lookasideSlotCount)
+    }
     .build()
 
 /**
