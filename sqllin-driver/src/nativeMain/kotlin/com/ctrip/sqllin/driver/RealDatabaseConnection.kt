@@ -72,8 +72,9 @@ internal class RealDatabaseConnection(
     override fun query(sql: String, bindParams: Array<out Any?>?): CommonCursor =
         bindParamsToSQL(sql, bindParams).query()
 
+    // IMMEDIATE takes the write lock at once, as on every platform; a read-only connection can't take it
     override fun beginTransaction() = transactionLock.withLock {
-        database.rawExecSql("BEGIN;")
+        database.rawExecSql(if (database.isActualReadOnly) "BEGIN;" else "BEGIN IMMEDIATE;")
         transaction.value = Transaction(isSuccessful = false)
     }
 

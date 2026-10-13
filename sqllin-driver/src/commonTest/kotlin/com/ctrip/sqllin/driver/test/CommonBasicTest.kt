@@ -23,6 +23,7 @@ import com.ctrip.sqllin.driver.withQuery
 import com.ctrip.sqllin.driver.withTransaction
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.runTest
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
 
@@ -221,6 +222,59 @@ class CommonBasicTest(private val path: DatabasePath) {
                 connection.executeInsert("INSERT INTO parent VALUES (?)", arrayOf(1L))
             }
             assertEquals(1L, children())
+        }
+    }
+
+    /**
+     * SQLite rolls a transaction back itself for a constraint with ON CONFLICT ROLLBACK, or a trigger's RAISE(ROLLBACK),
+     * so that ending it fails too, which mustn't hide why it was rolled back; and the next transaction can begin.
+     */
+    fun testRolledBackBySQLite() {
+        openDatabase(getDefaultDBConfig(false)) {
+            it.execSQL("CREATE TABLE rolled_back(x INT UNIQUE ON CONFLICT ROLLBACK)")
+            it.execSQL("CREATE TRIGGER no_negative BEFORE INSERT ON rolled_back WHEN new.x < 0 BEGIN SELECT RAISE(ROLLBACK, 'negative'); END")
+            it.executeInsert("INSERT INTO rolled_back VALUES (?)", arrayOf(1L))
+            fun failure(value: Long): String = assertFails {
+                it.withTransaction { connection ->
+                    connection.executeInsert("INSERT INTO rolled_back VALUES (?)", arrayOf(2L))
+                    connection.executeInsert("INSERT INTO rolled_back VALUES (?)", arrayOf(value))
+                }
+            }.message ?: ""
+            assertContains(failure(1L), "UNIQUE constraint failed")
+            assertContains(failure(-1L), "negative")
+            it.withTransaction { connection ->
+                connection.executeInsert("INSERT INTO rolled_back VALUES (?)", arrayOf(3L))
+            }
+            val values = it.withQuery("SELECT x FROM rolled_back ORDER BY x") { cursor ->
+                buildList { cursor.forEachRow { add(cursor.getLong(0)) } }
+            }
+            assertEquals(listOf(1L, 3L), values)
+        }
+    }
+
+    /**
+     * A transaction takes the write lock when it begins, as BEGIN IMMEDIATE does, on every platform: another connection
+     * can't write until it ends.
+     */
+    fun testImmediateTransaction() {
+        openDatabase(getDefaultDBConfig(false)) {
+            openDatabase(getDefaultDBConfig(false).copy(busyTimeout = 0)) { other ->
+                it.withTransaction {
+                    assertFails {
+                        other.executeInsert(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96, byteArrayOf()))
+                    }
+                }
+                other.executeInsert(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96, byteArrayOf()))
+            }
+        }
+    }
+
+    /**
+     * SQLite waits as long as `busyTimeout` for a lock that another connection holds.
+     */
+    fun testBusyTimeout() {
+        openDatabase(getDefaultDBConfig(false).copy(busyTimeout = 1234)) {
+            assertEquals(1234L, it.withQuery("PRAGMA busy_timeout") { cursor -> cursor.next(); cursor.getLong(0) })
         }
     }
 

@@ -43,7 +43,10 @@ import kotlinx.coroutines.flow.update
  * only means the queries run once more.
  *
  * TEMP tables and triggers belong to the connection, so changes made through another connection, or by another
- * process, aren't seen. A table stays tracked until the connection closes.
+ * process, aren't seen. A table stays tracked until the connection closes. They are also rolled back with the
+ * transaction they are created in: on the JVM and Kotlin/Native, the connection is locked for each statement rather
+ * than for a transaction, so a blocking database scope on another thread can have one open while [track] creates them,
+ * and its rollback takes them with it. [refresh] creates them again then.
  *
  * @author Yuang Qiao
  */
@@ -158,7 +161,10 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
             val virtual = tables intersect virtualTables()
             virtualTables.value = virtual
             triggeredTables.value = if (virtual.isEmpty()) emptySet() else triggeredTables()
-            for (table in tables - virtual)
+        }
+        restoreLostObjects(tables)
+        if (changes == Changes.SCHEMA) {
+            for (table in tables - virtualTables.value)
                 createTriggers(table)
             connection.execSQL(COUNT_ALL)
         } else {
@@ -179,6 +185,42 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
         }
         _versions.update { versions ->
             versions + counts.filter { (table, count) -> count > (versions[table] ?: -1L) }
+        }
+    }
+
+    /**
+     * Creates the TEMP table and the triggers of the tracked [tables] again where they are gone, as a rollback can take
+     * them, and counts a change of each table whose row or triggers were gone, as its changes may have been missed.
+     */
+    private fun restoreLostObjects(tables: Set<String>) {
+        // On Android, a query outside a transaction may run on a reader connection, which has no TEMP objects
+        val (loggedTables, triggerCounts) = connection.withTransaction {
+            val logExists = it.withQuery(LOG_EXISTS) { cursor -> cursor.next() && cursor.getLong(0) > 0 }
+            val logged = if (logExists) it.withQuery(SELECT_LOGGED_TABLES) { cursor ->
+                buildSet<String> {
+                    cursor.forEachRow { add(cursor.getString(0)!!) }
+                }
+            } else null
+            val triggers = it.withQuery(COUNT_TRIGGERS) { cursor ->
+                buildMap<String, Long> {
+                    cursor.forEachRow { put(cursor.getString(0)!!, cursor.getLong(1)) }
+                }
+            }
+            logged to triggers
+        }
+        val virtual = virtualTables.value
+        val lostTables = tables.filter { table ->
+            loggedTables == null || table !in loggedTables || (table !in virtual && (triggerCounts[table] ?: 0L) < OPERATIONS.size)
+        }
+        if (lostTables.isEmpty())
+            return
+        connection.execSQL(CREATE_LOG)
+        for (table in lostTables) {
+            // Above the version last read, so that the queries that read the table run again
+            connection.execSQL(INSERT_LOG_VERSION, arrayOf<Any?>(table, _versions.value[table] ?: 0L))
+            connection.execSQL(COUNT_TABLE, arrayOf(table))
+            if (table !in virtual)
+                createTriggers(table)
         }
     }
 
@@ -211,8 +253,13 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
         const val LOG = "sqllin_modification_log"
         const val CREATE_LOG = "CREATE TEMP TABLE IF NOT EXISTS $LOG(table_name TEXT PRIMARY KEY NOT NULL, version INTEGER NOT NULL DEFAULT 0)"
         const val INSERT_LOG_ROW = "INSERT OR IGNORE INTO $LOG(table_name) VALUES(?)"
+        const val INSERT_LOG_VERSION = "INSERT OR IGNORE INTO $LOG(table_name, version) VALUES(?, ?)"
         const val COUNT_ALL = "UPDATE $LOG SET version = version + 1"
+        const val COUNT_TABLE = "$COUNT_ALL WHERE table_name = ?"
         const val SELECT_LOG = "SELECT table_name, version FROM $LOG"
+        const val SELECT_LOGGED_TABLES = "SELECT table_name FROM $LOG"
+        const val LOG_EXISTS = "SELECT count(*) FROM sqlite_temp_master WHERE type = 'table' AND name = '$LOG'"
+        const val COUNT_TRIGGERS = "SELECT tbl_name, count(*) FROM sqlite_temp_master WHERE type = 'trigger' AND name LIKE 'sqllin\\_modification\\_trigger\\_%' ESCAPE '\\' GROUP BY tbl_name"
         val OPERATIONS = listOf("INSERT", "UPDATE", "DELETE")
 
         fun identifier(name: String): String = "\"${name.replace("\"", "\"\"")}\""

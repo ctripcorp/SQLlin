@@ -594,6 +594,38 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers the tracker of observed queries creating its TEMP table and triggers again where they are gone, as a
+     * rollback on another thread can take them on the JVM and Kotlin/Native. Removing the row of a table from the TEMP
+     * table, and dropping it, stand for that rollback.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, ExperimentalDSLDatabaseAPI::class)
+    fun testObserveRestoresTracking() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        runTest {
+            val books = Channel<List<Book>>(Channel.UNLIMITED)
+            backgroundScope.launch {
+                database.observe(EmptyCoroutineContext) { BookTable SELECT X }.collect { books.send(it) }
+            }
+            fun newBooks(): List<Book>? {
+                runCurrent()
+                return books.tryReceive().getOrNull()
+            }
+            assertEquals(emptyList(), books.receive())
+
+            val first = Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251)
+            database { ModificationLogTable DELETE WHERE(ModificationLogTable.table_name EQ "book") }
+            assertEquals(null, newBooks())
+            database { BookTable INSERT first }
+            assertEquals(listOf(first), newBooks())
+
+            val second = Book(name = "The Lost Symbol", author = "Dan Brown", price = 19.95, pages = 510)
+            database { DROP(ModificationLogTable) }
+            assertEquals(null, newBooks())
+            database { BookTable INSERT second }
+            assertEquals(listOf(first, second), newBooks())
+        }
+    }
+
+    /**
      * Covers an observed query of a table that only a foreign key action changes: SQLite reports the rows that
      * ON DELETE CASCADE deletes, though no statement names their table.
      */

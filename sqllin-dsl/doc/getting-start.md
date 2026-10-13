@@ -131,8 +131,8 @@ val database = Database(
         journalMode = JournalMode.WAL,
         synchronousMode = SynchronousMode.NORMAL,
         busyTimeout = 5000,
-        lookasideSlotSize = 0,
-        lookasideSlotCount = 0,
+        lookasideSlotSize = -1,
+        lookasideSlotCount = -1,
         create = {
             it.execSQL("create table person (id integer primary key autoincrement, name text, age integer)")
         },
@@ -141,9 +141,12 @@ val database = Database(
 )
 ```
 
-Note, because of limitation by Android Framework, the `inMemory`, `busyTimeout`, `lookasideSlotSize`, `lookasideSlotCount`
+`lookasideSlotSize` and `lookasideSlotCount` configure SQLite's lookaside memory allocator: -1, their default, leaves
+SQLite's default configuration, and 0 disables the allocator.
+
+Note, because of limitation by Android Framework, the `inMemory`, `lookasideSlotSize`, `lookasideSlotCount`
 only work on Android 9 and higher. And, because [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)(SQLlin is based on it on JVM) doesn't support
-`sqlite3_config()`, the `lookasideSlotSize` and `lookasideSlotCount` don't work on JVM target.
+`sqlite3_db_config()`, the `lookasideSlotSize` and `lookasideSlotCount` don't work on JVM target.
 
 ### Using DSLDBConfiguration for Type-Safe Schema Management
 
@@ -163,8 +166,8 @@ val database = Database(
         journalMode = JournalMode.WAL,
         synchronousMode = SynchronousMode.NORMAL,
         busyTimeout = 5000,
-        lookasideSlotSize = 0,
-        lookasideSlotCount = 0,
+        lookasideSlotSize = -1,
+        lookasideSlotCount = -1,
         create = {
             // Use type-safe DSL instead of raw SQL
             CREATE(PersonTable)
