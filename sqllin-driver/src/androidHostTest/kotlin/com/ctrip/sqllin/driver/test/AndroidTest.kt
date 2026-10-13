@@ -61,6 +61,9 @@ class AndroidTest {
     fun testFailedCommit() = commonTest.testFailedCommit()
 
     @Test
+    fun testRolledBackBySQLite() = commonTest.testRolledBackBySQLite()
+
+    @Test
     fun testImmediateTransaction() = commonTest.testImmediateTransaction()
 
     @Test
