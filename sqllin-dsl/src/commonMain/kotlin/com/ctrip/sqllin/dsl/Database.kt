@@ -67,6 +67,11 @@ public class Database internal constructor(
      * All SQL operations within the block are executed when the scope exits.
      * Statements are batched and executed in order.
      *
+     * Unlike [suspendedScope], it isn't serialized with the scopes of other threads, nor with the queries of
+     * [observe], which run on `Dispatchers.IO` by default: on the JVM and Kotlin/Native, where the connection is locked
+     * for each statement rather than for a transaction, their statements can run in its transaction. To share the
+     * database between threads, use [suspendedScope].
+     *
      * @param block The DSL block containing SQL operations
      * @return The result of the block
      */
@@ -91,16 +96,19 @@ public class Database internal constructor(
 
     /**
      * Runs the statements of [databaseScope], then tells the observed queries what they changed. They are told even
-     * when a statement fails, as the ones before it may have changed something.
+     * when a statement fails, as the ones before it may have changed something, and then a failure to tell them is
+     * added to the statement's, rather than taking its place.
      */
     private fun execute(databaseScope: DatabaseScope) {
         val changes = databaseScope.changes
         val writtenTables = databaseScope.writtenTables
         try {
             databaseScope.executeAllStatements()
-        } finally {
-            invalidationTracker?.refresh(changes, writtenTables)
+        } catch (e: Throwable) {
+            runCatching { invalidationTracker?.refresh(changes, writtenTables) }.exceptionOrNull()?.let(e::addSuppressed)
+            throw e
         }
+        invalidationTracker?.refresh(changes, writtenTables)
     }
 
     private val executiveMutex by lazy { Mutex() }
@@ -140,7 +148,8 @@ public class Database internal constructor(
      * UPDATE or DELETE that matches no rows. Several changes in a row may lead to a single query.
      *
      * Only changes made through this database are seen, not those of another database instance or connection on the
-     * same file, or of another process. To combine the results of several SELECTs, combine the flows that observe them;
+     * same file, or of another process. The queries run in [context], on another thread than the one that writes, so
+     * write through [suspendedScope], which they are serialized with, rather than [invoke], which they aren't. To combine the results of several SELECTs, combine the flows that observe them;
      * as each runs its query on its own, a change to the tables of both may briefly show the new results of one with the
      * old results of the other.
      *
