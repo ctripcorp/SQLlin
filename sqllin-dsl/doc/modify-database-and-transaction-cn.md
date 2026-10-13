@@ -605,6 +605,8 @@ fun sample() {
 
 `transaction {...}` 是 `Database` 的成员函数，将它写在 `TABLE(databaseName) {...}` 函数的内部或外部没有特别限制。
 
+在所有平台上，事务都以 `BEGIN IMMEDIATE` 开始：它一开始就拿到写锁，所以要写入的其他连接或者其他事务，最多会按 `busyTimeout` 等待它结束。
+
 ## VACUUM
 
 删除行并不会让数据库文件变小，因为 SQLite 会留着空闲页以便复用。`VACUUM()` 会重建数据库文件，把它压缩到最小的磁盘空间；

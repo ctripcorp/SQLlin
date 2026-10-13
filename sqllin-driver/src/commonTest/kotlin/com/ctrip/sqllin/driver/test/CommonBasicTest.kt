@@ -225,6 +225,23 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * A transaction takes the write lock when it begins, as BEGIN IMMEDIATE does, on every platform: another connection
+     * can't write until it ends.
+     */
+    fun testImmediateTransaction() {
+        openDatabase(getDefaultDBConfig(false)) {
+            openDatabase(getDefaultDBConfig(false).copy(busyTimeout = 0)) { other ->
+                it.withTransaction {
+                    assertFails {
+                        other.executeInsert(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96, byteArrayOf()))
+                    }
+                }
+                other.executeInsert(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96, byteArrayOf()))
+            }
+        }
+    }
+
+    /**
      * SQLite waits as long as `busyTimeout` for a lock that another connection holds.
      */
     fun testBusyTimeout() {

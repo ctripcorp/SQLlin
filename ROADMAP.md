@@ -21,7 +21,7 @@ done. A new item takes the next number.
 * F23: Support the other conflict resolutions: INSERT OR ABORT, OR FAIL and OR ROLLBACK, and UPDATE OR IGNORE, OR REPLACE and the others
 * F25: Support ORDER BY and LIMIT in UPDATE and DELETE, which need SQLite's `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` option, which Android's lacks
 * F26: Support INDEXED BY and NOT INDEXED
-* F27: Support choosing how a transaction begins, DEFERRED, IMMEDIATE or EXCLUSIVE, which differs between the platforms now
+* F27: Support choosing how a transaction begins, DEFERRED or EXCLUSIVE, besides IMMEDIATE, which every platform uses since 2.6.0
 * F29: Support EXPLAIN QUERY PLAN, to see which indexes a query uses
 * F30: Support more PRAGMAs, such as integrity_check, quick_check, table_info, index_list, wal_checkpoint, defer_foreign_keys and case_sensitive_like
 

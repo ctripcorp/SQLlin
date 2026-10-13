@@ -61,6 +61,9 @@ class AndroidTest {
     fun testFailedCommit() = commonTest.testFailedCommit()
 
     @Test
+    fun testImmediateTransaction() = commonTest.testImmediateTransaction()
+
+    @Test
     fun testBusyTimeout() = commonTest.testBusyTimeout()
 
     @Test

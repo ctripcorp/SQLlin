@@ -96,7 +96,8 @@ internal class AndroidDatabaseConnection(private val database: SQLiteDatabase) :
         }
     }
 
-    override fun beginTransaction() = database.beginTransaction()
+    // BEGIN IMMEDIATE, as on every platform, which beginTransaction's EXCLUSIVE only is in WAL mode
+    override fun beginTransaction() = database.beginTransactionNonExclusive()
     override fun endTransaction() {
         try {
             database.endTransaction()
