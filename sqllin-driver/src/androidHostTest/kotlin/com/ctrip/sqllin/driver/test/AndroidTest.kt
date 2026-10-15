@@ -18,12 +18,15 @@ package com.ctrip.sqllin.driver.test
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.ctrip.sqllin.driver.DatabaseConfiguration
+import com.ctrip.sqllin.driver.toAndroidOpenParams
 import com.ctrip.sqllin.driver.toDatabasePath
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 /**
  * Android unit test that runs on the JVM via Robolectric. The `sdk` levels cover both
@@ -58,7 +61,30 @@ class AndroidTest {
     fun testFailedCommit() = commonTest.testFailedCommit()
 
     @Test
+    fun testRolledBackBySQLite() = commonTest.testRolledBackBySQLite()
+
+    @Test
+    fun testImmediateTransaction() = commonTest.testImmediateTransaction()
+
+    @Test
+    fun testBusyTimeout() = commonTest.testBusyTimeout()
+
+    @Test
     fun testConcurrency() = commonTest.testConcurrency()
+
+    /**
+     * The lookaside configuration is only given to the framework when one is set, as `setLookasideConfig(0, 0)`
+     * disables the allocator.
+     */
+    @Test
+    @Config(sdk = [37])
+    fun testLookasideConfig() {
+        val config = DatabaseConfiguration(name = SQL.DATABASE_NAME, path = context.toDatabasePath(), version = 1)
+        fun lookaside(config: DatabaseConfiguration) = config.toAndroidOpenParams().run { lookasideSlotSize to lookasideSlotCount }
+        assertEquals(-1 to -1, lookaside(config))
+        assertEquals(0 to 0, lookaside(config.copy(lookasideSlotSize = 0, lookasideSlotCount = 0)))
+        assertEquals(256 to 32, lookaside(config.copy(lookasideSlotSize = 256, lookasideSlotCount = 32)))
+    }
 
     @AfterTest
     fun setDown() {

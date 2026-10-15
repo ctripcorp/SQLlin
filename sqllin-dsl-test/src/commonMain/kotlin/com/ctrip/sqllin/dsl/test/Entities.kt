@@ -1026,3 +1026,12 @@ data class PersonBookTitle(val age: Age, val title: String?)
  */
 @Serializable
 data class AuthorCode(val age: Age, val code: Code)
+
+/**
+ * The TEMP table in which SQLlin counts the changes of the tables of observed queries, which a test removes rows of,
+ * and drops, as a rollback on another thread can.
+ */
+@Suppress("PropertyName")
+@DBRow("sqllin_modification_log")
+@Serializable
+data class ModificationLog(val table_name: String, val version: Long)

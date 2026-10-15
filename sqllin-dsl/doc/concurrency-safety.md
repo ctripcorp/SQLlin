@@ -34,8 +34,8 @@ fun sample() {
 We use the new API `Database#suspendedScope` to replace the `database {}`, it will be like that:
 
 ```kotlin
-fun sample() {
-    database suspendScope {
+suspend fun sample() {
+    database suspendedScope {
         PersonTable { table ->
             table INSERT Person(age = 4, name = "Tom")
             table INSERT listOf(

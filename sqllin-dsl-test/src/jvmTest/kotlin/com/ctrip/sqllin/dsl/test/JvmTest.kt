@@ -50,6 +50,9 @@ class JvmTest {
     fun testObserve() = commonTest.testObserve()
 
     @Test
+    fun testObserveRestoresTracking() = commonTest.testObserveRestoresTracking()
+
+    @Test
     fun testObserveForeignKeyAction() = commonTest.testObserveForeignKeyAction()
 
     @Test

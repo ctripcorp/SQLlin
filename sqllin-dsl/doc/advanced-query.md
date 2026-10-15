@@ -428,6 +428,11 @@ that matches no rows.
 Only the changes made through the same `Database` instance are seen: not those of another instance or connection on
 the same file, such as one opened with _sqllin-driver_, nor those of another process.
 
+The queries run on another thread than the one that writes, so the database is shared between threads: write through
+`suspendedScope`, as [Concurrency Safety](concurrency-safety.md) says. A blocking `database { }` isn't serialized with
+the queries: on the JVM and Kotlin/Native, where the connection is locked for each statement rather than for a
+transaction, they can run in its transaction while it is open.
+
 To combine the results of several _SELECT_ statements, combine the flows that observe them, with `combine` from
 kotlinx.coroutines. As each runs its query on its own, a change to the tables of both may briefly show the new results of
 one with the old results of the other. When the results come from several tables, a single _SELECT_ with a join gives
