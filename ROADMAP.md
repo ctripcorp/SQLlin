@@ -11,7 +11,8 @@ done. A new item takes the next number.
 
 * F8: Support WASM platform DSL
 * F12: Support type converters: store a property of any type through a serializer that encodes it to a type SQLite supports, with type-safe WHERE and SET on its column, e.g. to store instances of kotlinx.datetime
-* F13: Provide a `PagingSource` for androidx.paging built on observable queries, like Room's `LimitOffsetPagingSource`, so that paging a query doesn't need a hand-written bridge
+* F66: Provide table version tokens, which tell a reader when the tables it read change, such as a `PagingSource` that has to invalidate itself: `versioned { }` runs a read-only scope and returns its results with an opaque token of the versions of the tables its SELECTs read, captured under the lock that the read runs under, after the tables are tracked; tokens combine with `+`, which takes the earlier version of a table and rejects the tokens of another `Database`; `awaitChange(token)` suspends until one of their tables changes, and `onChange(token) { }` registers a one-shot callback, which runs after the writing scope releases the lock, and returns null instead when the token is already stale, as it registers before it checks, so that no change between the read and the registration is missed
+* F13: Provide a `PagingSource` for androidx.paging built on the table version tokens of F66, like Room's `LimitOffsetPagingSource`, so that paging a query doesn't need a hand-written bridge: it registers with `onChange` from its first load, holding its callback strongly while the registry holds it weakly, so that a source that Pager abandons doesn't stay registered, keeps the previous key of an invalidated offset-keyed source, reads `anchorPosition` relative to the presented list without placeholders, and keeps offsets on a grid of the page size
 * F14: Support constraints in `ALTER_ADD_COLUMN`, which adds a column with its type only: DEFAULT, NOT NULL with DEFAULT, CHECK, COLLATE NOCASE and REFERENCES
 * F15: Support WITHOUT ROWID tables, which save space and a lookup when the primary key isn't an INTEGER
 * F16: Support STRICT tables, which reject values of other types than their columns' (SQLite 3.37.0, Android API 34)
@@ -20,7 +21,7 @@ done. A new item takes the next number.
 * F23: Support the other conflict resolutions: INSERT OR ABORT, OR FAIL and OR ROLLBACK, and UPDATE OR IGNORE, OR REPLACE and the others
 * F25: Support ORDER BY and LIMIT in UPDATE and DELETE, which need SQLite's `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` option, which Android's lacks
 * F26: Support INDEXED BY and NOT INDEXED
-* F27: Support choosing how a transaction begins, DEFERRED, IMMEDIATE or EXCLUSIVE, which differs between the platforms now
+* F27: Support choosing how a transaction begins, DEFERRED or EXCLUSIVE, besides IMMEDIATE, which every platform uses since 2.6.0
 * F29: Support EXPLAIN QUERY PLAN, to see which indexes a query uses
 * F30: Support more PRAGMAs, such as integrity_check, quick_check, table_info, index_list, wal_checkpoint, defer_foreign_keys and case_sensitive_like
 

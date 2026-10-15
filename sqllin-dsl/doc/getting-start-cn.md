@@ -124,8 +124,8 @@ val database = Database(
         journalMode = JournalMode.WAL,
         synchronousMode = SynchronousMode.NORMAL,
         busyTimeout = 5000,
-        lookasideSlotSize = 0,
-        lookasideSlotCount = 0,
+        lookasideSlotSize = -1,
+        lookasideSlotCount = -1,
         create = {
             it.execSQL("create table person (id integer primary key autoincrement, name text, age integer)")
         },
@@ -133,8 +133,10 @@ val database = Database(
     )
 )
 ```
-注意，由于 Android Framework 的限制，`inMemory`、`journalMode`、`lookasideSlotSize`、`lookasideSlotCount` 这些参数仅在 Android 9 及以上版本生效。 并且，由于
-[sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)（SQLlin 在 JVM 上基于它）不支持 `sqlite3_config()`，`lookasideSlotSize` 和 `lookasideSlotCount` 两个属性在 JVM 平台不生效。
+`lookasideSlotSize` 和 `lookasideSlotCount` 用来配置 SQLite 的 lookaside 内存分配器：默认值 -1 表示保持 SQLite 的默认配置，0 表示关闭它。
+
+注意，由于 Android Framework 的限制，`inMemory`、`lookasideSlotSize`、`lookasideSlotCount` 这些参数仅在 Android 9 及以上版本生效。 并且，由于
+[sqlite-jdbc](https://github.com/xerial/sqlite-jdbc)（SQLlin 在 JVM 上基于它）不支持 `sqlite3_db_config()`，`lookasideSlotSize` 和 `lookasideSlotCount` 两个属性在 JVM 平台不生效。
 
 ### 使用 DSLDBConfiguration 进行类型安全的模式管理
 
@@ -154,8 +156,8 @@ val database = Database(
         journalMode = JournalMode.WAL,
         synchronousMode = SynchronousMode.NORMAL,
         busyTimeout = 5000,
-        lookasideSlotSize = 0,
-        lookasideSlotCount = 0,
+        lookasideSlotSize = -1,
+        lookasideSlotCount = -1,
         create = {
             // Use type-safe DSL instead of raw SQL
             CREATE(PersonTable)

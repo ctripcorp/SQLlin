@@ -64,17 +64,29 @@ public inline fun <T> openDatabase(config: DatabaseConfiguration, block: (Databa
  * The transaction is committed if the block completes successfully,
  * or rolled back if an exception is thrown.
  *
+ * When the block throws, a failure to end the transaction is added to its exception, rather than taking its place:
+ * SQLite rolls some transactions back itself, as for a constraint with ON CONFLICT ROLLBACK or a trigger's
+ * RAISE(ROLLBACK), and then the ROLLBACK fails, as no transaction is active.
+ *
  * @param block The block to execute within the transaction
  * @return The result of the block
  */
 public inline fun <T> DatabaseConnection.withTransaction(block: (DatabaseConnection) -> T): T {
     beginTransaction()
+    var failure: Throwable? = null
     try {
         val result = block(this)
         setTransactionSuccessful()
         return result
+    } catch (e: Throwable) {
+        failure = e
+        throw e
     } finally {
-        endTransaction()
+        try {
+            endTransaction()
+        } catch (endFailure: Throwable) {
+            (failure ?: throw endFailure).addSuppressed(endFailure)
+        }
     }
 }
 

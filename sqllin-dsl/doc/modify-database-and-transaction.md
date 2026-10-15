@@ -642,6 +642,9 @@ fun sample() {
 
 The `transaction {...}` is a member function in `Database`, it is inside or outside of `TABLE(databaseName) {...}` doesn't matter.
 
+A transaction begins with `BEGIN IMMEDIATE` on every platform: it takes the write lock at once, so another connection
+that writes, or another transaction, waits for it as long as its `busyTimeout`.
+
 ## VACUUM
 
 Deleting rows doesn't shrink the database file, as SQLite keeps the free pages to reuse them. `VACUUM()` rebuilds the
