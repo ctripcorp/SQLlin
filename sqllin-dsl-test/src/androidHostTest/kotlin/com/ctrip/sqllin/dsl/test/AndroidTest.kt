@@ -28,6 +28,9 @@ class AndroidTest {
     fun testInsert() = commonTest.testInsert()
 
     @Test
+    fun testInsertGeneratedKeyLast() = commonTest.testInsertGeneratedKeyLast()
+
+    @Test
     fun testDelete() = commonTest.testDelete()
 
     @Test
