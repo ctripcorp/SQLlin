@@ -22,7 +22,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Person(
     @PrimaryKey(autoIncrement = true)
-    val id: Long = 0,
+    val id: Long? = null,
     val name: String,
     val age: Int,
 )
