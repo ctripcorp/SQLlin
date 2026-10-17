@@ -125,6 +125,13 @@ data class PersonWithId(
     val age: Age,
 )
 
+@DBRow("generated_key_last")
+@Serializable
+data class GeneratedKeyLast(
+    val name: String,
+    @PrimaryKey val id: Long? = null,
+)
+
 @DBRow("product")
 @Serializable
 data class Product(
