@@ -83,6 +83,15 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(book, statement?.getResults()?.firstOrNull())
     }
 
+    fun testInsertGeneratedKeyLast() = Database(getDefaultDBConfig()).databaseAutoClose { database ->
+        val result = database {
+            CREATE(GeneratedKeyLastTable)
+            GeneratedKeyLastTable INSERT listOf(GeneratedKeyLast("first"), GeneratedKeyLast("second"))
+            GeneratedKeyLastTable SELECT ORDER_BY(GeneratedKeyLastTable.id)
+        }
+        assertEquals(listOf(GeneratedKeyLast("first", 1L), GeneratedKeyLast("second", 2L)), result.getResults())
+    }
+
     fun testDelete() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         val book1 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
