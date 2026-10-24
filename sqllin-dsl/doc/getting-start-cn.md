@@ -143,7 +143,7 @@ val database = Database(
 除此之外，你还可以使用 `DSLDBConfiguration`，它允许你在 `create` 和 `upgrade` 回调中使用类型安全的 SQL DSL，而不是原始的 SQL 字符串：
 
 ```kotlin
-import com.ctrip.sqllin.driver.DSLDBConfiguration
+import com.ctrip.sqllin.dsl.DSLDBConfiguration
 import com.ctrip.sqllin.dsl.Database
 
 val database = Database(

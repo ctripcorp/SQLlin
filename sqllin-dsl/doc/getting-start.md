@@ -153,7 +153,7 @@ only work on Android 9 and higher. And, because [sqlite-jdbc](https://github.com
 Alternatively, you can use `DSLDBConfiguration` which allows you to use the type-safe SQL DSL in the `create` and `upgrade` callbacks instead of raw SQL strings:
 
 ```kotlin
-import com.ctrip.sqllin.driver.DSLDBConfiguration
+import com.ctrip.sqllin.dsl.DSLDBConfiguration
 import com.ctrip.sqllin.dsl.Database
 
 val database = Database(
@@ -399,7 +399,7 @@ Use `@CollateNoCase` to make string comparisons case-insensitive:
 ```kotlin
 import com.ctrip.sqllin.dsl.annotation.DBRow
 import com.ctrip.sqllin.dsl.annotation.PrimaryKey
-import com.ctrip.sqllin.dsl.annotation.NoCase
+import com.ctrip.sqllin.dsl.annotation.CollateNoCase
 import com.ctrip.sqllin.dsl.annotation.Unique
 import kotlinx.serialization.Serializable
 

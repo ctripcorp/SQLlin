@@ -20,7 +20,7 @@ fun sample() {
             table SELECT WHERE (age LTE 5) GROUP_BY age HAVING (upper(name) EQ "TOM") ORDER_BY (age to DESC) LIMIT 2 OFFSET 1
         }
     }
-    selectStatement.getResult().forEach { person ->
+    selectStatement.getResults().forEach { person ->
         println(person.name)
     }
 }
