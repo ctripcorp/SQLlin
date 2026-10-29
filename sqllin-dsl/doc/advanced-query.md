@@ -183,9 +183,10 @@ from a [join](#join) too. Arithmetic, `CASE` and subqueries that give a single v
 
 ## Join
 
-A join reads the rows of several relations, tables, views or derived tables, together. Start one with
-`FROM(relation)`, extend it with join operators, and select from it as from a table. Joins are experimental, so opt in
-with `@OptIn(ExperimentalDSLDatabaseAPI::class)`.
+A join reads the rows of several relations, tables, views or derived tables, together. Start one with a join operator
+applied to its first relation, as `PersonTable INNER_JOIN TranscriptTable`, or with `FROM(relation)`, extend it with more
+join operators, and select from it as from a table. Joins are experimental, so opt in with
+`@OptIn(ExperimentalDSLDatabaseAPI::class)`.
 
 The examples use another table, and types for the rows of joins, which don't need `@DBRow`:
 
@@ -221,10 +222,10 @@ fun joinSample() {
     lateinit var scores: SelectStatement<StudentScore>
     database {
         // SELECT name,person.age,transcript.math,transcript.english FROM person INNER JOIN transcript USING (name)
-        students = (FROM(PersonTable) INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()
+        students = (PersonTable INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()
         // SELECT person.name AS name,count(transcript.math) AS tests,max(transcript.math) AS bestMath
         //     FROM person LEFT OUTER JOIN transcript ON person.name = transcript.name GROUP BY person.name
-        scores = (FROM(PersonTable) LEFT_OUTER_JOIN TranscriptTable ON (PersonTable.name EQ TranscriptTable.name)) SELECT listOf(
+        scores = (PersonTable LEFT_OUTER_JOIN TranscriptTable ON (PersonTable.name EQ TranscriptTable.name)) SELECT listOf(
             PersonTable.name AS StudentScore::name,
             PersonTable.count(TranscriptTable.math) AS StudentScore::tests,
             PersonTable.max(TranscriptTable.math) AS StudentScore::bestMath,
@@ -249,7 +250,7 @@ they are marked with `@PlatformDependentSQLiteAPI`, which you have to opt in to,
 [APIs That Depend on the SQLite Version](modify-database-and-transaction.md#apis-that-depend-on-the-sqlite-version).
 
 Joins are applied in the order they are written, and each can have its own condition:
-`FROM(a) INNER_JOIN b ON (...) LEFT_OUTER_JOIN c ON (...)`. A relation can only be joined once: to join a table with
+`a INNER_JOIN b ON (...) LEFT_OUTER_JOIN c ON (...)`. A relation can only be joined once: to join a table with
 itself, join a [derived table](#derived-tables) of its rows, which gives it another name.
 
 A join's rows have no type of their own, so a _SELECT_ of a join names the type it reads them into: with
@@ -265,12 +266,15 @@ joined relations when the statement is built:
 SQLlin writes the columns with their relations' names, so that a condition, a function, _GROUP BY_ or _ORDER BY_ can
 name a column that another relation has too. An observed query of a join watches all its relations.
 
-### The Old Join API
+### Migrating From the Old Join API
 
-Before 2.5.0, joins were written as clauses of _SELECT_: `PersonTable SELECT INNER_JOIN<Student>(TranscriptTable) USING name`,
-with `CROSS_JOIN`, `NATURAL_JOIN`, `LEFT_OUTER_JOIN` and the others. They still work, but they don't check the type
-their rows are read into, can't join more than two relations each with its own condition, and can't select result
-columns. **They will be removed in the next version after 2.5.0**, so write joins as above.
+Before 2.6.0, joins could also be written as clauses of _SELECT_, as
+`PersonTable SELECT INNER_JOIN<Student>(TranscriptTable) USING name`, with `CROSS_JOIN`, `NATURAL_JOIN`,
+`LEFT_OUTER_JOIN` and the others. 2.6.0 removed them. Such a join is now written as above:
+`(PersonTable INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()`. As its result type is now
+checked against the joined relations, a type that reads a column two relations have, or reads a column that an outer
+join can leave NULL into a non-null property, is rejected when the statement is built: select such a column with `AS`,
+or make the property nullable.
 
 ## Subqueries
 
@@ -316,7 +320,7 @@ fun sample() {
         //     WHERE author_books.books>?
         prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
         // SELECT person.name,author_books.books FROM person INNER JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
-        personBooks = (FROM(PersonTable) INNER_JOIN authorBooks ON (PersonTable.id EQ AuthorBooksView.authorId)) SELECT X<PersonBooks>()
+        personBooks = (PersonTable INNER_JOIN authorBooks ON (PersonTable.id EQ AuthorBooksView.authorId)) SELECT X<PersonBooks>()
     }
 }
 ```
@@ -342,7 +346,7 @@ database {
     } AS ElderView
     // SELECT person.name,elder.elderName FROM person
     //     INNER JOIN (SELECT person.name AS elderName,person.age AS elderAge FROM person) AS elder ON elder.elderAge>person.age
-    pairs = (FROM(PersonTable) INNER_JOIN elders ON (ElderView.elderAge GT PersonTable.age)) SELECT X<YoungerAndElder>()
+    pairs = (PersonTable INNER_JOIN elders ON (ElderView.elderAge GT PersonTable.age)) SELECT X<YoungerAndElder>()
 }
 ```
 

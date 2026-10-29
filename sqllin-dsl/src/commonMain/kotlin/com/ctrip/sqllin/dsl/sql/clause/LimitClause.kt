@@ -67,12 +67,6 @@ public infix fun <T> HavingSelectStatement<T>.LIMIT(count: Int): LimitSelectStat
         container changeLastStatement it
     }
 
-@StatementDslMaker
-public infix fun <T> JoinSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
-    appendToLimit(LimitClause(count)).also {
-        container changeLastStatement it
-    }
-
 @ExperimentalDSLDatabaseAPI
 @StatementDslMaker
 public infix fun <T> CompoundSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =

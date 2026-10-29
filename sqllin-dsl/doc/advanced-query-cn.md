@@ -171,8 +171,9 @@ fun sample() {
 
 ## Join
 
-Join 把多个关系（表、视图或派生表）的行合在一起读取。用 `FROM(relation)` 开始一个 Join，用 Join 运算符扩展它，然后像查询表一样
-从中查询。Join 是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`。
+Join 把多个关系（表、视图或派生表）的行合在一起读取。对第一个关系直接使用 Join 运算符即可开始一个 Join，比如
+`PersonTable INNER_JOIN TranscriptTable`，也可以用 `FROM(relation)` 开始；再用更多 Join 运算符扩展它，然后像查询表一样从中查询。
+Join 是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`。
 
 示例用到另一张表，以及几个表示 Join 结果的类型，它们不需要 `@DBRow`：
 
@@ -208,10 +209,10 @@ fun joinSample() {
     lateinit var scores: SelectStatement<StudentScore>
     database {
         // SELECT name,person.age,transcript.math,transcript.english FROM person INNER JOIN transcript USING (name)
-        students = (FROM(PersonTable) INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()
+        students = (PersonTable INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()
         // SELECT person.name AS name,count(transcript.math) AS tests,max(transcript.math) AS bestMath
         //     FROM person LEFT OUTER JOIN transcript ON person.name = transcript.name GROUP BY person.name
-        scores = (FROM(PersonTable) LEFT_OUTER_JOIN TranscriptTable ON (PersonTable.name EQ TranscriptTable.name)) SELECT listOf(
+        scores = (PersonTable LEFT_OUTER_JOIN TranscriptTable ON (PersonTable.name EQ TranscriptTable.name)) SELECT listOf(
             PersonTable.name AS StudentScore::name,
             PersonTable.count(TranscriptTable.math) AS StudentScore::tests,
             PersonTable.max(TranscriptTable.math) AS StudentScore::bestMath,
@@ -235,7 +236,7 @@ Join 运算符有：
 `@PlatformDependentSQLiteAPI`，需要按[依赖 SQLite 版本的 API](modify-database-and-transaction-cn.md#依赖-sqlite-版本的-api) 所说的
 方式声明同意。
 
-Join 按书写的顺序执行，每一个都可以有自己的条件：`FROM(a) INNER_JOIN b ON (...) LEFT_OUTER_JOIN c ON (...)`。一个关系只能被连接
+Join 按书写的顺序执行，每一个都可以有自己的条件：`a INNER_JOIN b ON (...) LEFT_OUTER_JOIN c ON (...)`。一个关系只能被连接
 一次：要让表和自身 Join，请连接由它的行构成的[派生表](#派生表)，这相当于给它起了另一个名字。
 
 Join 的行没有自己的类型，所以从 Join 查询时要指定读取成的类型：用 `X<R>()`、`WHERE<R>(...)` 这类子句函数，或者结果列。构建语句时，
@@ -249,11 +250,13 @@ Join 的行没有自己的类型，所以从 Join 查询时要指定读取成的
 SQLlin 写列时都带上关系的名字，所以条件、函数、_GROUP BY_ 和 _ORDER BY_ 都能使用其他关系中也有的列名。可观察查询会观察 Join 中的
 所有关系。
 
-### 旧的 Join API
+### 从旧的 Join API 迁移
 
-在 2.5.0 之前，Join 写作 _SELECT_ 的子句：`PersonTable SELECT INNER_JOIN<Student>(TranscriptTable) USING name`，以及 `CROSS_JOIN`、
-`NATURAL_JOIN`、`LEFT_OUTER_JOIN` 等。它们仍然可用，但不会检查行被读取成的类型，无法连接两个以上各带条件的关系，也不能选取结果列。
-**它们将在 2.5.0 之后的下一个版本中删除**，请按上面的方式书写 Join。
+在 2.6.0 之前，Join 还可以写作 _SELECT_ 的子句，比如 `PersonTable SELECT INNER_JOIN<Student>(TranscriptTable) USING name`，
+以及 `CROSS_JOIN`、`NATURAL_JOIN`、`LEFT_OUTER_JOIN` 等。2.6.0 删除了这些写法，请按上面的方式书写：
+`(PersonTable INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()`。由于现在会对照被连接的关系检查结果类型，
+如果一个类型读取了两个关系都有的列，或者把外连接可能为 NULL 的列读进非空属性，构建语句时就会被拒绝：请用 `AS` 选取这样的列，
+或者把属性改为可空。
 
 ## 子查询
 
@@ -297,7 +300,7 @@ fun sample() {
         //     WHERE author_books.books>?
         prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
         // SELECT person.name,author_books.books FROM person INNER JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
-        personBooks = (FROM(PersonTable) INNER_JOIN authorBooks ON (PersonTable.id EQ AuthorBooksView.authorId)) SELECT X<PersonBooks>()
+        personBooks = (PersonTable INNER_JOIN authorBooks ON (PersonTable.id EQ AuthorBooksView.authorId)) SELECT X<PersonBooks>()
     }
 }
 ```
@@ -322,7 +325,7 @@ database {
     } AS ElderView
     // SELECT person.name,elder.elderName FROM person
     //     INNER JOIN (SELECT person.name AS elderName,person.age AS elderAge FROM person) AS elder ON elder.elderAge>person.age
-    pairs = (FROM(PersonTable) INNER_JOIN elders ON (ElderView.elderAge GT PersonTable.age)) SELECT X<YoungerAndElder>()
+    pairs = (PersonTable INNER_JOIN elders ON (ElderView.elderAge GT PersonTable.age)) SELECT X<YoungerAndElder>()
 }
 ```
 

@@ -180,16 +180,6 @@ public infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column2WayMap: Map<Claus
         container changeLastStatement it
     }
 
-@StatementDslMaker
-public inline infix fun <T> JoinSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement<*>, Ordering>): OrderBySelectStatement<T> =
-    ORDER_BY(mapOf(column2Way))
-
-@StatementDslMaker
-public infix fun <T> JoinSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, Ordering>): OrderBySelectStatement<T> =
-    appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
-        container changeLastStatement it
-    }
-
 @ExperimentalDSLDatabaseAPI
 @StatementDslMaker
 public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement<*>, Ordering>): OrderBySelectStatement<T> =
@@ -278,16 +268,6 @@ public inline infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column: ClauseEle
 
 @StatementDslMaker
 public infix fun <T> GroupBySelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement<*>>): OrderBySelectStatement<T> =
-    appendToOrderBy(SimpleOrderByClause(columns)).also {
-        container changeLastStatement it
-    }
-
-@StatementDslMaker
-public inline infix fun <T> JoinSelectStatement<T>.ORDER_BY(column: ClauseElement<*>): OrderBySelectStatement<T> =
-    ORDER_BY(listOf(column))
-
-@StatementDslMaker
-public infix fun <T> JoinSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement<*>>): OrderBySelectStatement<T> =
     appendToOrderBy(SimpleOrderByClause(columns)).also {
         container changeLastStatement it
     }

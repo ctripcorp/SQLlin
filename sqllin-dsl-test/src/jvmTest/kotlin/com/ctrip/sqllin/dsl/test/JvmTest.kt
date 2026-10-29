@@ -170,7 +170,7 @@ class JvmTest {
     fun testFunction() = commonTest.testFunction()
 
     @Test
-    fun testJoinClause() = commonTest.testJoinClause()
+    fun testJoinWithoutFrom() = commonTest.testJoinWithoutFrom()
 
     @Test
     fun testConcurrency() = commonTest.testConcurrency()

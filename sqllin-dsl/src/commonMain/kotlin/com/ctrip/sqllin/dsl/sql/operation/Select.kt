@@ -114,49 +114,6 @@ internal object Select : Operation {
     }
 
     /**
-     * Builds a SELECT statement with NATURAL JOIN clause.
-     *
-     * Natural joins automatically match columns with the same name in both tables.
-     *
-     * @return Statement that can be followed by WHERE, GROUP BY, ORDER BY, or LIMIT
-     */
-    fun <R> select(
-        table: Relation<*>,
-        clause: NaturalJoinClause<R>,
-        isDistinct: Boolean,
-        deserializer: DeserializationStrategy<R>,
-        connection: DatabaseConnection,
-        container: StatementContainer,
-    ) : JoinSelectStatement<R> =
-        JoinSelectStatement(buildSQL(From.of(table), clause, isDistinct, deserializer), deserializer, connection, container, parametersOf(table.fromParameters, clause.parameters), null, table.readTables + clause.tables)
-
-    /**
-     * Builds a SELECT statement with JOIN clause (requires ON or USING).
-     *
-     * Returns an intermediate state that must be completed with either an ON or USING clause.
-     *
-     * @return Incomplete JOIN statement requiring condition
-     */
-    fun <R> select(
-        table: Relation<*>,
-        clause: JoinClause<R>,
-        isDistinct: Boolean,
-        deserializer: DeserializationStrategy<R>,
-        connection: DatabaseConnection,
-        container: StatementContainer,
-        addSelectStatement: (SelectStatement<R>) -> Unit
-    ) : JoinStatementWithoutCondition<R> =
-        JoinStatementWithoutCondition(
-            buildSQL(From.of(table), clause, isDistinct, deserializer),
-            deserializer,
-            connection,
-            container,
-            parametersOf(table.fromParameters, clause.parameters),
-            table.readTables + clause.tables,
-            addSelectStatement,
-        )
-
-    /**
      * Checks that [deserializer] can read rows of [from], when it reads them into a type other than the row type of a
      * single table.
      *

@@ -488,14 +488,19 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(3, selectStatement17?.getResults()?.size) // Random ordering, but should return 3 results
     }
 
-    fun testJoinClause() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
-        var crossJoinStatement: SelectStatement<CrossJoiner>? = null
-        var innerJoinStatement: SelectStatement<Joiner>? = null
-        var naturalInnerJoinStatement: SelectStatement<Joiner>? = null
-        var innerJoinStatementWithOn: SelectStatement<CrossJoiner>? = null
-        var outerJoinStatement: SelectStatement<Joiner>? = null
-        var naturalOuterJoinStatement: SelectStatement<Joiner>? = null
-        var outerJoinStatementWithOn: SelectStatement<CrossJoiner>? = null
+    /**
+     * Covers the joins that start with their first relation, as `BookTable INNER_JOIN CategoryTable`, without FROM, of
+     * each kind that every platform has.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testJoinWithoutFrom() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
+        lateinit var crossJoinStatement: SelectStatement<CrossJoiner>
+        lateinit var innerJoinStatement: SelectStatement<Joiner>
+        lateinit var naturalInnerJoinStatement: SelectStatement<Joiner>
+        lateinit var innerJoinStatementWithOn: SelectStatement<CrossJoiner>
+        lateinit var outerJoinStatement: SelectStatement<Joiner>
+        lateinit var naturalOuterJoinStatement: SelectStatement<Joiner>
+        lateinit var outerJoinStatementWithOn: SelectStatement<CrossJoiner>
         val categories = listOf(
             Category(name = "The Da Vinci Code", code = 123),
             Category(name = "Kotlin Cookbook", code = 456),
@@ -508,27 +513,23 @@ class CommonBasicTest(private val path: DatabasePath) {
             Book(name = "Modern Java Recipes", author ="Ken Kousen", pages = 322, price = 25.78),
         )
         database {
-            CategoryTable { table ->
-                table INSERT categories
-            }
-            BookTable { table ->
-                table INSERT books
-                crossJoinStatement = table SELECT_DISTINCT CROSS_JOIN(CategoryTable)
-                innerJoinStatement = table SELECT INNER_JOIN<Joiner>(CategoryTable) USING name
-                naturalInnerJoinStatement = table SELECT NATURAL_INNER_JOIN(CategoryTable)
-                innerJoinStatementWithOn = table SELECT INNER_JOIN<CrossJoiner>(CategoryTable) ON (name EQ CategoryTable.name)
-                outerJoinStatement = table SELECT LEFT_OUTER_JOIN<Joiner>(CategoryTable) USING name
-                naturalOuterJoinStatement = table SELECT NATURAL_LEFT_OUTER_JOIN(CategoryTable)
-                outerJoinStatementWithOn = table SELECT LEFT_OUTER_JOIN<CrossJoiner>(CategoryTable) ON (name EQ CategoryTable.name)
-            }
+            CategoryTable INSERT categories
+            BookTable INSERT books
+            crossJoinStatement = (BookTable CROSS_JOIN CategoryTable) SELECT_DISTINCT X<CrossJoiner>()
+            innerJoinStatement = (BookTable INNER_JOIN CategoryTable USING BookTable.name) SELECT X<Joiner>()
+            naturalInnerJoinStatement = (BookTable NATURAL_JOIN CategoryTable) SELECT X<Joiner>()
+            innerJoinStatementWithOn = (BookTable INNER_JOIN CategoryTable ON (BookTable.name EQ CategoryTable.name)) SELECT X<CrossJoiner>()
+            outerJoinStatement = (BookTable LEFT_OUTER_JOIN CategoryTable USING BookTable.name) SELECT X<Joiner>()
+            naturalOuterJoinStatement = (BookTable NATURAL_LEFT_OUTER_JOIN CategoryTable) SELECT X<Joiner>()
+            outerJoinStatementWithOn = (BookTable LEFT_OUTER_JOIN CategoryTable ON (BookTable.name EQ CategoryTable.name)) SELECT X<CrossJoiner>()
         }
-        assertEquals(crossJoinStatement?.getResults()?.size, categories.size * books.size)
-        assertEquals(innerJoinStatement?.getResults()?.size, categories.size)
-        assertEquals(naturalInnerJoinStatement?.getResults()?.size, categories.size)
-        assertEquals(innerJoinStatementWithOn?.getResults()?.size, categories.size)
-        assertEquals(outerJoinStatement?.getResults()?.size, books.size)
-        assertEquals(naturalOuterJoinStatement?.getResults()?.size, books.size)
-        assertEquals(outerJoinStatementWithOn?.getResults()?.size, books.size)
+        assertEquals(categories.size * books.size, crossJoinStatement.getResults().size)
+        assertEquals(categories.size, innerJoinStatement.getResults().size)
+        assertEquals(categories.size, naturalInnerJoinStatement.getResults().size)
+        assertEquals(categories.size, innerJoinStatementWithOn.getResults().size)
+        assertEquals(books.size, outerJoinStatement.getResults().size)
+        assertEquals(books.size, naturalOuterJoinStatement.getResults().size)
+        assertEquals(books.size, outerJoinStatementWithOn.getResults().size)
     }
 
     /**
@@ -548,7 +549,7 @@ class CommonBasicTest(private val path: DatabasePath) {
             }
             backgroundScope.launch {
                 database.observe(EmptyCoroutineContext) {
-                    BookTable SELECT INNER_JOIN<Joiner>(CategoryTable) USING BookTable.name
+                    (BookTable INNER_JOIN CategoryTable USING BookTable.name) SELECT X<Joiner>()
                 }.collect { joined.send(it) }
             }
             fun assertNoNewBooks() {
@@ -1024,12 +1025,12 @@ class CommonBasicTest(private val path: DatabasePath) {
                     table SELECT listOf(count(X) AS AuthorBooks::books) WHERE (price GT 10.0) GROUP_BY author
                 } AS AuthorBooksView
                 prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
-                personBooks = PersonWithIdTable SELECT INNER_JOIN<PersonBooks>(authorBooks) ON (PersonWithIdTable.name EQ AuthorBooksView.author)
+                personBooks = (PersonWithIdTable INNER_JOIN authorBooks ON (PersonWithIdTable.name EQ AuthorBooksView.author)) SELECT X<PersonBooks>()
                 // The persons under other names join their table with itself
                 val elders = PersonWithIdTable { table ->
                     table SELECT listOf(name AS Elder::elderName, age AS Elder::elderAge)
                 } AS ElderView
-                pairs = PersonWithIdTable SELECT INNER_JOIN<YoungerAndElder>(elders) ON (ElderView.elderAge GT PersonWithIdTable.age)
+                pairs = (PersonWithIdTable INNER_JOIN elders ON (ElderView.elderAge GT PersonWithIdTable.age)) SELECT X<YoungerAndElder>()
             }
             assertEquals(listOf(AuthorBooks("Dan Brown", 2)), prolific.getResults())
             assertEquals(
@@ -1085,7 +1086,7 @@ class CommonBasicTest(private val path: DatabasePath) {
             backgroundScope.launch {
                 database.observe(EmptyCoroutineContext) {
                     val authorBooks = BookTable { table -> table SELECT listOf(count(X) AS AuthorBooks::books) GROUP_BY author } AS AuthorBooksView
-                    PersonWithIdTable SELECT INNER_JOIN<PersonBooks>(authorBooks) ON (PersonWithIdTable.name EQ AuthorBooksView.author)
+                    (PersonWithIdTable INNER_JOIN authorBooks ON (PersonWithIdTable.name EQ AuthorBooksView.author)) SELECT X<PersonBooks>()
                 }.collect { books.send(it) }
             }
             backgroundScope.launch {

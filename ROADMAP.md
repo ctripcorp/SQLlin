@@ -3,10 +3,6 @@
 Each item has an ID, `Fx`, which stays the same when the item moves to another priority, and under Supported once it is
 done. A new item takes the next number.
 
-## High Priority
-
-* F7: Remove the joins written as clauses of SELECT, such as `table SELECT INNER_JOIN<R>(other)`, in the next version after 2.5.0, then let a join start with its first relation, as in `PersonTable INNER_JOIN BookTable`, without `FROM`
-
 ## Medium Priority
 
 * F8: Support WASM platform DSL
@@ -50,6 +46,7 @@ done. A new item takes the next number.
 
 ## Supported
 
+* F7: Remove the joins written as clauses of SELECT, such as `table SELECT INNER_JOIN<R>(other)`, and let a join start with its first relation, as in `PersonTable INNER_JOIN BookTable`, without `FROM` (2.6.0 ✅)
 * F17: Support conflict clauses on PRIMARY KEY and UNIQUE constraints (2.5.0 ✅)
 * F18: Support DEFERRABLE INITIALLY DEFERRED foreign keys (2.5.0 ✅)
 * F22: Support NULLS FIRST and NULLS LAST in ORDER BY (2.5.0 ✅)

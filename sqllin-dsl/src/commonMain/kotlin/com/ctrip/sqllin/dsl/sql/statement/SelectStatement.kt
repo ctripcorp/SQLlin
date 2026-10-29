@@ -168,40 +168,6 @@ public class ResultColumnSelectStatement<T> internal constructor(
 }
 
 /**
- * SELECT statement with JOIN clause applied.
- *
- * Can be followed by:
- * - WHERE
- * - GROUP BY
- * - ORDER BY
- * - LIMIT
- *
- * @author Yuang Qiao
- */
-public class JoinSelectStatement<T> internal constructor(
-    sqlStr: String,
-    deserializer: DeserializationStrategy<T>,
-    connection: DatabaseConnection,
-    container: StatementContainer,
-    parameters: MutableList<Any?>?,
-    ungroupedError: String?,
-    tables: Set<String>,
-) : SelectStatement<T>(sqlStr, deserializer, connection, container, parameters, ungroupedError, tables) {
-
-    internal infix fun appendToWhere(clause: WhereClause<T>): WhereSelectStatement<T> =
-        WhereSelectStatement(buildSQL(clause), deserializer, connection, container, parametersOf(parameters, clause.selectCondition.parameters), ungroupedError, tables + clause.selectCondition.tables)
-
-    internal infix fun appendToLimit(clause: LimitClause<T>): LimitSelectStatement<T> =
-        LimitSelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables)
-
-    internal infix fun appendToOrderBy(clause: OrderByClause<T>): OrderBySelectStatement<T> =
-        OrderBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, ungroupedError, tables + clause.elementTables)
-
-    internal infix fun appendToGroupBy(clause: GroupByClause<T>): GroupBySelectStatement<T> =
-        GroupBySelectStatement(buildSQL(clause), deserializer, connection, container, parameters, null, tables + clause.elementTables)
-}
-
-/**
  * SELECT statement with GROUP BY clause applied.
  *
  * Can be followed by:

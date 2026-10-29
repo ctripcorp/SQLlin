@@ -35,7 +35,7 @@ import com.ctrip.sqllin.dsl.sql.Relation
  *
  * // SELECT person.name AS name,count(book.title) AS books FROM person LEFT OUTER JOIN book ON person.id=book.authorId
  * //     GROUP BY person.id
- * (FROM(PersonTable) LEFT_OUTER_JOIN BookTable ON (PersonTable.id EQ BookTable.authorId)) SELECT listOf(
+ * (PersonTable LEFT_OUTER_JOIN BookTable ON (PersonTable.id EQ BookTable.authorId)) SELECT listOf(
  *     PersonTable.name AS PersonBooks::name,
  *     PersonTable.count(BookTable.title) AS PersonBooks::books,
  * ) GROUP_BY PersonTable.id
@@ -47,16 +47,17 @@ import com.ctrip.sqllin.dsl.sql.Relation
  * otherwise; and has to be nullable when its column or expression can be NULL, which an outer join makes those of a
  * relation it can leave without a matching row, but `count`. SQLlin writes the columns with their relations' names.
  *
- * A join starts with `FROM(relation)`, and its joins are applied in the order they are written:
- * `FROM(a) INNER_JOIN b ON (...) LEFT_OUTER_JOIN c ON (...)`. A relation can only be joined once; to join a table with
- * itself, join a derived table of its rows, which gives it another name.
+ * A join starts with its first relation, as `a INNER_JOIN b ON (...)` does, or with `FROM(a)`, and its joins are
+ * applied in the order they are written: `a INNER_JOIN b ON (...) LEFT_OUTER_JOIN c ON (...)`. A relation can only be
+ * joined once; to join a table with itself, join a derived table of its rows, which gives it another name.
  *
  * @author Yuang Qiao
  */
 
 /**
  * Relations joined as a FROM clause writes them, such as `person INNER JOIN book ON person.id=book.authorId`, which a
- * SELECT reads, or another join extends. `FROM(relation)` starts one.
+ * SELECT reads, or another join extends. A join operator applied to a relation starts one, as in
+ * `PersonTable INNER_JOIN BookTable ON (...)`, and so does `FROM(relation)`.
  *
  * A SELECT of a join has to name the type it reads rows into, as rows of a join have no type of their own:
  * `joined SELECT X<R>()`, `joined SELECT WHERE<R>(...)`, or result columns.
@@ -92,7 +93,8 @@ public class JoinWithoutCondition internal constructor(
 
 /**
  * Starts a join with [relation], the first relation of a FROM clause, which `INNER_JOIN`, `LEFT_OUTER_JOIN` and the
- * other joins extend: `FROM(PersonTable) INNER_JOIN BookTable ON (...)`.
+ * other joins extend: `FROM(PersonTable) INNER_JOIN BookTable ON (...)`. A join operator applied to the relation itself
+ * starts the same join: `PersonTable INNER_JOIN BookTable ON (...)`.
  */
 @ExperimentalDSLDatabaseAPI
 @StatementDslMaker
@@ -247,3 +249,96 @@ public infix fun JoinedRelation.NATURAL_FULL_OUTER_JOIN(relation: Relation<*>): 
 @OptIn(ExperimentalDSLDatabaseAPI::class)
 private fun From.naturalfullouterjoin(relation: Relation<*>): JoinedRelation =
     JoinedRelation(join("NATURAL FULL OUTER JOIN", relation, From.Constraint.NONE, isLeftNullable = true, isRightNullable = true, isNatural = true))
+
+/**
+ * Starts a join with this relation, and joins [relation] to it with `INNER JOIN`, which [ON] or [USING] completes, as
+ * `FROM(this) INNER_JOIN relation` does.
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun Relation<*>.INNER_JOIN(relation: Relation<*>): JoinWithoutCondition =
+    From.of(this).innerjoin(relation)
+
+/**
+ * Starts a join with this relation, and joins [relation] to it with `LEFT OUTER JOIN`, which [ON] or [USING] completes, as
+ * `FROM(this) LEFT_OUTER_JOIN relation` does.
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun Relation<*>.LEFT_OUTER_JOIN(relation: Relation<*>): JoinWithoutCondition =
+    From.of(this).leftouterjoin(relation)
+
+/**
+ * Starts a join with this relation, and joins [relation] to it with `RIGHT OUTER JOIN`, which [ON] or [USING] completes, as
+ * `FROM(this) RIGHT_OUTER_JOIN relation` does.
+ *
+ * `RIGHT` and `FULL` joins need SQLite 3.39.0, which Android has from API 34 on.
+ */
+@ExperimentalDSLDatabaseAPI
+@PlatformDependentSQLiteAPI
+@StatementDslMaker
+public infix fun Relation<*>.RIGHT_OUTER_JOIN(relation: Relation<*>): JoinWithoutCondition =
+    From.of(this).rightouterjoin(relation)
+
+/**
+ * Starts a join with this relation, and joins [relation] to it with `FULL OUTER JOIN`, which [ON] or [USING] completes, as
+ * `FROM(this) FULL_OUTER_JOIN relation` does.
+ *
+ * `RIGHT` and `FULL` joins need SQLite 3.39.0, which Android has from API 34 on.
+ */
+@ExperimentalDSLDatabaseAPI
+@PlatformDependentSQLiteAPI
+@StatementDslMaker
+public infix fun Relation<*>.FULL_OUTER_JOIN(relation: Relation<*>): JoinWithoutCondition =
+    From.of(this).fullouterjoin(relation)
+
+/**
+ * Starts a join with this relation, and joins [relation] to it with `CROSS JOIN`, as
+ * `FROM(this) CROSS_JOIN relation` does.
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun Relation<*>.CROSS_JOIN(relation: Relation<*>): JoinedRelation =
+    From.of(this).crossjoin(relation)
+
+/**
+ * Starts a join with this relation, and joins [relation] to it with `NATURAL JOIN`, as
+ * `FROM(this) NATURAL_JOIN relation` does.
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun Relation<*>.NATURAL_JOIN(relation: Relation<*>): JoinedRelation =
+    From.of(this).naturaljoin(relation)
+
+/**
+ * Starts a join with this relation, and joins [relation] to it with `NATURAL LEFT OUTER JOIN`, as
+ * `FROM(this) NATURAL_LEFT_OUTER_JOIN relation` does.
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun Relation<*>.NATURAL_LEFT_OUTER_JOIN(relation: Relation<*>): JoinedRelation =
+    From.of(this).naturalleftouterjoin(relation)
+
+/**
+ * Starts a join with this relation, and joins [relation] to it with `NATURAL RIGHT OUTER JOIN`, as
+ * `FROM(this) NATURAL_RIGHT_OUTER_JOIN relation` does.
+ *
+ * `RIGHT` and `FULL` joins need SQLite 3.39.0, which Android has from API 34 on.
+ */
+@ExperimentalDSLDatabaseAPI
+@PlatformDependentSQLiteAPI
+@StatementDslMaker
+public infix fun Relation<*>.NATURAL_RIGHT_OUTER_JOIN(relation: Relation<*>): JoinedRelation =
+    From.of(this).naturalrightouterjoin(relation)
+
+/**
+ * Starts a join with this relation, and joins [relation] to it with `NATURAL FULL OUTER JOIN`, as
+ * `FROM(this) NATURAL_FULL_OUTER_JOIN relation` does.
+ *
+ * `RIGHT` and `FULL` joins need SQLite 3.39.0, which Android has from API 34 on.
+ */
+@ExperimentalDSLDatabaseAPI
+@PlatformDependentSQLiteAPI
+@StatementDslMaker
+public infix fun Relation<*>.NATURAL_FULL_OUTER_JOIN(relation: Relation<*>): JoinedRelation =
+    From.of(this).naturalfullouterjoin(relation)
