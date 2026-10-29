@@ -197,12 +197,7 @@ public class DatabaseScope internal constructor(
     private val currentContainer: StatementContainer
         get() = triggerBody ?: transactionStatementsGroup ?: executiveEngine
 
-    private fun <T> addSelectStatement(statement: SelectStatement<T>) {
-        if (unionSelectStatementGroupStack.isNotEmpty())
-            (unionSelectStatementGroupStack.last() as UnionSelectStatementGroup<T>).addSelectStatement(statement)
-        else
-            addStatement(statement)
-    }
+    private fun <T> addSelectStatement(statement: SelectStatement<T>) = addStatement(statement)
 
     internal fun executeAllStatements() {
         check(definingTrigger == null) {
@@ -641,7 +636,7 @@ public class DatabaseScope internal constructor(
         select(kSerializer(), true)
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, isDistinct: Boolean): FinalSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(From.of(this), isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -666,7 +661,7 @@ public class DatabaseScope internal constructor(
         select(kSerializer(), clause, true)
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: WhereClause<R>, isDistinct: Boolean): WhereSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -689,7 +684,7 @@ public class DatabaseScope internal constructor(
         select(kSerializer(), clause, true)
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: OrderByClause<R>, isDistinct: Boolean): OrderBySelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -712,7 +707,7 @@ public class DatabaseScope internal constructor(
         select(kSerializer(), clause, true)
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: LimitClause<R>, isDistinct: Boolean): LimitSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -735,7 +730,7 @@ public class DatabaseScope internal constructor(
         select(kSerializer(), clause, true)
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: GroupByClause<R>, isDistinct: Boolean): GroupBySelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -964,7 +959,7 @@ public class DatabaseScope internal constructor(
         select(getKSerializer<R>(), columns, true)
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, columns: Iterable<ResultColumn<R>>, isDistinct: Boolean): ResultColumnSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(From.of(this), columns, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -1035,7 +1030,7 @@ public class DatabaseScope internal constructor(
         select.checkComplete()
         container removeStatement this
         select.container removeStatement select
-        val statement = Select.compound(this, operator, select, getSelectStatementGroup())
+        val statement = Select.compound(this, operator, select, currentContainer)
         addSelectStatement(statement)
         return statement
     }
@@ -1252,91 +1247,6 @@ public class DatabaseScope internal constructor(
         const val BYTE_ARRAY_TYPE = "kotlin.ByteArray"
     }
 
-    // ========== UNION Operations (deprecated) ==========
-
-    private val unionSelectStatementGroupStack by lazy { ArrayDeque<UnionSelectStatementGroup<*>>() }
-
-    private fun getSelectStatementGroup(): StatementContainer = unionSelectStatementGroupStack.lastOrNull() ?: currentContainer
-
-    /**
-     * Combines multiple SELECT statements with UNION (removes duplicates).
-     *
-     * Example:
-     * ```kotlin
-     * val combined = PersonTable.UNION {
-     *     it SELECT WHERE(age LT 18)
-     *     it SELECT WHERE(age GTE 65)
-     * }
-     * ```
-     *
-     * **Deprecated**: the result is typed by the table's row type, but read into the first SELECT's result type, so
-     * a union of projections, result columns or joins fails with a `ClassCastException` when its results are used.
-     * A nested block is flattened into the SQL, which SQLite evaluates from left to right, so it changes its meaning
-     * when it isn't the first statement. Use the infix [UNION] instead: `(select1) UNION (select2)`.
-     */
-    @Deprecated("The UNION {} block reads the rows into its first SELECT's result type while returning the table's row type, so a union of projections, result columns or joins fails with a ClassCastException when its results are used, and a nested block is flattened into the SQL, which changes its meaning. " +
-            "Use the infix operators instead, as in (select1) UNION (select2), which also offer INTERSECT and EXCEPT. This block will be removed in a future version.")
-    @Suppress("DEPRECATION") // Its body calls the plumbing deprecated with it
-    public inline fun <T> Table<T>.UNION(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
-        beginUnion<T>()
-        var selectStatement: SelectStatement<T>? = null
-        try {
-            block(this)
-            selectStatement = createUnionSelectStatement(false)
-            return selectStatement
-        } finally {
-            endUnion(selectStatement)
-        }
-    }
-
-    /**
-     * Combines multiple SELECT statements with UNION ALL (keeps duplicates).
-     *
-     * **Deprecated** for the reasons given for the `UNION {}` block. Use the infix [UNION_ALL] instead:
-     * `(select1) UNION_ALL (select2)`.
-     */
-    @Deprecated("The UNION {} block reads the rows into its first SELECT's result type while returning the table's row type, so a union of projections, result columns or joins fails with a ClassCastException when its results are used, and a nested block is flattened into the SQL, which changes its meaning. " +
-            "Use the infix operators instead, as in (select1) UNION (select2), which also offer INTERSECT and EXCEPT. This block will be removed in a future version.")
-    @Suppress("DEPRECATION") // Its body calls the plumbing deprecated with it
-    @StatementDslMaker
-    public inline fun <T> Table<T>.UNION_ALL(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
-        beginUnion<T>()
-        var selectStatement: SelectStatement<T>? = null
-        try {
-            block(this)
-            selectStatement = createUnionSelectStatement(true)
-            return selectStatement
-        } finally {
-            endUnion(selectStatement)
-        }
-    }
-
-    /**
-     * Begins a UNION statement group (for advanced usage).
-     */
-    @Deprecated("Part of the deprecated UNION {} block, which will be removed in a future version. Use the infix UNION instead.")
-    public fun <T> beginUnion() {
-        unionSelectStatementGroupStack.add(UnionSelectStatementGroup<T>())
-    }
-
-    /**
-     * Creates the final UNION select statement from accumulated SELECT statements.
-     */
-    @Deprecated("Part of the deprecated UNION {} block, which will be removed in a future version. Use the infix UNION instead.")
-    public fun <T> createUnionSelectStatement(isUnionAll: Boolean): FinalSelectStatement<T> {
-        check(unionSelectStatementGroupStack.isNotEmpty()) { "Please invoke the 'beginUnion' before you invoke this function!!!" }
-        return (unionSelectStatementGroupStack.last() as UnionSelectStatementGroup<T>).unionStatements(isUnionAll)
-    }
-
-    /**
-     * Ends the UNION statement group and adds the final statement.
-     */
-    @Deprecated("Part of the deprecated UNION {} block, which will be removed in a future version. Use the infix UNION instead.")
-    public fun <T> endUnion(selectStatement: SelectStatement<T>?) {
-        unionSelectStatementGroupStack.removeLast()
-        selectStatement?.let { addSelectStatement(it) }
-    }
-
     // ========== SELECT from Joins ==========
     //
     // A join of relations, such as `PersonTable INNER_JOIN BookTable ON (...)`, is selected from like a table, but has
@@ -1505,7 +1415,7 @@ public class DatabaseScope internal constructor(
 
     @ExperimentalDSLDatabaseAPI
     public fun <R> JoinedRelation.select(serializer: KSerializer<R>, isDistinct: Boolean): FinalSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(from, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -1513,7 +1423,7 @@ public class DatabaseScope internal constructor(
 
     @ExperimentalDSLDatabaseAPI
     public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: WhereClause<R>, isDistinct: Boolean): WhereSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -1521,7 +1431,7 @@ public class DatabaseScope internal constructor(
 
     @ExperimentalDSLDatabaseAPI
     public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: OrderByClause<R>, isDistinct: Boolean): OrderBySelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -1529,7 +1439,7 @@ public class DatabaseScope internal constructor(
 
     @ExperimentalDSLDatabaseAPI
     public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: LimitClause<R>, isDistinct: Boolean): LimitSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -1537,7 +1447,7 @@ public class DatabaseScope internal constructor(
 
     @ExperimentalDSLDatabaseAPI
     public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: GroupByClause<R>, isDistinct: Boolean): GroupBySelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -1545,7 +1455,7 @@ public class DatabaseScope internal constructor(
 
     @ExperimentalDSLDatabaseAPI
     public fun <R> JoinedRelation.select(serializer: KSerializer<R>, columns: Iterable<ResultColumn<R>>, isDistinct: Boolean): ResultColumnSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(from, columns, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement

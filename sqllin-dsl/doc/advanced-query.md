@@ -55,26 +55,20 @@ _LIMIT_ keeps them to itself, as SQLlin writes it as a subquery too:
 
 The statements become part of the compound, so they no longer run on their own, and their results can't be read.
 
-### The deprecated `UNION {...}` block
+### Migrating From the `UNION {...}` Block
 
-Earlier versions combined _SELECT_ statements with `UNION {...}` and `UNION_ALL {...}` blocks. **They are deprecated
-and will be removed in a future version**, because they have bugs that won't be fixed:
-
-- A block's result is typed by the table's row type, but its rows are read into the first _SELECT_'s result type. So
-  a union of projections, result columns or joins compiles, and then fails with a `ClassCastException` when its
-  results are used.
-- A nested block is flattened into the SQL, which SQLite evaluates from left to right, so
-  `UNION { a; UNION_ALL { b; c } }` runs as `(a UNION b) UNION ALL c`, not as its nesting suggests.
-
-Use the infix operators instead:
+Before 2.6.0, _SELECT_ statements could also be combined with `UNION {...}` and `UNION_ALL {...}` blocks, deprecated
+in 2.5.0 for bugs that wouldn't be fixed: a block read its rows into its first _SELECT_'s result type while returning the
+table's row type, so a union of projections, result columns or joins failed with a `ClassCastException`, and a nested
+block was flattened into the SQL, which changed its meaning. 2.6.0 removed them. Write them with the infix operators:
 
 ```kotlin
-// Deprecated
+// Before 2.6.0
 UNION {
     table SELECT WHERE(age LT 18)
     table SELECT WHERE(age GTE 65)
 }
-// Instead
+// Now
 (table SELECT WHERE(age LT 18)) UNION (table SELECT WHERE(age GTE 65))
 ```
 

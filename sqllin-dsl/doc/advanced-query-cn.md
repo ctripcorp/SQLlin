@@ -50,25 +50,19 @@ a UNION (b UNION_ALL c)  // a UNION SELECT * FROM (b UNION ALL c)
 
 参与组合的语句会成为组合的一部分，因此不再单独执行，也无法读取它们各自的结果。
 
-### 已废弃的 `UNION {...}` 块
+### 从 `UNION {...}` 块迁移
 
-以前的版本用 `UNION {...}` 和 `UNION_ALL {...}` 块来合并 _SELECT_ 语句。**它们已经废弃，将在未来的版本中移除**，因为它们存在
-不会再修复的 bug：
-
-- 块的结果类型取自表的行类型，结果行却按第一条 _SELECT_ 的结果类型读取。所以对投影、结果列或 Join 做 UNION 时，代码能编译通过，
-  但使用结果时会抛出 `ClassCastException`。
-- 嵌套的块在生成 SQL 时会被展平，而 SQLite 按从左到右的顺序计算，所以 `UNION { a; UNION_ALL { b; c } }` 实际执行的是
-  `(a UNION b) UNION ALL c`，而不是嵌套所表达的含义。
-
-请改用中缀运算符：
+在 2.6.0 之前，还可以用 `UNION {...}` 和 `UNION_ALL {...}` 块来合并 _SELECT_ 语句。它们在 2.5.0 中因不会再修复的 bug 而废弃：
+块的结果行按第一条 _SELECT_ 的结果类型读取，返回的却是表的行类型，所以对投影、结果列或 Join 做 UNION 时会抛出
+`ClassCastException`；嵌套的块在生成 SQL 时会被展平，从而改变含义。2.6.0 删除了它们，请改用中缀运算符：
 
 ```kotlin
-// 已废弃
+// 2.6.0 之前
 UNION {
     table SELECT WHERE(age LT 18)
     table SELECT WHERE(age GTE 65)
 }
-// 改为
+// 现在
 (table SELECT WHERE(age LT 18)) UNION (table SELECT WHERE(age GTE 65))
 ```
 

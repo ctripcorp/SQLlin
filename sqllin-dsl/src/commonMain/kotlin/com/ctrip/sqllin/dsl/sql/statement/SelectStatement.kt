@@ -270,7 +270,7 @@ public class LimitSelectStatement<T> internal constructor(
  * The statement is ready for execution.
  *
  * @property isSimple Whether the statement is a single SELECT without LIMIT, as `SELECT X` builds, rather than one
- * with OFFSET, or a compound built by the deprecated `UNION {}` block
+ * with OFFSET
  *
  * @author Yuang Qiao
  */

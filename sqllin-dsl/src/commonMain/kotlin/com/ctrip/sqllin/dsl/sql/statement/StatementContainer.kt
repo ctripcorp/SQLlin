@@ -27,7 +27,6 @@ package com.ctrip.sqllin.dsl.sql.statement
  * Implementations:
  * - [DatabaseExecuteEngine]: Executes standalone statements
  * - [TransactionStatementsGroup]: Groups statements within a transaction
- * - [UnionSelectStatementGroup]: Accumulates SELECT statements for UNION operations
  *
  * @author Yuang Qiao
  */

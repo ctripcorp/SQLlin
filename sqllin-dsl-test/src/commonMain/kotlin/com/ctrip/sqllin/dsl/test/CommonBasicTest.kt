@@ -387,35 +387,6 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(true, ungrouped.message!!.contains("without GROUP BY"))
     }
 
-    /**
-     * Covers the deprecated `UNION {}` block, which keeps working for the table's own rows until it is removed.
-     */
-    @Suppress("DEPRECATION")
-    fun testUnionSelect() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
-        val book0 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
-        val book1 = Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72)
-        val book2 = Book(name = "The Lost Symbol", author = "Dan Brown", pages = 510, price = 19.95)
-        val book3 = Book(name = "Kotlin Guide Pratique", author = "Ken Kousen", pages = 398, price = 40.08)
-        var statement: SelectStatement<Book>? = null
-        database {
-            statement = BookTable { table ->
-                table INSERT listOf(book0, book1, book2, book3)
-                UNION_ALL {
-                    UNION {
-                        table SELECT WHERE (author EQ "Ken Kousen")
-                        table SELECT WHERE (name EQ "Kotlin Cookbook" OR (name EQ "The Da Vinci Code"))
-                    }
-                    table SELECT X
-                }
-            }
-        }
-        assertEquals(7, statement!!.getResults().size)
-        assertEquals(2, statement.getResults().count { it == book0 })
-        assertEquals(2, statement.getResults().count { it == book1 })
-        assertEquals(1, statement.getResults().count { it == book2 })
-        assertEquals(2, statement.getResults().count { it == book3 })
-    }
-
     fun testFunction() = Database(getDefaultDBConfig(), true).databaseAutoClose { database ->
         val book0 = Book(name = "The Da Vinci Code", author = "Dan Brown", pages = 454, price = 16.96)
         val book1 = Book(name = "Kotlin Cookbook", author = "Ken Kousen", pages = 251, price = 37.72)

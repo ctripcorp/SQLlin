@@ -57,9 +57,6 @@ class NativeTest {
     fun testGroupByAndHavingClause() = commonTest.testGroupByAndHavingClause()
 
     @Test
-    fun testUnionSelect() = commonTest.testUnionSelect()
-
-    @Test
     fun testCompoundSelect() = commonTest.testCompoundSelect()
 
     @Test
