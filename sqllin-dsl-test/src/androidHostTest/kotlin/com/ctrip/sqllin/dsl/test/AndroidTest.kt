@@ -178,6 +178,9 @@ class AndroidTest {
     fun testConflictResolutions() = commonTest.testConflictResolutions()
 
     @Test
+    fun testTransactionModes() = commonTest.testTransactionModes()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

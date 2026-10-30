@@ -15,7 +15,6 @@ done. A new item takes the next number.
 * F21: Support FILTER in aggregate functions (SQLite 3.30.0, Android API 31), and ORDER BY in them, as for `group_concat` (SQLite 3.44.0, Android API 35)
 * F25: Support ORDER BY and LIMIT in UPDATE and DELETE, which need SQLite's `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` option, which Android's lacks
 * F26: Support INDEXED BY and NOT INDEXED
-* F27: Support choosing how a transaction begins, DEFERRED or EXCLUSIVE, besides IMMEDIATE, which every platform uses since 2.6.0
 * F29: Support EXPLAIN QUERY PLAN, to see which indexes a query uses
 * F30: Support more PRAGMAs, such as integrity_check, quick_check, table_info, index_list, wal_checkpoint, defer_foreign_keys and case_sensitive_like
 
@@ -44,6 +43,7 @@ done. A new item takes the next number.
 
 ## Supported
 
+* F27: Support choosing how a transaction begins, DEFERRED, IMMEDIATE or EXCLUSIVE (2.6.0 ✅)
 * F23: Support the other conflict resolutions: INSERT OR ABORT, OR FAIL and OR ROLLBACK, and UPDATE OR ABORT, OR FAIL, OR IGNORE, OR REPLACE and OR ROLLBACK (2.6.0 ✅)
 * F66: Provide table version tokens, `versioned { }`, `awaitChange` and `onChange`, which tell a reader when the tables it read change (2.6.0 ✅)
 * F7: Remove the joins written as clauses of SELECT, such as `table SELECT INNER_JOIN<R>(other)`, and let a join start with its first relation, as in `PersonTable INNER_JOIN BookTable`, without `FROM` (2.6.0 ✅)

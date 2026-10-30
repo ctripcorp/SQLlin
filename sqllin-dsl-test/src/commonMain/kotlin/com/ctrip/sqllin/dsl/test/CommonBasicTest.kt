@@ -18,6 +18,7 @@ package com.ctrip.sqllin.dsl.test
 
 import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.DatabasePath
+import com.ctrip.sqllin.driver.TransactionMode
 import com.ctrip.sqllin.driver.deleteDatabase
 import com.ctrip.sqllin.driver.openDatabase
 import com.ctrip.sqllin.driver.withQuery
@@ -2749,6 +2750,40 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
         assertEquals(listOf(ConflictTest(id = 4, email = "c@mail", x = 3, y = 3)), rows.getResults())
         assertEquals(listOf(ConflictPair(a = "k", b = "v", note = "first")), pairs.getResults())
+    }
+
+    /**
+     * Covers transactions in each mode, which commit their statements, and roll them back when one fails, and a
+     * transaction in another one, which joins it.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testTransactionModes() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        fun book(name: String) = Book(name = name, author = "Author", price = 1.0, pages = 1)
+        for (mode in TransactionMode.entries) {
+            database {
+                transaction(mode) {
+                    BookTable INSERT book(mode.name)
+                    transaction(TransactionMode.DEFERRED) {
+                        BookTable INSERT book("${mode.name} inner")
+                    }
+                }
+            }
+            assertFails {
+                database {
+                    transaction(mode) {
+                        BookTable INSERT book("${mode.name} rolled back")
+                        UniqueEmailTestTable INSERT listOf(
+                            UniqueEmailTest(id = null, email = "same@example.com", name = "One"),
+                            UniqueEmailTest(id = null, email = "same@example.com", name = "Two"),
+                        )
+                    }
+                }
+            }
+        }
+        lateinit var books: SelectStatement<Book>
+        database { books = BookTable SELECT ORDER_BY(BookTable.name to ASC) }
+        val expected = TransactionMode.entries.flatMap { listOf(it.name, "${it.name} inner") }.sorted()
+        assertEquals(expected, books.getResults().map { it.name })
     }
 
     /**

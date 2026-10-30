@@ -59,7 +59,7 @@ public inline fun <T> openDatabase(config: DatabaseConfiguration, block: (Databa
 }
 
 /**
- * Executes a block within a database transaction.
+ * Executes a block within a database transaction, which begins in [mode], IMMEDIATE unless another is given.
  *
  * The transaction is committed if the block completes successfully,
  * or rolled back if an exception is thrown.
@@ -68,11 +68,12 @@ public inline fun <T> openDatabase(config: DatabaseConfiguration, block: (Databa
  * SQLite rolls some transactions back itself, as for a constraint with ON CONFLICT ROLLBACK or a trigger's
  * RAISE(ROLLBACK), and then the ROLLBACK fails, as no transaction is active.
  *
+ * @param mode How the transaction begins, which decides when it takes the write lock
  * @param block The block to execute within the transaction
  * @return The result of the block
  */
-public inline fun <T> DatabaseConnection.withTransaction(block: (DatabaseConnection) -> T): T {
-    beginTransaction()
+public inline fun <T> DatabaseConnection.withTransaction(mode: TransactionMode = TransactionMode.IMMEDIATE, block: (DatabaseConnection) -> T): T {
+    beginTransaction(mode)
     var failure: Throwable? = null
     try {
         val result = block(this)

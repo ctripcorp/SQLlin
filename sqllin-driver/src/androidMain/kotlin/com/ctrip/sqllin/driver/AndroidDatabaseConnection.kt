@@ -96,8 +96,15 @@ internal class AndroidDatabaseConnection(private val database: SQLiteDatabase) :
         }
     }
 
-    // BEGIN IMMEDIATE, as on every platform, which beginTransaction's EXCLUSIVE only is in WAL mode
-    override fun beginTransaction() = database.beginTransactionNonExclusive()
+    override fun beginTransaction() = beginTransaction(TransactionMode.IMMEDIATE)
+
+    // beginTransactionNonExclusive begins an IMMEDIATE transaction, and beginTransaction an EXCLUSIVE one. The framework
+    // can't begin a DEFERRED one that writes, as it turns a BEGIN statement into an EXCLUSIVE transaction of its own, so
+    // that one is IMMEDIATE, which only takes the write lock earlier
+    override fun beginTransaction(mode: TransactionMode) = when (mode) {
+        TransactionMode.EXCLUSIVE -> database.beginTransaction()
+        TransactionMode.DEFERRED, TransactionMode.IMMEDIATE -> database.beginTransactionNonExclusive()
+    }
     override fun endTransaction() {
         try {
             database.endTransaction()

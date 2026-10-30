@@ -63,6 +63,9 @@ class NativeTest {
     fun testImmediateTransaction() = commonTest.testImmediateTransaction()
 
     @Test
+    fun testTransactionModes() = commonTest.testTransactionModes(isDeferredSupported = true)
+
+    @Test
     fun testBusyTimeout() = commonTest.testBusyTimeout()
 
     @Test

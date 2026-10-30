@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.dsl
 
 import com.ctrip.sqllin.driver.DatabaseConnection
+import com.ctrip.sqllin.driver.TransactionMode
 import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.KeyWordDslMaker
@@ -137,15 +138,23 @@ public class DatabaseScope internal constructor(
         get() = transactionStatementsGroup != null
 
     /**
-     * Begins a new transaction.
+     * Begins a new transaction, which begins IMMEDIATE.
      *
      * @return `true` if transaction started successfully, `false` if already in a transaction
      */
-    public fun beginTransaction(): Boolean {
+    public fun beginTransaction(): Boolean = beginTransaction(TransactionMode.IMMEDIATE)
+
+    /**
+     * Begins a new transaction, which begins in [mode], unless one has begun already, whose statements the new ones join.
+     *
+     * @return `true` if transaction started successfully, `false` if already in a transaction
+     */
+    @PublishedApi
+    internal fun beginTransaction(mode: TransactionMode): Boolean {
         check(triggerBody == null) { "A transaction can't begin in the body of a trigger, which runs in the statement that fires it." }
         if (isInTransaction)
             return false
-        transactionStatementsGroup = TransactionStatementsGroup(databaseConnection, enableSimpleSQLLog)
+        transactionStatementsGroup = TransactionStatementsGroup(databaseConnection, enableSimpleSQLLog, mode)
         executiveEngine.addStatement(transactionStatementsGroup!!)
         return true
     }
@@ -171,6 +180,35 @@ public class DatabaseScope internal constructor(
      */
     public inline fun <T> transaction(block: DatabaseScope.() -> T): T {
         beginTransaction()
+        try {
+            return block()
+        } finally {
+            endTransaction()
+        }
+    }
+
+    /**
+     * Executes a block of SQL statements as a single transaction, which begins in [mode], as SQL's `BEGIN DEFERRED`,
+     * `BEGIN IMMEDIATE` or `BEGIN EXCLUSIVE` does, which decides when it takes the write lock. [transaction] without a
+     * mode begins IMMEDIATE.
+     *
+     * Example:
+     * ```kotlin
+     * transaction(TransactionMode.EXCLUSIVE) {
+     *     PersonTable INSERT person
+     * }
+     * ```
+     *
+     * A transaction in another one joins it, whose mode it keeps. Android's framework can't begin a DEFERRED transaction
+     * that writes, so there it begins an IMMEDIATE one.
+     *
+     * @param mode How the transaction begins
+     * @param block The block of SQL statements to execute
+     * @return The result of the block
+     */
+    @ExperimentalDSLDatabaseAPI
+    public inline fun <T> transaction(mode: TransactionMode, block: DatabaseScope.() -> T): T {
+        beginTransaction(mode)
         try {
             return block()
         } finally {

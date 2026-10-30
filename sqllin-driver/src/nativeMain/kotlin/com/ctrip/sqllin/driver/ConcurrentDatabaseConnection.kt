@@ -52,6 +52,10 @@ internal class ConcurrentDatabaseConnection(
         delegateConnection.beginTransaction()
     }
 
+    override fun beginTransaction(mode: TransactionMode) = accessLock.withLock {
+        delegateConnection.beginTransaction(mode)
+    }
+
     override fun setTransactionSuccessful() = accessLock.withLock {
         delegateConnection.setTransactionSuccessful()
     }

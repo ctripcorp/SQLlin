@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.dsl.sql.statement
 
 import com.ctrip.sqllin.driver.DatabaseConnection
+import com.ctrip.sqllin.driver.TransactionMode
 import com.ctrip.sqllin.driver.withTransaction
 
 /**
@@ -28,12 +29,14 @@ import com.ctrip.sqllin.driver.withTransaction
  *
  * @property databaseConnection Connection for executing the transactional operations
  * @property enableSimpleSQLLog Whether to log each statement's SQL before execution
+ * @property mode How the transaction begins
  *
  * @author Yuang Qiao
  */
 internal class TransactionStatementsGroup(
     private val databaseConnection: DatabaseConnection,
     private val enableSimpleSQLLog: Boolean,
+    private val mode: TransactionMode,
 ) : ExecutableStatement, StatementContainer {
 
     private val statementList = ArrayDeque<SingleStatement>()
@@ -85,7 +88,7 @@ internal class TransactionStatementsGroup(
         (it as? SelectStatement<*>)?.checkComplete()
     }
 
-    override fun execute() = databaseConnection.withTransaction {
+    override fun execute() = databaseConnection.withTransaction(mode) {
         statementList.forEach {
             if (enableSimpleSQLLog)
                 it.printlnSQL()

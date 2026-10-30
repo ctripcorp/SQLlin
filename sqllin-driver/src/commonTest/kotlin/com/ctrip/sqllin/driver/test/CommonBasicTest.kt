@@ -18,6 +18,7 @@ package com.ctrip.sqllin.driver.test
 
 import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.DatabasePath
+import com.ctrip.sqllin.driver.TransactionMode
 import com.ctrip.sqllin.driver.openDatabase
 import com.ctrip.sqllin.driver.withQuery
 import com.ctrip.sqllin.driver.withTransaction
@@ -265,6 +266,34 @@ class CommonBasicTest(private val path: DatabasePath) {
                     }
                 }
                 other.executeInsert(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96, byteArrayOf()))
+            }
+        }
+    }
+
+    /**
+     * A transaction begins in the mode given: an IMMEDIATE or EXCLUSIVE one takes the write lock at once, so another
+     * connection can't write until it ends, while a DEFERRED one takes none until it writes, but on Android, whose
+     * framework begins an IMMEDIATE one instead.
+     */
+    fun testTransactionModes(isDeferredSupported: Boolean) {
+        val book = arrayOf<Any?>("The Da Vinci Code", "Dan Brown", 454, 16.96, byteArrayOf())
+        openDatabase(getDefaultDBConfig(false)) {
+            openDatabase(getDefaultDBConfig(false).copy(busyTimeout = 0)) { other ->
+                for (mode in listOf(TransactionMode.IMMEDIATE, TransactionMode.EXCLUSIVE)) {
+                    it.withTransaction(mode) {
+                        assertFails { other.executeInsert(SQL.INSERT_BOOK, book) }
+                    }
+                }
+                it.withTransaction(TransactionMode.DEFERRED) { connection ->
+                    if (isDeferredSupported)
+                        other.executeInsert(SQL.INSERT_BOOK, book)
+                    else
+                        assertFails { other.executeInsert(SQL.INSERT_BOOK, book) }
+                    // It takes the write lock once it writes
+                    connection.executeInsert(SQL.INSERT_BOOK, book)
+                }
+                val books = it.withQuery("SELECT count(*) FROM book") { cursor -> cursor.next(); cursor.getLong(0) }
+                assertEquals(if (isDeferredSupported) 2L else 1L, books)
             }
         }
     }

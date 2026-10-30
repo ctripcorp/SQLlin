@@ -682,6 +682,30 @@ The `transaction {...}` is a member function in `Database`, it is inside or outs
 A transaction begins with `BEGIN IMMEDIATE` on every platform: it takes the write lock at once, so another connection
 that writes, or another transaction, waits for it as long as its `busyTimeout`.
 
+`transaction(mode) {...}` begins one in another mode, which is experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        transaction(TransactionMode.EXCLUSIVE) {
+            PersonTable INSERT Person(age = 4, name = "Tom")
+        }
+    }
+}
+```
+
+* `TransactionMode.IMMEDIATE`, the default, takes the write lock at once.
+* `TransactionMode.EXCLUSIVE` takes it at once too, and in `DELETE` journal mode also keeps other connections from
+  reading until the transaction ends. In WAL mode, it is the same as `IMMEDIATE`.
+* `TransactionMode.DEFERRED` takes no lock until the transaction reads, nor the write lock until it writes, so other
+  connections can write until then. But a transaction that reads before it writes then fails at once with
+  "database is locked" while another connection writes, without waiting for `busyTimeout`. Android's framework can't
+  begin a deferred transaction that writes, so on Android it begins an `IMMEDIATE` one.
+
+A transaction in another one joins it, and keeps its mode. With _sqllin-driver_, `withTransaction(mode) {...}` and
+`DatabaseConnection#beginTransaction(mode)` take a mode as well.
+
 ## VACUUM
 
 Deleting rows doesn't shrink the database file, as SQLite keeps the free pages to reuse them. `VACUUM()` rebuilds the

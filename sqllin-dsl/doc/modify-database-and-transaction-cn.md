@@ -642,6 +642,29 @@ fun sample() {
 
 在所有平台上，事务都以 `BEGIN IMMEDIATE` 开始：它一开始就拿到写锁，所以要写入的其他连接或者其他事务，最多会按 `busyTimeout` 等待它结束。
 
+`transaction(mode) {...}` 可以用其他方式开始事务，它是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        transaction(TransactionMode.EXCLUSIVE) {
+            PersonTable INSERT Person(age = 4, name = "Tom")
+        }
+    }
+}
+```
+
+* `TransactionMode.IMMEDIATE` 是默认方式，一开始就拿到写锁。
+* `TransactionMode.EXCLUSIVE` 同样一开始就拿到写锁；在 `DELETE` 日志模式下，还会在事务结束前阻止其他连接读取。在 WAL 模式下，它与
+  `IMMEDIATE` 相同。
+* `TransactionMode.DEFERRED` 在事务读取之前不拿任何锁，在写入之前不拿写锁，所以在此之前其他连接可以写入。但如果事务先读后写，而此时
+  另一个连接正在写入，它会立即以 "database is locked" 失败，不会按 `busyTimeout` 等待。Android 框架无法开始一个可以写入的 DEFERRED
+  事务，所以在 Android 上它会以 `IMMEDIATE` 方式开始。
+
+嵌套在另一个事务中的事务会并入外层事务，沿用外层的开始方式。使用 _sqllin-driver_ 时，`withTransaction(mode) {...}` 和
+`DatabaseConnection#beginTransaction(mode)` 同样可以指定开始方式。
+
 ## VACUUM
 
 删除行并不会让数据库文件变小，因为 SQLite 会留着空闲页以便复用。`VACUUM()` 会重建数据库文件，把它压缩到最小的磁盘空间；
