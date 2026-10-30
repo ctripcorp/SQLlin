@@ -64,24 +64,19 @@ internal object Insert : Operation {
         return InsertStatement(sql, connection, parameters, table.tableName)
     }
 
-    fun <T> insertOrReplace(table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>): SingleStatement {
+    /**
+     * Builds an INSERT statement of [entities] with a conflict resolution, which [insert] starts with, as
+     * `INSERT OR IGNORE INTO `.
+     *
+     * The primary key is written even when the database would assign it, as a conflict on it could never be seen
+     * otherwise; a null key still lets the database assign it.
+     */
+    fun <T> insertOr(insert: String, table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>): SingleStatement {
         val parameters = ArrayList<Any?>()
         val sql = buildString {
-            append("INSERT OR REPLACE INTO ")
+            append(insert)
             append(table.tableName)
             append(' ')
-            encodeEntities2InsertValues(table, this, entities, parameters, isInsertWithId = true)
-        }
-        return InsertStatement(sql, connection, parameters, table.tableName)
-    }
-
-    fun <T> insertOrIgnore(table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>): SingleStatement {
-        val parameters = ArrayList<Any?>()
-        val sql = buildString {
-            append("INSERT OR IGNORE INTO ")
-            append(table.tableName)
-            append(' ')
-            // Write the primary key even when the database would assign it, or a conflict on it could never be seen
             encodeEntities2InsertValues(table, this, entities, parameters, isInsertWithId = true)
         }
         return InsertStatement(sql, connection, parameters, table.tableName)

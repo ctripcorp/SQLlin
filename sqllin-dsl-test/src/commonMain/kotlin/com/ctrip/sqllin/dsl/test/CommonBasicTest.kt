@@ -43,6 +43,7 @@ import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
@@ -2748,6 +2749,91 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
         assertEquals(listOf(ConflictTest(id = 4, email = "c@mail", x = 3, y = 3)), rows.getResults())
         assertEquals(listOf(ConflictPair(a = "k", b = "v", note = "first")), pairs.getResults())
+    }
+
+    /**
+     * Covers the conflict resolutions of a statement, which take the place of those of the constraints: INSERT OR
+     * ABORT, OR FAIL and OR ROLLBACK, of objects, expressions, DEFAULT VALUES and a SELECT, and UPDATE OR each of the
+     * five. A failure is checked to be the constraint's, rather than one of the SQL.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testConflictResolutions() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        fun assertConflict(block: () -> Unit) = assertContains(assertFails(block).message.orEmpty(), "constraint failed")
+        fun emails(): List<String> {
+            lateinit var rows: SelectStatement<UniqueEmailTest>
+            database { rows = UniqueEmailTestTable SELECT ORDER_BY(UniqueEmailTestTable.id to ASC) }
+            return rows.getResults().map { it.email }
+        }
+        database { UniqueEmailTestTable INSERT UniqueEmailTest(id = null, email = "a@x", name = "A") }
+
+        // ABORT undoes the whole statement, while FAIL keeps the rows it inserted before the one that conflicts
+        val rows = listOf(UniqueEmailTest(null, "b@x", "B"), UniqueEmailTest(null, "a@x", "Dup"), UniqueEmailTest(null, "c@x", "C"))
+        assertConflict { database { UniqueEmailTestTable INSERT_OR_ABORT rows } }
+        assertEquals(listOf("a@x"), emails())
+        assertConflict { database { UniqueEmailTestTable INSERT_OR_FAIL rows } }
+        assertEquals(listOf("a@x", "b@x"), emails())
+        // ROLLBACK rolls back the transaction, with the statements before it
+        assertConflict {
+            database {
+                transaction {
+                    UniqueEmailTestTable INSERT UniqueEmailTest(null, "d@x", "D")
+                    UniqueEmailTestTable INSERT_OR_ROLLBACK UniqueEmailTest(null, "a@x", "Dup")
+                }
+            }
+        }
+        assertEquals(listOf("a@x", "b@x"), emails())
+
+        // They take expressions, DEFAULT VALUES and a SELECT as well
+        val copy = UniqueEmailTestTable.withName("unique_email_copy")
+        database {
+            UniqueEmailTestTable INSERT_OR_ABORT listOf(literal("e@x") AS UniqueEmailTest::email, literal("E") AS UniqueEmailTest::name)
+            UniqueEmailTestTable INSERT_OR_FAIL listOf(literal("f@x") AS UniqueEmailTest::email, literal("F") AS UniqueEmailTest::name)
+            UniqueEmailTestTable INSERT_OR_ROLLBACK listOf(literal("g@x") AS UniqueEmailTest::email, literal("G") AS UniqueEmailTest::name)
+            CREATE(DefaultRowTable)
+            DefaultRowTable INSERT_OR_ABORT DEFAULT_VALUES
+            DefaultRowTable INSERT_OR_FAIL DEFAULT_VALUES
+            DefaultRowTable INSERT_OR_ROLLBACK (literal("note") AS DefaultRow::note)
+            CREATE(copy)
+            copy INSERT_OR_ABORT (UniqueEmailTestTable SELECT X)
+        }
+        assertEquals(listOf("a@x", "b@x", "e@x", "f@x", "g@x"), emails())
+        lateinit var defaults: SelectStatement<DefaultRow>
+        lateinit var copied: SelectStatement<UniqueEmailTest>
+        database {
+            defaults = DefaultRowTable SELECT X
+            copied = copy SELECT X
+        }
+        assertEquals(listOf(DefaultRow(1, "new", 0, null), DefaultRow(2, "new", 0, null), DefaultRow(3, "new", 0, "note")), defaults.getResults())
+        assertEquals(5, copied.getResults().size)
+        // and fail on a conflict
+        assertConflict { database { UniqueEmailTestTable INSERT_OR_ABORT listOf(literal("a@x") AS UniqueEmailTest::email, literal("Dup") AS UniqueEmailTest::name) } }
+        assertConflict { database { copy INSERT_OR_FAIL (UniqueEmailTestTable SELECT X) } }
+        assertConflict { database { copy INSERT_OR_ROLLBACK (UniqueEmailTestTable SELECT X) } }
+
+        // A statement's resolution takes the place of its constraint's: email is UNIQUE ON CONFLICT IGNORE, and the key
+        // PRIMARY KEY ON CONFLICT REPLACE
+        database {
+            CREATE(ConflictTestTable)
+            ConflictTestTable INSERT ConflictTest(id = 1, email = "a@x", x = 1, y = 1)
+        }
+        assertConflict { database { ConflictTestTable INSERT_OR_ABORT ConflictTest(id = 2, email = "a@x", x = 2, y = 2) } }
+        assertConflict { database { ConflictTestTable INSERT_OR_FAIL ConflictTest(id = 1, email = "b@x", x = 3, y = 3) } }
+        database { ConflictTestTable INSERT ConflictTest(id = 2, email = "b@x", x = 2, y = 2) }
+        // A plain UPDATE to a taken email is skipped, as the constraint says, while UPDATE OR ABORT fails
+        database { ConflictTestTable { table -> table UPDATE SET { email = "a@x" } WHERE (id EQ 2L) } }
+        assertConflict { database { ConflictTestTable { table -> table UPDATE_OR_ABORT SET { email = "a@x" } WHERE (id EQ 2L) } } }
+        lateinit var conflicts: SelectStatement<ConflictTest>
+        database { conflicts = ConflictTestTable SELECT ORDER_BY(ConflictTestTable.id to ASC) }
+        assertEquals(listOf(ConflictTest(1, "a@x", 1, 1), ConflictTest(2, "b@x", 2, 2)), conflicts.getResults())
+
+        // UPDATE OR IGNORE leaves the row whose new email is taken, OR FAIL and OR ROLLBACK fail, and OR REPLACE deletes
+        // the row that has it
+        database { UniqueEmailTestTable { table -> table UPDATE_OR_IGNORE SET { email = "a@x" } WHERE (email EQ "b@x") } }
+        assertEquals(listOf("a@x", "b@x", "e@x", "f@x", "g@x"), emails())
+        assertConflict { database { UniqueEmailTestTable { table -> table UPDATE_OR_FAIL SET { email = "a@x" } WHERE (email EQ "b@x") } } }
+        assertConflict { database { UniqueEmailTestTable { table -> table UPDATE_OR_ROLLBACK SET { email = "a@x" } WHERE (email EQ "b@x") } } }
+        database { UniqueEmailTestTable { table -> table UPDATE_OR_REPLACE SET { email = "a@x" } WHERE (email EQ "b@x") } }
+        assertEquals(listOf("a@x", "e@x", "f@x", "g@x"), emails())
     }
 
     /**

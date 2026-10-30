@@ -183,6 +183,9 @@ class NativeTest {
     fun testConflictClauses() = commonTest.testConflictClauses()
 
     @Test
+    fun testConflictResolutions() = commonTest.testConflictResolutions()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

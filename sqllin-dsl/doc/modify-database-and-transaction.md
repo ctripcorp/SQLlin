@@ -458,7 +458,7 @@ fun sample() {
 The _INSERT_ statements could insert objects directly. You can insert one or multiple objects once.
 
 `INSERT_OR_IGNORE` skips the objects that conflict with a row already in the table, and `INSERT_OR_REPLACE` replaces
-that row. They take the same arguments as `INSERT`.
+that row. They take the same arguments as `INSERT`, as the other [conflict resolutions](#conflict-resolutions) do.
 
 _INSERT_ can also insert the rows a _SELECT_ returns, as `INSERT INTO ... SELECT` does, if the _SELECT_ reads rows of the
 table's type. They can come from any table, through a projection or result columns:
@@ -617,6 +617,43 @@ and it can only read the columns of the table it updates, and not be an aggregat
 statement is built. Use `literal(5)` for a value among expressions.
 
 You also could write the _UPDATE_ statements without the _WHERE_ clause that used for update all rows, but you should use it with caution.
+
+## Conflict Resolutions
+
+A statement that violates a constraint fails, undoing what it changed, unless the constraint declares another
+resolution, as `@Unique(onConflict = OnConflict.IGNORE)` does. A statement can choose its own, which takes the place of
+the constraint's: `INSERT_OR_ABORT`, `INSERT_OR_FAIL`, `INSERT_OR_ROLLBACK`, `INSERT_OR_IGNORE` and `INSERT_OR_REPLACE`
+take the same arguments as `INSERT`, and `UPDATE_OR_ABORT`, `UPDATE_OR_FAIL`, `UPDATE_OR_IGNORE`, `UPDATE_OR_REPLACE` and
+`UPDATE_OR_ROLLBACK` are written as `UPDATE`. They are experimental, but `INSERT_OR_IGNORE` and `INSERT_OR_REPLACE` of
+objects and of a _SELECT_:
+
+| Resolution | On a conflict with a PRIMARY KEY, UNIQUE, NOT NULL or CHECK constraint |
+| --- | --- |
+| `ABORT` | fails the statement, undoing what it changed, which is the default |
+| `FAIL` | fails the statement, keeping the rows it wrote before the one that conflicts |
+| `ROLLBACK` | fails the statement, rolling back the transaction it runs in |
+| `IGNORE` | skips the row that conflicts, and goes on |
+| `REPLACE` | deletes the rows that conflict on a PRIMARY KEY or UNIQUE constraint, writes the default value of a NOT NULL column instead of NULL, and fails as `ABORT` on a CHECK constraint |
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // INSERT OR FAIL INTO person(id,name,age) VALUES (?,?,?),(?,?,?)
+        PersonTable INSERT_OR_FAIL listOf(tom, jerry)
+        PersonTable { table ->
+            // UPDATE OR IGNORE person SET name=? WHERE person.name=?
+            table UPDATE_OR_IGNORE SET { name = "Tom" } WHERE (name EQ "Thomas")
+        }
+    }
+}
+```
+
+The _INSERT_ statements write the primary key even when the database assigns it, as a conflict on it couldn't be seen
+otherwise; a null key still lets the database assign one. A FOREIGN KEY violation fails the statement whatever its
+resolution. In `transaction {...}`, a statement that fails ends the transaction, which is rolled back, so `ABORT`,
+`FAIL` and `ROLLBACK` only differ outside one, where `FAIL` keeps the rows that a statement of several rows wrote before
+the one that conflicts, and `ROLLBACK` does what `ABORT` does.
 
 ## Transaction
 

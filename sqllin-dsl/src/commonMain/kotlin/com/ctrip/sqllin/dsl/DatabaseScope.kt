@@ -348,7 +348,7 @@ public class DatabaseScope internal constructor(
      */
     @StatementDslMaker
     public infix fun <T> Table<T>.INSERT_OR_REPLACE(entities: Iterable<T>) {
-        val statement = Insert.insertOrReplace(this, databaseConnection, entities)
+        val statement = Insert.insertOr("INSERT OR REPLACE INTO ", this, databaseConnection, entities)
         addStatement(statement)
     }
 
@@ -397,7 +397,7 @@ public class DatabaseScope internal constructor(
      */
     @StatementDslMaker
     public infix fun <T> Table<T>.INSERT_OR_IGNORE(entities: Iterable<T>) {
-        val statement = Insert.insertOrIgnore(this, databaseConnection, entities)
+        val statement = Insert.insertOr("INSERT OR IGNORE INTO ", this, databaseConnection, entities)
         addStatement(statement)
     }
 
@@ -567,6 +567,165 @@ public class DatabaseScope internal constructor(
     public infix fun <T> Table<T>.INSERT_OR_REPLACE(select: SelectStatement<T>): Unit =
         insert("INSERT OR REPLACE INTO ", select)
 
+    // ========== INSERT OR ABORT, OR FAIL and OR ROLLBACK ==========
+    //
+    // Like INSERT_OR_IGNORE and INSERT_OR_REPLACE, they write the primary key even when the database assigns it, so that
+    // a conflict on it is seen; a null key still lets the database assign one.
+
+    /**
+     * Inserts [entities], and fails the statement on a conflict with a constraint, undoing what it changed, as SQL's `INSERT OR ABORT` does:
+     * what a plain [INSERT] does, but in place of the conflict clause of a constraint, such as
+     * `@Unique(onConflict = OnConflict.IGNORE)`.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ABORT(entities: Iterable<T>): Unit =
+        addStatement(Insert.insertOr("INSERT OR ABORT INTO ", this, databaseConnection, entities))
+
+    /**
+     * Inserts [entity], and fails on a conflict, undoing the statement, as `INSERT_OR_ABORT(listOf(entity))` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ABORT(entity: T): Unit = INSERT_OR_ABORT(listOf(entity))
+
+    /**
+     * Inserts a row of expressions, and fails on a conflict, undoing the statement, as SQL's `INSERT OR ABORT` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("insertOrAbortExpressions")
+    public infix fun <T> Table<T>.INSERT_OR_ABORT(values: Iterable<ResultColumn<T>>): Unit =
+        addStatement(Insert.insert("INSERT OR ABORT INTO ", this, databaseConnection, values))
+
+    /**
+     * Inserts a row of a single expression, and fails on a conflict, undoing the statement.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ABORT(value: ResultColumn<T>): Unit = INSERT_OR_ABORT(listOf(value))
+
+    /**
+     * Inserts a row of the default values of all columns, and fails on a conflict, undoing the statement, as SQL's
+     * `INSERT OR ABORT INTO table DEFAULT VALUES` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ABORT(defaultValues: DefaultValues): Unit =
+        addStatement(Insert.insertDefaultValues("INSERT OR ABORT INTO ", this, databaseConnection))
+
+    /**
+     * Inserts the rows [select] returns, and fails on a conflict, undoing the statement, as SQL's `INSERT OR ABORT INTO table SELECT ...` does.
+     *
+     * @see INSERT
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ABORT(select: SelectStatement<T>): Unit =
+        insert("INSERT OR ABORT INTO ", select)
+
+    /**
+     * Inserts [entities], and fails the statement on a conflict with a constraint, keeping the rows it inserted before the one that
+     * conflicts, as SQL's `INSERT OR FAIL` does, in place of the conflict clause of the constraint.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_FAIL(entities: Iterable<T>): Unit =
+        addStatement(Insert.insertOr("INSERT OR FAIL INTO ", this, databaseConnection, entities))
+
+    /**
+     * Inserts [entity], and fails on a conflict, keeping the rows inserted before, as `INSERT_OR_FAIL(listOf(entity))` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_FAIL(entity: T): Unit = INSERT_OR_FAIL(listOf(entity))
+
+    /**
+     * Inserts a row of expressions, and fails on a conflict, keeping the rows inserted before, as SQL's `INSERT OR FAIL` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("insertOrFailExpressions")
+    public infix fun <T> Table<T>.INSERT_OR_FAIL(values: Iterable<ResultColumn<T>>): Unit =
+        addStatement(Insert.insert("INSERT OR FAIL INTO ", this, databaseConnection, values))
+
+    /**
+     * Inserts a row of a single expression, and fails on a conflict, keeping the rows inserted before.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_FAIL(value: ResultColumn<T>): Unit = INSERT_OR_FAIL(listOf(value))
+
+    /**
+     * Inserts a row of the default values of all columns, and fails on a conflict, keeping the rows inserted before, as SQL's
+     * `INSERT OR FAIL INTO table DEFAULT VALUES` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_FAIL(defaultValues: DefaultValues): Unit =
+        addStatement(Insert.insertDefaultValues("INSERT OR FAIL INTO ", this, databaseConnection))
+
+    /**
+     * Inserts the rows [select] returns, and fails on a conflict, keeping the rows inserted before, as SQL's `INSERT OR FAIL INTO table SELECT ...` does.
+     *
+     * @see INSERT
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_FAIL(select: SelectStatement<T>): Unit =
+        insert("INSERT OR FAIL INTO ", select)
+
+    /**
+     * Inserts [entities], and rolls back the transaction it runs in on a conflict with a constraint, as SQL's `INSERT OR ROLLBACK` does,
+     * in place of the conflict clause of the constraint; outside a transaction, it fails as [INSERT_OR_ABORT] does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ROLLBACK(entities: Iterable<T>): Unit =
+        addStatement(Insert.insertOr("INSERT OR ROLLBACK INTO ", this, databaseConnection, entities))
+
+    /**
+     * Inserts [entity], and rolls back the transaction on a conflict, as `INSERT_OR_ROLLBACK(listOf(entity))` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ROLLBACK(entity: T): Unit = INSERT_OR_ROLLBACK(listOf(entity))
+
+    /**
+     * Inserts a row of expressions, and rolls back the transaction on a conflict, as SQL's `INSERT OR ROLLBACK` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("insertOrRollbackExpressions")
+    public infix fun <T> Table<T>.INSERT_OR_ROLLBACK(values: Iterable<ResultColumn<T>>): Unit =
+        addStatement(Insert.insert("INSERT OR ROLLBACK INTO ", this, databaseConnection, values))
+
+    /**
+     * Inserts a row of a single expression, and rolls back the transaction on a conflict.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ROLLBACK(value: ResultColumn<T>): Unit = INSERT_OR_ROLLBACK(listOf(value))
+
+    /**
+     * Inserts a row of the default values of all columns, and rolls back the transaction on a conflict, as SQL's
+     * `INSERT OR ROLLBACK INTO table DEFAULT VALUES` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ROLLBACK(defaultValues: DefaultValues): Unit =
+        addStatement(Insert.insertDefaultValues("INSERT OR ROLLBACK INTO ", this, databaseConnection))
+
+    /**
+     * Inserts the rows [select] returns, and rolls back the transaction on a conflict, as SQL's `INSERT OR ROLLBACK INTO table SELECT ...` does.
+     *
+     * @see INSERT
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ROLLBACK(select: SelectStatement<T>): Unit =
+        insert("INSERT OR ROLLBACK INTO ", select)
+
     private fun <T> Table<T>.insert(insert: String, select: SelectStatement<T>) {
         select.checkComplete()
         select.container removeStatement select
@@ -589,6 +748,49 @@ public class DatabaseScope internal constructor(
     @StatementDslMaker
     public infix fun <T> Table<T>.UPDATE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
         Update.update(this, databaseConnection, currentContainer, clause).also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE] does, and fails the statement on a conflict with a constraint, undoing what it changed: what a plain [UPDATE] does, but in
+     * place of the conflict clause of a constraint, such as `@Unique(onConflict = OnConflict.IGNORE)`, as SQL's `UPDATE OR ABORT` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.UPDATE_OR_ABORT(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(this, databaseConnection, currentContainer, clause, "UPDATE OR ABORT ").also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE] does, and fails the statement on a conflict with a constraint, keeping the rows it updated before the one that conflicts, as SQL's `UPDATE OR FAIL` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.UPDATE_OR_FAIL(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(this, databaseConnection, currentContainer, clause, "UPDATE OR FAIL ").also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE] does, and leaves each row whose new values would conflict with a constraint as it was, and goes on, as SQL's `UPDATE OR IGNORE` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.UPDATE_OR_IGNORE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(this, databaseConnection, currentContainer, clause, "UPDATE OR IGNORE ").also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE] does, and deletes the rows that a row's new values conflict with on a PRIMARY KEY or UNIQUE constraint, writes the
+     * default value of a NOT NULL column it would set to NULL, and fails on a CHECK constraint, as SQL's `UPDATE OR REPLACE` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.UPDATE_OR_REPLACE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(this, databaseConnection, currentContainer, clause, "UPDATE OR REPLACE ").also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE] does, and rolls back the transaction it runs in on a conflict with a constraint, and outside a transaction fails as
+     * [UPDATE_OR_ABORT] does, as SQL's `UPDATE OR ROLLBACK` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.UPDATE_OR_ROLLBACK(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(this, databaseConnection, currentContainer, clause, "UPDATE OR ROLLBACK ").also { addStatement(it) }
 
     // ========== DELETE Operations ==========
 

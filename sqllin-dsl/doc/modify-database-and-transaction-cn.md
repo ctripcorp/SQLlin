@@ -428,7 +428,8 @@ fun sample() {
 
 _INSERT_ 语句可以直接插入对象，你可以一次插入一个或多个对象。
 
-`INSERT_OR_IGNORE` 会跳过与表中已有行冲突的对象，`INSERT_OR_REPLACE` 则会替换那一行。它们接受的参数与 `INSERT` 相同。
+`INSERT_OR_IGNORE` 会跳过与表中已有行冲突的对象，`INSERT_OR_REPLACE` 则会替换那一行。它们接受的参数与 `INSERT` 相同，其他
+[冲突处理方式](#冲突处理)也一样。
 
 _INSERT_ 还可以插入一条 _SELECT_ 返回的行，就像 `INSERT INTO ... SELECT` 那样，前提是这条 _SELECT_ 读出的是这张表的行类型。
 这些行可以来自任意一张表，借助投影或结果列：
@@ -580,6 +581,40 @@ fun sample() {
 函数，这些在构建语句时检查。表达式中需要单独的值时，用 `literal(5)`。
 
 你也可以编写没有 _WHERE_ 子句的 _UPDATE_ 语句用于更新所有的行，但使用它的时候你应该谨慎。
+
+## 冲突处理
+
+违反约束的语句会失败，并撤销它所做的修改，除非约束声明了别的处理方式，比如 `@Unique(onConflict = OnConflict.IGNORE)`。语句也可以
+指定自己的处理方式，它会取代约束的处理方式：`INSERT_OR_ABORT`、`INSERT_OR_FAIL`、`INSERT_OR_ROLLBACK`、`INSERT_OR_IGNORE` 和
+`INSERT_OR_REPLACE` 接受的参数与 `INSERT` 相同；`UPDATE_OR_ABORT`、`UPDATE_OR_FAIL`、`UPDATE_OR_IGNORE`、`UPDATE_OR_REPLACE`
+和 `UPDATE_OR_ROLLBACK` 的写法与 `UPDATE` 相同。除了插入对象和 _SELECT_ 的 `INSERT_OR_IGNORE`、`INSERT_OR_REPLACE`，它们都是实验性
+API：
+
+| 处理方式 | 与 PRIMARY KEY、UNIQUE、NOT NULL 或 CHECK 约束冲突时 |
+| --- | --- |
+| `ABORT` | 语句失败，撤销它所做的修改，这是默认方式 |
+| `FAIL` | 语句失败，但保留它在冲突行之前写入的行 |
+| `ROLLBACK` | 语句失败，并回滚它所在的事务 |
+| `IGNORE` | 跳过冲突的行，继续执行 |
+| `REPLACE` | 删除在 PRIMARY KEY 或 UNIQUE 约束上冲突的行；NOT NULL 列要写入 NULL 时改写其默认值；违反 CHECK 约束时像 `ABORT` 一样失败 |
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // INSERT OR FAIL INTO person(id,name,age) VALUES (?,?,?),(?,?,?)
+        PersonTable INSERT_OR_FAIL listOf(tom, jerry)
+        PersonTable { table ->
+            // UPDATE OR IGNORE person SET name=? WHERE person.name=?
+            table UPDATE_OR_IGNORE SET { name = "Tom" } WHERE (name EQ "Thomas")
+        }
+    }
+}
+```
+
+即使主键由数据库分配，_INSERT_ 语句也会写入主键，否则主键上的冲突无法被发现；主键为 null 时仍由数据库分配。无论语句指定哪种处理
+方式，违反 FOREIGN KEY 约束都会让语句失败。在 `transaction {...}` 中，失败的语句会结束事务并让它回滚，所以 `ABORT`、`FAIL` 和
+`ROLLBACK` 只在事务之外有区别：`FAIL` 会保留一条多行语句在冲突行之前写入的行，而 `ROLLBACK` 与 `ABORT` 效果相同。
 
 ## 事务
 

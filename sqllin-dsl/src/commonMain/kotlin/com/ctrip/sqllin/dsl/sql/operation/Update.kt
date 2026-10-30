@@ -48,15 +48,20 @@ internal object Update : Operation {
      * @param clause SET clause with column assignments
      * @return Statement that can either execute or be refined with WHERE
      */
+    /**
+     * Builds an UPDATE statement, which [update] starts with: `UPDATE `, or one with a conflict resolution, as
+     * `UPDATE OR IGNORE `.
+     */
     fun <T> update(
         table: Table<T>,
         connection: DatabaseConnection,
         container: StatementContainer,
         clause: SetClause<T>,
+        update: String = sqlStr,
     ): UpdateStatementWithoutWhereClause<T> {
         val assignments = clause.assignments
         val sql = buildString {
-            append(sqlStr)
+            append(update)
             append(table.tableName)
             append(" SET ")
             if (assignments == null) {
