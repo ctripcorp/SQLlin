@@ -36,6 +36,7 @@ import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
@@ -571,6 +572,77 @@ class CommonBasicTest(private val path: DatabasePath) {
             assertEquals(emptyList(), books.receive())
             database { BookTable INSERT book }
             assertEquals(listOf(book), books.receive())
+        }
+    }
+
+    /**
+     * Covers table version tokens: the token of a read-only scope, which a change to one of its tables makes stale, and
+     * no other change; awaitChange; onChange, which runs its callback once, after a blocking or a suspended scope, and
+     * returns null for a token that is already stale, and whose registration can be closed; tokens combined with the
+     * earlier version of a table; and the rejected writes, and tokens of another database.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, ExperimentalDSLDatabaseAPI::class)
+    fun testTableVersions() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        runTest {
+            val book = Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251)
+            database { BookTable INSERT book }
+            val (books, booksVersions) = database.versioned { BookTable SELECT X }
+            assertEquals(listOf(book), books.getResults())
+
+            // A change to another table leaves the token current, and one to its table makes it stale
+            val changed = async { database.awaitChange(booksVersions) }
+            database { CategoryTable INSERT Category(name = "Kotlin Cookbook", code = 1) }
+            runCurrent()
+            assertEquals(false, changed.isCompleted)
+            database { BookTable INSERT book.copy(name = "The Lost Symbol") }
+            runCurrent()
+            assertEquals(true, changed.isCompleted)
+            // and a stale token returns at once
+            database.awaitChange(booksVersions)
+
+            // onChange runs its callback once, after the scope that changed a table of the token
+            var calls = 0
+            val (_, current) = database.versioned { BookTable SELECT X }
+            assertNotEquals(null, database.onChange(current) { calls++ })
+            database { CategoryTable INSERT Category(name = "Other", code = 2) }
+            assertEquals(0, calls)
+            database suspendedScope { BookTable DELETE WHERE(BookTable.name EQ "The Lost Symbol") }
+            assertEquals(1, calls)
+            database { BookTable INSERT book.copy(name = "Again") }
+            assertEquals(1, calls)
+
+            // A token that is already stale registers nothing
+            val (_, stale) = database.versioned { BookTable SELECT X }
+            database { BookTable DELETE WHERE(BookTable.name EQ "Again") }
+            assertEquals(null, database.onChange(stale) { calls++ })
+            assertEquals(1, calls)
+
+            // A closed registration doesn't run its callback
+            val (_, closed) = database.versioned { BookTable SELECT X }
+            database.onChange(closed) { calls++ }!!.close()
+            database { BookTable INSERT book.copy(name = "Closed") }
+            assertEquals(1, calls)
+
+            // A combined token takes the earlier version of a table, and covers the tables of both
+            val (_, booksBefore) = database.versioned { BookTable SELECT X }
+            database { BookTable INSERT book.copy(name = "Between") }
+            val (_, booksAfter) = database.versioned { BookTable SELECT X }
+            val (_, categories) = database.versioned { CategoryTable SELECT X }
+            assertEquals(null, database.onChange(booksBefore + booksAfter) { calls++ })
+            assertNotEquals(null, database.onChange(booksAfter + categories) { calls++ })
+            database { CategoryTable INSERT Category(name = "Combined", code = 3) }
+            assertEquals(2, calls)
+
+            // A scope that writes isn't run
+            assertEquals(true, runCatching { database.versioned { BookTable INSERT book.copy(name = "Written") } }.isFailure)
+            assertEquals(false, database.versioned { BookTable SELECT X }.first.getResults().any { it.name == "Written" })
+
+            // The tokens of another database can't be combined with these, nor be waited for here
+            Database(getNewAPIDBConfig()).databaseAutoClose { other ->
+                val (_, otherVersions) = other.versioned { BookTable SELECT X }
+                assertFails { booksAfter + otherVersions }
+                assertFails { database.onChange(otherVersions) { calls++ } }
+            }
         }
     }
 

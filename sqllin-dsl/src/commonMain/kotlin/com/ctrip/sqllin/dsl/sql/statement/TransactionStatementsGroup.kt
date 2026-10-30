@@ -58,6 +58,14 @@ internal class TransactionStatementsGroup(
     val writtenTables: Set<String>
         get() = statementList.mapNotNullTo(LinkedHashSet()) { Changes.writtenTable(it) }
 
+    /**
+     * The tables and views the SELECTs of the transaction read.
+     *
+     * @see DatabaseExecuteEngine.readTables
+     */
+    val readTables: Set<String>
+        get() = statementList.flatMapTo(LinkedHashSet()) { (it as? SelectStatement<*>)?.tables.orEmpty() }
+
     override infix fun removeStatement(statement: SingleStatement) {
         statementList.remove(statement)
     }

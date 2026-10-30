@@ -55,6 +55,9 @@ class AndroidTest {
     fun testObserve() = commonTest.testObserve()
 
     @Test
+    fun testTableVersions() = commonTest.testTableVersions()
+
+    @Test
     fun testObserveRestoresTracking() = commonTest.testObserveRestoresTracking()
 
     @Test

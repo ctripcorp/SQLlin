@@ -68,6 +68,19 @@ internal class DatabaseExecuteEngine(
             if (it is TransactionStatementsGroup) it.writtenTables else Changes.writtenTable(it as SingleStatement)?.let(::setOf).orEmpty()
         }
 
+    /**
+     * The tables and views the SELECTs of the scope read, their subqueries' included, which a token of their versions
+     * covers.
+     */
+    val readTables: Set<String>
+        get() = statementList.flatMapTo(LinkedHashSet()) {
+            when (it) {
+                is TransactionStatementsGroup -> it.readTables
+                is SelectStatement<*> -> it.tables
+                else -> emptySet()
+            }
+        }
+
     override infix fun removeStatement(statement: SingleStatement) {
         statementList.remove(statement)
     }

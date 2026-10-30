@@ -405,6 +405,48 @@ _DELETE_ 也不会。
 同时影响两边的表的修改，可能会短暂地呈现一边的新结果和另一边的旧结果。如果结果来自几张表，用一条带 Join 的 _SELECT_ 可以一次
 得到。
 
+### 表版本令牌
+
+可观察查询给出的是结果。如果读取方只需要知道它读过的表何时发生变化，比如自己读取分页、需要自行失效的 `PagingSource`，就改用
+`versioned { }` 读取。它执行一个由 _SELECT_ 组成的作用域，返回作用域的结果，以及这些 _SELECT_ 读到的表的版本令牌。
+`awaitChange(token)` 会挂起，直到经由该数据库执行的语句修改了其中某张表；`onChange(token) { }` 则为此注册一个回调。它们是实验性
+API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+class PersonPagingSource(private val database: Database) : PagingSource<Int, Person>() {
+
+    private var registration: AutoCloseable? = null
+
+    override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Person> {
+        val offset = params.key ?: 0
+        val (page, since) = database.versioned {
+            PersonTable SELECT ORDER_BY(PersonTable.age to ASC) LIMIT params.loadSize OFFSET offset
+        }
+        if (registration == null) {
+            // 读取之后已有语句修改了这张表时返回 null
+            registration = database.onChange(since) { invalidate() } ?: return LoadResult.Invalid()
+            registerInvalidatedCallback { registration?.close() }
+        }
+        val persons = page.getResults()
+        return LoadResult.Page(persons, prevKey = null, nextKey = if (persons.isEmpty()) null else offset + persons.size)
+    }
+
+    override fun getRefreshKey(state: PagingState<Int, Person>): Int? = null
+}
+```
+
+令牌在执行这些 _SELECT_ 时持有的锁内捕获，并且是在开始跟踪它们的表之后，所以不会漏掉它们执行之后的任何修改；它们已经包含的修改
+也可能让令牌过期。令牌覆盖作用域中每条 _SELECT_ 读到的表，视图按它读取的表计算；和可观察查询一样，只能感知经由同一个 `Database`
+实例的修改。包含写入语句的作用域会被拒绝，因为它的令牌无法区分自己的修改和别人的修改。
+
+* **组合令牌**：如果一条查询要用另一条查询的结果来构建，比如用第一个作用域返回的 id，它就只能在自己的作用域中执行。
+  `token1 + token2` 覆盖两次读取的表；两者都读过的表取较早的版本，所以任何一边过期，组合后的令牌就过期。两个 `Database` 实例的令牌
+  不能组合。
+* **onChange** 先注册、再检查令牌，所以读取和注册之间的修改不会被漏掉：如果令牌已经过期，它不注册，直接返回 `null`，由调用方自行
+  处理，比如 `PagingSource` 返回 `LoadResult.Invalid()`。否则它的回调只执行一次：在写入的线程上，在写入作用域释放数据库的锁之后
+  执行，所以回调里可以使用数据库，但应当尽快返回。注册会一直持有回调，直到回调执行，或者它返回的 `AutoCloseable` 被关闭。
+
 ## 全文搜索
 
 全文搜索（FTS）表会为文本建立索引，让查询像搜索引擎一样找出包含某些词的行。SQLlin 支持 SQLite 的 FTS4 和 FTS3 表，SQLlin

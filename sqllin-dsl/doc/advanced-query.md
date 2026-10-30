@@ -436,6 +436,54 @@ kotlinx.coroutines. As each runs its query on its own, a change to the tables of
 one with the old results of the other. When the results come from several tables, a single _SELECT_ with a join gives
 them at once.
 
+### Table Version Tokens
+
+An observed query gives results. A reader that only needs to know when the tables it read change, such as a
+`PagingSource` that invalidates itself and reads its pages on its own, reads through `versioned { }` instead. It runs a
+scope of _SELECT_ statements, and returns the scope's result with a token of the versions of the tables they read.
+`awaitChange(token)` suspends until a statement run through the database changes one of those tables, and
+`onChange(token) { }` registers a callback for it. They are experimental, so opt in with
+`@OptIn(ExperimentalDSLDatabaseAPI::class)`:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+class PersonPagingSource(private val database: Database) : PagingSource<Int, Person>() {
+
+    private var registration: AutoCloseable? = null
+
+    override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Person> {
+        val offset = params.key ?: 0
+        val (page, since) = database.versioned {
+            PersonTable SELECT ORDER_BY(PersonTable.age to ASC) LIMIT params.loadSize OFFSET offset
+        }
+        if (registration == null) {
+            // null when a statement changed the table since the read
+            registration = database.onChange(since) { invalidate() } ?: return LoadResult.Invalid()
+            registerInvalidatedCallback { registration?.close() }
+        }
+        val persons = page.getResults()
+        return LoadResult.Page(persons, prevKey = null, nextKey = if (persons.isEmpty()) null else offset + persons.size)
+    }
+
+    override fun getRefreshKey(state: PagingState<Int, Person>): Int? = null
+}
+```
+
+The token is captured under the lock that the _SELECT_ statements run under, after their tables are tracked, so that no
+change made after them is missed; a change that they already include may make it stale too. It covers the tables of
+every _SELECT_ of the scope, a view standing for the tables it reads, and only sees the changes made through the same
+`Database` instance, as an observed query does. A scope that writes is rejected, as its token couldn't tell its own
+changes from others'.
+
+* **Combining tokens**: when a query is built from the results of another, as from ids that a first scope returned, it
+  runs in a scope of its own. `token1 + token2` covers the tables of both reads, with the earlier version of a table
+  that both read, so that it is stale when either is. The tokens of two `Database` instances can't be combined.
+* **onChange** registers before it checks the token, so that a change between the read and the registration is never
+  missed: when the token is already stale, it registers nothing and returns `null`, and the caller acts on the change
+  itself, as a `PagingSource` returns `LoadResult.Invalid()`. Otherwise its callback runs once, on the thread that
+  wrote, after the writing scope has released the database's lock, so it may use the database, but should return
+  quickly. The registration holds the callback until it runs, or until the `AutoCloseable` it returns is closed.
+
 ## Full-Text Search
 
 A full-text search (FTS) table indexes text, so that a query finds the rows containing some words, as a search engine

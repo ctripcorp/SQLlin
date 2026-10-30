@@ -218,6 +218,12 @@ public class DatabaseScope internal constructor(
     internal val writtenTables: Set<String>
         get() = executiveEngine.writtenTables
 
+    /**
+     * The tables and views the SELECTs of this scope read.
+     */
+    internal val readTables: Set<String>
+        get() = executiveEngine.readTables
+
     // ========== INSERT Operations ==========
 
     /**
