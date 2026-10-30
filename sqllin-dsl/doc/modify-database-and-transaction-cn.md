@@ -146,6 +146,24 @@ fun sample() {
 }
 ```
 
+语句通过哪个索引查找行，由 SQLite 的查询规划器选择。`INDEXED_BY` 让它使用指定的索引，`NOT_INDEXED` 让它不使用索引，就像 SQL 的
+`INDEXED BY` 和 `NOT INDEXED` 那样。带有它们的表可以被 _SELECT_（包括 Join）读取，也可以被 _UPDATE_ 和 _DELETE_ 写入，但不能用于
+_INSERT_，因为 SQL 不允许。它们是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // SELECT ... FROM person INDEXED BY idx_person_name WHERE person.name = ?
+        (PersonTable INDEXED_BY "idx_person_name") SELECT WHERE(PersonTable.name EQ "Tom")
+        // DELETE FROM person NOT INDEXED WHERE person.age < ?
+        PersonTable.NOT_INDEXED DELETE WHERE(PersonTable.age LT 18)
+    }
+}
+```
+
+如果 SQLite 无法通过指定的索引执行语句，比如索引不存在，语句会失败，并报 "no such index"。
+
 ### IF NOT EXISTS 与 IF EXISTS
 
 表已存在时 `CREATE` 会失败，表不存在时 `DROP` 会失败。它们的 `IF NOT EXISTS` 和 `IF EXISTS` 版本则什么也不做，适用于表、视图和索引。

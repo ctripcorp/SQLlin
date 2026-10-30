@@ -45,9 +45,9 @@ internal object Delete : Operation {
      * @param whereClause WHERE condition specifying which rows to delete
      * @return Final DELETE statement ready for execution
      */
-    fun <T> delete(table: Table<*>, connection: DatabaseConnection, whereClause: WhereClause<T>): SingleStatement {
+    fun <T> delete(table: Table<*>, connection: DatabaseConnection, whereClause: WhereClause<T>, target: String = table.tableName): SingleStatement {
         val sql = buildString {
-            buildBaseDeleteStatement(table)
+            buildBaseDeleteStatement(target)
             append(whereClause.clauseStr)
         }
         return UpdateDeleteStatement(sql, connection, whereClause.selectCondition.parameters, table.tableName)
@@ -62,15 +62,18 @@ internal object Delete : Operation {
      * @param connection Database connection for execution
      * @return Final DELETE statement ready for execution
      */
-    fun deleteAllEntities(table: Table<*>, connection: DatabaseConnection): SingleStatement {
+    fun deleteAllEntities(table: Table<*>, connection: DatabaseConnection, target: String = table.tableName): SingleStatement {
         val sql = buildString {
-            buildBaseDeleteStatement(table)
+            buildBaseDeleteStatement(target)
         }
         return UpdateDeleteStatement(sql, connection, null, table.tableName)
     }
 
-    private fun StringBuilder.buildBaseDeleteStatement(table: Table<*>) {
+    /**
+     * Appends `DELETE FROM` [target], the table, or the table with `INDEXED BY` or `NOT INDEXED`.
+     */
+    private fun StringBuilder.buildBaseDeleteStatement(target: String) {
         append(sqlStr)
-        append(table.tableName)
+        append(target)
     }
 }

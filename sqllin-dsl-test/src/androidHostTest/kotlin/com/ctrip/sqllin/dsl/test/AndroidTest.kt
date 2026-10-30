@@ -181,6 +181,9 @@ class AndroidTest {
     fun testTransactionModes() = commonTest.testTransactionModes()
 
     @Test
+    fun testIndexedBy() = commonTest.testIndexedBy()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

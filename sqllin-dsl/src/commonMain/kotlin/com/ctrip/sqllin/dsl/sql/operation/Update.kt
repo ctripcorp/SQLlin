@@ -50,7 +50,7 @@ internal object Update : Operation {
      */
     /**
      * Builds an UPDATE statement, which [update] starts with: `UPDATE `, or one with a conflict resolution, as
-     * `UPDATE OR IGNORE `.
+     * `UPDATE OR IGNORE `, of [target], the table, or the table with `INDEXED BY` or `NOT INDEXED`.
      */
     fun <T> update(
         table: Table<T>,
@@ -58,11 +58,12 @@ internal object Update : Operation {
         container: StatementContainer,
         clause: SetClause<T>,
         update: String = sqlStr,
+        target: String = table.tableName,
     ): UpdateStatementWithoutWhereClause<T> {
         val assignments = clause.assignments
         val sql = buildString {
             append(update)
-            append(table.tableName)
+            append(target)
             append(" SET ")
             if (assignments == null) {
                 append(clause.finalize())

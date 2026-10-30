@@ -30,6 +30,7 @@ import com.ctrip.sqllin.dsl.sql.FtsTable
 import com.ctrip.sqllin.dsl.sql.ProjectedX
 import com.ctrip.sqllin.dsl.sql.RaiseIgnore
 import com.ctrip.sqllin.dsl.sql.RaiseResolution
+import com.ctrip.sqllin.dsl.sql.IndexedTable
 import com.ctrip.sqllin.dsl.sql.Relation
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.TriggerDefinition
@@ -858,6 +859,81 @@ public class DatabaseScope internal constructor(
     public infix fun <T> Table<T>.DELETE(clause: WhereClause<T>) {
         val statement = Delete.delete(this, databaseConnection, clause)
         addStatement(statement)
+    }
+
+    // ========== UPDATE and DELETE of a table with INDEXED BY or NOT INDEXED ==========
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE] does, looking them up as `INDEXED BY` or
+     * `NOT INDEXED` says, as SQL's `UPDATE table INDEXED BY index` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> IndexedTable<T>.UPDATE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(table, databaseConnection, currentContainer, clause, target = fromSQL).also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE_OR_ABORT] does, looking them up as `INDEXED BY` or
+     * `NOT INDEXED` says.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> IndexedTable<T>.UPDATE_OR_ABORT(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(table, databaseConnection, currentContainer, clause, "UPDATE OR ABORT ", fromSQL).also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE_OR_FAIL] does, looking them up as `INDEXED BY` or
+     * `NOT INDEXED` says.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> IndexedTable<T>.UPDATE_OR_FAIL(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(table, databaseConnection, currentContainer, clause, "UPDATE OR FAIL ", fromSQL).also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE_OR_IGNORE] does, looking them up as `INDEXED BY` or
+     * `NOT INDEXED` says.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> IndexedTable<T>.UPDATE_OR_IGNORE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(table, databaseConnection, currentContainer, clause, "UPDATE OR IGNORE ", fromSQL).also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE_OR_REPLACE] does, looking them up as `INDEXED BY` or
+     * `NOT INDEXED` says.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> IndexedTable<T>.UPDATE_OR_REPLACE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(table, databaseConnection, currentContainer, clause, "UPDATE OR REPLACE ", fromSQL).also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE_OR_ROLLBACK] does, looking them up as `INDEXED BY` or
+     * `NOT INDEXED` says.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> IndexedTable<T>.UPDATE_OR_ROLLBACK(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(table, databaseConnection, currentContainer, clause, "UPDATE OR ROLLBACK ", fromSQL).also { addStatement(it) }
+
+    /**
+     * Deletes all rows of the table, looking them up as `INDEXED BY` or `NOT INDEXED` says.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun IndexedTable<*>.DELETE(x: X) {
+        addStatement(Delete.deleteAllEntities(table, databaseConnection, fromSQL))
+    }
+
+    /**
+     * Deletes the rows that [clause] selects, looking them up as `INDEXED BY` or `NOT INDEXED` says, as SQL's
+     * `DELETE FROM table INDEXED BY index WHERE ...` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> IndexedTable<T>.DELETE(clause: WhereClause<T>) {
+        addStatement(Delete.delete(table, databaseConnection, clause, fromSQL))
     }
 
     // ========== SELECT Operations ==========

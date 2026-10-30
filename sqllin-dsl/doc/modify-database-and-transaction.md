@@ -156,6 +156,25 @@ fun sample() {
 }
 ```
 
+SQLite's query planner chooses the index a statement looks its rows up through. `INDEXED_BY` makes it use one, and
+`NOT_INDEXED` none, as SQL's `INDEXED BY` and `NOT INDEXED` do. A table with them is read by a _SELECT_, joins included,
+and written by _UPDATE_ and _DELETE_, but not by _INSERT_, which SQL doesn't allow. They are experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // SELECT ... FROM person INDEXED BY idx_person_name WHERE person.name = ?
+        (PersonTable INDEXED_BY "idx_person_name") SELECT WHERE(PersonTable.name EQ "Tom")
+        // DELETE FROM person NOT INDEXED WHERE person.age < ?
+        PersonTable.NOT_INDEXED DELETE WHERE(PersonTable.age LT 18)
+    }
+}
+```
+
+A statement fails when SQLite can't run it through the index given, as when the index doesn't exist, with
+"no such index".
+
 ### IF NOT EXISTS and IF EXISTS
 
 `CREATE` fails if the table already exists, and `DROP` if it doesn't. Their `IF NOT EXISTS` and `IF EXISTS` versions do

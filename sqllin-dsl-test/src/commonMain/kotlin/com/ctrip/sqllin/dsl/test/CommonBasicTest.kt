@@ -29,6 +29,8 @@ import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.PlatformDependentSQLiteAPI
 import com.ctrip.sqllin.dsl.sql.FtsTable
+import com.ctrip.sqllin.dsl.sql.INDEXED_BY
+import com.ctrip.sqllin.dsl.sql.NOT_INDEXED
 import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.withName
 import com.ctrip.sqllin.dsl.sql.clause.*
@@ -2750,6 +2752,55 @@ class CommonBasicTest(private val path: DatabasePath) {
         }
         assertEquals(listOf(ConflictTest(id = 4, email = "c@mail", x = 3, y = 3)), rows.getResults())
         assertEquals(listOf(ConflictPair(a = "k", b = "v", note = "first")), pairs.getResults())
+    }
+
+    /**
+     * Covers INDEXED BY and NOT INDEXED: a SELECT, a join, UPDATE, UPDATE OR IGNORE and DELETE of a table with them,
+     * which find the rows they find without them, and fail with an index that doesn't exist, which shows they are in the
+     * SQL.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testIndexedBy() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        fun assertNoSuchIndex(block: () -> Unit) = assertContains(assertFails(block).message.orEmpty(), "no such index")
+        val books = listOf(
+            Book(name = "The Da Vinci Code", author = "Dan Brown", price = 16.96, pages = 454),
+            Book(name = "The Lost Symbol", author = "Dan Brown", price = 19.95, pages = 510),
+            Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251),
+        )
+        database {
+            BookTable.CREATE_INDEX("idx_book_author", BookTable.author)
+            BookTable INSERT books
+            CategoryTable INSERT Category(name = "Kotlin Cookbook", code = 1)
+        }
+        lateinit var byIndex: SelectStatement<Book>
+        lateinit var withoutIndex: SelectStatement<Book>
+        lateinit var joined: SelectStatement<Joiner>
+        database {
+            byIndex = (BookTable INDEXED_BY "idx_book_author") SELECT WHERE(BookTable.author EQ "Dan Brown")
+            withoutIndex = BookTable.NOT_INDEXED SELECT WHERE(BookTable.author EQ "Dan Brown")
+            joined = ((BookTable INDEXED_BY "idx_book_author") INNER_JOIN CategoryTable.NOT_INDEXED USING BookTable.name) SELECT WHERE<Joiner>(BookTable.author EQ "Ken Kousen")
+        }
+        assertEquals(books.take(2), byIndex.getResults().sortedBy { it.name })
+        assertEquals(books.take(2), withoutIndex.getResults().sortedBy { it.name })
+        assertEquals(listOf("Kotlin Cookbook"), joined.getResults().map { it.name })
+
+        database {
+            BookTable { table ->
+                (table INDEXED_BY "idx_book_author") UPDATE SET { pages = 1 } WHERE (author EQ "Dan Brown")
+                table.NOT_INDEXED UPDATE_OR_IGNORE SET { price = 1.0 } WHERE (author EQ "Ken Kousen")
+            }
+            (BookTable INDEXED_BY "idx_book_author") DELETE WHERE(BookTable.author EQ "Ken Kousen")
+        }
+        lateinit var rest: SelectStatement<Book>
+        database { rest = BookTable SELECT X }
+        assertEquals(listOf(1, 1), rest.getResults().map { it.pages })
+        database { BookTable.NOT_INDEXED DELETE X }
+        database { rest = BookTable SELECT X }
+        assertEquals(emptyList(), rest.getResults())
+
+        assertNoSuchIndex { database { (BookTable INDEXED_BY "no_such_index") SELECT X } }
+        assertNoSuchIndex { database { BookTable { table -> (table INDEXED_BY "no_such_index") UPDATE SET { pages = 2 } WHERE (author EQ "Dan Brown") } } }
+        assertNoSuchIndex { database { (BookTable INDEXED_BY "no_such_index") DELETE X } }
     }
 
     /**
