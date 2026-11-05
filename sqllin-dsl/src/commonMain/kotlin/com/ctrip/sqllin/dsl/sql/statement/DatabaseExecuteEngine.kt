@@ -33,18 +33,9 @@ internal class DatabaseExecuteEngine(
 
     private val statementList = ArrayDeque<ExecutableStatement>()
 
-    override infix fun changeLastStatement(statement: SingleStatement) {
-        if (statementList.lastOrNull() is UpdateStatementWithoutWhereClause<*>
-            || statementList.lastOrNull() is SelectStatement<*>) {
-            statementList.removeLast()
-            statementList.add(statement)
-        } else
-            throw IllegalStateException("Current statement can't append clause.")
-    }
-
     override fun replaceStatement(statement: SingleStatement, newStatement: SingleStatement) {
         val index = statementList.indexOf(statement)
-        check(index >= 0) { "The statement to replace isn't one of the scope's." }
+        check(index >= 0) { "The statement isn't one of the scope's: a clause was already appended to it, which replaced it, or it became part of another statement, as a subquery does." }
         statementList[index] = newStatement
     }
 

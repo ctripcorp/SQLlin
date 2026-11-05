@@ -157,7 +157,7 @@ public inline infix fun <T> WhereSelectStatement<T>.ORDER_BY(column2Way: Pair<Cl
 @StatementDslMaker
 public infix fun <T> WhereSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, Ordering>): OrderBySelectStatement<T> =
     appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
@@ -167,7 +167,7 @@ public inline infix fun <T> HavingSelectStatement<T>.ORDER_BY(column2Way: Pair<C
 @StatementDslMaker
 public infix fun <T> HavingSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, Ordering>): OrderBySelectStatement<T> =
     appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
@@ -177,7 +177,7 @@ public inline infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column2Way: Pair<
 @StatementDslMaker
 public infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, Ordering>): OrderBySelectStatement<T> =
     appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @ExperimentalDSLDatabaseAPI
@@ -189,7 +189,7 @@ public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(column2Way: Pair<Clause
 @StatementDslMaker
 public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, Ordering>): OrderBySelectStatement<T> =
     appendToOrderBy(CompleteOrderByClause(column2WayMap, isQualified = false)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @ExperimentalDSLDatabaseAPI
@@ -201,7 +201,7 @@ public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(column: ClauseElement<*
 @StatementDslMaker
 public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement<*>>): OrderBySelectStatement<T> =
     appendToOrderBy(SimpleOrderByClause(columns, isQualified = false)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
@@ -211,7 +211,7 @@ public infix fun <T> ResultColumnSelectStatement<T>.ORDER_BY(column2Way: Pair<Cl
 @StatementDslMaker
 public infix fun <T> ResultColumnSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, Ordering>): OrderBySelectStatement<T> =
     appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 internal class SimpleOrderByClause<T>(
@@ -249,7 +249,7 @@ public inline infix fun <T> WhereSelectStatement<T>.ORDER_BY(column: ClauseEleme
 @StatementDslMaker
 public infix fun <T> WhereSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement<*>>): OrderBySelectStatement<T> =
     appendToOrderBy(SimpleOrderByClause(columns)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
@@ -259,7 +259,7 @@ public inline infix fun <T> HavingSelectStatement<T>.ORDER_BY(column: ClauseElem
 @StatementDslMaker
 public infix fun <T> HavingSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement<*>>): OrderBySelectStatement<T> =
     appendToOrderBy(SimpleOrderByClause(columns)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
@@ -269,7 +269,7 @@ public inline infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column: ClauseEle
 @StatementDslMaker
 public infix fun <T> GroupBySelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement<*>>): OrderBySelectStatement<T> =
     appendToOrderBy(SimpleOrderByClause(columns)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
@@ -279,5 +279,5 @@ public infix fun <T> ResultColumnSelectStatement<T>.ORDER_BY(column: ClauseEleme
 @StatementDslMaker
 public infix fun <T> ResultColumnSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement<*>>): OrderBySelectStatement<T> =
     appendToOrderBy(SimpleOrderByClause(columns)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }

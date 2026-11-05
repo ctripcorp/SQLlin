@@ -2894,6 +2894,104 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers a clause appended to a statement built before another one, which replaces that statement rather than the
+     * last one: a SELECT built since still runs, and an UPDATE's WHERE leaves the other rows, as the UPDATE without it
+     * no longer runs, in a scope and in a transaction, with parameters in SET or not. A clause can't be appended twice
+     * to a statement, nor to one that became part of another, which fails before any statement runs.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testClauseOnEarlierStatement() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        fun assertNotInScope(block: () -> Unit) =
+            assertContains(assertFailsWith<IllegalStateException> { block() }.message.orEmpty(), "a clause was already appended")
+        fun pages(): List<Int> {
+            lateinit var books: SelectStatement<Book>
+            database { books = BookTable SELECT ORDER_BY(BookTable.name to ASC) }
+            return books.getResults().map { it.pages }
+        }
+        database {
+            BookTable INSERT listOf(
+                Book(name = "A", author = "Dan Brown", price = 2.0, pages = 1),
+                Book(name = "B", author = "Ken Kousen", price = 1.0, pages = 1),
+            )
+            CategoryTable INSERT Category(name = "C", code = 1)
+        }
+
+        // A SELECT built since still runs, and the one the clause completes runs once, with it
+        for (inTransaction in listOf(false, true)) {
+            lateinit var unordered: SelectStatement<Book>
+            lateinit var ordered: SelectStatement<Book>
+            lateinit var categories: SelectStatement<Category>
+            fun DatabaseScope.build() {
+                unordered = BookTable SELECT WHERE(BookTable.pages EQ 1)
+                categories = CategoryTable SELECT X
+                ordered = unordered ORDER_BY (BookTable.price to ASC)
+            }
+            database { if (inTransaction) transaction { build() } else build() }
+            assertEquals(listOf("B", "A"), ordered.getResults().map { it.name })
+            assertEquals(listOf("C"), categories.getResults().map { it.name })
+            assertFailsWith<IllegalStateException> { unordered.getResults() }
+        }
+
+        // An UPDATE's WHERE leaves the other rows, though a SELECT was built since, as the UPDATE without it doesn't run
+        lateinit var books: SelectStatement<Book>
+        database {
+            BookTable { table ->
+                val update = table UPDATE SET(literal(99) AS Book::pages)
+                books = table SELECT X
+                update WHERE (name EQ "A")
+            }
+        }
+        assertEquals(2, books.getResults().size)
+        assertEquals(listOf(99, 1), pages())
+        // With parameters in SET, which the WHERE adds its own to without changing the UPDATE's
+        database {
+            BookTable { table ->
+                val update = table UPDATE SET { pages = 7 }
+                books = table SELECT X
+                update WHERE (name EQ "B")
+            }
+        }
+        assertEquals(2, books.getResults().size)
+        assertEquals(listOf(99, 7), pages())
+
+        // A clause can't be appended twice to a statement, nor to one that became part of another, and then no
+        // statement of the scope runs
+        assertNotInScope {
+            database {
+                val base = BookTable SELECT WHERE(BookTable.pages GT 0)
+                base ORDER_BY (BookTable.price to ASC)
+                base LIMIT 1
+            }
+        }
+        assertNotInScope {
+            database {
+                BookTable { table ->
+                    val update = table UPDATE SET { pages = 0 }
+                    update WHERE (name EQ "A")
+                    update WHERE (name EQ "B")
+                }
+            }
+        }
+        assertNotInScope {
+            database {
+                val planned = BookTable SELECT WHERE(BookTable.pages GT 0)
+                EXPLAIN_QUERY_PLAN(planned)
+                planned ORDER_BY (BookTable.price to ASC)
+            }
+        }
+        assertNotInScope {
+            database {
+                BookTable { table ->
+                    val first = table SELECT WHERE(name EQ "A")
+                    first UNION (table SELECT WHERE(name EQ "B"))
+                    first LIMIT 1
+                }
+            }
+        }
+        assertEquals(listOf(99, 7), pages())
+    }
+
+    /**
      * Covers transactions in each mode, which commit their statements, and roll them back when one fails, and a
      * transaction in another one, which joins it.
      */

@@ -20,6 +20,7 @@ package com.ctrip.sqllin.dsl.sql.clause
 
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
+import com.ctrip.sqllin.dsl.sql.operation.parametersOf
 import com.ctrip.sqllin.dsl.sql.statement.IndexStatement
 import com.ctrip.sqllin.dsl.sql.statement.ResultColumnSelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.UpdateDeleteStatement
@@ -58,7 +59,7 @@ public fun <T> WHERE(condition: SelectCondition): WhereClause<T> = WhereClause(c
 @StatementDslMaker
 public infix fun <T> ResultColumnSelectStatement<T>.WHERE(condition: SelectCondition): WhereSelectStatement<T> =
     appendToWhere(WhereClause(condition)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 /**
@@ -79,20 +80,12 @@ public infix fun <T> ResultColumnSelectStatement<T>.WHERE(condition: SelectCondi
  */
 @StatementDslMaker
 public infix fun <T> UpdateStatementWithoutWhereClause<T>.WHERE(condition: SelectCondition): String {
-    val params = when {
-        parameters == null && condition.parameters != null -> condition.parameters
-        parameters != null && condition.parameters == null -> parameters
-        parameters == null && condition.parameters == null -> null
-        else -> {
-            parameters!!.addAll(condition.parameters!!)
-            parameters
-        }
-    }
+    // A new list, so that the UPDATE without WHERE keeps its own parameters
     val statement = UpdateDeleteStatement(buildString {
         append(sqlStr)
         append(WhereClause<T>(condition).clauseStr)
-    }, connection, params, table)
-    statementContainer changeLastStatement statement
+    }, connection, parametersOf(parameters, condition.parameters), table)
+    statementContainer.replaceStatement(this, statement)
     return statement.sqlStr
 }
 

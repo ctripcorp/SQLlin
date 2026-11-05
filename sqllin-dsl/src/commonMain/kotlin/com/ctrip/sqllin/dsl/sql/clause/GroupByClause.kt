@@ -65,13 +65,13 @@ public fun <T> GROUP_BY(vararg elements: ClauseElement<*>): GroupByClause<T> = G
 @StatementDslMaker
 public infix fun <T> WhereSelectStatement<T>.GROUP_BY(element: ClauseElement<*>): GroupBySelectStatement<T> =
     appendToGroupBy(GroupByClause(listOf(element))).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
 public infix fun <T> WhereSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement<*>>): GroupBySelectStatement<T> {
     val statement = appendToGroupBy(GroupByClause(elements))
-    container changeLastStatement statement
+    container.replaceStatement(this, statement)
     return statement
 }
 
@@ -82,6 +82,6 @@ public infix fun <T> ResultColumnSelectStatement<T>.GROUP_BY(element: ClauseElem
 @StatementDslMaker
 public infix fun <T> ResultColumnSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement<*>>): GroupBySelectStatement<T> {
     val statement = appendToGroupBy(GroupByClause(elements))
-    container changeLastStatement statement
+    container.replaceStatement(this, statement)
     return statement
 }

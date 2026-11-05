@@ -52,32 +52,32 @@ public fun <T> LIMIT(count: Int): LimitClause<T> = LimitClause(count)
 @StatementDslMaker
 public infix fun <T> WhereSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
 public infix fun <T> OrderBySelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
 public infix fun <T> HavingSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @ExperimentalDSLDatabaseAPI
 @StatementDslMaker
 public infix fun <T> CompoundSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
 public infix fun <T> ResultColumnSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 /**
@@ -104,5 +104,5 @@ public class OffsetClause<T> internal constructor(
 @StatementDslMaker
 public infix fun <T> LimitSelectStatement<T>.OFFSET(rowNo: Int): FinalSelectStatement<T> =
     appendToFinal(OffsetClause(rowNo)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }

@@ -179,6 +179,9 @@ class JvmTest {
     fun testExplainQueryPlan() = commonTest.testExplainQueryPlan()
 
     @Test
+    fun testClauseOnEarlierStatement() = commonTest.testClauseOnEarlierStatement()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test
