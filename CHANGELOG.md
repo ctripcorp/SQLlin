@@ -33,6 +33,10 @@
 * Fix: when SQLite rolled a transaction back itself, as it does for a constraint with `ON CONFLICT ROLLBACK`, which `onConflict = OnConflict.ROLLBACK` declares, for a trigger's `RAISE(ROLLBACK)` and for some I/O errors, ending the transaction failed too, as no transaction was active, and that failure took the place of the one that made SQLite roll it back, in `withTransaction` and so in the DSL's `transaction { }`. The failure that made SQLite roll it back is now thrown, with the failure to end the transaction added to it as a suppressed exception
 * New API: `TransactionMode`, `DEFERRED`, `IMMEDIATE` or `EXCLUSIVE`, which `DatabaseConnection#beginTransaction(mode)` and `withTransaction(mode) { }` begin a transaction in, rather than IMMEDIATE, the mode of `beginTransaction()`. `EXCLUSIVE` also keeps other connections from reading in DELETE journal mode, and `DEFERRED` takes no lock until the transaction reads or writes; Android's framework can't begin a deferred transaction that writes, so on Android `DEFERRED` begins an IMMEDIATE one. The new `beginTransaction` has a default implementation, which only begins an IMMEDIATE transaction, so a `DatabaseConnection` implemented outside SQLlin still compiles
 
+### sqllin-processor
+
+* Fix: only the Java classes of the processor had a JVM target, 21, so its Kotlin classes were compiled for the JDK that ran the build, as for Java 25 by JDK 25, which a KSP run on an older JDK can't load, failing with `UnsupportedClassVersionError`. The processor is now built with the JVM toolchain of the other modules, JDK 21, which its Kotlin classes target as well
+
 ## 2.5.0 / 2026-10-11
 
 ### All
