@@ -184,6 +184,9 @@ class AndroidTest {
     fun testIndexedBy() = commonTest.testIndexedBy()
 
     @Test
+    fun testExplainQueryPlan() = commonTest.testExplainQueryPlan()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

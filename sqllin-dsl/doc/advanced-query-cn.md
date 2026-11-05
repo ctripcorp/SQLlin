@@ -565,6 +565,33 @@ FTS 表是虚拟表，无法拥有[可观察查询](#可观察查询)用来计�
 _INSERT_、_UPDATE_ 和 _DELETE_ 来计数；由于触发器可能写入它，对任何带触发器的表执行的这些语句也会计入：用其他 SQL 所做的修改
 感知不到，视图所读取的 FTS 表的修改也感知不到。回滚的事务仍会计入其中的语句，这只会让查询多执行一次。
 
+## 查询计划
+
+`EXPLAIN_QUERY_PLAN(select)` 和 SQL 的 `EXPLAIN QUERY PLAN` 一样，告诉你 SQLite 会怎样执行一条 _SELECT_，但不会真的执行它：
+扫描哪些表、查找哪些索引、在哪里用临时 B 树给行排序。它可以用来确认查询用上了为它准备的索引（比如用了 `INDEXED_BY` 之后），
+也可以在测试中做这样的断言。它是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`：
+
+```kotlin
+val plan = database {
+    EXPLAIN_QUERY_PLAN(BookTable SELECT WHERE(BookTable.author EQ "Dan Brown") ORDER_BY (BookTable.price to ASC))
+}.getResults()
+println(plan)
+// QUERY PLAN
+// |--SEARCH book USING INDEX idx_book_author (author=?)
+// `--USE TEMP B-TREE FOR ORDER BY
+check(plan.details.any { "idx_book_author" in it })
+```
+
+任何 _SELECT_ 都可以，包括连接、子查询和组合查询。它会成为这条语句的一部分，所以不再单独执行；规划时会绑定它的参数，和它真正
+执行时一样。和 _SELECT_ 的结果一样，计划要在作用域执行完之后才能读取。`QueryPlan` 的 `steps` 是计划的各个步骤，每一步有它的
+`detail` 和 `children`，比如子查询的步骤、组合查询中每条 _SELECT_ 的步骤；`details` 列出所有步骤的描述，`toString()` 则像
+`sqlite3` 命令行那样把它们写成一棵树。计划取决于索引，以及 `ANALYZE` 和 `PRAGMA_OPTIMIZE` 收集的统计信息。
+
+步骤的描述是 SQLite 自己的文字，是给人读的，在不同的 SQLite 版本之间会有差异，比如 `SCAN TABLE book` 和 `SCAN book`。所以检查
+计划时，请看表名、索引名，以及 `USING INDEX`、`USING COVERING INDEX`、`TEMP B-TREE` 这样的短语，不要比较整条描述。低于 3.24.0
+的 SQLite（比如 API 30 之前的 Android）不会告诉你一个步骤属于哪个步骤，所以它的计划把所有步骤平铺列出，没有子步骤。这些都不需要
+你知道 SQLite 的版本：在每个平台上，计划的读取方式都一样。
+
 ## 最后
 
 你已经学习了所有的 SQLlin 用法，享受你的 SQLlin 的编程旅程并对它的更新保持关注吧 :)

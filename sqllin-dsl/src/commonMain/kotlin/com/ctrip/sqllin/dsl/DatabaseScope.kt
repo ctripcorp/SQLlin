@@ -1393,7 +1393,7 @@ public class DatabaseScope internal constructor(
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <R> SelectStatement<R>.AS(view: View<R>): Relation<R> {
-        takeAsSubquery()
+        takeOut()
         return DerivedTable(view, this)
     }
 
@@ -1455,13 +1455,10 @@ public class DatabaseScope internal constructor(
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public fun EXISTS(select: SelectStatement<*>): SelectCondition {
-        select.takeAsSubquery()
+        select.takeOut()
         return SelectCondition("EXISTS (${select.sqlStr})", select.parameters?.toMutableList(), select.tables)
     }
 
-    /**
-     * Takes this SELECT out of the statements the scope runs, as it becomes a subquery of another one.
-     */
     // A SELECT of a single column can also be a value, a scalar subquery: `select[R::property]` names the column, so
     // that the value has the property's type.
 
@@ -1526,11 +1523,17 @@ public class DatabaseScope internal constructor(
         require(descriptor.elementsCount == 1 && descriptor.getElementName(0) == property.name) {
             "A SELECT of '${descriptor.serialName}' can't be the value '${property.name}': a scalar subquery returns a single column, so its result type has to have that property only."
         }
-        select.takeAsSubquery()
+        select.takeOut()
         return element("(${inlineParameters(select.sqlStr, select.parameters)})", select.tables)
     }
 
-    private fun SelectStatement<*>.takeAsSubquery() {
+    /**
+     * Takes this SELECT out of the statements the scope runs, as it becomes part of another one: a subquery, or the
+     * SELECT that `EXPLAIN QUERY PLAN` plans.
+     *
+     * @throws IllegalArgumentException if this SELECT is incomplete, as an aggregate query that needs GROUP BY
+     */
+    private fun SelectStatement<*>.takeOut() {
         checkComplete()
         container removeStatement this
     }
@@ -1550,7 +1553,7 @@ public class DatabaseScope internal constructor(
         require(holds(column)) {
             "$prefix: its column '${descriptor.getElementName(0)}' holds ${column.serialName.removeSuffix("?")}, while '${element.valueName}' holds $values."
         }
-        select.takeAsSubquery()
+        select.takeOut()
         val sql = buildString {
             element.appendSQL(this)
             append(" IN (")
@@ -2349,6 +2352,43 @@ public class DatabaseScope internal constructor(
     @StatementDslMaker
     public fun PRAGMA_OPTIMIZE() {
         addStatement(PRAGMA.optimize(databaseConnection))
+    }
+
+    // ========== EXPLAIN QUERY PLAN ==========
+
+    /**
+     * Tells how SQLite would run [select], as the SQL `EXPLAIN QUERY PLAN` does, without running it: which tables it
+     * scans, which indexes it searches, and where it sorts the rows with a temporary B-tree. The plan is read, as the
+     * results of a SELECT are, once the scope has run.
+     *
+     * Example:
+     * ```kotlin
+     * val plan = database {
+     *     EXPLAIN_QUERY_PLAN(BookTable SELECT WHERE(BookTable.author EQ "Dan Brown") ORDER_BY (BookTable.price to ASC))
+     * }.getResults()
+     * println(plan)
+     * // QUERY PLAN
+     * // |--SEARCH book USING INDEX idx_book_author (author=?)
+     * // `--USE TEMP B-TREE FOR ORDER BY
+     * check(plan.details.any { "idx_book_author" in it })
+     * ```
+     *
+     * [select] can be any SELECT, with joins, subqueries or compound operators. It becomes part of the statement, so
+     * it no longer runs on its own, and it is planned with its parameters, as it would run. The plan depends on the
+     * indexes, and on the statistics that [ANALYZE] and [PRAGMA_OPTIMIZE] gather. Its details are SQLite's text, which
+     * differs between SQLite versions, as [QueryPlan] describes. A trigger can't run it.
+     *
+     * @return The statement, whose `getResults()` returns the plan once the scope has run
+     * @throws IllegalArgumentException if [select] is incomplete, as an aggregate query that needs GROUP BY
+     * @see QueryPlan
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun EXPLAIN_QUERY_PLAN(select: SelectStatement<*>): QueryPlanStatement {
+        select.takeOut()
+        val statement = QueryPlanStatement("EXPLAIN QUERY PLAN ${select.sqlStr}", databaseConnection, select.parameters?.toMutableList())
+        addStatement(statement)
+        return statement
     }
 
     // ========== CREATE TRIGGER and DROP TRIGGER ==========

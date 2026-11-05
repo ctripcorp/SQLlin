@@ -36,6 +36,7 @@ import com.ctrip.sqllin.dsl.sql.withName
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.ASC
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
+import com.ctrip.sqllin.dsl.sql.statement.QueryPlanStatement
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -2801,6 +2802,95 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertNoSuchIndex { database { (BookTable INDEXED_BY "no_such_index") SELECT X } }
         assertNoSuchIndex { database { BookTable { table -> (table INDEXED_BY "no_such_index") UPDATE SET { pages = 2 } WHERE (author EQ "Dan Brown") } } }
         assertNoSuchIndex { database { (BookTable INDEXED_BY "no_such_index") DELETE X } }
+    }
+
+    /**
+     * Covers EXPLAIN QUERY PLAN: the plan of a SELECT tells the index it searches, the table it scans and the sort it
+     * needs, which NOT INDEXED changes, and nests the steps of a compound SELECT; the SELECT itself doesn't run, and its
+     * parameters are bound. The details are checked by the names and phrases that every SQLite version writes. It runs
+     * in a transaction and in a versioned read, whose token it adds no table to, and is rejected in a trigger and with
+     * an incomplete SELECT.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testExplainQueryPlan() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        fun List<String>.anyHas(text: String) = any { text in it }
+        database {
+            BookTable.CREATE_INDEX("idx_book_author", BookTable.author)
+            BookTable INSERT Book(name = "The Da Vinci Code", author = "Dan Brown", price = 16.96, pages = 454)
+        }
+        lateinit var select: SelectStatement<Book>
+        lateinit var searched: QueryPlanStatement
+        lateinit var scanned: QueryPlanStatement
+        lateinit var notIndexed: QueryPlanStatement
+        lateinit var compound: QueryPlanStatement
+        database {
+            select = BookTable SELECT WHERE(BookTable.author EQ "Dan Brown") ORDER_BY (BookTable.price to ASC)
+            searched = EXPLAIN_QUERY_PLAN(select)
+            scanned = EXPLAIN_QUERY_PLAN(BookTable SELECT X)
+            notIndexed = EXPLAIN_QUERY_PLAN(BookTable.NOT_INDEXED SELECT WHERE(BookTable.author EQ "Dan Brown"))
+            compound = BookTable { table ->
+                EXPLAIN_QUERY_PLAN((table SELECT WHERE(author EQ "Dan Brown")) UNION (table SELECT WHERE(author EQ "Ken Kousen")))
+            }
+        }
+        // The SELECT became part of the plan, so it didn't run
+        assertFailsWith<IllegalStateException> { select.getResults() }
+
+        // The search of the index, and the sort of ORDER BY, which no index gives
+        val searchedPlan = searched.getResults()
+        assertEquals(2, searchedPlan.steps.size)
+        assertEquals(true, searchedPlan.steps[0].detail.startsWith("SEARCH"))
+        assertContains(searchedPlan.steps[0].detail, "idx_book_author")
+        assertContains(searchedPlan.steps[1].detail, "TEMP B-TREE")
+        assertEquals(true, searchedPlan.steps.all { it.children.isEmpty() })
+        assertEquals(searchedPlan.steps.map { it.detail }, searchedPlan.details)
+        assertEquals(
+            listOf("QUERY PLAN", "|--${searchedPlan.steps[0].detail}", "`--${searchedPlan.steps[1].detail}"),
+            searchedPlan.toString().lines(),
+        )
+
+        // A scan of the table, without WHERE, or with NOT INDEXED
+        for (plan in listOf(scanned.getResults(), notIndexed.getResults())) {
+            assertEquals(true, plan.details.any { it.startsWith("SCAN") && "book" in it }, plan.toString())
+            assertEquals(false, plan.details.anyHas("idx_book_author"), plan.toString())
+        }
+
+        // The steps of each SELECT of a compound are children of the compound's
+        val compoundPlan = compound.getResults()
+        assertEquals(true, compoundPlan.steps.any { it.children.isNotEmpty() }, compoundPlan.toString())
+        assertEquals(2, compoundPlan.details.count { "idx_book_author" in it }, compoundPlan.toString())
+        assertEquals(true, compoundPlan.details.size > compoundPlan.steps.size)
+        assertEquals(true, compoundPlan.toString().lines().drop(1).any { it.startsWith("   ") || it.startsWith("|  ") })
+
+        // In a transaction, and in a versioned read, which only reads
+        lateinit var inTransaction: QueryPlanStatement
+        database {
+            transaction {
+                BookTable INSERT Book(name = "The Lost Symbol", author = "Dan Brown", price = 19.95, pages = 510)
+                inTransaction = EXPLAIN_QUERY_PLAN(BookTable SELECT WHERE(BookTable.author EQ "Dan Brown"))
+            }
+        }
+        assertEquals(true, inTransaction.getResults().details.anyHas("idx_book_author"))
+        runTest {
+            val (versioned, versions) = database.versioned { EXPLAIN_QUERY_PLAN(BookTable SELECT X) }
+            assertEquals(true, versioned.getResults().details.anyHas("book"))
+            assertEquals("TableVersions()", versions.toString())
+        }
+
+        // A trigger can't run it, and an incomplete SELECT can't be planned
+        val inTrigger = assertFailsWith<IllegalArgumentException> {
+            database {
+                CREATE_TRIGGER("book_inserted") AFTER INSERT ON BookTable BEGIN {
+                    EXPLAIN_QUERY_PLAN(BookTable SELECT X)
+                }
+            }
+        }
+        assertContains(inTrigger.message.orEmpty(), "EXPLAIN QUERY PLAN")
+        val ungrouped = assertFailsWith<IllegalArgumentException> {
+            database {
+                BookTable { table -> EXPLAIN_QUERY_PLAN(table SELECT (count(X) AS AuthorBookCount::books)) }
+            }
+        }
+        assertContains(ungrouped.message.orEmpty(), "without GROUP BY")
     }
 
     /**

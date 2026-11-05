@@ -611,6 +611,37 @@ trigger can write it, from those on any table that has triggers: a change made w
 is a change to an FTS table that a view reads. A rolled back transaction still counts its statements, which only runs
 the query once more.
 
+## Query Plans
+
+`EXPLAIN_QUERY_PLAN(select)` tells how SQLite would run a _SELECT_, as the SQL `EXPLAIN QUERY PLAN` does, without
+running it: which tables it scans, which indexes it searches, and where it sorts the rows with a temporary B-tree. It
+helps to check that a query uses the index meant for it, as after `INDEXED_BY`, or a test that asserts so. It is
+experimental, so opt in with `@OptIn(ExperimentalDSLDatabaseAPI::class)`:
+
+```kotlin
+val plan = database {
+    EXPLAIN_QUERY_PLAN(BookTable SELECT WHERE(BookTable.author EQ "Dan Brown") ORDER_BY (BookTable.price to ASC))
+}.getResults()
+println(plan)
+// QUERY PLAN
+// |--SEARCH book USING INDEX idx_book_author (author=?)
+// `--USE TEMP B-TREE FOR ORDER BY
+check(plan.details.any { "idx_book_author" in it })
+```
+
+The _SELECT_ can be any, with joins, subqueries or compound operators. It becomes part of the statement, so it no
+longer runs on its own, and it is planned with its parameters, as it would run. As with the results of a _SELECT_, the
+plan is read once the scope has run. A `QueryPlan` has the `steps` of the plan, each with its `detail` and its
+`children`, as the steps of a subquery or of each _SELECT_ of a compound are; `details` lists the details of all steps,
+and `toString()` writes them as a tree, as the `sqlite3` shell does. The plan depends on the indexes, and on the
+statistics that `ANALYZE` and `PRAGMA_OPTIMIZE` gather.
+
+The details are SQLite's own text, which is meant to be read, and which differs between SQLite versions, as
+`SCAN TABLE book` and `SCAN book` do. So check a plan by the names of tables and indexes, and by phrases such as
+`USING INDEX`, `USING COVERING INDEX` and `TEMP B-TREE`, rather than by whole details. A SQLite older than 3.24.0, as
+Android's before API 30 is, doesn't tell which step another belongs to, so its plans list all steps in a row, with no
+children. None of this needs the version of SQLite to be known: the plan is read the same way on every platform.
+
 ## Finally
 
 You have learned all usages with SQLlin, enjoy it and stay Stay tuned for SQLlin's updates :)

@@ -16,6 +16,8 @@
 
 package com.ctrip.sqllin.dsl.sql.statement
 
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
+
 /**
  * What the statements of a scope may change when they run, from least to most.
  *
@@ -23,7 +25,7 @@ package com.ctrip.sqllin.dsl.sql.statement
  */
 internal enum class Changes {
 
-    /** Nothing: the statements only read. */
+    /** Nothing: the statements only read, or plan a query. */
     NONE,
 
     /** The rows of tables: INSERT, UPDATE or DELETE. */
@@ -34,8 +36,9 @@ internal enum class Changes {
 
     companion object {
 
+        @OptIn(ExperimentalDSLDatabaseAPI::class)
         fun of(statement: SingleStatement): Changes = when (statement) {
-            is SelectStatement<*>, is RaiseStatement -> NONE
+            is SelectStatement<*>, is QueryPlanStatement, is RaiseStatement -> NONE
             is TableStructureStatement -> SCHEMA
             is InsertStatement, is UpdateDeleteStatement, is UpdateStatementWithoutWhereClause<*> -> ROWS
         }
@@ -43,11 +46,12 @@ internal enum class Changes {
         /**
          * The table [statement] writes rows to, or null if it writes none.
          */
+        @OptIn(ExperimentalDSLDatabaseAPI::class)
         fun writtenTable(statement: SingleStatement): String? = when (statement) {
             is InsertStatement -> statement.table
             is UpdateDeleteStatement -> statement.table
             is UpdateStatementWithoutWhereClause<*> -> statement.table
-            is SelectStatement<*>, is TableStructureStatement, is RaiseStatement -> null
+            is SelectStatement<*>, is QueryPlanStatement, is TableStructureStatement, is RaiseStatement -> null
         }
     }
 }
