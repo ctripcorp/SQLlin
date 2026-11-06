@@ -60,7 +60,6 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.serializer
-import kotlin.concurrent.Volatile
 import kotlin.jvm.JvmName
 import kotlin.reflect.KProperty1
 
@@ -93,6 +92,11 @@ import kotlin.reflect.KProperty1
  * declared outside the scope and read its results after the scope has exited, as shown below.
  * For the same reason a query's result cannot inform a write in the same scope: a read-modify-write
  * has to be split into two scopes.
+ *
+ * **A scope isn't thread-safe**: use it only in the code that runs its block, and don't call its functions from
+ * threads or coroutines that run at the same time, as coroutines launched in the block of `suspendedScope` on a
+ * dispatcher of several threads would. A block that suspends may resume on another thread, which is safe, as the steps
+ * of a coroutine run one after another.
  *
  * Example:
  * ```kotlin
@@ -132,7 +136,6 @@ public class DatabaseScope internal constructor(
 
     // ========== Transaction Management ==========
 
-    @Volatile
     private var transactionStatementsGroup: TransactionStatementsGroup? = null
 
     private inline val isInTransaction
@@ -142,7 +145,6 @@ public class DatabaseScope internal constructor(
      * How deeply the transactions being built are nested: 1 in the outermost one, and 0 outside any. Only the outermost
      * one collects statements, and only its end ends it, so that the statements after an inner one are still in it.
      */
-    @Volatile
     private var transactionDepth = 0
 
     /**
