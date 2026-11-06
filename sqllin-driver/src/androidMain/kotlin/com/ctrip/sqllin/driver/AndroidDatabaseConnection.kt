@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.driver
 
 import android.database.sqlite.SQLiteCursor
+import android.os.Build
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteQuery
 
@@ -27,11 +28,33 @@ import android.database.sqlite.SQLiteQuery
  */
 internal class AndroidDatabaseConnection(private val database: SQLiteDatabase) : DatabaseConnection {
 
-    override fun execSQL(sql: String, bindParams: Array<out Any?>?) =
-        if (bindParams == null)
-            database.execSQL(sql)
-        else
-            database.execSQL(sql, Array(bindParams.size) { unsignedAsLong(bindParams[it]) })
+    /**
+     * Runs [sql], and a PRAGMA that sets how the connection runs statements on every connection of the database.
+     *
+     * From Android 13 on, a database in WAL mode has several connections: the one that writes, and those that read
+     * outside a transaction. The framework only prepares a PRAGMA such as `foreign_keys = ON` on the connection that
+     * writes, and steps it on one that reads, as `sqlite3_stmt_readonly()` reports it doesn't write. SQLite changes the
+     * setting when it prepares the PRAGMA, but only expires the statements the connection has compiled when it steps
+     * it, so the statements that the connection that writes has cached kept running as they were compiled, with the
+     * setting they had: without checking foreign keys, or with them. Such a PRAGMA runs on every connection instead,
+     * those opened later included, so that each steps it. In a transaction, which runs on the connection that writes,
+     * it runs there, where SQLite ignores a change of foreign_keys, as it does on the other platforms, and applies
+     * recursive_triggers to the statements after it, which only that connection runs. Before Android 13, a database
+     * that SQLlin opens has a single connection.
+     */
+    override fun execSQL(sql: String, bindParams: Array<out Any?>?) = when {
+        bindParams != null -> database.execSQL(sql, Array(bindParams.size) { unsignedAsLong(bindParams[it]) })
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !database.inTransaction() && CONNECTION_SETTING.containsMatchIn(sql) ->
+            database.execPerConnectionSQL(sql, null)
+        else -> database.execSQL(sql)
+    }
+
+    private companion object {
+        /**
+         * A PRAGMA that sets how the connection runs statements, which SQLite compiles into them.
+         */
+        val CONNECTION_SETTING = Regex("""^\s*PRAGMA\s+(foreign_keys|recursive_triggers)\s*[=(]""", RegexOption.IGNORE_CASE)
+    }
 
     /**
      * The framework binds a value it doesn't know, such as a `UInt`, as its string, so unsigned values are bound as

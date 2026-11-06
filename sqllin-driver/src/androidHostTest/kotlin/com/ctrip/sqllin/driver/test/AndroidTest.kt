@@ -73,6 +73,9 @@ class AndroidTest {
     fun testBusyTimeout() = commonTest.testBusyTimeout()
 
     @Test
+    fun testConnectionPragmas() = commonTest.testConnectionPragmas()
+
+    @Test
     fun testConcurrency() = commonTest.testConcurrency()
 
     /**

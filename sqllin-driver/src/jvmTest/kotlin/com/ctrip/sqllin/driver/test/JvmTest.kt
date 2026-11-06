@@ -62,6 +62,9 @@ class JvmTest {
     fun testBusyTimeout() = commonTest.testBusyTimeout()
 
     @Test
+    fun testConnectionPragmas() = commonTest.testConnectionPragmas()
+
+    @Test
     fun testConcurrency() = commonTest.testConcurrency()
 
     @AfterTest
