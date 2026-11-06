@@ -819,9 +819,10 @@ fun sample() {
   whose auto_vacuum is on, as Android's SQLite creates one by default, removes them at each commit, so it has none.
   `PRAGMA_AUTO_VACUUM()` tells whether it is, and `PRAGMA_AUTO_VACUUM(mode)` sets it, which applies to a database that
   has no tables yet, and otherwise once a `VACUUM()` after it rebuilds the database. SQLlin doesn't run
-  `PRAGMA incremental_vacuum`, which the `INCREMENTAL` mode keeps the pages for, as it returns a row for each page it
-  removes, which no driver steps through. `PRAGMA_APPLICATION_ID()` reads, and `PRAGMA_APPLICATION_ID(id)` sets, the
-  number of the header that tells the app the file belongs to.
+  `PRAGMA incremental_vacuum`, which the `INCREMENTAL` mode keeps the pages for: it removes a page each time it returns a
+  row, which has no columns, and sqlite-jdbc runs such a statement only as far as its first row.
+  `PRAGMA_APPLICATION_ID()` reads, and `PRAGMA_APPLICATION_ID(id)` sets, the number of the header that tells the app the
+  file belongs to.
 * **How statements run**: `PRAGMA_DEFER_FOREIGN_KEYS(true)` defers the checks of foreign keys to the commit, so that a
   row can be inserted before the row it references; SQLite turns it off when the transaction ends, so it throws an
   `IllegalStateException` outside `transaction {...}`. `PRAGMA_RECURSIVE_TRIGGERS(true)` lets triggers fire

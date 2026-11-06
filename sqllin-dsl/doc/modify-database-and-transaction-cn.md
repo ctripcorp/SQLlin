@@ -768,8 +768,8 @@ fun sample() {
   [`VACUUM()`](#vacuum) 会去掉这些页；开启了 auto_vacuum 的数据库（Android 的 SQLite 默认就这样创建数据库）每次提交都会去掉
   它们，所以没有未使用的页。`PRAGMA_AUTO_VACUUM()` 返回是否开启了 auto_vacuum，`PRAGMA_AUTO_VACUUM(mode)` 设置它：对还没有表的
   数据库立即生效，否则要在它之后执行一次 `VACUUM()` 重建数据库才生效。SQLlin 不执行 `PRAGMA incremental_vacuum`（`INCREMENTAL`
-  模式保留的页要靠它去掉），因为它每去掉一页就返回一行，而各个驱动都不会把这些行逐一执行完。`PRAGMA_APPLICATION_ID()` 读取、
-  `PRAGMA_APPLICATION_ID(id)` 设置文件头中标识文件属于哪个应用的数字。
+  模式保留的页要靠它去掉）：它每返回一行才去掉一页，而这些行没有列，sqlite-jdbc 执行这样的语句只会执行到第一行。
+  `PRAGMA_APPLICATION_ID()` 读取、`PRAGMA_APPLICATION_ID(id)` 设置文件头中标识文件属于哪个应用的数字。
 * **语句的执行方式**：`PRAGMA_DEFER_FOREIGN_KEYS(true)` 把外键检查推迟到提交时，这样就可以先插入引用其他行的行；SQLite 会在
   事务结束时把它关掉，所以在 `transaction {...}` 之外调用会抛出 `IllegalStateException`。`PRAGMA_RECURSIVE_TRIGGERS(true)`
   允许触发器递归触发；`PRAGMA_LEGACY_ALTER_TABLE(true)` 让 `ALTER_RENAME_TABLE_TO` 不改写读取这张表的视图和触发器，Android 的

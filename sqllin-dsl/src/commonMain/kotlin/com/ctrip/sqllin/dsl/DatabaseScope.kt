@@ -2877,8 +2877,8 @@ public class DatabaseScope internal constructor(
      * ```
      *
      * @param mode Whether to remove them at each commit, or to keep them, as [AutoVacuum.INCREMENTAL] does until the
-     * SQL `PRAGMA incremental_vacuum` removes them, which SQLlin doesn't run, as it returns a row for each page it removes,
-     * which no driver steps through
+     * SQL `PRAGMA incremental_vacuum` removes them, which SQLlin doesn't run: it removes a page each time it returns a
+     * row, which has no columns, and sqlite-jdbc runs such a statement only as far as its first row
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker

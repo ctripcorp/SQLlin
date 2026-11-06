@@ -39,9 +39,15 @@ done. A new item takes the next number.
 * F65: Support the conflict clause of NOT NULL, as `NOT NULL ON CONFLICT REPLACE`, which writes the default value instead of NULL, left out of F17: a property's type declares NOT NULL, so no annotation can hold the clause yet; it could be a new annotation, or a parameter of `@Default`. SQLlin's statements rarely write NULL to a non-null column, so it is of little use for now
 * F67: Support the PRAGMAs that set how each connection runs statements, such as cache_size, temp_store, mmap_size, query_only, automatic_index, trusted_schema, threads, cache_spill, analysis_limit, journal_size_limit, wal_autocheckpoint, max_page_count, secure_delete and cell_size_check, as parameters of `DatabaseConfiguration` and `DSLDBConfiguration` rather than as statements: Android's framework reads through several connections of a database in WAL mode from Android 13 on, while a statement sets a PRAGMA on the one connection that writes, so they have to be set on every connection, as `busyTimeout` is, and Android's framework sets journal_size_limit and wal_autocheckpoint on each connection it opens; and a change of temp_store deletes the TEMP tables and triggers, which observed queries count changes with
 
+## Shelved
+
+Items that aren't planned, as they are of little use, or would cost more than they give, until a need for them comes up.
+
+* F68: Support `PRAGMA incremental_vacuum`, which removes the unused pages that the INCREMENTAL mode of `PRAGMA_AUTO_VACUUM(mode)` keeps: it removes a page each time it returns a row, which has no columns, so it has to run as a query whose rows are all read. Android's framework and Kotlin/Native would run it so, but sqlite-jdbc doesn't run a statement that returns no columns as a query, and runs it as a statement only as far as its first row, removing one page, so the JVM would have to run `PRAGMA incremental_vacuum(1)` once for each page, in a transaction. Few databases are in INCREMENTAL mode, and Android's SQLite creates them in FULL mode
+
 ## Supported
 
-* F30: Support more PRAGMAs: those that check the database, read its schema and what the SQLite has, checkpoint the WAL, read the size and the header of the file, and set how statements run; case_sensitive_like is left out, as SQLite deprecates it, and incremental_vacuum, as it returns a row for each page it removes, which no driver steps through (2.6.0 ✅)
+* F30: Support more PRAGMAs: those that check the database, read its schema and what the SQLite has, checkpoint the WAL, read the size and the header of the file, and set how statements run; case_sensitive_like is left out, as SQLite deprecates it, and incremental_vacuum, shelved as F68, as sqlite-jdbc only runs it as far as the first of the rows it returns, one for each page it removes (2.6.0 ✅)
 * F29: Support EXPLAIN QUERY PLAN, to see which indexes a query uses (2.6.0 ✅)
 * F26: Support INDEXED BY and NOT INDEXED (2.6.0 ✅)
 * F27: Support choosing how a transaction begins, DEFERRED, IMMEDIATE or EXCLUSIVE (2.6.0 ✅)
