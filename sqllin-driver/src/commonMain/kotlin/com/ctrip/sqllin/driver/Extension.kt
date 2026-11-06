@@ -125,16 +125,20 @@ public expect fun deleteDatabase(path: DatabasePath, name: String): Boolean
  * Updates the database's synchronous mode if different from current.
  */
 internal infix fun DatabaseConnection.updateSynchronousMode(mode: SynchronousMode) {
-    val currentJournalMode = withQuery("PRAGMA synchronous;") {
+    val currentSynchronousMode = withQuery("PRAGMA synchronous;") {
         it.next()
         it.getInt(0)
     }
-    if (currentJournalMode != mode.value)
+    if (currentSynchronousMode != mode.value)
         execSQL("PRAGMA synchronous=${mode.value};")
 }
 
 /**
  * Updates the database's journal mode if different from current.
+ *
+ * The PRAGMA returns the mode as a row, which is read, as a query on Android and Kotlin/Native only runs as its cursor
+ * is read: without it, the mode never changed. A connection that is read-only can't change it, as SQLite writes WAL
+ * mode to the header of the file, so it isn't called for one.
  */
 internal infix fun DatabaseConnection.updateJournalMode(mode: JournalMode) {
     val currentJournalMode = withQuery("PRAGMA journal_mode;") {
@@ -142,7 +146,7 @@ internal infix fun DatabaseConnection.updateJournalMode(mode: JournalMode) {
         it.getString(0)
     }
     if (!currentJournalMode.equals(mode.name, ignoreCase = true))
-        withQuery("PRAGMA journal_mode=${mode.name};") {}
+        withQuery("PRAGMA journal_mode=${mode.name};") { it.next() }
 }
 
 /**

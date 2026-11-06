@@ -18,6 +18,7 @@ package com.ctrip.sqllin.driver.test
 
 import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.DatabasePath
+import com.ctrip.sqllin.driver.JournalMode
 import com.ctrip.sqllin.driver.TransactionMode
 import com.ctrip.sqllin.driver.openDatabase
 import com.ctrip.sqllin.driver.withQuery
@@ -343,6 +344,20 @@ class CommonBasicTest(private val path: DatabasePath) {
             it.executeInsert(insertCounter, arrayOf(30L, 0L))
             assertEquals(listOf(1L, 2L, 10L, 11L, 12L, 13L, 20L, 21L, 30L, 31L), counters())
         }
+    }
+
+    /**
+     * The database is in the journal mode of its configuration, WAL by default, to which it is switched when it is
+     * opened from the mode it was left in.
+     */
+    fun testJournalMode() {
+        fun journalMode(config: DatabaseConfiguration): String? = openDatabase(config) {
+            it.withQuery("PRAGMA journal_mode") { cursor -> cursor.next(); cursor.getString(0) }
+        }
+        val config = getDefaultDBConfig(false)
+        assertEquals("wal", journalMode(config))
+        assertEquals("delete", journalMode(config.copy(journalMode = JournalMode.DELETE)))
+        assertEquals("wal", journalMode(config))
     }
 
     /**

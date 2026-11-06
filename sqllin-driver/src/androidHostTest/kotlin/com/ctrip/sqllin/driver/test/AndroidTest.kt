@@ -70,6 +70,9 @@ class AndroidTest {
     fun testTransactionModes() = commonTest.testTransactionModes(isDeferredSupported = false)
 
     @Test
+    fun testJournalMode() = commonTest.testJournalMode()
+
+    @Test
     fun testBusyTimeout() = commonTest.testBusyTimeout()
 
     @Test

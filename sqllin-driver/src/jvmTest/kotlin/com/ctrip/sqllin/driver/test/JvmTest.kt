@@ -59,6 +59,9 @@ class JvmTest {
     fun testTransactionModes() = commonTest.testTransactionModes(isDeferredSupported = true)
 
     @Test
+    fun testJournalMode() = commonTest.testJournalMode()
+
+    @Test
     fun testBusyTimeout() = commonTest.testBusyTimeout()
 
     @Test
