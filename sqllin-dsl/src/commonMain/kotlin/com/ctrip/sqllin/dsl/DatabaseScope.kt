@@ -2407,10 +2407,22 @@ public class DatabaseScope internal constructor(
         return statement
     }
 
-    // ========== PRAGMAs that check the database, read its schema, or defer foreign keys ==========
+    // ========== PRAGMAs that check the database, read its schema and its file, or set how statements run ==========
     //
     // A PRAGMA that reads returns a PragmaStatement, whose getResults() returns what it read once the scope has run, as
     // the results of a SELECT are read. Their types are in com.ctrip.sqllin.dsl.sql.pragma. A trigger can't run them.
+    // A PRAGMA that only newer versions of SQLite have fails with an IllegalStateException where the SQLite lacks it,
+    // which ignores it rather than failing, as its rows have no columns then.
+
+    /**
+     * Whether the database enforces foreign keys, as the SQL `PRAGMA foreign_keys` tells, which
+     * `PRAGMA_FOREIGN_KEYS(flag)` sets.
+     *
+     * @return The statement, whose `getResults()` returns whether it does once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FOREIGN_KEYS(): PragmaStatement<Boolean> = pragma(PRAGMA.isForeignKeysEnabled(databaseConnection))
 
     /**
      * Checks the whole database, as the SQL `PRAGMA integrity_check(N)` does: that its pages, rows and indexes are
@@ -2455,6 +2467,60 @@ public class DatabaseScope internal constructor(
         require(maxErrors > 0) { "PRAGMA quick_check needs a positive number of errors, rather than $maxErrors." }
         return pragma(PRAGMA.check("quick_check", maxErrors, databaseConnection))
     }
+
+    /**
+     * Checks [table] and its indexes as [PRAGMA_INTEGRITY_CHECK] checks the whole database, as the SQL
+     * `PRAGMA integrity_check(table)` does, reporting up to 100 problems.
+     *
+     * It needs SQLite 3.33.0, which Android has from API 34 on: an older SQLite takes the name of the table for a number
+     * of errors, which it ignores, so that it checks the whole database instead.
+     *
+     * @return The statement, whose `getResults()` returns the problems, in SQLite's words, or an empty list if there
+     * are none, once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_INTEGRITY_CHECK(table: Table<*>): PragmaStatement<List<String>> =
+        pragma(PRAGMA.check("integrity_check", table.tableName, databaseConnection))
+
+    /**
+     * Checks the table named [table] and its indexes, as the SQL `PRAGMA integrity_check(table)` does.
+     *
+     * @see PRAGMA_INTEGRITY_CHECK
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_INTEGRITY_CHECK(table: String): PragmaStatement<List<String>> =
+        pragma(PRAGMA.check("integrity_check", table, databaseConnection))
+
+    /**
+     * Checks [table] and its indexes as [PRAGMA_QUICK_CHECK] checks the whole database, as the SQL
+     * `PRAGMA quick_check(table)` does, reporting up to 100 problems.
+     *
+     * It needs SQLite 3.33.0, which Android has from API 34 on: an older SQLite takes the name of the table for a number
+     * of errors, which it ignores, so that it checks the whole database instead.
+     *
+     * @return The statement, whose `getResults()` returns the problems, in SQLite's words, or an empty list if there
+     * are none, once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_QUICK_CHECK(table: Table<*>): PragmaStatement<List<String>> =
+        pragma(PRAGMA.check("quick_check", table.tableName, databaseConnection))
+
+    /**
+     * Checks the table named [table] and its indexes, as the SQL `PRAGMA quick_check(table)` does.
+     *
+     * @see PRAGMA_QUICK_CHECK
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_QUICK_CHECK(table: String): PragmaStatement<List<String>> =
+        pragma(PRAGMA.check("quick_check", table, databaseConnection))
 
     /**
      * Finds the rows of all tables that violate their foreign keys, as the SQL `PRAGMA foreign_key_check` does, such as
@@ -2530,6 +2596,59 @@ public class DatabaseScope internal constructor(
         pragma(PRAGMA.tableInfo(name, databaseConnection))
 
     /**
+     * The columns of [table] in the database, its hidden and generated ones included, as the SQL
+     * `PRAGMA table_xinfo(table)` tells: [PRAGMA_TABLE_INFO] with the [ColumnInfo.kind] of each column, such as the
+     * hidden columns of an FTS table. A table that doesn't exist has no columns.
+     *
+     * It needs SQLite 3.26.0, which Android has from API 30 on, and fails with an [IllegalStateException] where the
+     * SQLite lacks it.
+     *
+     * @return The statement, whose `getResults()` returns the columns, in the order of the table, once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_TABLE_XINFO(table: Table<*>): PragmaStatement<List<ColumnInfo>> =
+        pragma(PRAGMA.tableXinfo(table.tableName, databaseConnection))
+
+    /**
+     * The columns of [view] in the database, as the SQL `PRAGMA table_xinfo(view)` tells.
+     *
+     * @see PRAGMA_TABLE_XINFO
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_TABLE_XINFO(view: View<*>): PragmaStatement<List<ColumnInfo>> =
+        pragma(PRAGMA.tableXinfo(view.tableName, databaseConnection))
+
+    /**
+     * The columns of the table or view named [name], as the SQL `PRAGMA table_xinfo(name)` tells.
+     *
+     * @see PRAGMA_TABLE_XINFO
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_TABLE_XINFO(name: String): PragmaStatement<List<ColumnInfo>> =
+        pragma(PRAGMA.tableXinfo(name, databaseConnection))
+
+    /**
+     * The tables and views of the databases of the connection, as the SQL `PRAGMA table_list` tells: those of `main`,
+     * with the virtual tables, as FTS tables, and the tables they keep their data in, and `sqlite_schema`, and those of
+     * `temp`, as the TEMP table that observed queries count changes with.
+     *
+     * It needs SQLite 3.37.0, which Android has from API 34 on, and fails with an [IllegalStateException] where the
+     * SQLite lacks it.
+     *
+     * @return The statement, whose `getResults()` returns the tables and views once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_TABLE_LIST(): PragmaStatement<List<RelationInfo>> = pragma(PRAGMA.tableList(databaseConnection))
+
+    /**
      * The indexes of [table], as the SQL `PRAGMA index_list(table)` tells: those that CREATE INDEX created, and those
      * that SQLite created for its UNIQUE and PRIMARY KEY constraints, except for an INTEGER PRIMARY KEY, which is the
      * rowid, which needs none.
@@ -2584,6 +2703,84 @@ public class DatabaseScope internal constructor(
         pragma(PRAGMA.foreignKeyList(table, databaseConnection))
 
     /**
+     * The options the SQLite was compiled with, as the SQL `PRAGMA compile_options` tells, without their `SQLITE_`
+     * prefix, as `ENABLE_FTS4` or `THREADSAFE=1`, which tell what the SQLite of a platform has.
+     *
+     * A SQLite can be built without the PRAGMA, as Android's is, where it fails with an [IllegalStateException].
+     *
+     * @return The statement, whose `getResults()` returns the options once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_COMPILE_OPTIONS(): PragmaStatement<List<String>> =
+        pragma(PRAGMA.names("compile_options", "compile_options", null, databaseConnection))
+
+    /**
+     * The names of the collations of the connection, as the SQL `PRAGMA collation_list` tells: SQLite's `BINARY`,
+     * `NOCASE` and `RTRIM`, and those the platform or the app registers, as Android's `LOCALIZED` and `UNICODE`.
+     *
+     * @return The statement, whose `getResults()` returns the names once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_COLLATION_LIST(): PragmaStatement<List<String>> =
+        pragma(PRAGMA.names("collation_list", "name", null, databaseConnection))
+
+    /**
+     * The databases of the connection, as the SQL `PRAGMA database_list` tells: `main`, with the path of its file,
+     * and `temp` once the connection has TEMP tables.
+     *
+     * @return The statement, whose `getResults()` returns the databases once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_DATABASE_LIST(): PragmaStatement<List<DatabaseInfo>> = pragma(PRAGMA.databaseList(databaseConnection))
+
+    /**
+     * The SQL functions of the connection, as the SQL `PRAGMA function_list` tells, such as to check whether the SQLite
+     * of a platform has the math functions, which Android's lacks.
+     *
+     * It needs SQLite 3.30.0, which Android has from API 31 on, and fails with an [IllegalStateException] where the
+     * SQLite lacks it.
+     *
+     * @return The statement, whose `getResults()` returns a row for each form of each function once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FUNCTION_LIST(): PragmaStatement<List<FunctionInfo>> = pragma(PRAGMA.functionList(databaseConnection))
+
+    /**
+     * The names of the modules of virtual tables of the connection, as the SQL `PRAGMA module_list` tells, as `fts4` or
+     * `rtree`, which tell the virtual tables the SQLite of a platform can create.
+     *
+     * It needs SQLite 3.30.0, which Android has from API 31 on, and fails with an [IllegalStateException] where the
+     * SQLite lacks it.
+     *
+     * @return The statement, whose `getResults()` returns the names once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_MODULE_LIST(): PragmaStatement<List<String>> =
+        pragma(PRAGMA.names("module_list", "name", "SQLite 3.30.0, which Android has from API 31 on", databaseConnection))
+
+    /**
+     * The names of the PRAGMAs the SQLite has, as the SQL `PRAGMA pragma_list` tells.
+     *
+     * It needs SQLite 3.30.0, which Android has from API 31 on, and fails with an [IllegalStateException] where the
+     * SQLite lacks it.
+     *
+     * @return The statement, whose `getResults()` returns the names once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_PRAGMA_LIST(): PragmaStatement<List<String>> =
+        pragma(PRAGMA.names("pragma_list", "name", "SQLite 3.30.0, which Android has from API 31 on", databaseConnection))
+
+    /**
      * Checkpoints the WAL, as the SQL `PRAGMA wal_checkpoint(mode)` does: copies the pages it holds into the database
      * file, as SQLite does on its own once it holds 1000 pages, such as before copying the database file, which
      * doesn't hold what the WAL does. A FULL, RESTART or TRUNCATE checkpoint waits for the other connections of the
@@ -2609,7 +2806,7 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public fun PRAGMA_PAGE_COUNT(): PragmaStatement<Long> = pragma(PRAGMA.size("page_count", databaseConnection))
+    public fun PRAGMA_PAGE_COUNT(): PragmaStatement<Long> = pragma(PRAGMA.size("page_count", isInTransaction, databaseConnection))
 
     /**
      * The number of unused pages of the database file, as the SQL `PRAGMA freelist_count` tells, which rows that were
@@ -2620,16 +2817,74 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public fun PRAGMA_FREELIST_COUNT(): PragmaStatement<Long> = pragma(PRAGMA.size("freelist_count", databaseConnection))
+    public fun PRAGMA_FREELIST_COUNT(): PragmaStatement<Long> = pragma(PRAGMA.size("freelist_count", isInTransaction, databaseConnection))
 
     /**
-     * The size of a page of the database file in bytes, as the SQL `PRAGMA page_size` tells.
+     * The size of a page of the database file in bytes, as the SQL `PRAGMA page_size` tells. Outside a transaction,
+     * it is read in a transaction of its own, as SQLite takes it from what the connection last read of the header of
+     * the file, which a transaction reads again.
      *
      * @return The statement, whose `getResults()` returns the size once the scope has run
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public fun PRAGMA_PAGE_SIZE(): PragmaStatement<Long> = pragma(PRAGMA.size("page_size", databaseConnection))
+    public fun PRAGMA_PAGE_SIZE(): PragmaStatement<Long> = pragma(PRAGMA.size("page_size", isInTransaction, databaseConnection))
+
+    /**
+     * The number that the header of the database file holds to tell the app it belongs to, as the SQL
+     * `PRAGMA application_id` tells, which SQLite doesn't use, 0 unless it is set.
+     *
+     * @return The statement, whose `getResults()` returns the number once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_APPLICATION_ID(): PragmaStatement<Int> = pragma(PRAGMA.applicationId(databaseConnection))
+
+    /**
+     * Sets the number that the header of the database file holds to tell the app it belongs to, as the SQL
+     * `PRAGMA application_id = id` does, such as to tell a file of the app from others it opens.
+     *
+     * @param id The number
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_APPLICATION_ID(id: Int) {
+        pragma(PRAGMA.applicationId(id, databaseConnection))
+    }
+
+    /**
+     * Whether the database removes its unused pages, as the SQL `PRAGMA auto_vacuum` tells: Android's SQLite creates a
+     * database with [AutoVacuum.FULL] by default, and the others with [AutoVacuum.NONE]. Outside a transaction, it is
+     * read in a transaction of its own, as SQLite takes it from what the connection last read of the header of the
+     * file, which a transaction reads again: from Android 13 on, a query outside a transaction may run on a connection
+     * that reads, which would tell the mode before the last VACUUM.
+     *
+     * @return The statement, whose `getResults()` returns the mode once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_AUTO_VACUUM(): PragmaStatement<AutoVacuum> = pragma(PRAGMA.autoVacuum(isInTransaction, databaseConnection))
+
+    /**
+     * Sets whether the database removes its unused pages, as the SQL `PRAGMA auto_vacuum = mode` does. It applies to a
+     * database that has no tables yet, as in `create` of the configuration before the first CREATE, and otherwise
+     * only once [VACUUM] rebuilds the database, which it has to be followed by:
+     * ```kotlin
+     * database {
+     *     PRAGMA_AUTO_VACUUM(AutoVacuum.INCREMENTAL)
+     *     VACUUM()
+     * }
+     * ```
+     *
+     * @param mode Whether to remove them at each commit, or to keep them, as [AutoVacuum.INCREMENTAL] does until the
+     * SQL `PRAGMA incremental_vacuum` removes them, which SQLlin doesn't run, as it returns a row for each page it removes,
+     * which no driver steps through
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_AUTO_VACUUM(mode: AutoVacuum) {
+        pragma(PRAGMA.autoVacuum(mode, databaseConnection))
+    }
 
     /**
      * Defers the checks of foreign keys to the end of the transaction, or stops deferring them, as the SQL
@@ -2659,6 +2914,53 @@ public class DatabaseScope internal constructor(
     public fun PRAGMA_DEFER_FOREIGN_KEYS(flag: Boolean) {
         check(isInTransaction) { "PRAGMA defer_foreign_keys only lasts until the transaction ends, so it can only be set in transaction { }." }
         pragma(PRAGMA.set("defer_foreign_keys", flag, databaseConnection))
+    }
+
+    /**
+     * Lets triggers fire recursively, or stops them, as the SQL `PRAGMA recursive_triggers` does: a statement that a
+     * trigger runs then fires the triggers of its table, the trigger itself included, which SQLite doesn't by default,
+     * up to a depth of 1000 by default. A REPLACE conflict resolution then also fires the DELETE triggers of the rows
+     * it deletes.
+     *
+     * It lasts as long as the database is open, for the scopes after this one too, until it is set again. In a
+     * transaction, it applies to the statements after it.
+     *
+     * @param flag Whether triggers fire recursively
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_RECURSIVE_TRIGGERS(flag: Boolean) {
+        pragma(PRAGMA.set("recursive_triggers", flag, databaseConnection))
+    }
+
+    /**
+     * Makes `ALTER_RENAME_TABLE_TO` rename a table as SQLite 3.25.0 and earlier did, or as it does now, as the SQL
+     * `PRAGMA legacy_alter_table` does: without rewriting the views and triggers that read the table, which then read
+     * a table of the old name, such as in a migration that rebuilds a table under the old name.
+     *
+     * It lasts as long as the database is open, for the scopes after this one too, until it is set again. Android's
+     * SQLite turns it on by default, so that a rename there doesn't rewrite them unless it is turned off.
+     *
+     * @param flag Whether to rename tables as SQLite 3.25.0 and earlier did
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_LEGACY_ALTER_TABLE(flag: Boolean) {
+        pragma(PRAGMA.set("legacy_alter_table", flag, databaseConnection))
+    }
+
+    /**
+     * Stops checking CHECK constraints, or checks them again, as the SQL `PRAGMA ignore_check_constraints` does, such
+     * as to import rows that predate a constraint; [PRAGMA_INTEGRITY_CHECK] then finds the rows that violate them.
+     *
+     * It lasts as long as the database is open, for the scopes after this one too, until it is set again.
+     *
+     * @param flag Whether to ignore CHECK constraints
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_IGNORE_CHECK_CONSTRAINTS(flag: Boolean) {
+        pragma(PRAGMA.set("ignore_check_constraints", flag, databaseConnection))
     }
 
     @OptIn(ExperimentalDSLDatabaseAPI::class)

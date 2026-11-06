@@ -204,6 +204,9 @@ class NativeTest {
     fun testPragmas() = commonTest.testPragmas()
 
     @Test
+    fun testMorePragmas() = commonTest.testMorePragmas()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

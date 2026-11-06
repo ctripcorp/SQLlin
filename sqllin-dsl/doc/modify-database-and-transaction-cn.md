@@ -726,7 +726,8 @@ fun sample() {
 
 ## PRAGMA
 
-SQLlin 支持用来检查数据库、读取表结构、执行 WAL 检查点、读取文件大小，以及推迟外键检查的 PRAGMA。读取类的 PRAGMA
+SQLlin 支持用来检查数据库、读取表结构和 SQLite 自身的信息、执行 WAL 检查点、读取文件大小和文件头，以及设置语句执行方式的
+PRAGMA。读取类的 PRAGMA
 返回一条语句，作用域执行完之后，用它的 `getResults()` 取得读到的内容，和 _SELECT_ 的结果一样。它们是实验性 API，结果类型
 都在 `com.ctrip.sqllin.dsl.sql.pragma` 包中：
 
@@ -751,17 +752,36 @@ fun sample() {
 * **检查数据库**：`PRAGMA_INTEGRITY_CHECK(maxErrors)` 检查页、行和索引是否完好、是否相互一致，以及行是否满足 NOT NULL 和
   CHECK 约束，返回发现的问题，没有问题时返回空列表；`PRAGMA_QUICK_CHECK(maxErrors)` 不检查索引和 UNIQUE 约束，其余相同，速度
   更快。`PRAGMA_FOREIGN_KEY_CHECK()` 或 `PRAGMA_FOREIGN_KEY_CHECK(table)` 返回违反外键的行，不管外键是否启用，比如在关闭外键
-  做完迁移之后检查。
+  做完迁移之后检查；`PRAGMA_FOREIGN_KEYS()` 返回外键是否启用。`PRAGMA_INTEGRITY_CHECK(table)` 和 `PRAGMA_QUICK_CHECK(table)`
+  只检查一张表和它的索引。
 * **读取表结构**：`PRAGMA_TABLE_INFO(table)` 返回表或视图的列，可以在迁移时用来判断，`PRAGMA_INDEX_LIST(table)` 返回表的索引，
   `PRAGMA_INDEX_XINFO(index)` 返回索引的列，包括排序方向和排序规则，`PRAGMA_FOREIGN_KEY_LIST(table)` 返回表的外键。它们也都可以
-  传入名字，比如应用已经不再声明的表。不存在的表或索引没有列、索引或外键。
+  传入名字，比如应用已经不再声明的表。不存在的表或索引没有列、索引或外键。`PRAGMA_TABLE_XINFO(table)` 额外列出隐藏列和生成列，
+  由 `ColumnInfo.kind` 区分，比如 FTS 表的隐藏列；`PRAGMA_TABLE_LIST()` 返回 `main` 和 `temp` 中的表和视图，包括虚拟表，以及
+  虚拟表用来存放数据的表。
+* **SQLite 自身的信息**：`PRAGMA_COMPILE_OPTIONS()` 返回 SQLite 的编译选项，`PRAGMA_COLLATION_LIST()` 返回排序规则，
+  `PRAGMA_DATABASE_LIST()` 返回连接上的数据库及其文件，`PRAGMA_FUNCTION_LIST()` 返回 SQL 函数，比如可以用来判断有没有数学函数，
+  `PRAGMA_MODULE_LIST()` 返回虚拟表模块（比如 `fts4`），`PRAGMA_PRAGMA_LIST()` 返回 SQLite 支持的 PRAGMA。
 * **数据库文件**：`PRAGMA_WAL_CHECKPOINT(mode)` 把 WAL 中的页复制进数据库文件，比如在复制数据库文件之前，因为文件里没有 WAL
   中的内容；SQLite 不能在事务中执行检查点，所以在 `transaction {...}` 中调用会抛出 `IllegalStateException`。
   `PRAGMA_PAGE_COUNT()` 乘以 `PRAGMA_PAGE_SIZE()` 就是文件的大小，`PRAGMA_FREELIST_COUNT()` 是文件中未使用的页数，
   [`VACUUM()`](#vacuum) 会去掉这些页；开启了 auto_vacuum 的数据库（Android 的 SQLite 默认就这样创建数据库）每次提交都会去掉
-  它们，所以没有未使用的页。
-* **推迟外键检查**：`PRAGMA_DEFER_FOREIGN_KEYS(true)` 把外键检查推迟到提交时，这样就可以先插入引用其他行的行；SQLite 会在
-  事务结束时把它关掉，所以在 `transaction {...}` 之外调用会抛出 `IllegalStateException`。
+  它们，所以没有未使用的页。`PRAGMA_AUTO_VACUUM()` 返回是否开启了 auto_vacuum，`PRAGMA_AUTO_VACUUM(mode)` 设置它：对还没有表的
+  数据库立即生效，否则要在它之后执行一次 `VACUUM()` 重建数据库才生效。SQLlin 不执行 `PRAGMA incremental_vacuum`（`INCREMENTAL`
+  模式保留的页要靠它去掉），因为它每去掉一页就返回一行，而各个驱动都不会把这些行逐一执行完。`PRAGMA_APPLICATION_ID()` 读取、
+  `PRAGMA_APPLICATION_ID(id)` 设置文件头中标识文件属于哪个应用的数字。
+* **语句的执行方式**：`PRAGMA_DEFER_FOREIGN_KEYS(true)` 把外键检查推迟到提交时，这样就可以先插入引用其他行的行；SQLite 会在
+  事务结束时把它关掉，所以在 `transaction {...}` 之外调用会抛出 `IllegalStateException`。`PRAGMA_RECURSIVE_TRIGGERS(true)`
+  允许触发器递归触发；`PRAGMA_LEGACY_ALTER_TABLE(true)` 让 `ALTER_RENAME_TABLE_TO` 不改写读取这张表的视图和触发器，Android 的
+  SQLite 默认就是这样；`PRAGMA_IGNORE_CHECK_CONSTRAINTS(true)` 不再检查 CHECK 约束。这几个设置在数据库关闭之前一直有效，对之前
+  执行过的语句同样生效。
+
+其中一些需要较新的 SQLite，有些平台没有，所以标有 [`@PlatformDependentSQLiteAPI`](#依赖-sqlite-版本的-api)：
+`PRAGMA_TABLE_XINFO` 需要 SQLite 3.26.0，Android 从 API 30 起才有；`PRAGMA_FUNCTION_LIST`、`PRAGMA_MODULE_LIST` 和
+`PRAGMA_PRAGMA_LIST` 需要 3.30.0，从 API 31 起；`PRAGMA_TABLE_LIST` 需要 3.37.0，从 API 34 起。SQLite 遇到不支持的 PRAGMA
+不会报错，只会忽略，所以这些 API 会检查 SQLite 返回的行有没有列，没有就抛出 `IllegalStateException` 并说明需要什么，而不是
+返回空结果。`PRAGMA_INTEGRITY_CHECK(table)` 和 `PRAGMA_QUICK_CHECK(table)` 需要 SQLite 3.33.0（从 API 34 起），更早的版本会
+改为检查整个数据库。`PRAGMA_COMPILE_OPTIONS` 在 Android 上会抛出异常，因为 Android 的 SQLite 编译时去掉了它。
 
 检查返回的问题描述是 SQLite 自己的文字。PRAGMA 不会修改任何表，所以可以写在 `versioned { }` 中。
 

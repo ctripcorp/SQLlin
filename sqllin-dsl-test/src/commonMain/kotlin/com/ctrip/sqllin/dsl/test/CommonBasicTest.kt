@@ -36,14 +36,17 @@ import com.ctrip.sqllin.dsl.sql.withName
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.ASC
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
+import com.ctrip.sqllin.dsl.sql.pragma.AutoVacuum
 import com.ctrip.sqllin.dsl.sql.pragma.CheckpointMode
 import com.ctrip.sqllin.dsl.sql.pragma.CheckpointResult
 import com.ctrip.sqllin.dsl.sql.pragma.ColumnInfo
+import com.ctrip.sqllin.dsl.sql.pragma.ColumnKind
 import com.ctrip.sqllin.dsl.sql.pragma.ForeignKeyInfo
 import com.ctrip.sqllin.dsl.sql.pragma.ForeignKeyViolation
 import com.ctrip.sqllin.dsl.sql.pragma.IndexColumn
 import com.ctrip.sqllin.dsl.sql.pragma.IndexInfo
 import com.ctrip.sqllin.dsl.sql.pragma.IndexOrigin
+import com.ctrip.sqllin.dsl.sql.pragma.RelationInfo
 import com.ctrip.sqllin.dsl.sql.statement.PragmaStatement
 import com.ctrip.sqllin.dsl.sql.statement.QueryPlanStatement
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
@@ -2174,6 +2177,21 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Whether the SQLite of the database, which has to exist, is [version], as `3.37.0`, or newer, which a test checks
+     * to know what to expect of an API that only newer versions support.
+     */
+    private fun sqliteIsAtLeast(version: String): Boolean {
+        val current = sqliteString("SELECT sqlite_version()")!!.split('.').map { it.toInt() }
+        val required = version.split('.').map { it.toInt() }
+        for (i in required.indices) {
+            val part = current.getOrElse(i) { 0 }
+            if (part != required[i])
+                return part > required[i]
+        }
+        return true
+    }
+
+    /**
      * Whether the SQLite of the database, which has to exist, can run [sql], as it can't use a function it doesn't have.
      */
     private fun sqliteHas(sql: String): Boolean {
@@ -3245,6 +3263,194 @@ class CommonBasicTest(private val path: DatabasePath) {
             val (columns, versions) = database.versioned { PRAGMA_TABLE_INFO(BookTable) }
             assertEquals(4, columns.getResults().size)
             assertEquals("TableVersions()", versions.toString())
+        }
+    }
+
+    /**
+     * Covers the second part of the PRAGMAs: reading foreign_keys; recursive_triggers, ignore_check_constraints and
+     * legacy_alter_table, which apply to the statements whose SQL ran before them too, in a transaction as well;
+     * integrity_check and quick_check of a table; application_id; auto_vacuum, which VACUUM applies; table_xinfo of
+     * ordinary, hidden and generated columns; table_list; compile_options,
+     * collation_list and database_list; and function_list, module_list and pragma_list. Those that only newer versions
+     * of SQLite have work where the SQLite has them, and fail with a message that tells what they need where it doesn't.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class, PlatformDependentSQLiteAPI::class)
+    fun testMorePragmas() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        fun <R> read(build: DatabaseScope.() -> PragmaStatement<R>): R = database { build() }.getResults()
+        fun assertUnsupported(version: String, block: () -> Any?) =
+            assertContains(assertFailsWith<IllegalStateException> { block() }.message.orEmpty(), version)
+        database {
+            CREATE(CheckedMembershipTable)
+            CREATE(TriggerCounterTable)
+            CREATE(ArticleTable)
+            PersonWithIdTable { table ->
+                CREATE_VIEW(AdultPersonView) AS (table SELECT WHERE<AdultPerson>(age GTE 18))
+            }
+            PersonWithIdTable INSERT PersonWithId(id = null, name = "Adult", age = 30)
+        }
+
+        // Reading foreign_keys
+        assertEquals(false, read { PRAGMA_FOREIGN_KEYS() })
+        database { PRAGMA_FOREIGN_KEYS(true) }
+        assertEquals(true, read { PRAGMA_FOREIGN_KEYS() })
+        database { PRAGMA_FOREIGN_KEYS(false) }
+        assertEquals(false, read { PRAGMA_FOREIGN_KEYS() })
+
+        // Recursive triggers: a trigger that inserts a row of its own table fires again only with them, for the SQL that
+        // ran before they were turned on too, and in a transaction, for the statements after it
+        fun counters(): List<Long> {
+            lateinit var rows: SelectStatement<TriggerCounter>
+            database { rows = TriggerCounterTable SELECT ORDER_BY(TriggerCounterTable.id to ASC) }
+            return rows.getResults().map { it.id }
+        }
+        database {
+            CREATE_TRIGGER("counter_chain") AFTER INSERT ON TriggerCounterTable WHEN (new(TriggerCounterTable.count) LT 3) BEGIN {
+                TriggerCounterTable INSERT listOf(
+                    (new(TriggerCounterTable.id) + 1) AS TriggerCounter::id,
+                    (new(TriggerCounterTable.count) + 1) AS TriggerCounter::count,
+                )
+            }
+            TriggerCounterTable INSERT TriggerCounter(id = 1, count = 0)
+        }
+        assertEquals(listOf(1L, 2L), counters())
+        database { PRAGMA_RECURSIVE_TRIGGERS(true) }
+        database { TriggerCounterTable INSERT TriggerCounter(id = 10, count = 0) }
+        assertEquals(listOf(1L, 2L, 10L, 11L, 12L, 13L), counters())
+        database {
+            transaction {
+                PRAGMA_RECURSIVE_TRIGGERS(false)
+                TriggerCounterTable INSERT TriggerCounter(id = 20, count = 0)
+            }
+        }
+        database { TriggerCounterTable INSERT TriggerCounter(id = 30, count = 0) }
+        assertEquals(listOf(1L, 2L, 10L, 11L, 12L, 13L, 20L, 21L, 30L, 31L), counters())
+
+        // Ignoring CHECK constraints, for the SQL that failed before too, which integrity_check finds then
+        val invalid = CheckedMembership(id = null, name = "a", age = 1, level = 7, startDate = "2026-01-01", endDate = null)
+        assertContains(assertFails { database { CheckedMembershipTable INSERT invalid } }.message.orEmpty(), "CHECK constraint failed")
+        database { PRAGMA_IGNORE_CHECK_CONSTRAINTS(true) }
+        database { CheckedMembershipTable INSERT invalid }
+        database { PRAGMA_IGNORE_CHECK_CONSTRAINTS(false) }
+        assertContains(assertFails { database { CheckedMembershipTable INSERT invalid } }.message.orEmpty(), "CHECK constraint failed")
+        assertEquals(1, read { PRAGMA_INTEGRITY_CHECK() }.size)
+
+        // Checking a table, which an older SQLite can't, so it checks the whole database
+        if (sqliteIsAtLeast("3.33.0")) {
+            assertEquals(emptyList(), read { PRAGMA_INTEGRITY_CHECK(BookTable) })
+            assertEquals(1, read { PRAGMA_INTEGRITY_CHECK(CheckedMembershipTable) }.size)
+            assertEquals(emptyList(), read { PRAGMA_QUICK_CHECK("book") })
+            assertEquals(1, read { PRAGMA_QUICK_CHECK("CheckedMembership") }.size)
+        } else {
+            assertEquals(1, read { PRAGMA_INTEGRITY_CHECK(BookTable) }.size)
+        }
+
+        // A legacy rename doesn't rewrite the view that reads the table, which then reads a table that doesn't exist
+        val legacyByDefault = sqliteString("PRAGMA legacy_alter_table")
+        val renamed = PersonWithIdTable.withName("person_renamed")
+        fun adults(): List<String> {
+            lateinit var rows: SelectStatement<AdultPerson>
+            database { rows = AdultPersonView SELECT X }
+            return rows.getResults().map { it.name }
+        }
+        database {
+            PRAGMA_LEGACY_ALTER_TABLE(false)
+            PersonWithIdTable ALTER_RENAME_TABLE_TO renamed
+        }
+        assertEquals(listOf("Adult"), adults(), "legacy_alter_table by default: $legacyByDefault")
+        database { renamed ALTER_RENAME_TABLE_TO PersonWithIdTable }
+        database { PRAGMA_LEGACY_ALTER_TABLE(true) }
+        database { PersonWithIdTable ALTER_RENAME_TABLE_TO renamed }
+        assertContains(assertFails { adults() }.message.orEmpty(), "no such table")
+        database { renamed ALTER_RENAME_TABLE_TO PersonWithIdTable }
+        database { PRAGMA_LEGACY_ALTER_TABLE(legacyByDefault == "1") }
+        assertEquals(listOf("Adult"), adults())
+        println("legacy_alter_table by default: $legacyByDefault")
+
+        // The header of the file
+        assertEquals(0, read { PRAGMA_APPLICATION_ID() })
+        database { PRAGMA_APPLICATION_ID(0x53514C4E) }
+        assertEquals(0x53514C4E, read { PRAGMA_APPLICATION_ID() })
+
+        // auto_vacuum, which VACUUM applies: INCREMENTAL keeps the unused pages, which FULL would remove at the commit
+        assertEquals(sqliteString("PRAGMA auto_vacuum"), read { PRAGMA_AUTO_VACUUM() }.ordinal.toString())
+        database {
+            PRAGMA_AUTO_VACUUM(AutoVacuum.INCREMENTAL)
+            VACUUM()
+        }
+        assertEquals(AutoVacuum.INCREMENTAL, read { PRAGMA_AUTO_VACUUM() })
+        database { BookTable INSERT (1..300).map { Book(name = "x".repeat(500) + it, author = "A", price = 1.0, pages = it) } }
+        database { BookTable DELETE X }
+        val unused = read { PRAGMA_FREELIST_COUNT() }
+        assertEquals(true, unused > 0, unused.toString())
+        database {
+            PRAGMA_AUTO_VACUUM(AutoVacuum.NONE)
+            VACUUM()
+        }
+        assertEquals(AutoVacuum.NONE, read { PRAGMA_AUTO_VACUUM() })
+        assertEquals(0L, read { PRAGMA_FREELIST_COUNT() })
+
+        // table_xinfo: ordinary, hidden and generated columns
+        if (sqliteIsAtLeast("3.26.0")) {
+            assertEquals(read { PRAGMA_TABLE_INFO(BookTable) }, read { PRAGMA_TABLE_XINFO(BookTable) })
+            assertEquals(listOf("name", "age"), read { PRAGMA_TABLE_XINFO(AdultPersonView) }.map { it.name })
+            val articleColumns = read { PRAGMA_TABLE_XINFO(ArticleTable) }
+            assertEquals(listOf("title", "body", "note"), articleColumns.filter { it.kind == ColumnKind.ORDINARY }.map { it.name })
+            assertEquals(true, articleColumns.any { it.kind == ColumnKind.HIDDEN && it.name == "articles" }, articleColumns.toString())
+            if (sqliteIsAtLeast("3.31.0")) {
+                val connection = openDatabase(DatabaseConfiguration(name = DATABASE_NAME, path = path, version = 1, create = {}))
+                try {
+                    connection.execSQL("CREATE TABLE generated_columns(a INT, b INT GENERATED ALWAYS AS (a * 2) VIRTUAL, c INT GENERATED ALWAYS AS (a * 3) STORED)")
+                } finally {
+                    connection.close()
+                }
+                // Read through another Database, whose connection opens after the table exists: on Robolectric API 26,
+                // the connection of this one doesn't see a table that another connection created
+                Database(getNewAPIDBConfig()).databaseAutoClose { other ->
+                    lateinit var xinfo: PragmaStatement<List<ColumnInfo>>
+                    lateinit var info: PragmaStatement<List<ColumnInfo>>
+                    other {
+                        xinfo = PRAGMA_TABLE_XINFO("generated_columns")
+                        info = PRAGMA_TABLE_INFO("generated_columns")
+                    }
+                    assertEquals(listOf(ColumnKind.ORDINARY, ColumnKind.VIRTUAL_GENERATED, ColumnKind.STORED_GENERATED), xinfo.getResults().map { it.kind })
+                    assertEquals(listOf("a"), info.getResults().map { it.name })
+                }
+            }
+        } else {
+            assertUnsupported("3.26.0") { read { PRAGMA_TABLE_XINFO(BookTable) } }
+        }
+
+        // table_list: tables, a view, an FTS table and the tables it keeps its data in
+        if (sqliteIsAtLeast("3.37.0")) {
+            val relations = read { PRAGMA_TABLE_LIST() }
+            assertEquals(RelationInfo("main", "book", "table", 4, isWithoutRowid = false, isStrict = false), relations.single { it.name == "book" })
+            assertEquals("view", relations.single { it.name == "adult_person" }.type)
+            assertEquals("virtual", relations.single { it.name == "articles" }.type)
+            assertEquals(true, relations.any { it.type == "shadow" && it.name.startsWith("articles_") }, relations.toString())
+        } else {
+            assertUnsupported("3.37.0") { read { PRAGMA_TABLE_LIST() } }
+        }
+
+        // What the SQLite and the connection have. A SQLite can be built without compile_options, as Android's is, which
+        // then lacks the SQL function sqlite_compileoption_used() too
+        if (sqliteHas("SELECT sqlite_compileoption_used('THREADSAFE')")) {
+            val options = read { PRAGMA_COMPILE_OPTIONS() }
+            assertEquals(true, options.isNotEmpty() && options.none { it.startsWith("SQLITE_") }, options.toString())
+        } else {
+            assertContains(assertFailsWith<IllegalStateException> { read { PRAGMA_COMPILE_OPTIONS() } }.message.orEmpty(), "compile_options")
+        }
+        val collations = read { PRAGMA_COLLATION_LIST() }
+        assertEquals(true, collations.containsAll(listOf("BINARY", "NOCASE", "RTRIM")), collations.toString())
+        val databases = read { PRAGMA_DATABASE_LIST() }
+        assertEquals("main", databases.first().name)
+        assertEquals(true, databases.first().file.endsWith(DATABASE_NAME), databases.toString())
+        if (sqliteIsAtLeast("3.30.0")) {
+            val lower = read { PRAGMA_FUNCTION_LIST() }.filter { it.name == "lower" }
+            assertEquals(true, lower.any { it.isBuiltin && it.type == "s" && it.argumentCount == 1 }, lower.toString())
+            assertEquals(true, "fts4" in read { PRAGMA_MODULE_LIST() })
+            assertEquals(true, "table_info" in read { PRAGMA_PRAGMA_LIST() })
+        } else {
+            assertUnsupported("3.30.0") { read { PRAGMA_FUNCTION_LIST() } }
         }
     }
 

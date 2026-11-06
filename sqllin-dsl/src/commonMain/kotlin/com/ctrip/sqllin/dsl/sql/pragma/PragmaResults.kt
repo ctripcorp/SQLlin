@@ -19,7 +19,8 @@ package com.ctrip.sqllin.dsl.sql.pragma
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 
 /**
- * A column of a table or a view, a row of `PRAGMA table_info`, which `PRAGMA_TABLE_INFO(table)` returns.
+ * A column of a table or a view, a row of `PRAGMA table_info`, which `PRAGMA_TABLE_INFO(table)` returns, or of
+ * `PRAGMA table_xinfo`, which `PRAGMA_TABLE_XINFO(table)` returns, with the hidden and generated columns.
  *
  * @property index The position of the column in the table, from 0, the `cid` of the PRAGMA
  * @property name The name of the column
@@ -29,6 +30,8 @@ import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
  * `dflt_value` of the PRAGMA
  * @property primaryKeyPosition The position of the column in the primary key, from 1, or 0 if it isn't part of it, the
  * `pk` of the PRAGMA
+ * @property kind Whether the column is an ordinary one, a hidden one or a generated one, the `hidden` of
+ * `PRAGMA table_xinfo`: `PRAGMA table_info` only lists ordinary columns
  *
  * @author Yuang Qiao
  */
@@ -40,7 +43,102 @@ public data class ColumnInfo(
     val notNull: Boolean,
     val defaultValue: String?,
     val primaryKeyPosition: Int,
+    val kind: ColumnKind = ColumnKind.ORDINARY,
 )
+
+/**
+ * What kind of column a column is, the `hidden` of `PRAGMA table_xinfo`.
+ *
+ * @author Yuang Qiao
+ */
+@ExperimentalDSLDatabaseAPI
+public enum class ColumnKind {
+    /** An ordinary column, `0` */
+    ORDINARY,
+    /** A hidden column of a virtual table, as the column of an FTS table named after the table, `1` */
+    HIDDEN,
+    /** A generated column that is computed when it is read, `GENERATED ALWAYS AS (...) VIRTUAL`, `2` */
+    VIRTUAL_GENERATED,
+    /** A generated column that is stored, `GENERATED ALWAYS AS (...) STORED`, `3` */
+    STORED_GENERATED,
+}
+
+/**
+ * A table or a view of the database, a row of `PRAGMA table_list`, which `PRAGMA_TABLE_LIST()` returns.
+ *
+ * @property schema The database the table belongs to: `main`, `temp`, or the name of an attached database
+ * @property name The name of the table
+ * @property type What the table is, in SQLite's words: `table`, `view`, `virtual` for a virtual table, as an FTS table,
+ * or `shadow` for a table that a virtual table keeps its data in
+ * @property columnCount The number of its columns, the `ncol` of the PRAGMA
+ * @property isWithoutRowid Whether it is a WITHOUT ROWID table, the `wr` of the PRAGMA
+ * @property isStrict Whether it is a STRICT table, the `strict` of the PRAGMA
+ *
+ * @author Yuang Qiao
+ */
+@ExperimentalDSLDatabaseAPI
+public data class RelationInfo(
+    val schema: String,
+    val name: String,
+    val type: String,
+    val columnCount: Int,
+    val isWithoutRowid: Boolean,
+    val isStrict: Boolean,
+)
+
+/**
+ * A database of the connection, a row of `PRAGMA database_list`, which `PRAGMA_DATABASE_LIST()` returns.
+ *
+ * @property name The name of the database: `main`, `temp`, or the name an attached database was attached as
+ * @property file The path of its file, or an empty string for a database in memory, or a TEMP one, which has none
+ *
+ * @author Yuang Qiao
+ */
+@ExperimentalDSLDatabaseAPI
+public data class DatabaseInfo(
+    val name: String,
+    val file: String,
+)
+
+/**
+ * A form of an SQL function, a row of `PRAGMA function_list`, which `PRAGMA_FUNCTION_LIST()` returns: a function that
+ * takes several numbers of arguments has a row for each.
+ *
+ * @property name The name of the function
+ * @property isBuiltin Whether SQLite has it, rather than the app, the `builtin` of the PRAGMA
+ * @property type What it is, in SQLite's words: `s` for a scalar function, `a` for an aggregate one, and `w` for a
+ * window one
+ * @property encoding The text encoding it takes, as `utf8`, the `enc` of the PRAGMA
+ * @property argumentCount The number of arguments it takes, or -1 if it takes any number, the `narg` of the PRAGMA
+ * @property flags The flags SQLite registered it with, as `SQLITE_DETERMINISTIC`
+ *
+ * @author Yuang Qiao
+ */
+@ExperimentalDSLDatabaseAPI
+public data class FunctionInfo(
+    val name: String,
+    val isBuiltin: Boolean,
+    val type: String,
+    val encoding: String,
+    val argumentCount: Int,
+    val flags: Long,
+)
+
+/**
+ * Whether the database removes its unused pages, the `auto_vacuum` of the database file, which
+ * `PRAGMA_AUTO_VACUUM(mode)` sets.
+ *
+ * @author Yuang Qiao
+ */
+@ExperimentalDSLDatabaseAPI
+public enum class AutoVacuum {
+    /** It keeps them, until a VACUUM removes them, `0` */
+    NONE,
+    /** It removes them at each commit, `1` */
+    FULL,
+    /** It keeps them, until the SQL `PRAGMA incremental_vacuum` removes them, `2` */
+    INCREMENTAL,
+}
 
 /**
  * An index of a table, a row of `PRAGMA index_list`, which `PRAGMA_INDEX_LIST(table)` returns.

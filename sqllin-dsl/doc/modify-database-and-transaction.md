@@ -772,8 +772,8 @@ fun sample() {
 
 ## PRAGMA
 
-SQLlin builds the PRAGMAs that check the database, read its schema, checkpoint the WAL, read the size of the file, and
-defer foreign keys. A PRAGMA that reads returns a statement whose `getResults()` returns what it read once the scope
+SQLlin builds the PRAGMAs that check the database, read its schema and what the SQLite has, checkpoint the WAL, read
+the size and the header of the file, and set how statements run. A PRAGMA that reads returns a statement whose `getResults()` returns what it read once the scope
 has run, as the results of a _SELECT_ are read. They are experimental, and their result types are in
 `com.ctrip.sqllin.dsl.sql.pragma`:
 
@@ -799,19 +799,44 @@ fun sample() {
   and agree with each other, and that the rows satisfy their NOT NULL and CHECK constraints, and returns the problems,
   or an empty list; `PRAGMA_QUICK_CHECK(maxErrors)` checks all but the indexes and UNIQUE constraints, more quickly.
   `PRAGMA_FOREIGN_KEY_CHECK()`, or `PRAGMA_FOREIGN_KEY_CHECK(table)`, returns the rows that violate their foreign keys,
-  whether or not they are enforced, such as after a migration that turned them off.
+  whether or not they are enforced, such as after a migration that turned them off, and `PRAGMA_FOREIGN_KEYS()` whether
+  they are. `PRAGMA_INTEGRITY_CHECK(table)` and `PRAGMA_QUICK_CHECK(table)` check a table and its indexes.
 * **Reading the schema**: `PRAGMA_TABLE_INFO(table)` returns the columns of a table or a view, which a migration can
   check, `PRAGMA_INDEX_LIST(table)` its indexes, `PRAGMA_INDEX_XINFO(index)` the columns of an index, with their sort
   orders and collations, and `PRAGMA_FOREIGN_KEY_LIST(table)` its foreign keys. Each also takes a name, as of a table
   the app no longer declares. A table or index that doesn't exist has no columns, indexes or foreign keys.
+  `PRAGMA_TABLE_XINFO(table)` adds the hidden and generated columns, which `ColumnInfo.kind` tells, as the hidden columns
+  of an FTS table, and `PRAGMA_TABLE_LIST()` returns the tables and views, the virtual ones, and the tables that these
+  keep their data in, of `main` and `temp`.
+* **What the SQLite has**: `PRAGMA_COMPILE_OPTIONS()` returns the options it was compiled with, `PRAGMA_COLLATION_LIST()`
+  its collations, `PRAGMA_DATABASE_LIST()` the databases of the connection and their files, `PRAGMA_FUNCTION_LIST()` its
+  SQL functions, such as to check whether it has the math functions, `PRAGMA_MODULE_LIST()` the modules of its virtual
+  tables, as `fts4`, and `PRAGMA_PRAGMA_LIST()` its PRAGMAs.
 * **The file**: `PRAGMA_WAL_CHECKPOINT(mode)` copies the pages of the WAL into the database file, as before copying the
   file, which doesn't hold what the WAL does; SQLite can't checkpoint inside a transaction, so it throws an
   `IllegalStateException` inside `transaction {...}`. `PRAGMA_PAGE_COUNT()` times `PRAGMA_PAGE_SIZE()` is the size of the
   file, and `PRAGMA_FREELIST_COUNT()` the number of its unused pages, which [`VACUUM()`](#vacuum) removes; a database
   whose auto_vacuum is on, as Android's SQLite creates one by default, removes them at each commit, so it has none.
-* **Deferring foreign keys**: `PRAGMA_DEFER_FOREIGN_KEYS(true)` defers the checks of foreign keys to the commit, so that
-  a row can be inserted before the row it references; SQLite turns it off when the transaction ends, so it throws an
-  `IllegalStateException` outside `transaction {...}`.
+  `PRAGMA_AUTO_VACUUM()` tells whether it is, and `PRAGMA_AUTO_VACUUM(mode)` sets it, which applies to a database that
+  has no tables yet, and otherwise once a `VACUUM()` after it rebuilds the database. SQLlin doesn't run
+  `PRAGMA incremental_vacuum`, which the `INCREMENTAL` mode keeps the pages for, as it returns a row for each page it
+  removes, which no driver steps through. `PRAGMA_APPLICATION_ID()` reads, and `PRAGMA_APPLICATION_ID(id)` sets, the
+  number of the header that tells the app the file belongs to.
+* **How statements run**: `PRAGMA_DEFER_FOREIGN_KEYS(true)` defers the checks of foreign keys to the commit, so that a
+  row can be inserted before the row it references; SQLite turns it off when the transaction ends, so it throws an
+  `IllegalStateException` outside `transaction {...}`. `PRAGMA_RECURSIVE_TRIGGERS(true)` lets triggers fire
+  recursively, `PRAGMA_LEGACY_ALTER_TABLE(true)` makes `ALTER_RENAME_TABLE_TO` leave the views and triggers that read the
+  table as they are, which Android's SQLite does by default, and `PRAGMA_IGNORE_CHECK_CONSTRAINTS(true)` stops checking
+  CHECK constraints. These last as long as the database is open, and apply to the statements that ran before them too.
+
+Some of them need a newer SQLite than some platforms have, so they are marked with
+[`@PlatformDependentSQLiteAPI`](#apis-that-depend-on-the-sqlite-version): `PRAGMA_TABLE_XINFO` needs SQLite 3.26.0,
+which Android has from API 30 on, `PRAGMA_FUNCTION_LIST`, `PRAGMA_MODULE_LIST` and `PRAGMA_PRAGMA_LIST` 3.30.0, from API
+31 on, and `PRAGMA_TABLE_LIST` 3.37.0, from API 34 on. SQLite ignores a PRAGMA it doesn't have, rather than failing, so
+that these check the columns of the rows SQLite returns, and throw an `IllegalStateException` that tells what they need
+rather than return nothing. `PRAGMA_INTEGRITY_CHECK(table)` and `PRAGMA_QUICK_CHECK(table)` need SQLite 3.33.0, from API
+34 on, below which they check the whole database. `PRAGMA_COMPILE_OPTIONS` throws on Android, whose SQLite is built
+without it.
 
 The details of the problems that the checks return are SQLite's own text. A PRAGMA changes no table, so it can be in
 a scope of `versioned { }`.

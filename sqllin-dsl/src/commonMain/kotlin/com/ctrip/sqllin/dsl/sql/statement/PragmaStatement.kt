@@ -18,6 +18,7 @@ package com.ctrip.sqllin.dsl.sql.statement
 
 import com.ctrip.sqllin.driver.CommonCursor
 import com.ctrip.sqllin.driver.DatabaseConnection
+import com.ctrip.sqllin.driver.withTransaction
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import kotlin.concurrent.Volatile
 
@@ -33,6 +34,10 @@ import kotlin.concurrent.Volatile
  * A PRAGMA changes no table, so a scope of PRAGMAs and SELECTs only reads, as a versioned read has to.
  *
  * @param read Reads the rows the PRAGMA returns, or null for a PRAGMA that returns none, which runs with `execSQL`
+ * @param inOwnTransaction Whether to read in a transaction of its own, for a PRAGMA whose value SQLite takes from what
+ * the connection last read of the database file's header, which it reads again when a transaction begins: from
+ * Android 13 on, a query outside a transaction may run on a connection that reads, whose header may be older than the
+ * connection that wrote it
  *
  * @author Yuang Qiao
  */
@@ -41,6 +46,7 @@ public class PragmaStatement<R> internal constructor(
     sqlStr: String,
     private val connection: DatabaseConnection,
     private val read: ((CommonCursor) -> R)?,
+    private val inOwnTransaction: Boolean = false,
 ) : SingleStatement(sqlStr) {
 
     override val parameters: MutableList<Any?>? = null
@@ -49,7 +55,11 @@ public class PragmaStatement<R> internal constructor(
     private var result: Any? = NOT_RUN
 
     override fun execute() {
-        result = if (read == null) connection.execSQL(sqlStr) else connection.query(sqlStr).use(read)
+        result = when {
+            read == null -> connection.execSQL(sqlStr)
+            inOwnTransaction -> connection.withTransaction { it.query(sqlStr).use(read) }
+            else -> connection.query(sqlStr).use(read)
+        }
     }
 
     /**

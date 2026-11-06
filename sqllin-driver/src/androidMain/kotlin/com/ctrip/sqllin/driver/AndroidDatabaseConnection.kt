@@ -36,7 +36,8 @@ internal class AndroidDatabaseConnection(private val database: SQLiteDatabase) :
      * writes, and steps it on one that reads, as `sqlite3_stmt_readonly()` reports it doesn't write. SQLite changes the
      * setting when it prepares the PRAGMA, but only expires the statements the connection has compiled when it steps
      * it, so the statements that the connection that writes has cached kept running as they were compiled, with the
-     * setting they had: without checking foreign keys, or with them. Such a PRAGMA runs on every connection instead,
+     * setting they had: without checking foreign keys, or with them; and the other connections that read didn't have
+     * it, which `PRAGMA foreign_keys` may read through. Such a PRAGMA runs on every connection,
      * those opened later included, so that each steps it. In a transaction, which runs on the connection that writes,
      * it runs there, where SQLite ignores a change of foreign_keys, as it does on the other platforms, and applies
      * recursive_triggers to the statements after it, which only that connection runs. Before Android 13, a database
@@ -51,9 +52,11 @@ internal class AndroidDatabaseConnection(private val database: SQLiteDatabase) :
 
     private companion object {
         /**
-         * A PRAGMA that sets how the connection runs statements, which SQLite compiles into them.
+         * A PRAGMA that sets how the connection runs statements, which each connection has to run itself: foreign_keys,
+         * recursive_triggers and ignore_check_constraints, which SQLite compiles into the statements, and
+         * legacy_alter_table, which ALTER TABLE RENAME reads.
          */
-        val CONNECTION_SETTING = Regex("""^\s*PRAGMA\s+(foreign_keys|recursive_triggers)\s*[=(]""", RegexOption.IGNORE_CASE)
+        val CONNECTION_SETTING = Regex("""^\s*PRAGMA\s+(foreign_keys|recursive_triggers|legacy_alter_table|ignore_check_constraints)\s*[=(]""", RegexOption.IGNORE_CASE)
     }
 
     /**

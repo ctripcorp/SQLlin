@@ -14,7 +14,6 @@ done. A new item takes the next number.
 * F19: Support the collations BINARY and RTRIM besides NOCASE, and COLLATE on the columns of an index and in ORDER BY
 * F21: Support FILTER in aggregate functions (SQLite 3.30.0, Android API 31), and ORDER BY in them, as for `group_concat` (SQLite 3.44.0, Android API 35)
 * F25: Support ORDER BY and LIMIT in UPDATE and DELETE, which need SQLite's `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` option, which Android's lacks
-* F30: Support more PRAGMAs, such as integrity_check, quick_check, table_info, index_list, wal_checkpoint and defer_foreign_keys; case_sensitive_like is left out, as SQLite deprecates it
 
 ## Low Priority
 
@@ -38,10 +37,11 @@ done. A new item takes the next number.
 * F63: Support INSTEAD OF triggers on views, together with INSERT, UPDATE and DELETE on a view, which the DSL doesn't allow, as a view isn't a `Table`, so that such a trigger can be used; left out of the first version of CREATE TRIGGER (F10)
 * F64: Support the JSON functions and JSON's `->` and `->>` operators (SQLite 3.38.0, Android API 34), left out of F46
 * F65: Support the conflict clause of NOT NULL, as `NOT NULL ON CONFLICT REPLACE`, which writes the default value instead of NULL, left out of F17: a property's type declares NOT NULL, so no annotation can hold the clause yet; it could be a new annotation, or a parameter of `@Default`. SQLlin's statements rarely write NULL to a non-null column, so it is of little use for now
-* F67: Support the PRAGMAs that set how each connection runs statements, which reads depend on, such as cache_size, temp_store, mmap_size, query_only, automatic_index, trusted_schema, threads, cache_spill and analysis_limit, as parameters of `DatabaseConfiguration` and `DSLDBConfiguration` rather than as statements: Android's framework reads through several connections of a database in WAL mode from Android 13 on, while a statement sets a PRAGMA on the one connection that writes, so they have to be set on every connection, as `busyTimeout` is; and a change of temp_store deletes the TEMP tables and triggers, which observed queries count changes with
+* F67: Support the PRAGMAs that set how each connection runs statements, such as cache_size, temp_store, mmap_size, query_only, automatic_index, trusted_schema, threads, cache_spill, analysis_limit, journal_size_limit, wal_autocheckpoint, max_page_count, secure_delete and cell_size_check, as parameters of `DatabaseConfiguration` and `DSLDBConfiguration` rather than as statements: Android's framework reads through several connections of a database in WAL mode from Android 13 on, while a statement sets a PRAGMA on the one connection that writes, so they have to be set on every connection, as `busyTimeout` is, and Android's framework sets journal_size_limit and wal_autocheckpoint on each connection it opens; and a change of temp_store deletes the TEMP tables and triggers, which observed queries count changes with
 
 ## Supported
 
+* F30: Support more PRAGMAs: those that check the database, read its schema and what the SQLite has, checkpoint the WAL, read the size and the header of the file, and set how statements run; case_sensitive_like is left out, as SQLite deprecates it, and incremental_vacuum, as it returns a row for each page it removes, which no driver steps through (2.6.0 ✅)
 * F29: Support EXPLAIN QUERY PLAN, to see which indexes a query uses (2.6.0 ✅)
 * F26: Support INDEXED BY and NOT INDEXED (2.6.0 ✅)
 * F27: Support choosing how a transaction begins, DEFERRED, IMMEDIATE or EXCLUSIVE (2.6.0 ✅)
