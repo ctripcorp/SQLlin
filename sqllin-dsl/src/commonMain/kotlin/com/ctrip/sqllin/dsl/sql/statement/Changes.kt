@@ -25,7 +25,7 @@ import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
  */
 internal enum class Changes {
 
-    /** Nothing: the statements only read, or plan a query. */
+    /** Nothing: the statements only read, plan a query, or run a PRAGMA of those that DatabaseScope builds as [PragmaStatement]. */
     NONE,
 
     /** The rows of tables: INSERT, UPDATE or DELETE. */
@@ -38,7 +38,7 @@ internal enum class Changes {
 
         @OptIn(ExperimentalDSLDatabaseAPI::class)
         fun of(statement: SingleStatement): Changes = when (statement) {
-            is SelectStatement<*>, is QueryPlanStatement, is RaiseStatement -> NONE
+            is SelectStatement<*>, is QueryPlanStatement, is PragmaStatement<*>, is RaiseStatement -> NONE
             is TableStructureStatement -> SCHEMA
             is InsertStatement, is UpdateDeleteStatement, is UpdateStatementWithoutWhereClause<*> -> ROWS
         }
@@ -51,7 +51,7 @@ internal enum class Changes {
             is InsertStatement -> statement.table
             is UpdateDeleteStatement -> statement.table
             is UpdateStatementWithoutWhereClause<*> -> statement.table
-            is SelectStatement<*>, is QueryPlanStatement, is TableStructureStatement, is RaiseStatement -> null
+            is SelectStatement<*>, is QueryPlanStatement, is PragmaStatement<*>, is TableStructureStatement, is RaiseStatement -> null
         }
     }
 }

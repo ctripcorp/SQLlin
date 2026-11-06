@@ -36,6 +36,15 @@ import com.ctrip.sqllin.dsl.sql.withName
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.ASC
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
+import com.ctrip.sqllin.dsl.sql.pragma.CheckpointMode
+import com.ctrip.sqllin.dsl.sql.pragma.CheckpointResult
+import com.ctrip.sqllin.dsl.sql.pragma.ColumnInfo
+import com.ctrip.sqllin.dsl.sql.pragma.ForeignKeyInfo
+import com.ctrip.sqllin.dsl.sql.pragma.ForeignKeyViolation
+import com.ctrip.sqllin.dsl.sql.pragma.IndexColumn
+import com.ctrip.sqllin.dsl.sql.pragma.IndexInfo
+import com.ctrip.sqllin.dsl.sql.pragma.IndexOrigin
+import com.ctrip.sqllin.dsl.sql.statement.PragmaStatement
 import com.ctrip.sqllin.dsl.sql.statement.QueryPlanStatement
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -2989,6 +2998,254 @@ class CommonBasicTest(private val path: DatabasePath) {
             }
         }
         assertEquals(listOf(99, 7), pages())
+    }
+
+    /**
+     * Covers the PRAGMAs that check the database, read its schema, checkpoint the WAL and read the file's size, and
+     * defer foreign keys: integrity_check and quick_check of a sound database and of one with a row that violates its
+     * CHECK constraint, foreign_key_check of all tables and of one, table_info of a
+     * table, a view, a table that doesn't exist and one with default values, index_list of the indexes of CREATE INDEX,
+     * a partial one, and those of UNIQUE and PRIMARY KEY constraints, index_xinfo of the sort order and the collation of
+     * index columns, foreign_key_list, wal_checkpoint, which a transaction rejects, page_count, freelist_count, which
+     * VACUUM empties, and page_size, and defer_foreign_keys, which needs a transaction and fails a commit that leaves a
+     * violation.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class, AdvancedInsertAPI::class)
+    fun testPragmas() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        fun orderCount(): Int {
+            lateinit var orders: SelectStatement<FKOrder>
+            database { orders = FKOrderTable SELECT X }
+            return orders.getResults().size
+        }
+        database {
+            CREATE(FKUserTable)
+            CREATE(FKOrderTable)
+            CREATE(DefaultRowTable)
+            CREATE(CheckedMembershipTable)
+            BookTable.CREATE_INDEX("idx_book_author", BookTable.author)
+            PersonWithIdTable.CREATE_INDEX("idx_person_age_name", PersonWithIdTable.age to DESC, PersonWithIdTable.name to ASC)
+            PersonWithIdTable.CREATE_UNIQUE_INDEX("idx_person_name", PersonWithIdTable.name) WHERE (PersonWithIdTable.age GT 0)
+            CollateNoCaseTestTable.CREATE_INDEX("idx_username", CollateNoCaseTestTable.username)
+            PersonWithIdTable { table ->
+                CREATE_VIEW(AdultPersonView) AS (table SELECT WHERE<AdultPerson>(age GTE 18))
+            }
+        }
+
+        // A sound database has no problems
+        lateinit var integrity: PragmaStatement<List<String>>
+        lateinit var quick: PragmaStatement<List<String>>
+        database {
+            integrity = PRAGMA_INTEGRITY_CHECK()
+            quick = PRAGMA_QUICK_CHECK(maxErrors = 1)
+        }
+        assertEquals(emptyList(), integrity.getResults())
+        assertEquals(emptyList(), quick.getResults())
+        assertFailsWith<IllegalArgumentException> { database { PRAGMA_INTEGRITY_CHECK(0) } }
+
+        // A row that a connection inserted without checking the CHECK constraints is a problem
+        val connection = openDatabase(DatabaseConfiguration(name = DATABASE_NAME, path = path, version = 1, create = {}))
+        try {
+            connection.execSQL("PRAGMA ignore_check_constraints=1")
+            connection.execSQL("INSERT INTO CheckedMembership (id, name, age, level, startDate) VALUES (1, 'a', 1, 7, '2026-01-01')")
+        } finally {
+            connection.close()
+        }
+        database {
+            integrity = PRAGMA_INTEGRITY_CHECK()
+            quick = PRAGMA_QUICK_CHECK()
+        }
+        assertEquals(1, integrity.getResults().size, integrity.getResults().toString())
+        assertContains(integrity.getResults().single(), "CheckedMembership")
+        assertEquals(integrity.getResults(), quick.getResults())
+
+        // Foreign keys aren't enforced by default, so an order of a user that doesn't exist is a violation
+        database {
+            FKUserTable INSERT FKUser(id = null, email = "a@x", name = "A")
+            FKOrderTable INSERT FKOrder(id = null, userId = 1L, amount = 1.0, orderDate = "2026-01-01")
+            FKOrderTable INSERT FKOrder(id = null, userId = 9L, amount = 2.0, orderDate = "2026-01-02")
+        }
+        lateinit var violations: PragmaStatement<List<ForeignKeyViolation>>
+        lateinit var orderViolations: PragmaStatement<List<ForeignKeyViolation>>
+        lateinit var userViolations: PragmaStatement<List<ForeignKeyViolation>>
+        database {
+            violations = PRAGMA_FOREIGN_KEY_CHECK()
+            orderViolations = PRAGMA_FOREIGN_KEY_CHECK(FKOrderTable)
+            userViolations = PRAGMA_FOREIGN_KEY_CHECK("fk_user")
+        }
+        val violation = ForeignKeyViolation(table = "fk_order", rowid = 2L, parentTable = "fk_user", foreignKeyId = 0)
+        assertEquals(listOf(violation), violations.getResults())
+        assertEquals(listOf(violation), orderViolations.getResults())
+        assertEquals(emptyList(), userViolations.getResults())
+        database { FKOrderTable DELETE WHERE(FKOrderTable.userId EQ 9L) }
+
+        // The schema: columns, of a table, a view and a table that doesn't exist, indexes, and foreign keys
+        lateinit var bookColumns: PragmaStatement<List<ColumnInfo>>
+        lateinit var bookColumnsByName: PragmaStatement<List<ColumnInfo>>
+        lateinit var defaultColumns: PragmaStatement<List<ColumnInfo>>
+        lateinit var viewColumns: PragmaStatement<List<ColumnInfo>>
+        lateinit var noColumns: PragmaStatement<List<ColumnInfo>>
+        lateinit var bookIndexes: PragmaStatement<List<IndexInfo>>
+        lateinit var personIndexes: PragmaStatement<List<IndexInfo>>
+        lateinit var userIndexes: PragmaStatement<List<IndexInfo>>
+        lateinit var enrollmentIndexes: PragmaStatement<List<IndexInfo>>
+        lateinit var ageNameColumns: PragmaStatement<List<IndexColumn>>
+        lateinit var usernameColumns: PragmaStatement<List<IndexColumn>>
+        lateinit var noIndexColumns: PragmaStatement<List<IndexColumn>>
+        lateinit var orderForeignKeys: PragmaStatement<List<ForeignKeyInfo>>
+        lateinit var userForeignKeys: PragmaStatement<List<ForeignKeyInfo>>
+        database {
+            bookColumns = PRAGMA_TABLE_INFO(BookTable)
+            bookColumnsByName = PRAGMA_TABLE_INFO("book")
+            defaultColumns = PRAGMA_TABLE_INFO(DefaultRowTable)
+            viewColumns = PRAGMA_TABLE_INFO(AdultPersonView)
+            noColumns = PRAGMA_TABLE_INFO("no_such_table")
+            bookIndexes = PRAGMA_INDEX_LIST(BookTable)
+            personIndexes = PRAGMA_INDEX_LIST(PersonWithIdTable)
+            userIndexes = PRAGMA_INDEX_LIST(FKUserTable)
+            enrollmentIndexes = PRAGMA_INDEX_LIST("enrollment")
+            ageNameColumns = PRAGMA_INDEX_XINFO("idx_person_age_name")
+            usernameColumns = PRAGMA_INDEX_XINFO("idx_username")
+            noIndexColumns = PRAGMA_INDEX_XINFO("no_such_index")
+            orderForeignKeys = PRAGMA_FOREIGN_KEY_LIST(FKOrderTable)
+            userForeignKeys = PRAGMA_FOREIGN_KEY_LIST("fk_user")
+        }
+        assertEquals(
+            listOf(
+                ColumnInfo(index = 0, name = "name", type = "TEXT", notNull = true, defaultValue = null, primaryKeyPosition = 0),
+                ColumnInfo(index = 1, name = "author", type = "TEXT", notNull = true, defaultValue = null, primaryKeyPosition = 0),
+                ColumnInfo(index = 2, name = "price", type = "DOUBLE", notNull = true, defaultValue = null, primaryKeyPosition = 0),
+                ColumnInfo(index = 3, name = "pages", type = "INT", notNull = true, defaultValue = null, primaryKeyPosition = 0),
+            ),
+            bookColumns.getResults(),
+        )
+        assertEquals(bookColumns.getResults(), bookColumnsByName.getResults())
+        assertEquals(
+            listOf(
+                ColumnInfo(index = 0, name = "id", type = "INTEGER", notNull = false, defaultValue = null, primaryKeyPosition = 1),
+                ColumnInfo(index = 1, name = "status", type = "TEXT", notNull = true, defaultValue = "'new'", primaryKeyPosition = 0),
+                ColumnInfo(index = 2, name = "count", type = "INT", notNull = true, defaultValue = "0", primaryKeyPosition = 0),
+                ColumnInfo(index = 3, name = "note", type = "TEXT", notNull = false, defaultValue = null, primaryKeyPosition = 0),
+            ),
+            defaultColumns.getResults(),
+        )
+        assertEquals(listOf("name", "age"), viewColumns.getResults().map { it.name })
+        assertEquals(emptyList(), noColumns.getResults())
+        assertEquals(listOf(IndexInfo("idx_book_author", isUnique = false, origin = IndexOrigin.CREATE_INDEX, isPartial = false)), bookIndexes.getResults())
+        assertEquals(
+            listOf(
+                IndexInfo("idx_person_age_name", isUnique = false, origin = IndexOrigin.CREATE_INDEX, isPartial = false),
+                IndexInfo("idx_person_name", isUnique = true, origin = IndexOrigin.CREATE_INDEX, isPartial = true),
+            ),
+            personIndexes.getResults().sortedBy { it.name },
+        )
+        assertEquals(listOf(IndexInfo("sqlite_autoindex_fk_user_1", isUnique = true, origin = IndexOrigin.UNIQUE, isPartial = false)), userIndexes.getResults())
+        assertEquals(listOf(IndexOrigin.PRIMARY_KEY), enrollmentIndexes.getResults().map { it.origin })
+        // Keyed by age, descending, then name, and holding the rowid besides
+        assertEquals(
+            listOf(Triple("age", true, true), Triple("name", false, true), Triple(null, false, false)),
+            ageNameColumns.getResults().map { Triple(it.name, it.isDescending, it.isKey) },
+        )
+        assertEquals(-1, ageNameColumns.getResults().last().columnIndex)
+        assertEquals("NOCASE", usernameColumns.getResults().first().collation?.uppercase())
+        assertEquals("BINARY", ageNameColumns.getResults().first().collation?.uppercase())
+        assertEquals(emptyList(), noIndexColumns.getResults())
+        assertEquals(
+            listOf(
+                ForeignKeyInfo(
+                    id = 0, position = 0, parentTable = "fk_user", column = "userId", parentColumn = "id",
+                    onUpdate = "NO ACTION", onDelete = "CASCADE", match = "NONE",
+                ),
+            ),
+            orderForeignKeys.getResults(),
+        )
+        assertEquals(emptyList(), userForeignKeys.getResults())
+
+        // A checkpoint copies all the pages of the WAL, or has none to copy outside WAL mode, and can't run in a
+        // transaction
+        lateinit var passive: PragmaStatement<CheckpointResult>
+        lateinit var truncate: PragmaStatement<CheckpointResult>
+        database {
+            passive = PRAGMA_WAL_CHECKPOINT()
+            truncate = PRAGMA_WAL_CHECKPOINT(CheckpointMode.TRUNCATE)
+        }
+        for (result in listOf(passive.getResults(), truncate.getResults())) {
+            assertEquals(false, result.isBusy, result.toString())
+            assertEquals(result.walPages, result.checkpointedPages, result.toString())
+        }
+        assertFailsWith<IllegalStateException> { database { transaction { PRAGMA_WAL_CHECKPOINT() } } }
+
+        // The file's size: deleted rows leave unused pages, which VACUUM removes, unless the database vacuums itself at
+        // each commit, as Android's SQLite makes a database do by default, auto_vacuum being FULL there
+        database { BookTable INSERT (1..300).map { Book(name = "x".repeat(500) + it, author = "A", price = 1.0, pages = it) } }
+        lateinit var pageSize: PragmaStatement<Long>
+        lateinit var pageCount: PragmaStatement<Long>
+        lateinit var freeBefore: PragmaStatement<Long>
+        lateinit var freeAfterDelete: PragmaStatement<Long>
+        lateinit var pageCountAfterDelete: PragmaStatement<Long>
+        lateinit var freeAfterVacuum: PragmaStatement<Long>
+        database {
+            pageSize = PRAGMA_PAGE_SIZE()
+            pageCount = PRAGMA_PAGE_COUNT()
+            freeBefore = PRAGMA_FREELIST_COUNT()
+            BookTable DELETE X
+            freeAfterDelete = PRAGMA_FREELIST_COUNT()
+            pageCountAfterDelete = PRAGMA_PAGE_COUNT()
+        }
+        database {
+            VACUUM()
+            freeAfterVacuum = PRAGMA_FREELIST_COUNT()
+        }
+        assertEquals(true, pageSize.getResults() >= 512 && pageSize.getResults().countOneBits() == 1, pageSize.getResults().toString())
+        assertEquals(true, pageCount.getResults() * pageSize.getResults() > 300L * 500, pageCount.getResults().toString())
+        val sizes = "pages ${pageCount.getResults()} to ${pageCountAfterDelete.getResults()}, unused ${freeBefore.getResults()} to ${freeAfterDelete.getResults()}"
+        if (sqliteString("PRAGMA auto_vacuum") == "0") {
+            assertEquals(true, freeAfterDelete.getResults() > freeBefore.getResults(), sizes)
+            assertEquals(pageCount.getResults(), pageCountAfterDelete.getResults(), sizes)
+        } else {
+            assertEquals(0L, freeAfterDelete.getResults(), sizes)
+            assertEquals(true, pageCountAfterDelete.getResults() < pageCount.getResults(), sizes)
+        }
+        assertEquals(0L, freeAfterVacuum.getResults())
+
+        // Deferred foreign keys: an order inserted before its user, in a transaction, which a violation left fails
+        database { PRAGMA_FOREIGN_KEYS(true) }
+        assertFails {
+            database {
+                transaction {
+                    FKOrderTable INSERT FKOrder(id = null, userId = 2L, amount = 3.0, orderDate = "2026-01-03")
+                    FKUserTable INSERT_WITH_ID FKUser(id = 2L, email = "b@x", name = "B")
+                }
+            }
+        }
+        assertEquals(1, orderCount())
+        database {
+            transaction {
+                PRAGMA_DEFER_FOREIGN_KEYS(true)
+                FKOrderTable INSERT FKOrder(id = null, userId = 2L, amount = 3.0, orderDate = "2026-01-03")
+                FKUserTable INSERT_WITH_ID FKUser(id = 2L, email = "b@x", name = "B")
+            }
+        }
+        assertEquals(2, orderCount())
+        assertContains(
+            assertFails {
+                database {
+                    transaction {
+                        PRAGMA_DEFER_FOREIGN_KEYS(true)
+                        FKOrderTable INSERT FKOrder(id = null, userId = 99L, amount = 4.0, orderDate = "2026-01-04")
+                    }
+                }
+            }.message.orEmpty(),
+            "FOREIGN KEY constraint failed",
+        )
+        assertEquals(2, orderCount())
+        assertFailsWith<IllegalStateException> { database { PRAGMA_DEFER_FOREIGN_KEYS(true) } }
+
+        // PRAGMAs only read, as a versioned read has to
+        runTest {
+            val (columns, versions) = database.versioned { PRAGMA_TABLE_INFO(BookTable) }
+            assertEquals(4, columns.getResults().size)
+            assertEquals("TableVersions()", versions.toString())
+        }
     }
 
     /**

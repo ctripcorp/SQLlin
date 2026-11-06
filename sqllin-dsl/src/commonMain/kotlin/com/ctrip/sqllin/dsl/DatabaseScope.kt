@@ -54,6 +54,7 @@ import com.ctrip.sqllin.dsl.sql.operation.Select
 import com.ctrip.sqllin.dsl.sql.operation.Trigger
 import com.ctrip.sqllin.dsl.sql.operation.Update
 import com.ctrip.sqllin.dsl.sql.operation.Vacuum
+import com.ctrip.sqllin.dsl.sql.pragma.*
 import com.ctrip.sqllin.dsl.sql.statement.*
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
@@ -2402,6 +2403,266 @@ public class DatabaseScope internal constructor(
     public fun EXPLAIN_QUERY_PLAN(select: SelectStatement<*>): QueryPlanStatement {
         select.takeOut()
         val statement = QueryPlanStatement("EXPLAIN QUERY PLAN ${select.sqlStr}", databaseConnection, select.parameters?.toMutableList())
+        addStatement(statement)
+        return statement
+    }
+
+    // ========== PRAGMAs that check the database, read its schema, or defer foreign keys ==========
+    //
+    // A PRAGMA that reads returns a PragmaStatement, whose getResults() returns what it read once the scope has run, as
+    // the results of a SELECT are read. Their types are in com.ctrip.sqllin.dsl.sql.pragma. A trigger can't run them.
+
+    /**
+     * Checks the whole database, as the SQL `PRAGMA integrity_check(N)` does: that its pages, rows and indexes are
+     * well-formed and agree with each other, and that the rows satisfy their NOT NULL and CHECK constraints, but not
+     * their foreign keys, which [PRAGMA_FOREIGN_KEY_CHECK] checks.
+     *
+     * Example:
+     * ```kotlin
+     * val problems = database { PRAGMA_INTEGRITY_CHECK() }.getResults()
+     * if (problems.isNotEmpty()) {
+     *     // The database is corrupt
+     * }
+     * ```
+     *
+     * It reads the whole database, so it takes long for a large one, which [PRAGMA_QUICK_CHECK] takes less long for.
+     *
+     * @param maxErrors How many problems to report at most
+     * @return The statement, whose `getResults()` returns the problems, in SQLite's words, or an empty list if there
+     * are none, once the scope has run
+     * @throws IllegalArgumentException if [maxErrors] isn't positive
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_INTEGRITY_CHECK(maxErrors: Int = 100): PragmaStatement<List<String>> {
+        require(maxErrors > 0) { "PRAGMA integrity_check needs a positive number of errors, rather than $maxErrors." }
+        return pragma(PRAGMA.check("integrity_check", maxErrors, databaseConnection))
+    }
+
+    /**
+     * Checks the whole database as [PRAGMA_INTEGRITY_CHECK] does, as the SQL `PRAGMA quick_check(N)` does, except that
+     * the indexes hold the rows of their tables, and that the rows satisfy their UNIQUE constraints, so that it takes
+     * time in proportion to the size of the database, rather than more.
+     *
+     * @param maxErrors How many problems to report at most
+     * @return The statement, whose `getResults()` returns the problems, in SQLite's words, or an empty list if there
+     * are none, once the scope has run
+     * @throws IllegalArgumentException if [maxErrors] isn't positive
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_QUICK_CHECK(maxErrors: Int = 100): PragmaStatement<List<String>> {
+        require(maxErrors > 0) { "PRAGMA quick_check needs a positive number of errors, rather than $maxErrors." }
+        return pragma(PRAGMA.check("quick_check", maxErrors, databaseConnection))
+    }
+
+    /**
+     * Finds the rows of all tables that violate their foreign keys, as the SQL `PRAGMA foreign_key_check` does, such as
+     * after a migration that turned foreign keys off with `PRAGMA_FOREIGN_KEYS(false)`. It checks them whether or not
+     * the database enforces them.
+     *
+     * @return The statement, whose `getResults()` returns the violations, or an empty list if there are none, once the
+     * scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FOREIGN_KEY_CHECK(): PragmaStatement<List<ForeignKeyViolation>> =
+        pragma(PRAGMA.foreignKeyCheck(null, databaseConnection))
+
+    /**
+     * Finds the rows of [table] that violate its foreign keys, as the SQL `PRAGMA foreign_key_check(table)` does.
+     *
+     * @see PRAGMA_FOREIGN_KEY_CHECK
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FOREIGN_KEY_CHECK(table: Table<*>): PragmaStatement<List<ForeignKeyViolation>> =
+        pragma(PRAGMA.foreignKeyCheck(table.tableName, databaseConnection))
+
+    /**
+     * Finds the rows of the table named [table] that violate its foreign keys, as the SQL
+     * `PRAGMA foreign_key_check(table)` does.
+     *
+     * @see PRAGMA_FOREIGN_KEY_CHECK
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FOREIGN_KEY_CHECK(table: String): PragmaStatement<List<ForeignKeyViolation>> =
+        pragma(PRAGMA.foreignKeyCheck(table, databaseConnection))
+
+    /**
+     * The columns of [table] in the database, as the SQL `PRAGMA table_info(table)` tells, such as to check in a
+     * migration whether a column exists. It doesn't list the hidden and generated columns. A table that doesn't exist
+     * has no columns.
+     *
+     * Example:
+     * ```kotlin
+     * val columns = database { PRAGMA_TABLE_INFO(PersonTable) }.getResults()
+     * val hasEmail = columns.any { it.name == "email" }
+     * ```
+     *
+     * @return The statement, whose `getResults()` returns the columns, in the order of the table, once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_TABLE_INFO(table: Table<*>): PragmaStatement<List<ColumnInfo>> =
+        pragma(PRAGMA.tableInfo(table.tableName, databaseConnection))
+
+    /**
+     * The columns of [view] in the database, as the SQL `PRAGMA table_info(view)` tells.
+     *
+     * @see PRAGMA_TABLE_INFO
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_TABLE_INFO(view: View<*>): PragmaStatement<List<ColumnInfo>> =
+        pragma(PRAGMA.tableInfo(view.tableName, databaseConnection))
+
+    /**
+     * The columns of the table or view named [name], as the SQL `PRAGMA table_info(name)` tells, such as of a table
+     * that the app no longer declares.
+     *
+     * @see PRAGMA_TABLE_INFO
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_TABLE_INFO(name: String): PragmaStatement<List<ColumnInfo>> =
+        pragma(PRAGMA.tableInfo(name, databaseConnection))
+
+    /**
+     * The indexes of [table], as the SQL `PRAGMA index_list(table)` tells: those that CREATE INDEX created, and those
+     * that SQLite created for its UNIQUE and PRIMARY KEY constraints, except for an INTEGER PRIMARY KEY, which is the
+     * rowid, which needs none.
+     *
+     * @return The statement, whose `getResults()` returns the indexes once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_INDEX_LIST(table: Table<*>): PragmaStatement<List<IndexInfo>> =
+        pragma(PRAGMA.indexList(table.tableName, databaseConnection))
+
+    /**
+     * The indexes of the table named [table], as the SQL `PRAGMA index_list(table)` tells.
+     *
+     * @see PRAGMA_INDEX_LIST
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_INDEX_LIST(table: String): PragmaStatement<List<IndexInfo>> =
+        pragma(PRAGMA.indexList(table, databaseConnection))
+
+    /**
+     * The columns of the index named [index], as the SQL `PRAGMA index_xinfo(index)` tells: those it is keyed by, in
+     * order, with their sort orders and collations, then those it holds besides, as the rowid. An index that doesn't
+     * exist has no columns.
+     *
+     * @return The statement, whose `getResults()` returns the columns once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_INDEX_XINFO(index: String): PragmaStatement<List<IndexColumn>> =
+        pragma(PRAGMA.indexXinfo(index, databaseConnection))
+
+    /**
+     * The foreign keys of [table], as the SQL `PRAGMA foreign_key_list(table)` tells, a row for each of their columns.
+     *
+     * @return The statement, whose `getResults()` returns the columns of the foreign keys once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FOREIGN_KEY_LIST(table: Table<*>): PragmaStatement<List<ForeignKeyInfo>> =
+        pragma(PRAGMA.foreignKeyList(table.tableName, databaseConnection))
+
+    /**
+     * The foreign keys of the table named [table], as the SQL `PRAGMA foreign_key_list(table)` tells.
+     *
+     * @see PRAGMA_FOREIGN_KEY_LIST
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FOREIGN_KEY_LIST(table: String): PragmaStatement<List<ForeignKeyInfo>> =
+        pragma(PRAGMA.foreignKeyList(table, databaseConnection))
+
+    /**
+     * Checkpoints the WAL, as the SQL `PRAGMA wal_checkpoint(mode)` does: copies the pages it holds into the database
+     * file, as SQLite does on its own once it holds 1000 pages, such as before copying the database file, which
+     * doesn't hold what the WAL does. A FULL, RESTART or TRUNCATE checkpoint waits for the other connections of the
+     * database as long as `busyTimeout`, and tells whether they kept it from finishing. A database that isn't in WAL
+     * mode has nothing to checkpoint.
+     *
+     * @param mode How to checkpoint
+     * @return The statement, whose `getResults()` returns the result of the checkpoint once the scope has run
+     * @throws IllegalStateException inside a transaction, as SQLite can't checkpoint there
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_WAL_CHECKPOINT(mode: CheckpointMode = CheckpointMode.PASSIVE): PragmaStatement<CheckpointResult> {
+        check(!isInTransaction) { "SQLite can't checkpoint the WAL inside a transaction." }
+        return pragma(PRAGMA.walCheckpoint(mode, databaseConnection))
+    }
+
+    /**
+     * The number of pages of the database file, as the SQL `PRAGMA page_count` tells, which, times
+     * [PRAGMA_PAGE_SIZE], is its size, without what its WAL holds.
+     *
+     * @return The statement, whose `getResults()` returns the number once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_PAGE_COUNT(): PragmaStatement<Long> = pragma(PRAGMA.size("page_count", databaseConnection))
+
+    /**
+     * The number of unused pages of the database file, as the SQL `PRAGMA freelist_count` tells, which rows that were
+     * deleted leave, and which [VACUUM] removes, so that the file shrinks. A database whose auto_vacuum is on removes them
+     * at each commit, so that it has none: Android's SQLite creates a database with auto_vacuum FULL by default.
+     *
+     * @return The statement, whose `getResults()` returns the number once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FREELIST_COUNT(): PragmaStatement<Long> = pragma(PRAGMA.size("freelist_count", databaseConnection))
+
+    /**
+     * The size of a page of the database file in bytes, as the SQL `PRAGMA page_size` tells.
+     *
+     * @return The statement, whose `getResults()` returns the size once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_PAGE_SIZE(): PragmaStatement<Long> = pragma(PRAGMA.size("page_size", databaseConnection))
+
+    /**
+     * Defers the checks of foreign keys to the end of the transaction, or stops deferring them, as the SQL
+     * `PRAGMA defer_foreign_keys` does, so that the statements after it may violate them for a while, as when a row is
+     * inserted before the row it references. A violation that remains when the transaction commits fails the commit.
+     *
+     * Example:
+     * ```kotlin
+     * database { PRAGMA_FOREIGN_KEYS(true) }
+     * database {
+     *     transaction {
+     *         PRAGMA_DEFER_FOREIGN_KEYS(true)
+     *         OrderTable INSERT Order(userId = 1)
+     *         UserTable INSERT User(id = 1)
+     *     }
+     * }
+     * ```
+     *
+     * SQLite turns it off again when the transaction ends, so it can only be set in one. It only matters while the
+     * database enforces foreign keys, which `PRAGMA_FOREIGN_KEYS(true)` turns on, outside a transaction.
+     *
+     * @param flag Whether to defer the checks
+     * @throws IllegalStateException outside a transaction
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_DEFER_FOREIGN_KEYS(flag: Boolean) {
+        check(isInTransaction) { "PRAGMA defer_foreign_keys only lasts until the transaction ends, so it can only be set in transaction { }." }
+        pragma(PRAGMA.set("defer_foreign_keys", flag, databaseConnection))
+    }
+
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    private fun <R> pragma(statement: PragmaStatement<R>): PragmaStatement<R> {
         addStatement(statement)
         return statement
     }

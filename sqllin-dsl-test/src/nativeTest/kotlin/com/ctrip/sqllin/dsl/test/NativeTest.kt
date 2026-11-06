@@ -201,6 +201,9 @@ class NativeTest {
     fun testClauseOnEarlierStatement() = commonTest.testClauseOnEarlierStatement()
 
     @Test
+    fun testPragmas() = commonTest.testPragmas()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test

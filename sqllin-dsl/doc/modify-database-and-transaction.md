@@ -770,6 +770,52 @@ fun sample() {
 }
 ```
 
+## PRAGMA
+
+SQLlin builds the PRAGMAs that check the database, read its schema, checkpoint the WAL, read the size of the file, and
+defer foreign keys. A PRAGMA that reads returns a statement whose `getResults()` returns what it read once the scope
+has run, as the results of a _SELECT_ are read. They are experimental, and their result types are in
+`com.ctrip.sqllin.dsl.sql.pragma`:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    lateinit var problems: PragmaStatement<List<String>>
+    lateinit var violations: PragmaStatement<List<ForeignKeyViolation>>
+    lateinit var columns: PragmaStatement<List<ColumnInfo>>
+    database {
+        problems = PRAGMA_INTEGRITY_CHECK()
+        violations = PRAGMA_FOREIGN_KEY_CHECK()
+        columns = PRAGMA_TABLE_INFO(PersonTable)
+    }
+    if (problems.getResults().isNotEmpty()) {
+        // The database is corrupt
+    }
+    val hasEmail = columns.getResults().any { it.name == "email" }
+}
+```
+
+* **Checking the database**: `PRAGMA_INTEGRITY_CHECK(maxErrors)` checks that the pages, rows and indexes are well-formed
+  and agree with each other, and that the rows satisfy their NOT NULL and CHECK constraints, and returns the problems,
+  or an empty list; `PRAGMA_QUICK_CHECK(maxErrors)` checks all but the indexes and UNIQUE constraints, more quickly.
+  `PRAGMA_FOREIGN_KEY_CHECK()`, or `PRAGMA_FOREIGN_KEY_CHECK(table)`, returns the rows that violate their foreign keys,
+  whether or not they are enforced, such as after a migration that turned them off.
+* **Reading the schema**: `PRAGMA_TABLE_INFO(table)` returns the columns of a table or a view, which a migration can
+  check, `PRAGMA_INDEX_LIST(table)` its indexes, `PRAGMA_INDEX_XINFO(index)` the columns of an index, with their sort
+  orders and collations, and `PRAGMA_FOREIGN_KEY_LIST(table)` its foreign keys. Each also takes a name, as of a table
+  the app no longer declares. A table or index that doesn't exist has no columns, indexes or foreign keys.
+* **The file**: `PRAGMA_WAL_CHECKPOINT(mode)` copies the pages of the WAL into the database file, as before copying the
+  file, which doesn't hold what the WAL does; SQLite can't checkpoint inside a transaction, so it throws an
+  `IllegalStateException` inside `transaction {...}`. `PRAGMA_PAGE_COUNT()` times `PRAGMA_PAGE_SIZE()` is the size of the
+  file, and `PRAGMA_FREELIST_COUNT()` the number of its unused pages, which [`VACUUM()`](#vacuum) removes; a database
+  whose auto_vacuum is on, as Android's SQLite creates one by default, removes them at each commit, so it has none.
+* **Deferring foreign keys**: `PRAGMA_DEFER_FOREIGN_KEYS(true)` defers the checks of foreign keys to the commit, so that
+  a row can be inserted before the row it references; SQLite turns it off when the transaction ends, so it throws an
+  `IllegalStateException` outside `transaction {...}`.
+
+The details of the problems that the checks return are SQLite's own text. A PRAGMA changes no table, so it can be in
+a scope of `versioned { }`.
+
 ## Next Step
 
 You have learned how to use _INSERT_, _DELETE_ and _UPDATE_ statements. Next step you will learn _SELECT_ statements. The

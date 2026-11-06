@@ -724,6 +724,47 @@ fun sample() {
 }
 ```
 
+## PRAGMA
+
+SQLlin 支持用来检查数据库、读取表结构、执行 WAL 检查点、读取文件大小，以及推迟外键检查的 PRAGMA。读取类的 PRAGMA
+返回一条语句，作用域执行完之后，用它的 `getResults()` 取得读到的内容，和 _SELECT_ 的结果一样。它们是实验性 API，结果类型
+都在 `com.ctrip.sqllin.dsl.sql.pragma` 包中：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    lateinit var problems: PragmaStatement<List<String>>
+    lateinit var violations: PragmaStatement<List<ForeignKeyViolation>>
+    lateinit var columns: PragmaStatement<List<ColumnInfo>>
+    database {
+        problems = PRAGMA_INTEGRITY_CHECK()
+        violations = PRAGMA_FOREIGN_KEY_CHECK()
+        columns = PRAGMA_TABLE_INFO(PersonTable)
+    }
+    if (problems.getResults().isNotEmpty()) {
+        // 数据库已损坏
+    }
+    val hasEmail = columns.getResults().any { it.name == "email" }
+}
+```
+
+* **检查数据库**：`PRAGMA_INTEGRITY_CHECK(maxErrors)` 检查页、行和索引是否完好、是否相互一致，以及行是否满足 NOT NULL 和
+  CHECK 约束，返回发现的问题，没有问题时返回空列表；`PRAGMA_QUICK_CHECK(maxErrors)` 不检查索引和 UNIQUE 约束，其余相同，速度
+  更快。`PRAGMA_FOREIGN_KEY_CHECK()` 或 `PRAGMA_FOREIGN_KEY_CHECK(table)` 返回违反外键的行，不管外键是否启用，比如在关闭外键
+  做完迁移之后检查。
+* **读取表结构**：`PRAGMA_TABLE_INFO(table)` 返回表或视图的列，可以在迁移时用来判断，`PRAGMA_INDEX_LIST(table)` 返回表的索引，
+  `PRAGMA_INDEX_XINFO(index)` 返回索引的列，包括排序方向和排序规则，`PRAGMA_FOREIGN_KEY_LIST(table)` 返回表的外键。它们也都可以
+  传入名字，比如应用已经不再声明的表。不存在的表或索引没有列、索引或外键。
+* **数据库文件**：`PRAGMA_WAL_CHECKPOINT(mode)` 把 WAL 中的页复制进数据库文件，比如在复制数据库文件之前，因为文件里没有 WAL
+  中的内容；SQLite 不能在事务中执行检查点，所以在 `transaction {...}` 中调用会抛出 `IllegalStateException`。
+  `PRAGMA_PAGE_COUNT()` 乘以 `PRAGMA_PAGE_SIZE()` 就是文件的大小，`PRAGMA_FREELIST_COUNT()` 是文件中未使用的页数，
+  [`VACUUM()`](#vacuum) 会去掉这些页；开启了 auto_vacuum 的数据库（Android 的 SQLite 默认就这样创建数据库）每次提交都会去掉
+  它们，所以没有未使用的页。
+* **推迟外键检查**：`PRAGMA_DEFER_FOREIGN_KEYS(true)` 把外键检查推迟到提交时，这样就可以先插入引用其他行的行；SQLite 会在
+  事务结束时把它关掉，所以在 `transaction {...}` 之外调用会抛出 `IllegalStateException`。
+
+检查返回的问题描述是 SQLite 自己的文字。PRAGMA 不会修改任何表，所以可以写在 `versioned { }` 中。
+
 ## 接下来
 
 你已经学习了如何使用 _INSERT_、_DELETE_ 以及 _UPDATE_ 语句，接下来你将学习 _SELECT_ 语句。 _SELECT_ 语句相比其他语句更复杂，做好准备哦 :)。
