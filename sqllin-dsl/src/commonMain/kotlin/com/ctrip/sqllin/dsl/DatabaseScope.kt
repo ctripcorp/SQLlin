@@ -139,7 +139,15 @@ public class DatabaseScope internal constructor(
         get() = transactionStatementsGroup != null
 
     /**
-     * Begins a new transaction, which begins IMMEDIATE.
+     * How deeply the transactions being built are nested: 1 in the outermost one, and 0 outside any. Only the outermost
+     * one collects statements, and only its end ends it, so that the statements after an inner one are still in it.
+     */
+    @Volatile
+    private var transactionDepth = 0
+
+    /**
+     * Begins a new transaction, which begins IMMEDIATE, unless one has begun already, whose statements the new ones
+     * join. Each call has to be followed by one of [endTransaction], as [transaction] does.
      *
      * @return `true` if transaction started successfully, `false` if already in a transaction
      */
@@ -153,7 +161,7 @@ public class DatabaseScope internal constructor(
     @PublishedApi
     internal fun beginTransaction(mode: TransactionMode): Boolean {
         check(triggerBody == null) { "A transaction can't begin in the body of a trigger, which runs in the statement that fires it." }
-        if (isInTransaction)
+        if (transactionDepth++ > 0)
             return false
         transactionStatementsGroup = TransactionStatementsGroup(databaseConnection, enableSimpleSQLLog, mode)
         executiveEngine.addStatement(transactionStatementsGroup!!)
@@ -161,13 +169,15 @@ public class DatabaseScope internal constructor(
     }
 
     /**
-     * Ends the current transaction.
+     * Ends the transaction that the last [beginTransaction] began, so that the statements after it aren't in it. A
+     * transaction in another one only ends itself: its statements are the outer one's, and so are those after it,
+     * until the outer one ends.
      *
-     * The transaction will be committed or rolled back based on whether
-     * [endTransaction] was called.
+     * The statements run, and the transaction commits, or rolls back if one of them fails, once the scope ends.
      */
     public fun endTransaction() {
-        transactionStatementsGroup = null
+        if (transactionDepth > 0 && --transactionDepth == 0)
+            transactionStatementsGroup = null
     }
 
     /**
@@ -175,6 +185,9 @@ public class DatabaseScope internal constructor(
      *
      * If the block completes successfully, the transaction is committed.
      * If an exception is thrown, the transaction is rolled back.
+     *
+     * A transaction in another one joins it: its statements, and those after it, are the outer one's, which commits or
+     * rolls back all of them.
      *
      * @param block The block of SQL statements to execute
      * @return The result of the block

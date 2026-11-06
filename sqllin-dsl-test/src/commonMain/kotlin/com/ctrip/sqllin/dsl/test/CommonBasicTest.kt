@@ -3026,6 +3026,82 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers transactions in others, which join the outer one rather than end it, with a mode or without: the statements
+     * after an inner one are still in the outer one, which rolls back all of them when one fails, the second of two
+     * inner ones joins it too, as after an inner one whose block threw, and so does a nested `beginTransaction()`, which
+     * returns false and which only the outermost `endTransaction()` ends.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testNestedTransaction() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        fun assertConflict(block: () -> Unit) = assertContains(assertFails(block).message.orEmpty(), "constraint failed")
+        fun emails(): List<String> {
+            lateinit var rows: SelectStatement<UniqueEmailTest>
+            database { rows = UniqueEmailTestTable SELECT ORDER_BY(UniqueEmailTestTable.id to ASC) }
+            return rows.getResults().map { it.email }
+        }
+        fun row(email: String) = UniqueEmailTest(id = null, email = email, name = email)
+        database { UniqueEmailTestTable INSERT row("a@x") }
+
+        // A statement after an inner transaction is still in the outer one, which rolls back all of them when it fails
+        assertConflict {
+            database {
+                transaction {
+                    UniqueEmailTestTable INSERT row("b@x")
+                    transaction { UniqueEmailTestTable INSERT row("c@x") }
+                    UniqueEmailTestTable INSERT row("a@x")
+                }
+            }
+        }
+        // Two inner ones with modes, as two functions that each begin one, both join the outer one
+        assertConflict {
+            database {
+                transaction(TransactionMode.EXCLUSIVE) {
+                    transaction(TransactionMode.DEFERRED) { UniqueEmailTestTable INSERT row("b@x") }
+                    transaction(TransactionMode.DEFERRED) { UniqueEmailTestTable INSERT row("c@x") }
+                    UniqueEmailTestTable INSERT row("a@x")
+                }
+            }
+        }
+        // An inner one whose block threw, which the outer one caught, leaves the outer one collecting statements
+        assertConflict {
+            database {
+                transaction {
+                    runCatching {
+                        transaction {
+                            UniqueEmailTestTable INSERT row("b@x")
+                            error("The inner block fails")
+                        }
+                    }
+                    UniqueEmailTestTable INSERT row("a@x")
+                }
+            }
+        }
+        // beginTransaction() and endTransaction() nest too
+        assertConflict {
+            database {
+                assertEquals(true, beginTransaction())
+                UniqueEmailTestTable INSERT row("b@x")
+                assertEquals(false, beginTransaction())
+                UniqueEmailTestTable INSERT row("c@x")
+                endTransaction()
+                UniqueEmailTestTable INSERT row("a@x")
+                endTransaction()
+            }
+        }
+        assertEquals(listOf("a@x"), emails())
+
+        // The outer one commits the statements of the inner ones and those after them
+        database {
+            transaction {
+                transaction { UniqueEmailTestTable INSERT row("b@x") }
+                transaction(TransactionMode.IMMEDIATE) { UniqueEmailTestTable INSERT row("c@x") }
+                UniqueEmailTestTable INSERT row("d@x")
+            }
+        }
+        assertEquals(listOf("a@x", "b@x", "c@x", "d@x"), emails())
+    }
+
+    /**
      * Covers the conflict resolutions of a statement, which take the place of those of the constraints: INSERT OR
      * ABORT, OR FAIL and OR ROLLBACK, of objects, expressions, DEFAULT VALUES and a SELECT, and UPDATE OR each of the
      * five. A failure is checked to be the constraint's, rather than one of the SQL.
