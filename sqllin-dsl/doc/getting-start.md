@@ -428,6 +428,29 @@ data class User(
 - `ORDER BY` clauses sort case-insensitively
 - Indexes on the column are case-insensitive
 
+#### @CollateRTrim - Text Comparison Ignoring Trailing Spaces
+
+`@CollateRTrim` makes a text column compare its values ignoring the spaces at their ends, for SQL `COLLATE RTRIM`, so
+that `'abc  '` equals `'abc'`, and its UNIQUE constraint and indexes treat them as the same value. The values are still
+stored as they are written. It is experimental, and can only be applied to `String` and `Char` properties:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow
+@Serializable
+data class Product(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @CollateRTrim @Unique val code: String,
+)
+// Generated SQL: CREATE TABLE Product(id INTEGER PRIMARY KEY AUTOINCREMENT,code TEXT NOT NULL COLLATE RTRIM UNIQUE)
+```
+
+A column has one collation, so a property can't have both `@CollateNoCase` and `@CollateRTrim`. A column without either
+compares its values by their bytes, as the `BINARY` collation does. The `COLLATE` operator compares them by another
+collation in a single expression, as [More Expression Syntax](sql-functions.md#more-expression-syntax) describes, and
+gives a column of an index its own collation, as
+[CREATE INDEX](modify-database-and-transaction.md#create-index---creating-indexes) describes.
+
 #### Combining Multiple Constraints
 
 You can combine multiple constraint annotations on the same property:

@@ -1857,8 +1857,9 @@ public class DatabaseScope internal constructor(
      * and DELETE operations.
      *
      * A function of the table's columns makes an expression index, which the queries comparing the same expression
-     * use, as `lower(email)` for case-insensitive lookups. `WHERE` after it makes a partial index of the rows that
-     * satisfy a condition.
+     * use, as `lower(email)` for case-insensitive lookups. The COLLATE operator gives a column of the index another
+     * collation than the column's, as `email COLLATE NOCASE`, which the queries comparing `(email COLLATE NOCASE)`
+     * use. `WHERE` after it makes a partial index of the rows that satisfy a condition.
      *
      * Example:
      * ```kotlin
@@ -1866,6 +1867,7 @@ public class DatabaseScope internal constructor(
      *     UserTable.CREATE_INDEX("idx_user_email", UserTable.email)
      *     UserTable.CREATE_INDEX("idx_user_name_age", UserTable.name, UserTable.age)
      *     UserTable.CREATE_INDEX("idx_user_lower_email", UserTable.lower(UserTable.email))
+     *     UserTable.CREATE_INDEX("idx_user_email_nocase", UserTable.email COLLATE NOCASE)
      * }
      * ```
      *

@@ -11,7 +11,6 @@ done. A new item takes the next number.
 * F14: Support constraints in `ALTER_ADD_COLUMN`, which adds a column with its type only: DEFAULT, NOT NULL with DEFAULT, CHECK, COLLATE NOCASE and REFERENCES
 * F15: Support WITHOUT ROWID tables, which save space and a lookup when the primary key isn't an INTEGER
 * F16: Support STRICT tables, which reject values of other types than their columns' (SQLite 3.37.0, Android API 34)
-* F19: Support the collations BINARY and RTRIM besides NOCASE, and COLLATE on the columns of an index and in ORDER BY
 * F21: Support FILTER in aggregate functions (SQLite 3.30.0, Android API 31), and ORDER BY in them, as for `group_concat` (SQLite 3.44.0, Android API 35)
 * F25: Support ORDER BY and LIMIT in UPDATE and DELETE, which need SQLite's `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` option, which Android's lacks
 
@@ -47,6 +46,7 @@ Items that aren't planned, as they are of little use, or would cost more than th
 
 ## Supported
 
+* F19: Support the collations BINARY and RTRIM besides NOCASE, and COLLATE on the columns of an index and in ORDER BY: `@CollateRTrim` for a column, which needs no `@CollateBinary`, as BINARY is a column's default, and the `COLLATE` operator of F46 for a column of an index, as it already was for conditions and ORDER BY (2.6.0 ✅)
 * F30: Support more PRAGMAs: those that check the database, read its schema and what the SQLite has, checkpoint the WAL, read the size and the header of the file, and set how statements run; case_sensitive_like is left out, as SQLite deprecates it, and incremental_vacuum, shelved as F68, as sqlite-jdbc only runs it as far as the first of the rows it returns, one for each page it removes (2.6.0 ✅)
 * F29: Support EXPLAIN QUERY PLAN, to see which indexes a query uses (2.6.0 ✅)
 * F26: Support INDEXED BY and NOT INDEXED (2.6.0 ✅)

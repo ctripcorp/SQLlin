@@ -119,6 +119,11 @@ fun sample() {
 索引的每一列都可以像 `ORDER_BY` 那样指定排序方向：`PersonTable.CREATE_INDEX("idx_person_age", PersonTable.age to DESC)` 就是
 `CREATE INDEX idx_person_age ON person(age DESC)`。它是实验性 API。按这个顺序或相反顺序排序的查询，可以按顺序读取索引。
 
+索引的列默认按列自己的排序规则比较，用 `COLLATE` 运算符可以给它指定另一种（同样是实验性 API）：
+`PersonTable.CREATE_INDEX("idx_person_name_nocase", PersonTable.name COLLATE NOCASE)` 就是
+`CREATE INDEX idx_person_name_nocase ON person(name COLLATE NOCASE)`，比较 `(name COLLATE NOCASE)` 的查询会用到它，而 `name`
+在其他地方仍按字节比较。它也可以指定排序方向，例如 `(PersonTable.name COLLATE NOCASE) to DESC`。
+
 在 `CREATE_INDEX` 或 `CREATE_UNIQUE_INDEX` 后面加上 `WHERE` 就是部分索引：只索引满足条件的行。它比索引所有行的索引更小，唯一的部分
 索引只保证这些行之间的值不相同，例如未删除用户的邮箱。部分索引是实验性 API：
 

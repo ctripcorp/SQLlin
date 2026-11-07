@@ -49,6 +49,7 @@ import java.io.Writer
  *
  * #### Collation
  * - **[@CollateNoCase][com.ctrip.sqllin.dsl.annotation.CollateNoCase]**: Case-insensitive text comparison (for String/Char only)
+ * - **[@CollateRTrim][com.ctrip.sqllin.dsl.annotation.CollateRTrim]**: Text comparison ignoring trailing spaces (for String/Char only)
  *
  * ### Example Usage
  * ```kotlin
@@ -71,7 +72,7 @@ import java.io.Writer
  *   to assign, while a non-null `Long` or a key of any other type is supplied by the caller
  * - Only one [@PrimaryKey] annotation allowed per table
  * - AUTOINCREMENT requires a `Long?` key, the only kind of key the database assigns
- * - [@CollateNoCase] can only be applied to String or Char properties
+ * - [@CollateNoCase] and [@CollateRTrim] can only be applied to String or Char properties, and not both to one
  * - [@CompositePrimaryKey] properties must be non-nullable
  * - [@CompositePrimaryKey] needs at least two properties; a single-column key uses [@PrimaryKey]
  *
@@ -84,6 +85,7 @@ import java.io.Writer
  * @see com.ctrip.sqllin.dsl.annotation.Unique
  * @see com.ctrip.sqllin.dsl.annotation.CompositeUnique
  * @see com.ctrip.sqllin.dsl.annotation.CollateNoCase
+ * @see com.ctrip.sqllin.dsl.annotation.CollateRTrim
  */
 class ColumnConstraintParser(resolver: Resolver) {
 
@@ -93,6 +95,7 @@ class ColumnConstraintParser(resolver: Resolver) {
         const val ANNOTATION_UNIQUE = "com.ctrip.sqllin.dsl.annotation.Unique"
         const val ANNOTATION_COMPOSITE_UNIQUE = "com.ctrip.sqllin.dsl.annotation.CompositeUnique"
         const val ANNOTATION_NO_CASE = "com.ctrip.sqllin.dsl.annotation.CollateNoCase"
+        const val ANNOTATION_RTRIM = "com.ctrip.sqllin.dsl.annotation.CollateRTrim"
 
         const val PROMPT_CANT_ADD_BOTH_ANNOTATION = "You can't add both @PrimaryKey and @CompositePrimaryKey to the same property."
         const val PROMPT_PRIMARY_KEY_MUST_NOT_NULL = "The primary key must be not-null."
@@ -101,11 +104,14 @@ class ColumnConstraintParser(resolver: Resolver) {
         const val PROMPT_COMPOSITE_PRIMARY_KEY_SINGLE_COLUMN = "A composite primary key needs at least two columns. Use @PrimaryKey for a single-column primary key, such as `@PrimaryKey val id: Long` for a numeric key you supply yourself."
         const val PROMPT_PRIMARY_KEY_USE_COUNT = "You only could use PrimaryKey to annotate one property in a class."
         const val PROMPT_NO_CASE_MUST_FOR_TEXT = "You only could add annotation @CollateNoCase for a String or Char typed property."
+        const val PROMPT_RTRIM_MUST_FOR_TEXT = "You only could add annotation @CollateRTrim for a String or Char typed property."
+        const val PROMPT_ONE_COLLATION = "A column has one collation, so a property can't have both @CollateNoCase and @CollateRTrim."
     }
 
     private val primaryKeyAnnotationName = resolver.getClassDeclarationByName(ANNOTATION_PRIMARY_KEY)!!.asStarProjectedType()
     private val compositePrimaryKeyName = resolver.getClassDeclarationByName(ANNOTATION_COMPOSITE_PRIMARY_KEY)!!.asStarProjectedType()
     private val noCaseAnnotationName = resolver.getClassDeclarationByName(ANNOTATION_NO_CASE)!!.asStarProjectedType()
+    private val rTrimAnnotationName = resolver.getClassDeclarationByName(ANNOTATION_RTRIM)!!.asStarProjectedType()
     private val uniqueAnnotationName = resolver.getClassDeclarationByName(ANNOTATION_UNIQUE)!!.asStarProjectedType()
 
     // Primary key tracking for metadata generation
@@ -183,7 +189,7 @@ class ColumnConstraintParser(resolver: Resolver) {
      * 2. Apply PRIMARY KEY constraint if [@PrimaryKey] present
      * 3. Collect [@CompositePrimaryKey] columns for table-level constraint
      * 4. Apply NOT NULL to every non-nullable column except a rowid alias, primary key columns included
-     * 5. Apply COLLATE NOCASE if [@CollateNoCase] present
+     * 5. Apply COLLATE NOCASE if [@CollateNoCase] present, or COLLATE RTRIM if [@CollateRTrim] is
      * 6. Apply UNIQUE if [@Unique] present
      * 7. Collect [@CompositeUnique] groups for table-level constraints
      *
@@ -256,10 +262,18 @@ class ColumnConstraintParser(resolver: Resolver) {
             if (isNotNull && !isRowIdAlias)
                 append(" NOT NULL")
 
-            // Handle @CollateNoCase annotation - must be on text columns
-            if (annotationKSType.any { it.isAssignableFrom(noCaseAnnotationName) }) {
-                check(type == " TEXT" || type == " CHAR(1)") { PROMPT_NO_CASE_MUST_FOR_TEXT }
+            // Handle @CollateNoCase and @CollateRTrim annotations - must be on text columns, which have one collation
+            val isNoCase = annotationKSType.any { it.isAssignableFrom(noCaseAnnotationName) }
+            val isRTrim = annotationKSType.any { it.isAssignableFrom(rTrimAnnotationName) }
+            check(!(isNoCase && isRTrim)) { PROMPT_ONE_COLLATION }
+            val isText = type == " TEXT" || type == " CHAR(1)"
+            if (isNoCase) {
+                check(isText) { PROMPT_NO_CASE_MUST_FOR_TEXT }
                 append(" COLLATE NOCASE")
+            }
+            if (isRTrim) {
+                check(isText) { PROMPT_RTRIM_MUST_FOR_TEXT }
+                append(" COLLATE RTRIM")
             }
 
             // Handle @Unique annotation - single column uniqueness

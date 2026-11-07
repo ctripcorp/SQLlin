@@ -416,6 +416,26 @@ data class User(
 - `ORDER BY` 子句不区分大小写排序
 - 列上的索引不区分大小写
 
+#### @CollateRTrim - 忽略末尾空格的文本比较
+
+`@CollateRTrim` 让文本列在比较时忽略值末尾的空格，对应 SQL 的 `COLLATE RTRIM`：`'abc  '` 等于 `'abc'`，列上的 UNIQUE 约束和索引
+也把它们当作同一个值。值本身仍按写入时的原样存储。它是实验性 API，只能用于 `String` 和 `Char` 属性：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow
+@Serializable
+data class Product(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @CollateRTrim @Unique val code: String,
+)
+// Generated SQL: CREATE TABLE Product(id INTEGER PRIMARY KEY AUTOINCREMENT,code TEXT NOT NULL COLLATE RTRIM UNIQUE)
+```
+
+一列只有一种排序规则，所以同一个属性不能同时使用 `@CollateNoCase` 和 `@CollateRTrim`。两者都没有的列按字节比较，即 `BINARY`
+排序规则。`COLLATE` 运算符可以在单个表达式里改用别的排序规则，见[更多表达式语法](sql-functions-cn.md#更多表达式语法)；
+也可以给索引的某一列指定它自己的排序规则，见 [CREATE INDEX](modify-database-and-transaction-cn.md#create-index---创建索引)。
+
 #### 组合多个约束
 
 你可以在同一个属性上组合多个约束注解：

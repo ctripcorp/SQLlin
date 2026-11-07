@@ -266,6 +266,9 @@ class JvmTest {
     fun testCollateNoCaseConstraint() = commonTest.testCollateNoCaseConstraint()
 
     @Test
+    fun testCollations() = commonTest.testCollations()
+
+    @Test
     fun testCompositeUniqueConstraint() = commonTest.testCompositeUniqueConstraint()
 
     @Test

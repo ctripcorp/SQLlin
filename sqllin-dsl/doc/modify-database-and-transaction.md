@@ -127,6 +127,12 @@ Each column of an index can be given the order it is sorted in, as `ORDER_BY` gi
 `PersonTable.CREATE_INDEX("idx_person_age", PersonTable.age to DESC)` is `CREATE INDEX idx_person_age ON person(age DESC)`.
 This is experimental. A query that sorts the columns in that order, or the reverse, reads the index in order.
 
+A column of an index compares its values by the column's collation, unless the `COLLATE` operator gives it another,
+which is experimental too: `PersonTable.CREATE_INDEX("idx_person_name_nocase", PersonTable.name COLLATE NOCASE)` is
+`CREATE INDEX idx_person_name_nocase ON person(name COLLATE NOCASE)`, which a query that compares
+`(name COLLATE NOCASE)` uses, while `name` keeps comparing its values by their bytes elsewhere. It can be given an order
+too, as `(PersonTable.name COLLATE NOCASE) to DESC`.
+
 `WHERE` after `CREATE_INDEX` or `CREATE_UNIQUE_INDEX` makes a partial index: an index of the rows that satisfy a condition
 only. It is smaller than an index of all rows, and a unique one keeps the values unique among those rows only, such as
 the emails of the users that aren't deleted. Partial indexes are experimental:

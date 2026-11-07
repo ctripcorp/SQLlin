@@ -18,6 +18,7 @@ package com.ctrip.sqllin.dsl.test
 
 import com.ctrip.sqllin.dsl.annotation.Check
 import com.ctrip.sqllin.dsl.annotation.CollateNoCase
+import com.ctrip.sqllin.dsl.annotation.CollateRTrim
 import com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey
 import com.ctrip.sqllin.dsl.annotation.CompositeUnique
 import com.ctrip.sqllin.dsl.annotation.DBRow
@@ -237,6 +238,18 @@ data class CollateNoCaseTest(
     @CollateNoCase val username: String,
     @CollateNoCase @Unique val email: String,
     val description: String,
+)
+
+/**
+ * Test entity for @CollateRTrim, a column whose values compare ignoring the spaces at their ends.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow("collate_rtrim_test")
+@Serializable
+data class CollateRTrimTest(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @CollateRTrim @Unique val code: String,
+    val name: String,
 )
 
 /**

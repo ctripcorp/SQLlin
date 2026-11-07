@@ -5635,6 +5635,63 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * The collations of columns and of the columns of indexes: `@CollateRTrim` compares a column's values ignoring the
+     * spaces at their ends, which its UNIQUE constraint does too, while storing them as they are; and the COLLATE
+     * operator gives a column of an index another collation than the column's, which a query that compares by it uses.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testCollations() {
+        val config = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(CollateRTrimTestTable)
+                CREATE(CollateNoCaseTestTable)
+            }
+        )
+        Database(config, true).databaseAutoClose { database ->
+            assertContains(CollateRTrimTestTable.createSQL, "code TEXT NOT NULL COLLATE RTRIM UNIQUE")
+            lateinit var trimmed: SelectStatement<CollateRTrimTest>
+            database {
+                CollateRTrimTestTable { table ->
+                    table INSERT CollateRTrimTest(null, "abc  ", "padded")
+                    trimmed = table SELECT WHERE(code EQ "abc")
+                }
+            }
+            assertEquals(listOf("abc  "), trimmed.getResults().map { it.code })
+            assertFails {
+                database {
+                    CollateRTrimTestTable INSERT CollateRTrimTest(null, "abc", "unpadded")
+                }
+            }
+
+            // An index of a column that has no collation that ignores case, and one of a NOCASE column that doesn't
+            lateinit var noCaseIndex: PragmaStatement<List<IndexColumn>>
+            lateinit var binaryIndex: PragmaStatement<List<IndexColumn>>
+            lateinit var noCasePlan: QueryPlanStatement
+            database {
+                CollateNoCaseTestTable { table ->
+                    table.CREATE_INDEX("idx_description_nocase", description COLLATE NOCASE)
+                    table.CREATE_INDEX("idx_username_binary", (username COLLATE BINARY) to DESC)
+                    noCasePlan = EXPLAIN_QUERY_PLAN(table SELECT WHERE((description COLLATE NOCASE) EQ "first user"))
+                }
+                noCaseIndex = PRAGMA_INDEX_XINFO("idx_description_nocase")
+                binaryIndex = PRAGMA_INDEX_XINFO("idx_username_binary")
+            }
+            assertEquals(
+                listOf(IndexColumn(columnIndex = 3, name = "description", isDescending = false, collation = "NOCASE", isKey = true)),
+                noCaseIndex.getResults().filter { it.isKey },
+            )
+            assertEquals(
+                listOf(IndexColumn(columnIndex = 1, name = "username", isDescending = true, collation = "BINARY", isKey = true)),
+                binaryIndex.getResults().filter { it.isKey },
+            )
+            assertContains(noCasePlan.getResults().details.single(), "idx_description_nocase")
+        }
+    }
+
+    /**
      * Test for @CompositeUnique annotation
      * Verifies multi-column uniqueness constraints with multiple groups
      */

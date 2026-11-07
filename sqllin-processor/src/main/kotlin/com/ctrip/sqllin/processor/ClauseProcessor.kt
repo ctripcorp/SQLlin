@@ -43,7 +43,7 @@ import java.io.OutputStreamWriter
  *   - PRIMARY KEY with optional AUTOINCREMENT
  *   - NOT NULL constraints
  *   - UNIQUE constraints (single and composite)
- *   - COLLATE NOCASE for case-insensitive text columns
+ *   - COLLATE NOCASE for case-insensitive text columns, and COLLATE RTRIM for those that ignore trailing spaces
  *   - CHECK constraints of columns and of the table, optionally named
  * - **Type support**:
  *   - All Kotlin primitive types and unsigned variants
@@ -66,6 +66,7 @@ import java.io.OutputStreamWriter
  * @see com.ctrip.sqllin.dsl.annotation.Unique
  * @see com.ctrip.sqllin.dsl.annotation.CompositeUnique
  * @see com.ctrip.sqllin.dsl.annotation.CollateNoCase
+ * @see com.ctrip.sqllin.dsl.annotation.CollateRTrim
  * @see com.ctrip.sqllin.dsl.annotation.Check
  */
 class ClauseProcessor(
@@ -90,7 +91,7 @@ class ClauseProcessor(
 
         /** The annotations that declare constraints, which only a table's columns can have. */
         val CONSTRAINT_ANNOTATIONS = listOf(
-            "PrimaryKey", "CompositePrimaryKey", "CollateNoCase", "Unique", "CompositeUnique",
+            "PrimaryKey", "CompositePrimaryKey", "CollateNoCase", "CollateRTrim", "Unique", "CompositeUnique",
             "ForeignKeyGroup", "References", "ForeignKey", "Default", "Check",
         ).map { "$ANNOTATION_PACKAGE.$it" }.toSet()
         const val ANNOTATION_SERIALIZABLE = "kotlinx.serialization.Serializable"
