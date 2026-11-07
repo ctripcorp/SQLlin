@@ -804,10 +804,12 @@ fun sample() {
 * **Reading the schema**: `PRAGMA_TABLE_INFO(table)` returns the columns of a table or a view, which a migration can
   check, `PRAGMA_INDEX_LIST(table)` its indexes, `PRAGMA_INDEX_XINFO(index)` the columns of an index, with their sort
   orders and collations, and `PRAGMA_FOREIGN_KEY_LIST(table)` its foreign keys. Each also takes a name, as of a table
-  the app no longer declares. A table or index that doesn't exist has no columns, indexes or foreign keys.
-  `PRAGMA_TABLE_XINFO(table)` adds the hidden and generated columns, which `ColumnInfo.kind` tells, as the hidden columns
-  of an FTS table, and `PRAGMA_TABLE_LIST()` returns the tables and views, the virtual ones, and the tables that these
-  keep their data in, of `main` and `temp`.
+  the app no longer declares. A table or index that doesn't exist has no columns, indexes or foreign keys. One that
+  another connection, such as one in another process, has just created may look the same, until this one runs a
+  statement that reads or writes a table: when SQLite doesn't find the name, it may not check whether the schema it read
+  before is still current. `PRAGMA_TABLE_XINFO(table)` adds the hidden and generated columns, which `ColumnInfo.kind`
+  tells, as the hidden columns of an FTS table, and `PRAGMA_TABLE_LIST()` returns the tables and views, the virtual
+  ones, and the tables that these keep their data in, of `main` and `temp`.
 * **What the SQLite has**: `PRAGMA_COMPILE_OPTIONS()` returns the options it was compiled with, `PRAGMA_COLLATION_LIST()`
   its collations, `PRAGMA_DATABASE_LIST()` the databases of the connection and their files, `PRAGMA_FUNCTION_LIST()` its
   SQL functions, such as to check whether it has the math functions, `PRAGMA_MODULE_LIST()` the modules of its virtual

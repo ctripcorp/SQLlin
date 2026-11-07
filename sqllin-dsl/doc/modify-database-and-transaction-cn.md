@@ -756,9 +756,10 @@ fun sample() {
   只检查一张表和它的索引。
 * **读取表结构**：`PRAGMA_TABLE_INFO(table)` 返回表或视图的列，可以在迁移时用来判断，`PRAGMA_INDEX_LIST(table)` 返回表的索引，
   `PRAGMA_INDEX_XINFO(index)` 返回索引的列，包括排序方向和排序规则，`PRAGMA_FOREIGN_KEY_LIST(table)` 返回表的外键。它们也都可以
-  传入名字，比如应用已经不再声明的表。不存在的表或索引没有列、索引或外键。`PRAGMA_TABLE_XINFO(table)` 额外列出隐藏列和生成列，
-  由 `ColumnInfo.kind` 区分，比如 FTS 表的隐藏列；`PRAGMA_TABLE_LIST()` 返回 `main` 和 `temp` 中的表和视图，包括虚拟表，以及
-  虚拟表用来存放数据的表。
+  传入名字，比如应用已经不再声明的表。不存在的表或索引没有列、索引或外键。另一个连接（比如另一个进程）刚建的表或索引也可能这样，
+  直到本连接执行一条读写表的语句为止：SQLite 找不到这个名字时，未必会检查之前读到的表结构是否已经过期。
+  `PRAGMA_TABLE_XINFO(table)` 额外列出隐藏列和生成列，由 `ColumnInfo.kind` 区分，比如 FTS 表的隐藏列；`PRAGMA_TABLE_LIST()`
+  返回 `main` 和 `temp` 中的表和视图，包括虚拟表，以及虚拟表用来存放数据的表。
 * **SQLite 自身的信息**：`PRAGMA_COMPILE_OPTIONS()` 返回 SQLite 的编译选项，`PRAGMA_COLLATION_LIST()` 返回排序规则，
   `PRAGMA_DATABASE_LIST()` 返回连接上的数据库及其文件，`PRAGMA_FUNCTION_LIST()` 返回 SQL 函数，比如可以用来判断有没有数学函数，
   `PRAGMA_MODULE_LIST()` 返回虚拟表模块（比如 `fts4`），`PRAGMA_PRAGMA_LIST()` 返回 SQLite 支持的 PRAGMA。
