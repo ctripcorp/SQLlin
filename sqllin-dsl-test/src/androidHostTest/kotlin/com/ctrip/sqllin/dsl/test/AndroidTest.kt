@@ -23,6 +23,7 @@ class AndroidTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
     private val commonTest = CommonBasicTest(context.toDatabasePath())
+    private val pagingTest = CommonPagingTest(context.toDatabasePath())
 
     @Test
     fun testInsert() = commonTest.testInsert()
@@ -278,6 +279,21 @@ class AndroidTest {
 
     @Test
     fun testUpdateDeleteOrderByLimit() = commonTest.testUpdateDeleteOrderByLimit()
+
+    @Test
+    fun testPagingSourceLoads() = pagingTest.testPagingSourceLoads()
+
+    @Test
+    fun testPagingSourceRefreshKey() = pagingTest.testPagingSourceRefreshKey()
+
+    @Test
+    fun testPagingSourceInvalidation() = pagingTest.testPagingSourceInvalidation()
+
+    @Test
+    fun testPagingSourceQueries() = pagingTest.testPagingSourceQueries()
+
+    @Test
+    fun testPagingSourceWithPager() = pagingTest.testPagingSourceWithPager()
 
     @Test
     fun testCompositeUniqueConstraint() = commonTest.testCompositeUniqueConstraint()

@@ -30,6 +30,8 @@ kotlin {
                 implementation("com.ctrip.kotlin:sqllin-dsl:$sqllinVersion")
                 // sqllin-driver
                 implementation("com.ctrip.kotlin:sqllin-driver:$sqllinVersion")
+                // Optional, since 2.6.0: androidx.paging's PagingSource of sqllin-dsl's queries
+                implementation("com.ctrip.kotlin:sqllin-dsl-paging:$sqllinVersion")
                 
                 // The sqllin-dsl serialization and deserialization depends on kotlinx-serialization
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.9.0")

@@ -11,6 +11,7 @@
 local.properties
 /sqllin-driver/build
 /sqllin-dsl/build
+/sqllin-dsl-paging/build
 /sqllin-processor/build
 /sqllin-dsl-test/build
 /sample/build

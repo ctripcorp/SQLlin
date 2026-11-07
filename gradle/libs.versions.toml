@@ -14,6 +14,7 @@ jvm-toolchain = "21"
 android-sdk-compile = "37"
 android-sdk-min = "24"
 vanniktech-maven-publish = "0.37.0"
+paging = "3.5.3"
 
 [libraries]
 
@@ -29,6 +30,9 @@ robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 sqlite-jdbc = { group = "org.xerial", name = "sqlite-jdbc", version.ref = "sqlite-jdbc" }
+
+androidx-paging-common = { group = "androidx.paging", name = "paging-common", version.ref = "paging" }
+androidx-paging-testing = { group = "androidx.paging", name = "paging-testing", version.ref = "paging" }
 
 [plugins]
 

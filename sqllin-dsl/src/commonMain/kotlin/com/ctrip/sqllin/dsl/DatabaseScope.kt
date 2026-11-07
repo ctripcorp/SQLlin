@@ -1543,6 +1543,38 @@ public class DatabaseScope internal constructor(
     }
 
     /**
+     * Takes [select] out of the statements the scope runs, and runs in its place the SELECT of its rows from [offset] on,
+     * at most [limit] of them, `SELECT * FROM (select) LIMIT limit OFFSET offset`, and, if [countRows], the count of all
+     * of them, `SELECT count(*) FROM (select)`, which a PagingSource of sqllin-dsl-paging loads a page with, as Room's
+     * does. As a subquery, [select] can be any SELECT, with its own ORDER BY, LIMIT or compound operators, and SQLite
+     * returns its rows in the order of its ORDER BY; the rows keep its columns, which they are decoded by, and its tables,
+     * which [Database.versioned] tracks.
+     *
+     * @return The SELECT of the page, and the count of the rows, if [countRows]
+     */
+    internal fun <T> page(select: SelectStatement<T>, offset: Int, limit: Int, countRows: Boolean): Pair<SelectStatement<T>, RowCountStatement?> {
+        select.takeOut()
+        val count = if (countRows) {
+            RowCountStatement("SELECT count(*) FROM (${select.sqlStr})", databaseConnection, select.parameters?.toMutableList())
+                .also { addStatement(it) }
+        } else {
+            null
+        }
+        val page = FinalSelectStatement(
+            sqlStr = "SELECT * FROM (${select.sqlStr}) LIMIT $limit OFFSET $offset",
+            deserializer = select.deserializer,
+            connection = databaseConnection,
+            container = currentContainer,
+            parameters = select.parameters?.toMutableList(),
+            ungroupedError = null,
+            tables = select.tables,
+            isSimple = false,
+        )
+        addStatement(page)
+        return page to count
+    }
+
+    /**
      * Takes this SELECT out of the statements the scope runs, as it becomes part of another one: a subquery, or the
      * SELECT that `EXPLAIN QUERY PLAN` plans.
      *

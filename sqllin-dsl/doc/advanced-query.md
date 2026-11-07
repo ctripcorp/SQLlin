@@ -443,7 +443,8 @@ An observed query gives results. A reader that only needs to know when the table
 scope of _SELECT_ statements, and returns the scope's result with a token of the versions of the tables they read.
 `awaitChange(token)` suspends until a statement run through the database changes one of those tables, and
 `onChange(token) { }` registers a callback for it. They are experimental, so opt in with
-`@OptIn(ExperimentalDSLDatabaseAPI::class)`:
+`@OptIn(ExperimentalDSLDatabaseAPI::class)`. The example only shows how they fit together: _sqllin-dsl-paging_ provides
+a whole `PagingSource`, as [PagingSource](#pagingsource) describes.
 
 ```kotlin
 @OptIn(ExperimentalDSLDatabaseAPI::class)
@@ -483,6 +484,39 @@ changes from others'.
   itself, as a `PagingSource` returns `LoadResult.Invalid()`. Otherwise its callback runs once, on the thread that
   wrote, after the writing scope has released the database's lock, so it may use the database, but should return
   quickly. The registration holds the callback until it runs, or until the `AutoCloseable` it returns is closed.
+
+### PagingSource
+
+The optional module _sqllin-dsl-paging_, `com.ctrip.kotlin:sqllin-dsl-paging`, provides androidx.paging's
+`PagingSource` of a query, which loads its rows a page at a time, by their offsets, as Room's `LimitOffsetPagingSource`
+does, on every platform that androidx.paging has, which are all of SQLlin's. `database.pagingSource { }` builds the
+_SELECT_ to page, as `observe { }` does, and is experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun persons(database: Database): Flow<PagingData<Person>> =
+    Pager(PagingConfig(pageSize = 20)) {
+        database.pagingSource { PersonTable SELECT ORDER_BY(PersonTable.id to ASC) }
+    }.flow
+```
+
+* **The pages**: a page is `SELECT * FROM (select) LIMIT ... OFFSET ...`, so the _SELECT_ can have a _WHERE_, a join or
+  compound operators, and should have an _ORDER BY_ that orders all of its rows, as SQLite returns them in no order
+  otherwise, so that two pages could have the same rows. The first page also counts the rows, so that each page tells
+  how many rows are before and after it, which placeholders show, and a refresh past the last row, as after rows are
+  deleted, loads the last ones. The keys are offsets at the borders between pages, so that two pages never share a row,
+  wherever a refresh starts, and a page after the first row can always prepend the rows above it, as after a
+  `RemoteMediator` invalidates the source. A refresh starts half the initial load before the row last read, with
+  placeholders or without them.
+* **Invalidation**: the source registers with `onChange` from its first page, so that a statement run through the same
+  `Database` that changes a table the _SELECT_ reads invalidates it, and its `Pager` loads a new one; a page that reads
+  rows changed since the first is `LoadResult.Invalid()`, so that no list mixes rows from before and after a change. It
+  registers weakly, so that a source that its `Pager` drops can still be garbage collected, and an invalidation from
+  elsewhere, as a refresh, closes the registration. As with an observed query, only the changes made through the same
+  `Database` instance are seen.
+* **The thread**: the pages load in `Dispatchers.IO`, or the context given to `pagingSource(context) { }`, as a `Pager`
+  may load them on the main thread. Write through `suspendedScope`, which the loads are serialized with, as for an
+  observed query.
 
 ## Full-Text Search
 

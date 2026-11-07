@@ -1,6 +1,7 @@
 rootProject.name = "SQLlin"
 include(":sqllin-driver")
 include(":sqllin-dsl")
+include(":sqllin-dsl-paging")
 include(":sqllin-processor")
 include(":sqllin-dsl-test")
 include(":sample")

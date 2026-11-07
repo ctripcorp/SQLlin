@@ -7,7 +7,6 @@ done. A new item takes the next number.
 
 * F8: Support WASM platform DSL
 * F12: Support type converters: store a property of any type through a serializer that encodes it to a type SQLite supports, with type-safe WHERE and SET on its column, e.g. to store instances of kotlinx.datetime
-* F13: Provide a `PagingSource` for androidx.paging built on the table version tokens of F66, like Room's `LimitOffsetPagingSource`, so that paging a query doesn't need a hand-written bridge: it registers with `onChange` from its first load, holding its callback strongly while the registry holds it weakly, so that a source that Pager abandons doesn't stay registered, keeps the previous key of an invalidated offset-keyed source, reads `anchorPosition` relative to the presented list without placeholders, and keeps offsets on a grid of the page size
 * F14: Support constraints in `ALTER_ADD_COLUMN`, which adds a column with its type only: DEFAULT, NOT NULL with DEFAULT, CHECK, COLLATE NOCASE and REFERENCES
 * F15: Support WITHOUT ROWID tables, which save space and a lookup when the primary key isn't an INTEGER; the ORDER BY and LIMIT of UPDATE and DELETE (F25) then have to choose the rows by their primary key, as SQLite does, rather than by the rowid
 * F16: Support STRICT tables, which reject values of other types than their columns' (SQLite 3.37.0, Android API 34)
@@ -45,6 +44,7 @@ Items that aren't planned, as they are of little use, or would cost more than th
 
 ## Supported
 
+* F13: Provide a `PagingSource` for androidx.paging built on the table version tokens of F66, like Room's `LimitOffsetPagingSource`, in the new module sqllin-dsl-paging, `Database#pagingSource { }` (2.6.0 ✅)
 * F25: Support ORDER BY and LIMIT in UPDATE and DELETE, which SQLite only takes with its `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` option, which Android's lacks: SQLlin writes the subquery of rowids that SQLite turns them into, which every platform runs (2.6.0 ✅)
 * F19: Support the collations BINARY and RTRIM besides NOCASE, and COLLATE on the columns of an index and in ORDER BY: `@CollateRTrim` for a column, which needs no `@CollateBinary`, as BINARY is a column's default, and the `COLLATE` operator of F46 for a column of an index, as it already was for conditions and ORDER BY (2.6.0 ✅)
 * F30: Support more PRAGMAs: those that check the database, read its schema and what the SQLite has, checkpoint the WAL, read the size and the header of the file, and set how statements run; case_sensitive_like is left out, as SQLite deprecates it, and incremental_vacuum, shelved as F68, as sqlite-jdbc only runs it as far as the first of the rows it returns, one for each page it removes (2.6.0 ✅)

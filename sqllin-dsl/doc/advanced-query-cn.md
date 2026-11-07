@@ -410,7 +410,8 @@ _DELETE_ 也不会。
 可观察查询给出的是结果。如果读取方只需要知道它读过的表何时发生变化，比如自己读取分页、需要自行失效的 `PagingSource`，就改用
 `versioned { }` 读取。它执行一个由 _SELECT_ 组成的作用域，返回作用域的结果，以及这些 _SELECT_ 读到的表的版本令牌。
 `awaitChange(token)` 会挂起，直到经由该数据库执行的语句修改了其中某张表；`onChange(token) { }` 则为此注册一个回调。它们是实验性
-API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`：
+API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`。下面的示例只是演示它们如何配合使用；_sqllin-dsl-paging_ 提供了完整的
+`PagingSource`，见 [PagingSource](#pagingsource)。
 
 ```kotlin
 @OptIn(ExperimentalDSLDatabaseAPI::class)
@@ -446,6 +447,32 @@ class PersonPagingSource(private val database: Database) : PagingSource<Int, Per
 * **onChange** 先注册、再检查令牌，所以读取和注册之间的修改不会被漏掉：如果令牌已经过期，它不注册，直接返回 `null`，由调用方自行
   处理，比如 `PagingSource` 返回 `LoadResult.Invalid()`。否则它的回调只执行一次：在写入的线程上，在写入作用域释放数据库的锁之后
   执行，所以回调里可以使用数据库，但应当尽快返回。注册会一直持有回调，直到回调执行，或者它返回的 `AutoCloseable` 被关闭。
+
+### PagingSource
+
+可选模块 _sqllin-dsl-paging_（`com.ctrip.kotlin:sqllin-dsl-paging`）为查询提供 androidx.paging 的 `PagingSource`：它像 Room 的
+`LimitOffsetPagingSource` 一样，按偏移量每次加载一页。androidx.paging 支持的平台都能用，SQLlin 支持的平台都在其中。
+`database.pagingSource { }` 像 `observe { }` 一样构建要分页的 _SELECT_，它是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun persons(database: Database): Flow<PagingData<Person>> =
+    Pager(PagingConfig(pageSize = 20)) {
+        database.pagingSource { PersonTable SELECT ORDER_BY(PersonTable.id to ASC) }
+    }.flow
+```
+
+* **分页**：每一页都是 `SELECT * FROM (select) LIMIT ... OFFSET ...`，所以 _SELECT_ 可以带 _WHERE_、连接或组合查询运算符。它应当带有
+  能给所有行排序的 _ORDER BY_，否则 SQLite 返回的行没有固定顺序，两页可能出现相同的行。第一页还会统计总行数，这样每一页都能说明它前后
+  各有多少行，占位符依赖这些数字；刷新时如果起点已经超过最后一行（比如有行被删除了），就改为加载最后那些行。key 是相邻两页之间边界处的
+  偏移量，所以无论从哪里开始刷新，两页都不会包含同一行；而且第一行之后的页总能向前加载它上面的行，比如 `RemoteMediator` 让数据源
+  失效之后。刷新从最后读取的那一行往前退初始加载量的一半开始，开不开占位符都一样。
+* **失效**：数据源从第一页起用 `onChange` 注册，所以经由同一个 `Database` 执行的语句只要修改了 _SELECT_ 读取的表，数据源就会失效，
+  它的 `Pager` 会加载一个新的数据源；如果某一页读到了第一页之后被修改过的行，就返回 `LoadResult.Invalid()`，这样列表里不会混入修改前后
+  的行。它以弱引用的方式注册，所以 `Pager` 丢弃的数据源仍然可以被垃圾回收；从别处让它失效（比如刷新）时，也会关闭这次注册。和可观察查询
+  一样，只能感知经由同一个 `Database` 实例的修改。
+* **线程**：分页在 `Dispatchers.IO` 中加载，也可以用 `pagingSource(context) { }` 指定别的上下文，因为 `Pager` 可能在主线程上加载。
+  和可观察查询一样，写入要通过 `suspendedScope` 执行，因为分页的加载和它是串行的。
 
 ## 全文搜索
 
