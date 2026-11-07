@@ -40,7 +40,8 @@ internal enum class Changes {
         fun of(statement: SingleStatement): Changes = when (statement) {
             is SelectStatement<*>, is QueryPlanStatement, is PragmaStatement<*>, is RaiseStatement -> NONE
             is TableStructureStatement -> SCHEMA
-            is InsertStatement, is UpdateDeleteStatement, is UpdateStatementWithoutWhereClause<*> -> ROWS
+            is InsertStatement, is UpdateDeleteStatement, is UpdateStatementWithoutWhereClause<*>, is WhereUpdateDeleteStatement<*>,
+            is OrderByUpdateDeleteStatement<*>, is LimitUpdateDeleteStatement<*> -> ROWS
         }
 
         /**
@@ -51,6 +52,9 @@ internal enum class Changes {
             is InsertStatement -> statement.table
             is UpdateDeleteStatement -> statement.table
             is UpdateStatementWithoutWhereClause<*> -> statement.table
+            is WhereUpdateDeleteStatement<*> -> statement.table
+            is OrderByUpdateDeleteStatement<*> -> statement.table
+            is LimitUpdateDeleteStatement<*> -> statement.table
             is SelectStatement<*>, is QueryPlanStatement, is PragmaStatement<*>, is TableStructureStatement, is RaiseStatement -> null
         }
     }

@@ -48,7 +48,9 @@ import com.ctrip.sqllin.dsl.sql.pragma.IndexInfo
 import com.ctrip.sqllin.dsl.sql.pragma.IndexOrigin
 import com.ctrip.sqllin.dsl.sql.pragma.RelationInfo
 import com.ctrip.sqllin.dsl.sql.statement.PragmaStatement
+import com.ctrip.sqllin.dsl.sql.statement.LimitUpdateDeleteStatement
 import com.ctrip.sqllin.dsl.sql.statement.QueryPlanStatement
+import com.ctrip.sqllin.dsl.sql.statement.UpdateDeleteStatement
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -5689,6 +5691,138 @@ class CommonBasicTest(private val path: DatabasePath) {
             )
             assertContains(noCasePlan.getResults().details.single(), "idx_description_nocase")
         }
+    }
+
+    /**
+     * ORDER BY, LIMIT and OFFSET of UPDATE and DELETE, which SQLlin writes as the subquery of rowids that SQLite turns
+     * them into, so that they run on every platform, as on Android, whose SQLite doesn't take them: DELETE with WHERE
+     * and of every row, UPDATE with WHERE and without, with the parameters of SET before those of WHERE; a negative LIMIT,
+     * which is none, so that OFFSET keeps the first rows; LIMIT without ORDER BY; INDEXED BY, which only the subquery
+     * looks the rows up through; a column named `rowid`; a transaction; a trigger, where SQLite's own syntax isn't
+     * allowed; and ORDER BY without LIMIT, which fails before any statement of the scope runs, or the trigger is created.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testUpdateDeleteOrderByLimit() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        fun persons(): List<PersonWithId> {
+            lateinit var select: SelectStatement<PersonWithId>
+            database { select = PersonWithIdTable SELECT ORDER_BY(PersonWithIdTable.age to ASC) }
+            return select.getResults()
+        }
+        fun ages() = persons().map { it.age }
+        fun reset() = database {
+            PersonWithIdTable DELETE X
+            PersonWithIdTable INSERT (1..6).map { PersonWithId(id = null, name = "p$it", age = it) }
+        }
+
+        // The two oldest of those older than 1
+        reset()
+        lateinit var oldest: LimitUpdateDeleteStatement<PersonWithId>
+        database {
+            PersonWithIdTable { table ->
+                oldest = table DELETE WHERE(age GT 1) ORDER_BY (age to DESC) LIMIT 2
+            }
+        }
+        assertEquals(
+            "DELETE FROM person_with_id WHERE rowid IN (SELECT rowid FROM person_with_id WHERE person_with_id.age>? ORDER BY person_with_id.age DESC LIMIT 2)",
+            oldest.sqlStr,
+        )
+        assertEquals(listOf(1, 2, 3, 4), ages())
+
+        // Every row but the two youngest: no limit, after the first two
+        database { PersonWithIdTable DELETE X ORDER_BY (PersonWithIdTable.age to ASC) LIMIT -1 OFFSET 2 }
+        assertEquals(listOf(1, 2), ages())
+
+        // Without ORDER BY, any three of the four older than 2
+        reset()
+        database { PersonWithIdTable DELETE WHERE(PersonWithIdTable.age GT 2) LIMIT 3 }
+        assertEquals(listOf(1, 2), ages().take(2))
+        assertEquals(3, ages().size)
+
+        // The second youngest, with the parameter of SET and that of WHERE
+        reset()
+        lateinit var second: UpdateDeleteStatement
+        database {
+            PersonWithIdTable { table ->
+                second = table UPDATE SET { name = "second" } WHERE (age GT 0) ORDER_BY (age to ASC) LIMIT 1 OFFSET 1
+            }
+        }
+        assertEquals(
+            "UPDATE person_with_id SET name=? WHERE rowid IN (SELECT rowid FROM person_with_id WHERE person_with_id.age>? ORDER BY person_with_id.age ASC LIMIT 1 OFFSET 1)",
+            second.sqlStr,
+        )
+        assertEquals(listOf("p1", "second", "p3", "p4", "p5", "p6"), persons().map { it.name })
+
+        // Without WHERE, in a transaction
+        database {
+            transaction {
+                PersonWithIdTable { table -> table UPDATE SET { name = "oldest" } ORDER_BY (age to DESC) LIMIT 1 }
+            }
+        }
+        assertEquals("oldest", persons().last().name)
+
+        // INDEXED BY in the subquery only, while the statement finds the rows by their rowids
+        lateinit var indexed: LimitUpdateDeleteStatement<PersonWithId>
+        database {
+            PersonWithIdTable.CREATE_INDEX("idx_person_with_id_age", PersonWithIdTable.age)
+            indexed = (PersonWithIdTable INDEXED_BY "idx_person_with_id_age") DELETE WHERE(PersonWithIdTable.age LT 3) ORDER_BY (PersonWithIdTable.age to ASC) LIMIT 1
+        }
+        assertEquals(
+            "DELETE FROM person_with_id WHERE rowid IN (SELECT rowid FROM person_with_id INDEXED BY idx_person_with_id_age WHERE person_with_id.age<? ORDER BY person_with_id.age ASC LIMIT 1)",
+            indexed.sqlStr,
+        )
+        assertEquals(listOf(2, 3, 4, 5, 6), ages())
+
+        // A column named rowid: both rows have 10 in it, so a subquery of that column would delete both
+        lateinit var named: LimitUpdateDeleteStatement<RowIdNamed>
+        lateinit var namedRows: SelectStatement<RowIdNamed>
+        database {
+            CREATE(RowIdNamedTable)
+            RowIdNamedTable INSERT listOf(RowIdNamed(rowid = 10, name = "b"), RowIdNamed(rowid = 10, name = "a"))
+            named = RowIdNamedTable DELETE X ORDER_BY (RowIdNamedTable.name to ASC) LIMIT 1
+            namedRows = RowIdNamedTable SELECT X
+        }
+        assertEquals("DELETE FROM row_id_named WHERE _rowid_ IN (SELECT _rowid_ FROM row_id_named ORDER BY row_id_named.name ASC LIMIT 1)", named.sqlStr)
+        assertEquals(listOf("b"), namedRows.getResults().map { it.name })
+
+        // ORDER BY without LIMIT: nothing of the scope runs, in a transaction or not
+        reset()
+        assertFailsWith<IllegalArgumentException> {
+            database {
+                PersonWithIdTable INSERT PersonWithId(id = null, name = "p7", age = 7)
+                PersonWithIdTable DELETE X ORDER_BY (PersonWithIdTable.age to ASC)
+            }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            database {
+                transaction {
+                    PersonWithIdTable INSERT PersonWithId(id = null, name = "p7", age = 7)
+                    PersonWithIdTable { table -> table UPDATE SET { name = "x" } WHERE (age GT 0) ORDER_BY (age to ASC) }
+                }
+            }
+        }
+        assertEquals(listOf(1, 2, 3, 4, 5, 6), ages())
+
+        // A trigger that keeps the three latest rows, which SQLite's own syntax can't, and one with ORDER BY without LIMIT
+        reset()
+        database {
+            CREATE_TRIGGER("keep_latest_persons") AFTER INSERT ON PersonWithIdTable BEGIN {
+                PersonWithIdTable DELETE X ORDER_BY (PersonWithIdTable.id to DESC) LIMIT -1 OFFSET 3
+            }
+            PersonWithIdTable INSERT (7..9).map { PersonWithId(id = null, name = "p$it", age = it) }
+        }
+        assertEquals(listOf(7, 8, 9), ages())
+        assertFailsWith<IllegalArgumentException> {
+            database {
+                CREATE_TRIGGER("unlimited") AFTER INSERT ON PersonWithIdTable BEGIN {
+                    PersonWithIdTable DELETE X ORDER_BY (PersonWithIdTable.id to DESC)
+                }
+            }
+        }
+        database {
+            DROP_TRIGGER("keep_latest_persons")
+            PersonWithIdTable INSERT PersonWithId(id = null, name = "p10", age = 10)
+        }
+        assertEquals(listOf(7, 8, 9, 10), ages())
     }
 
     /**

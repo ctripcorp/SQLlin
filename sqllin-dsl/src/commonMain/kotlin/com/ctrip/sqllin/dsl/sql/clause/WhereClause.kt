@@ -20,12 +20,11 @@ package com.ctrip.sqllin.dsl.sql.clause
 
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
-import com.ctrip.sqllin.dsl.sql.operation.parametersOf
 import com.ctrip.sqllin.dsl.sql.statement.IndexStatement
 import com.ctrip.sqllin.dsl.sql.statement.ResultColumnSelectStatement
-import com.ctrip.sqllin.dsl.sql.statement.UpdateDeleteStatement
 import com.ctrip.sqllin.dsl.sql.statement.UpdateStatementWithoutWhereClause
 import com.ctrip.sqllin.dsl.sql.statement.WhereSelectStatement
+import com.ctrip.sqllin.dsl.sql.statement.WhereUpdateDeleteStatement
 
 /**
  * WHERE clause for filtering rows in SELECT statements or targeting rows in UPDATE/DELETE statements.
@@ -76,18 +75,13 @@ public infix fun <T> ResultColumnSelectStatement<T>.WHERE(condition: SelectCondi
  * ```
  *
  * @param condition The WHERE condition with its parameters
- * @return The complete UPDATE statement SQL string
+ * @return The UPDATE statement, which ORDER BY and LIMIT can follow, so that it only updates the first rows in an order
  */
 @StatementDslMaker
-public infix fun <T> UpdateStatementWithoutWhereClause<T>.WHERE(condition: SelectCondition): String {
-    // A new list, so that the UPDATE without WHERE keeps its own parameters
-    val statement = UpdateDeleteStatement(buildString {
-        append(sqlStr)
-        append(WhereClause<T>(condition).clauseStr)
-    }, connection, parametersOf(parameters, condition.parameters), table)
-    statementContainer.replaceStatement(this, statement)
-    return statement.sqlStr
-}
+public infix fun <T> UpdateStatementWithoutWhereClause<T>.WHERE(condition: SelectCondition): WhereUpdateDeleteStatement<T> =
+    WhereUpdateDeleteStatement<T>(parts.copy(where = condition), statementContainer, connection).also {
+        statementContainer.replaceStatement(this, it)
+    }
 
 /**
  * Makes this index a partial index of the rows that satisfy [condition], as the SQL `CREATE INDEX ... WHERE condition`

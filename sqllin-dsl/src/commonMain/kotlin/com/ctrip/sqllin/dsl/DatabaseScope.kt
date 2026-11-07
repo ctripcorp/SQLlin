@@ -793,11 +793,13 @@ public class DatabaseScope internal constructor(
     /**
      * Updates records in the table with SET clause.
      *
-     * Can be followed by WHERE to target specific records.
+     * Can be followed by WHERE to target specific records, and by ORDER BY and LIMIT, to update the first of them in
+     * an order.
      *
      * Example:
      * ```kotlin
      * PersonTable UPDATE SET { name = "Alice" } WHERE (age GTE 18)
+     * PersonTable UPDATE SET { name = "Alice" } WHERE (age GTE 18) ORDER_BY (age to ASC) LIMIT 1
      * ```
      */
     @StatementDslMaker
@@ -850,32 +852,31 @@ public class DatabaseScope internal constructor(
     // ========== DELETE Operations ==========
 
     /**
-     * Deletes all records from the table.
+     * Deletes all records from the table, or the first in an order, which ORDER BY and LIMIT that follow choose.
      *
      * Example:
      * ```kotlin
      * PersonTable DELETE X
+     * PersonTable DELETE X ORDER_BY (PersonTable.age to ASC) LIMIT 10
      * ```
      */
     @StatementDslMaker
-    public infix fun Table<*>.DELETE(x: X) {
-        val statement = Delete.deleteAllEntities(this, databaseConnection)
-        addStatement(statement)
-    }
+    public infix fun <T> Table<T>.DELETE(x: X): WhereUpdateDeleteStatement<T> =
+        Delete.deleteAllEntities(this, databaseConnection, currentContainer).also { addStatement(it) }
 
     /**
-     * Deletes records matching the WHERE clause.
+     * Deletes records matching the WHERE clause, or the first of them in an order, which ORDER BY and LIMIT that follow
+     * choose.
      *
      * Example:
      * ```kotlin
      * PersonTable DELETE WHERE(age LT 18)
+     * PersonTable DELETE WHERE(age LT 18) ORDER_BY (age to ASC) LIMIT 10
      * ```
      */
     @StatementDslMaker
-    public infix fun <T> Table<T>.DELETE(clause: WhereClause<T>) {
-        val statement = Delete.delete(this, databaseConnection, clause)
-        addStatement(statement)
-    }
+    public infix fun <T> Table<T>.DELETE(clause: WhereClause<T>): WhereUpdateDeleteStatement<T> =
+        Delete.delete(this, databaseConnection, currentContainer, clause).also { addStatement(it) }
 
     // ========== UPDATE and DELETE of a table with INDEXED BY or NOT INDEXED ==========
 
@@ -938,9 +939,8 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public infix fun IndexedTable<*>.DELETE(x: X) {
-        addStatement(Delete.deleteAllEntities(table, databaseConnection, fromSQL))
-    }
+    public infix fun <T> IndexedTable<T>.DELETE(x: X): WhereUpdateDeleteStatement<T> =
+        Delete.deleteAllEntities(table, databaseConnection, currentContainer, fromSQL).also { addStatement(it) }
 
     /**
      * Deletes the rows that [clause] selects, looking them up as `INDEXED BY` or `NOT INDEXED` says, as SQL's
@@ -948,9 +948,8 @@ public class DatabaseScope internal constructor(
      */
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
-    public infix fun <T> IndexedTable<T>.DELETE(clause: WhereClause<T>) {
-        addStatement(Delete.delete(table, databaseConnection, clause, fromSQL))
-    }
+    public infix fun <T> IndexedTable<T>.DELETE(clause: WhereClause<T>): WhereUpdateDeleteStatement<T> =
+        Delete.delete(table, databaseConnection, currentContainer, clause, fromSQL).also { addStatement(it) }
 
     // ========== SELECT Operations ==========
 
@@ -3101,9 +3100,10 @@ public class DatabaseScope internal constructor(
         val name = timing.trigger.name
         require(collected.statements.isNotEmpty()) { "The trigger '$name' needs at least one statement." }
         for (statement in collected.statements) {
-            require(statement is InsertStatement || statement is UpdateDeleteStatement || statement is UpdateStatementWithoutWhereClause<*> || statement is RaiseStatement) {
+            require(Changes.writtenTable(statement) != null || statement is RaiseStatement) {
                 "The trigger '$name' can only run INSERT, UPDATE, DELETE and RAISE, but not: ${statement.sqlStr}"
             }
+            statement.checkComplete()
         }
         addStatement(Trigger.create(this, collected.statements, databaseConnection))
     }

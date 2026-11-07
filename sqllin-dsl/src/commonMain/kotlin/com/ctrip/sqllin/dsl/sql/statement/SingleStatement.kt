@@ -48,6 +48,15 @@ public sealed class SingleStatement(
         get() = parameters?.toTypedArray()
 
     /**
+     * Checks what can only be checked once no clause can be appended anymore, as that an ORDER BY of an UPDATE or
+     * DELETE is followed by LIMIT. Called for every statement of a scope before any of them runs, so that a failing
+     * check runs nothing.
+     *
+     * @throws IllegalArgumentException if the statement isn't complete
+     */
+    internal open fun checkComplete(): Unit = Unit
+
+    /**
      * Logs the SQL string and parameters for debugging.
      */
     internal fun printlnSQL() {

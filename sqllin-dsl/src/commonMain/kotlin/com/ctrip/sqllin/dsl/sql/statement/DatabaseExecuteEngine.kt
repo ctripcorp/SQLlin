@@ -81,9 +81,8 @@ internal class DatabaseExecuteEngine(
         // failing one runs nothing.
         statementList.forEach {
             when (it) {
-                is SelectStatement<*> -> it.checkComplete()
+                is SingleStatement -> it.checkComplete()
                 is TransactionStatementsGroup -> it.checkComplete()
-                else -> Unit
             }
         }
         statementList.forEach {

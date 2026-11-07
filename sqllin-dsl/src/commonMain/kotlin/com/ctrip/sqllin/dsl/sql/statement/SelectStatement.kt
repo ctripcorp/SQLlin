@@ -93,7 +93,7 @@ public sealed class SelectStatement<T>(
      *
      * @throws IllegalArgumentException if the statement isn't complete
      */
-    internal fun checkComplete() {
+    override fun checkComplete() {
         ungroupedError?.let { throw IllegalArgumentException(it) }
     }
 

@@ -643,6 +643,48 @@ statement is built. Use `literal(5)` for a value among expressions.
 
 You also could write the _UPDATE_ statements without the _WHERE_ clause that used for update all rows, but you should use it with caution.
 
+## ORDER BY and LIMIT of DELETE and UPDATE
+
+`LIMIT` after a _DELETE_ or an _UPDATE_, with its _WHERE_ or without, makes it write at most as many rows, and
+`ORDER_BY` before it the first of them in an order, as for the messages of a chat beyond the latest 100, or a task to
+run next. `OFFSET` after `LIMIT` skips as many rows first, and a negative `LIMIT` is no limit, so that `OFFSET` keeps the
+first rows. They are experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        MessageTable { table ->
+            // Deletes the 10 oldest messages of the chat
+            table DELETE WHERE(chatId EQ 1) ORDER_BY (time to ASC) LIMIT 10
+            // Deletes the messages of the chat after the latest 100
+            table DELETE WHERE(chatId EQ 1) ORDER_BY (time to DESC) LIMIT -1 OFFSET 100
+            // Deletes at most 1000 expired messages, as one batch of many
+            table DELETE WHERE(expired IS true) LIMIT 1000
+        }
+        TaskTable { table ->
+            // Starts the pending task of the highest priority
+            table UPDATE SET { status = 1 } WHERE (status EQ 0) ORDER_BY (priority to DESC) LIMIT 1
+        }
+    }
+}
+```
+
+SQLite only takes _ORDER BY_ and _LIMIT_ in a _DELETE_ or an _UPDATE_ when it is built with the
+`SQLITE_ENABLE_UPDATE_DELETE_LIMIT` option, which Android's SQLite isn't, and then turns them into a subquery of the
+rowids of the rows they choose. So SQLlin writes that subquery itself, which every platform runs, with the same query
+plan:
+
+```sql
+DELETE FROM message WHERE rowid IN (SELECT rowid FROM message WHERE message.chatId=? ORDER BY message.time ASC LIMIT 10)
+```
+
+It can also be in the body of a trigger, where SQLite's own syntax isn't allowed, as one that keeps the latest messages
+after each INSERT. `INDEXED_BY` and `NOT_INDEXED` decide how the subquery looks the rows up. A table with a column named
+`rowid` reads its rowid as `_rowid_`, or `oid`. `ORDER_BY` has to be followed by `LIMIT`, as SQLite says: a scope with an
+`ORDER_BY` of a _DELETE_ or an _UPDATE_ that `LIMIT` doesn't follow throws an `IllegalArgumentException` before any of
+its statements runs.
+
 ## Conflict Resolutions
 
 A statement that violates a constraint fails, undoing what it changed, unless the constraint declares another

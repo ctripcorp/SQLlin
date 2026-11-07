@@ -241,6 +241,17 @@ data class CollateNoCaseTest(
 )
 
 /**
+ * A table with a column named `rowid`, which `rowid` then means in SQL rather than the table's rowid, as the ORDER BY
+ * and LIMIT of an UPDATE or DELETE have to tell apart.
+ */
+@DBRow("row_id_named")
+@Serializable
+data class RowIdNamed(
+    val rowid: Long,
+    val name: String,
+)
+
+/**
  * Test entity for @CollateRTrim, a column whose values compare ignoring the spaces at their ends.
  */
 @OptIn(ExperimentalDSLDatabaseAPI::class)

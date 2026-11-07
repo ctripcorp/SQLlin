@@ -21,6 +21,7 @@ import com.ctrip.sqllin.dsl.sql.statement.StatementContainer
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.clause.SetClause
 import com.ctrip.sqllin.dsl.sql.clause.writtenColumns
+import com.ctrip.sqllin.dsl.sql.statement.UpdateDeleteParts
 import com.ctrip.sqllin.dsl.sql.statement.UpdateStatementWithoutWhereClause
 
 /**
@@ -62,8 +63,6 @@ internal object Update : Operation {
     ): UpdateStatementWithoutWhereClause<T> {
         val assignments = clause.assignments
         val sql = buildString {
-            append(update)
-            append(target)
             append(" SET ")
             if (assignments == null) {
                 append(clause.finalize())
@@ -77,6 +76,13 @@ internal object Update : Operation {
                 }
             }
         }
-        return UpdateStatementWithoutWhereClause(sql, container, connection, clause.parameters, table.tableName)
+        val parts = UpdateDeleteParts(
+            statement = update,
+            table = table,
+            target = target,
+            assignments = sql,
+            assignmentParameters = clause.parameters,
+        )
+        return UpdateStatementWithoutWhereClause(parts, container, connection)
     }
 }

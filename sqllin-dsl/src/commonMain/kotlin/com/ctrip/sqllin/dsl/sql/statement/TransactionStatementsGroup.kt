@@ -82,11 +82,9 @@ internal class TransactionStatementsGroup(
     /**
      * Checks that every statement of the transaction is complete, before any of them runs.
      *
-     * @see SelectStatement.checkComplete
+     * @see SingleStatement.checkComplete
      */
-    fun checkComplete() = statementList.forEach {
-        (it as? SelectStatement<*>)?.checkComplete()
-    }
+    fun checkComplete() = statementList.forEach { it.checkComplete() }
 
     override fun execute() = databaseConnection.withTransaction(mode) {
         statementList.forEach {

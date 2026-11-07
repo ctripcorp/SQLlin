@@ -605,6 +605,45 @@ fun sample() {
 
 你也可以编写没有 _WHERE_ 子句的 _UPDATE_ 语句用于更新所有的行，但使用它的时候你应该谨慎。
 
+## 删除和更新中的 ORDER BY 与 LIMIT
+
+在 _DELETE_ 或 _UPDATE_ 后面（无论有没有 _WHERE_）加上 `LIMIT`，最多只删除或更新这么多行；在它前面再加上 `ORDER_BY`，就是按这个顺序
+排在前面的那些行。比如删除某个聊天中最新 100 条以外的消息，或者取出下一个要执行的任务。`LIMIT` 后面的 `OFFSET` 会先跳过这么多行；
+`LIMIT` 为负数时表示不限制，这样 `OFFSET` 就会保留排在前面的行。它们是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        MessageTable { table ->
+            // 删除这个聊天中最早的 10 条消息
+            table DELETE WHERE(chatId EQ 1) ORDER_BY (time to ASC) LIMIT 10
+            // 删除这个聊天中最新 100 条以外的消息
+            table DELETE WHERE(chatId EQ 1) ORDER_BY (time to DESC) LIMIT -1 OFFSET 100
+            // 最多删除 1000 条过期消息，作为分批删除中的一批
+            table DELETE WHERE(expired IS true) LIMIT 1000
+        }
+        TaskTable { table ->
+            // 开始执行优先级最高的待办任务
+            table UPDATE SET { status = 1 } WHERE (status EQ 0) ORDER_BY (priority to DESC) LIMIT 1
+        }
+    }
+}
+```
+
+SQLite 只有在编译时打开 `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` 选项，才接受 _DELETE_ 和 _UPDATE_ 中的 _ORDER BY_ 与 _LIMIT_，而 Android
+的 SQLite 没有打开它；打开时，SQLite 会把它们改写成一个子查询，选出这些行的 rowid。所以 SQLlin 自己生成这个子查询，所有平台都能执行，
+查询计划也完全相同：
+
+```sql
+DELETE FROM message WHERE rowid IN (SELECT rowid FROM message WHERE message.chatId=? ORDER BY message.time ASC LIMIT 10)
+```
+
+它也可以写在触发器体里，而 SQLite 自己的语法在触发器里是不允许的，比如每次 INSERT 之后只保留最新消息的触发器。`INDEXED_BY` 和
+`NOT_INDEXED` 决定子查询如何查找这些行。如果表中有名为 `rowid` 的列，就改用 `_rowid_` 或 `oid` 读取 rowid。和 SQLite 的规定一样，
+`ORDER_BY` 后面必须接 `LIMIT`：作用域中如果有 _DELETE_ 或 _UPDATE_ 的 `ORDER_BY` 后面没有接 `LIMIT`，在任何语句执行之前就会抛出
+`IllegalArgumentException`。
+
 ## 冲突处理
 
 违反约束的语句会失败，并撤销它所做的修改，除非约束声明了别的处理方式，比如 `@Unique(onConflict = OnConflict.IGNORE)`。语句也可以

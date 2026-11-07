@@ -277,6 +277,9 @@ class AndroidTest {
     fun testCollations() = commonTest.testCollations()
 
     @Test
+    fun testUpdateDeleteOrderByLimit() = commonTest.testUpdateDeleteOrderByLimit()
+
+    @Test
     fun testCompositeUniqueConstraint() = commonTest.testCompositeUniqueConstraint()
 
     @Test
