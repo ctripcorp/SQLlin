@@ -309,6 +309,9 @@ class AndroidTest {
     fun testConvertedSchema() = convertedTest.testConvertedSchema()
 
     @Test
+    fun testConvertedOptIn() = convertedTest.testConvertedOptIn()
+
+    @Test
     fun testConvertedErrors() = convertedTest.testConvertedErrors()
 
     @Test

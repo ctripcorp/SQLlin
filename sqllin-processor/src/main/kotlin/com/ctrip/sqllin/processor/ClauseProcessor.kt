@@ -100,7 +100,9 @@ class ClauseProcessor(
         ).map { "$ANNOTATION_PACKAGE.$it" }.toSet()
         const val ANNOTATION_SERIALIZABLE = "kotlinx.serialization.Serializable"
         const val ANNOTATION_OPT_IN = "kotlin.OptIn"
+        const val ANNOTATION_REQUIRES_OPT_IN = "kotlin.RequiresOptIn"
         const val EXPERIMENTAL_API = "com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI"
+        const val EXPERIMENTAL_API_NAME = "ExperimentalDSLDatabaseAPI"
         const val CLAUSE_CONVERTED = "com.ctrip.sqllin.dsl.sql.clause.ClauseConverted"
         const val ANNOTATION_TRANSIENT = "kotlinx.serialization.Transient"
 
@@ -201,10 +203,11 @@ class ClauseProcessor(
                 // The column properties carry @ColumnNameDslMaker for IntelliJ IDEA's DSL highlighting, a target the compiler
                 // flags as having no effect on scope control. This code is compiled in the user's module, so keep it quiet.
                 writer.write("@Suppress(\"DSL_MARKER_APPLIED_TO_WRONG_TARGET\")\n")
-                // ClauseConverted is experimental, and the type of a converted column can be too, as Uuid is, which
-                // the entity's declarations opted in to
-                if (columnTypes.any { it is ColumnType.Converted })
-                    writer.write("@OptIn(${optInMarkers(classDeclaration, propertyList, EXPERIMENTAL_API).joinToString { "$it::class" }})\n")
+                // ClauseConverted is experimental, and so can be the type of a converted column, as Uuid is, and the
+                // entity itself, which its declarations opt in to or propagate
+                val hasConverted = columnTypes.any { it is ColumnType.Converted }
+                optInAnnotation(classDeclaration, propertyList, hasConverted, if (hasConverted) listOf(EXPERIMENTAL_API) else emptyList())
+                    ?.let { writer.write(it) }
                 writer.write("${visibilityModifier}object $objectName : Table<$className>(\"$tableName\") {\n\n")
 
                 writer.write("    override fun kSerializer() = $className.serializer()\n\n")
@@ -405,9 +408,10 @@ class ClauseProcessor(
             writer.write("import com.ctrip.sqllin.dsl.sql.FtsTable\n")
             writer.write("import com.ctrip.sqllin.dsl.sql.PrimaryKeyInfo\n\n")
             // As for table objects, the column properties carry @ColumnNameDslMaker for IntelliJ IDEA's DSL
-            // highlighting. FtsTable is experimental, and the table object opts in so that its users don't have to.
+            // highlighting. FtsTable is experimental, and the table object opts in so that its users don't have to, as
+            // it does to the markers that the entity propagates, as its columns are never converted.
             writer.write("@Suppress(\"DSL_MARKER_APPLIED_TO_WRONG_TARGET\")\n")
-            writer.write("@OptIn(ExperimentalDSLDatabaseAPI::class)\n")
+            writer.write(checkNotNull(optInAnnotation(classDeclaration, propertyList, hasConverted = false, listOf(EXPERIMENTAL_API_NAME))))
             writer.write("${visibilityModifier}object $objectName : FtsTable<$className>(\"$tableName\") {\n\n")
             writer.write("    override fun kSerializer() = $className.serializer()\n\n")
             writer.write("    inline operator fun <R> invoke(block: $objectName.(table: $objectName) -> R): R = this.block(this)\n\n")
@@ -602,11 +606,8 @@ class ClauseProcessor(
                 // As for table objects, the column properties carry @ColumnNameDslMaker for IntelliJ IDEA's DSL
                 // highlighting. View is experimental, and the view object opts in so that its users don't have to.
                 writer.write("@Suppress(\"DSL_MARKER_APPLIED_TO_WRONG_TARGET\")\n")
-                val markers = if (columnTypes.any { it is ColumnType.Converted })
-                    optInMarkers(classDeclaration, propertyList, EXPERIMENTAL_API).drop(1)
-                else
-                    emptyList()
-                writer.write("@OptIn(${(listOf("ExperimentalDSLDatabaseAPI") + markers).joinToString { "$it::class" }})\n")
+                val hasConverted = columnTypes.any { it is ColumnType.Converted }
+                writer.write(checkNotNull(optInAnnotation(classDeclaration, propertyList, hasConverted, listOf(EXPERIMENTAL_API_NAME))))
                 writer.write("${visibilityModifier}object $objectName : View<$className>(\"$viewName\") {\n\n")
                 writer.write("    override fun kSerializer() = $className.serializer()\n\n")
                 writer.write("    inline operator fun <R> invoke(block: $objectName.(view: $objectName) -> R): R = this.block(this)\n\n")
@@ -642,18 +643,37 @@ class ClauseProcessor(
     }
 
     /**
-     * Returns the qualified names of the opt-in markers that [first] and the `@OptIn` annotations of [classDeclaration],
-     * its [properties] and its file give, which the object generated for it opts in to, as the type of a converted
-     * column, as `Uuid`, can need.
+     * Returns the `@OptIn` annotation of the object generated for [classDeclaration], with a line break, which opts in
+     * to [markers], as they are written, and to the markers that the object needs because of the entity's declarations:
+     * those that the class, its [properties] or its file are annotated with, which propagate their requirement to the
+     * uses of the class, as the object's are; and, if the table [hasConverted] columns, those that their `@OptIn`s give,
+     * as the type of a converted column, as `Uuid`, can need, as it is written in the object. Null if there are none.
      */
-    private fun optInMarkers(classDeclaration: KSClassDeclaration, properties: List<KSPropertyDeclaration>, first: String): List<String> {
+    private fun optInAnnotation(
+        classDeclaration: KSClassDeclaration,
+        properties: List<KSPropertyDeclaration>,
+        hasConverted: Boolean,
+        markers: List<String>,
+    ): String? {
         val annotations = classDeclaration.annotations + properties.asSequence().flatMap { it.annotations } +
             classDeclaration.containingFile?.annotations.orEmpty()
-        val markers = annotations
-            .filter { it.qualifiedName == ANNOTATION_OPT_IN }
-            .flatMap { annotation -> annotation.arguments.flatMap { (it.value as? List<*>).orEmpty() } }
-            .mapNotNull { (it as? KSType)?.declaration?.qualifiedName?.asString() }
-        return (sequenceOf(first) + markers).distinct().toList()
+        val propagated = annotations
+            .map { it.annotationType.resolve().declaration }
+            .filter { declaration -> declaration.annotations.any { it.qualifiedName == ANNOTATION_REQUIRES_OPT_IN } }
+            .mapNotNull { it.qualifiedName?.asString() }
+        val optedIn = if (hasConverted) {
+            annotations
+                .filter { it.qualifiedName == ANNOTATION_OPT_IN }
+                .flatMap { annotation -> annotation.arguments.flatMap { (it.value as? List<*>).orEmpty() } }
+                .mapNotNull { (it as? KSType)?.declaration?.qualifiedName?.asString() }
+        } else {
+            emptySequence()
+        }
+        // ExperimentalDSLDatabaseAPI is written by its simple name where the object imports it
+        val all = (markers.asSequence() + propagated + optedIn)
+            .distinctBy { if (it == EXPERIMENTAL_API_NAME) EXPERIMENTAL_API else it }
+            .toList()
+        return if (all.isEmpty()) null else "@OptIn(${all.joinToString { "$it::class" }})\n"
     }
 
     /**

@@ -337,6 +337,26 @@ class CommonConvertedTest(private val path: DatabasePath) {
     }
 
     /**
+     * The tables of entities that propagate an opt-in requirement, with `@ExperimentalUuidApi` on their classes rather
+     * than `@OptIn`, opt in to it, as they use the classes, with a converted column or without: they compile, and work.
+     */
+    fun testConvertedOptIn() = withDatabase({
+        CREATE(MarkedEventTable)
+        CREATE(MarkedBasicTable)
+    }) { database ->
+        lateinit var event: SelectStatement<MarkedEvent>
+        lateinit var basic: SelectStatement<MarkedBasic>
+        database {
+            MarkedEventTable INSERT listOf(MarkedEvent(id1, Score(1)), MarkedEvent(id2, Score(2)))
+            MarkedBasicTable INSERT MarkedBasic(null, "basic")
+            event = MarkedEventTable SELECT WHERE(MarkedEventTable.id EQ id2)
+            basic = MarkedBasicTable SELECT X
+        }
+        assertEquals(listOf(MarkedEvent(id2, Score(2))), event.getResults())
+        assertEquals(listOf(MarkedBasic(1, "basic")), basic.getResults())
+    }
+
+    /**
      * A serializer that encodes a structure fails the CREATE statement of its column, and its conditions, as a column
      * holds one value; a collation of a column whose serializer doesn't store text fails its CREATE statement; and an
      * element whose serializer isn't the property's fails, as its conditions wouldn't compare what the column holds.
