@@ -60,9 +60,23 @@ public interface DatabaseConnection {
     public fun query(sql: String, bindParams: Array<out Any?>? = null): CommonCursor
 
     /**
-     * Begins a database transaction.
+     * Begins an IMMEDIATE transaction, which takes the write lock at once, on every platform.
      */
     public fun beginTransaction()
+
+    /**
+     * Begins a transaction in [mode], which decides when it takes the write lock.
+     *
+     * The default implementation, for a connection SQLlin doesn't provide, only begins an IMMEDIATE transaction, through
+     * [beginTransaction]; the connections of SQLlin begin one in each mode.
+     *
+     * @throws UnsupportedOperationException if this connection doesn't begin a transaction in [mode]
+     */
+    public fun beginTransaction(mode: TransactionMode) {
+        if (mode != TransactionMode.IMMEDIATE)
+            throw UnsupportedOperationException("This connection only begins IMMEDIATE transactions, not $mode ones.")
+        beginTransaction()
+    }
 
     /**
      * Marks the current transaction as successful.

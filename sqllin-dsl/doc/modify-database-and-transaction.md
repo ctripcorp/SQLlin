@@ -22,7 +22,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Person(
     @PrimaryKey(autoIncrement = true)
-    val id: Long = 0,
+    val id: Long? = null,
     val name: String,
     val age: Int,
 )
@@ -127,6 +127,12 @@ Each column of an index can be given the order it is sorted in, as `ORDER_BY` gi
 `PersonTable.CREATE_INDEX("idx_person_age", PersonTable.age to DESC)` is `CREATE INDEX idx_person_age ON person(age DESC)`.
 This is experimental. A query that sorts the columns in that order, or the reverse, reads the index in order.
 
+A column of an index compares its values by the column's collation, unless the `COLLATE` operator gives it another,
+which is experimental too: `PersonTable.CREATE_INDEX("idx_person_name_nocase", PersonTable.name COLLATE NOCASE)` is
+`CREATE INDEX idx_person_name_nocase ON person(name COLLATE NOCASE)`, which a query that compares
+`(name COLLATE NOCASE)` uses, while `name` keeps comparing its values by their bytes elsewhere. It can be given an order
+too, as `(PersonTable.name COLLATE NOCASE) to DESC`.
+
 `WHERE` after `CREATE_INDEX` or `CREATE_UNIQUE_INDEX` makes a partial index: an index of the rows that satisfy a condition
 only. It is smaller than an index of all rows, and a unique one keeps the values unique among those rows only, such as
 the emails of the users that aren't deleted. Partial indexes are experimental:
@@ -155,6 +161,25 @@ fun sample() {
     }
 }
 ```
+
+SQLite's query planner chooses the index a statement looks its rows up through. `INDEXED_BY` makes it use one, and
+`NOT_INDEXED` none, as SQL's `INDEXED BY` and `NOT INDEXED` do. A table with them is read by a _SELECT_, joins included,
+and written by _UPDATE_ and _DELETE_, but not by _INSERT_, which SQL doesn't allow. They are experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // SELECT ... FROM person INDEXED BY idx_person_name WHERE person.name = ?
+        (PersonTable INDEXED_BY "idx_person_name") SELECT WHERE(PersonTable.name EQ "Tom")
+        // DELETE FROM person NOT INDEXED WHERE person.age < ?
+        PersonTable.NOT_INDEXED DELETE WHERE(PersonTable.age LT 18)
+    }
+}
+```
+
+A statement fails when SQLite can't run it through the index given, as when the index doesn't exist, with
+"no such index".
 
 ### IF NOT EXISTS and IF EXISTS
 
@@ -458,7 +483,7 @@ fun sample() {
 The _INSERT_ statements could insert objects directly. You can insert one or multiple objects once.
 
 `INSERT_OR_IGNORE` skips the objects that conflict with a row already in the table, and `INSERT_OR_REPLACE` replaces
-that row. They take the same arguments as `INSERT`.
+that row. They take the same arguments as `INSERT`, as the other [conflict resolutions](#conflict-resolutions) do.
 
 _INSERT_ can also insert the rows a _SELECT_ returns, as `INSERT INTO ... SELECT` does, if the _SELECT_ reads rows of the
 table's type. They can come from any table, through a projection or result columns:
@@ -618,6 +643,85 @@ statement is built. Use `literal(5)` for a value among expressions.
 
 You also could write the _UPDATE_ statements without the _WHERE_ clause that used for update all rows, but you should use it with caution.
 
+## ORDER BY and LIMIT of DELETE and UPDATE
+
+`LIMIT` after a _DELETE_ or an _UPDATE_, with its _WHERE_ or without, makes it write at most as many rows, and
+`ORDER_BY` before it the first of them in an order, as for the messages of a chat beyond the latest 100, or a task to
+run next. `OFFSET` after `LIMIT` skips as many rows first, and a negative `LIMIT` is no limit, so that `OFFSET` keeps the
+first rows. They are experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        MessageTable { table ->
+            // Deletes the 10 oldest messages of the chat
+            table DELETE WHERE(chatId EQ 1) ORDER_BY (time to ASC) LIMIT 10
+            // Deletes the messages of the chat after the latest 100
+            table DELETE WHERE(chatId EQ 1) ORDER_BY (time to DESC) LIMIT -1 OFFSET 100
+            // Deletes at most 1000 expired messages, as one batch of many
+            table DELETE WHERE(expired IS true) LIMIT 1000
+        }
+        TaskTable { table ->
+            // Starts the pending task of the highest priority
+            table UPDATE SET { status = 1 } WHERE (status EQ 0) ORDER_BY (priority to DESC) LIMIT 1
+        }
+    }
+}
+```
+
+SQLite only takes _ORDER BY_ and _LIMIT_ in a _DELETE_ or an _UPDATE_ when it is built with the
+`SQLITE_ENABLE_UPDATE_DELETE_LIMIT` option, which Android's SQLite isn't, and then turns them into a subquery of the
+rowids of the rows they choose. So SQLlin writes that subquery itself, which every platform runs, with the same query
+plan:
+
+```sql
+DELETE FROM message WHERE rowid IN (SELECT rowid FROM message WHERE message.chatId=? ORDER BY message.time ASC LIMIT 10)
+```
+
+It can also be in the body of a trigger, where SQLite's own syntax isn't allowed, as one that keeps the latest messages
+after each INSERT. `INDEXED_BY` and `NOT_INDEXED` decide how the subquery looks the rows up. A table with a column named
+`rowid` reads its rowid as `_rowid_`, or `oid`. `ORDER_BY` has to be followed by `LIMIT`, as SQLite says: a scope with an
+`ORDER_BY` of a _DELETE_ or an _UPDATE_ that `LIMIT` doesn't follow throws an `IllegalArgumentException` before any of
+its statements runs.
+
+## Conflict Resolutions
+
+A statement that violates a constraint fails, undoing what it changed, unless the constraint declares another
+resolution, as `@Unique(onConflict = OnConflict.IGNORE)` does. A statement can choose its own, which takes the place of
+the constraint's: `INSERT_OR_ABORT`, `INSERT_OR_FAIL`, `INSERT_OR_ROLLBACK`, `INSERT_OR_IGNORE` and `INSERT_OR_REPLACE`
+take the same arguments as `INSERT`, and `UPDATE_OR_ABORT`, `UPDATE_OR_FAIL`, `UPDATE_OR_IGNORE`, `UPDATE_OR_REPLACE` and
+`UPDATE_OR_ROLLBACK` are written as `UPDATE`. They are experimental, but `INSERT_OR_IGNORE` and `INSERT_OR_REPLACE` of
+objects and of a _SELECT_:
+
+| Resolution | On a conflict with a PRIMARY KEY, UNIQUE, NOT NULL or CHECK constraint |
+| --- | --- |
+| `ABORT` | fails the statement, undoing what it changed, which is the default |
+| `FAIL` | fails the statement, keeping the rows it wrote before the one that conflicts |
+| `ROLLBACK` | fails the statement, rolling back the transaction it runs in |
+| `IGNORE` | skips the row that conflicts, and goes on |
+| `REPLACE` | deletes the rows that conflict on a PRIMARY KEY or UNIQUE constraint, writes the default value of a NOT NULL column instead of NULL, and fails as `ABORT` on a CHECK constraint |
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // INSERT OR FAIL INTO person(id,name,age) VALUES (?,?,?),(?,?,?)
+        PersonTable INSERT_OR_FAIL listOf(tom, jerry)
+        PersonTable { table ->
+            // UPDATE OR IGNORE person SET name=? WHERE person.name=?
+            table UPDATE_OR_IGNORE SET { name = "Tom" } WHERE (name EQ "Thomas")
+        }
+    }
+}
+```
+
+The _INSERT_ statements write the primary key even when the database assigns it, as a conflict on it couldn't be seen
+otherwise; a null key still lets the database assign one. A FOREIGN KEY violation fails the statement whatever its
+resolution. In `transaction {...}`, a statement that fails ends the transaction, which is rolled back, so `ABORT`,
+`FAIL` and `ROLLBACK` only differ outside one, where `FAIL` keeps the rows that a statement of several rows wrote before
+the one that conflicts, and `ROLLBACK` does what `ABORT` does.
+
 ## Transaction
 
 Using transaction is simple in SQLlin, you just need to use a `transaction {...}` wrap your SQL statements:
@@ -641,6 +745,33 @@ fun sample() {
 ```
 
 The `transaction {...}` is a member function in `Database`, it is inside or outside of `TABLE(databaseName) {...}` doesn't matter.
+
+A transaction begins with `BEGIN IMMEDIATE` on every platform: it takes the write lock at once, so another connection
+that writes, or another transaction, waits for it as long as its `busyTimeout`.
+
+`transaction(mode) {...}` begins one in another mode, which is experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        transaction(TransactionMode.EXCLUSIVE) {
+            PersonTable INSERT Person(age = 4, name = "Tom")
+        }
+    }
+}
+```
+
+* `TransactionMode.IMMEDIATE`, the default, takes the write lock at once.
+* `TransactionMode.EXCLUSIVE` takes it at once too, and in `DELETE` journal mode also keeps other connections from
+  reading until the transaction ends. In WAL mode, it is the same as `IMMEDIATE`.
+* `TransactionMode.DEFERRED` takes no lock until the transaction reads, nor the write lock until it writes, so other
+  connections can write until then. But a transaction that reads before it writes then fails at once with
+  "database is locked" while another connection writes, without waiting for `busyTimeout`. Android's framework can't
+  begin a deferred transaction that writes, so on Android it begins an `IMMEDIATE` one.
+
+A transaction in another one joins it, and keeps its mode. With _sqllin-driver_, `withTransaction(mode) {...}` and
+`DatabaseConnection#beginTransaction(mode)` take a mode as well.
 
 ## VACUUM
 
@@ -686,6 +817,80 @@ fun sample() {
     }
 }
 ```
+
+## PRAGMA
+
+SQLlin builds the PRAGMAs that check the database, read its schema and what the SQLite has, checkpoint the WAL, read
+the size and the header of the file, and set how statements run. A PRAGMA that reads returns a statement whose `getResults()` returns what it read once the scope
+has run, as the results of a _SELECT_ are read. They are experimental, and their result types are in
+`com.ctrip.sqllin.dsl.sql.pragma`:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    lateinit var problems: PragmaStatement<List<String>>
+    lateinit var violations: PragmaStatement<List<ForeignKeyViolation>>
+    lateinit var columns: PragmaStatement<List<ColumnInfo>>
+    database {
+        problems = PRAGMA_INTEGRITY_CHECK()
+        violations = PRAGMA_FOREIGN_KEY_CHECK()
+        columns = PRAGMA_TABLE_INFO(PersonTable)
+    }
+    if (problems.getResults().isNotEmpty()) {
+        // The database is corrupt
+    }
+    val hasEmail = columns.getResults().any { it.name == "email" }
+}
+```
+
+* **Checking the database**: `PRAGMA_INTEGRITY_CHECK(maxErrors)` checks that the pages, rows and indexes are well-formed
+  and agree with each other, and that the rows satisfy their NOT NULL and CHECK constraints, and returns the problems,
+  or an empty list; `PRAGMA_QUICK_CHECK(maxErrors)` checks all but the indexes and UNIQUE constraints, more quickly.
+  `PRAGMA_FOREIGN_KEY_CHECK()`, or `PRAGMA_FOREIGN_KEY_CHECK(table)`, returns the rows that violate their foreign keys,
+  whether or not they are enforced, such as after a migration that turned them off, and `PRAGMA_FOREIGN_KEYS()` whether
+  they are. `PRAGMA_INTEGRITY_CHECK(table)` and `PRAGMA_QUICK_CHECK(table)` check a table and its indexes.
+* **Reading the schema**: `PRAGMA_TABLE_INFO(table)` returns the columns of a table or a view, which a migration can
+  check, `PRAGMA_INDEX_LIST(table)` its indexes, `PRAGMA_INDEX_XINFO(index)` the columns of an index, with their sort
+  orders and collations, and `PRAGMA_FOREIGN_KEY_LIST(table)` its foreign keys. Each also takes a name, as of a table
+  the app no longer declares. A table or index that doesn't exist has no columns, indexes or foreign keys. One that
+  another connection, such as one in another process, has just created may look the same, until this one runs a
+  statement that reads or writes a table: when SQLite doesn't find the name, it may not check whether the schema it read
+  before is still current. `PRAGMA_TABLE_XINFO(table)` adds the hidden and generated columns, which `ColumnInfo.kind`
+  tells, as the hidden columns of an FTS table, and `PRAGMA_TABLE_LIST()` returns the tables and views, the virtual
+  ones, and the tables that these keep their data in, of `main` and `temp`.
+* **What the SQLite has**: `PRAGMA_COMPILE_OPTIONS()` returns the options it was compiled with, `PRAGMA_COLLATION_LIST()`
+  its collations, `PRAGMA_DATABASE_LIST()` the databases of the connection and their files, `PRAGMA_FUNCTION_LIST()` its
+  SQL functions, such as to check whether it has the math functions, `PRAGMA_MODULE_LIST()` the modules of its virtual
+  tables, as `fts4`, and `PRAGMA_PRAGMA_LIST()` its PRAGMAs.
+* **The file**: `PRAGMA_WAL_CHECKPOINT(mode)` copies the pages of the WAL into the database file, as before copying the
+  file, which doesn't hold what the WAL does; SQLite can't checkpoint inside a transaction, so it throws an
+  `IllegalStateException` inside `transaction {...}`. `PRAGMA_PAGE_COUNT()` times `PRAGMA_PAGE_SIZE()` is the size of the
+  file, and `PRAGMA_FREELIST_COUNT()` the number of its unused pages, which [`VACUUM()`](#vacuum) removes; a database
+  whose auto_vacuum is on, as Android's SQLite creates one by default, removes them at each commit, so it has none.
+  `PRAGMA_AUTO_VACUUM()` tells whether it is, and `PRAGMA_AUTO_VACUUM(mode)` sets it, which applies to a database that
+  has no tables yet, and otherwise once a `VACUUM()` after it rebuilds the database. SQLlin doesn't run
+  `PRAGMA incremental_vacuum`, which the `INCREMENTAL` mode keeps the pages for: it removes a page each time it returns a
+  row, which has no columns, and sqlite-jdbc runs such a statement only as far as its first row.
+  `PRAGMA_APPLICATION_ID()` reads, and `PRAGMA_APPLICATION_ID(id)` sets, the number of the header that tells the app the
+  file belongs to.
+* **How statements run**: `PRAGMA_DEFER_FOREIGN_KEYS(true)` defers the checks of foreign keys to the commit, so that a
+  row can be inserted before the row it references; SQLite turns it off when the transaction ends, so it throws an
+  `IllegalStateException` outside `transaction {...}`. `PRAGMA_RECURSIVE_TRIGGERS(true)` lets triggers fire
+  recursively, `PRAGMA_LEGACY_ALTER_TABLE(true)` makes `ALTER_RENAME_TABLE_TO` leave the views and triggers that read the
+  table as they are, which Android's SQLite does by default, and `PRAGMA_IGNORE_CHECK_CONSTRAINTS(true)` stops checking
+  CHECK constraints. These last as long as the database is open, and apply to the statements that ran before them too.
+
+Some of them need a newer SQLite than some platforms have, so they are marked with
+[`@PlatformDependentSQLiteAPI`](#apis-that-depend-on-the-sqlite-version): `PRAGMA_TABLE_XINFO` needs SQLite 3.26.0,
+which Android has from API 30 on, `PRAGMA_FUNCTION_LIST`, `PRAGMA_MODULE_LIST` and `PRAGMA_PRAGMA_LIST` 3.30.0, from API
+31 on, and `PRAGMA_TABLE_LIST` 3.37.0, from API 34 on. SQLite ignores a PRAGMA it doesn't have, rather than failing, so
+that these check the columns of the rows SQLite returns, and throw an `IllegalStateException` that tells what they need
+rather than return nothing. `PRAGMA_INTEGRITY_CHECK(table)` and `PRAGMA_QUICK_CHECK(table)` need SQLite 3.33.0, from API
+34 on, below which they check the whole database. `PRAGMA_COMPILE_OPTIONS` throws on Android, whose SQLite is built
+without it.
+
+The details of the problems that the checks return are SQLite's own text. A PRAGMA changes no table, so it can be in
+a scope of `versioned { }`.
 
 ## Next Step
 

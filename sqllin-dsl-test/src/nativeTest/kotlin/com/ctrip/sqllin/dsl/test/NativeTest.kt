@@ -31,9 +31,14 @@ class NativeTest {
 
     private val path = getPlatformStringPath().toDatabasePath()
     private val commonTest = CommonBasicTest(path)
+    private val pagingTest = CommonPagingTest(path)
+    private val convertedTest = CommonConvertedTest(path)
 
     @Test
     fun testInsert() = commonTest.testInsert()
+
+    @Test
+    fun testInsertGeneratedKeyLast() = commonTest.testInsertGeneratedKeyLast()
 
     @Test
     fun testDelete() = commonTest.testDelete()
@@ -54,13 +59,19 @@ class NativeTest {
     fun testGroupByAndHavingClause() = commonTest.testGroupByAndHavingClause()
 
     @Test
-    fun testUnionSelect() = commonTest.testUnionSelect()
-
-    @Test
     fun testCompoundSelect() = commonTest.testCompoundSelect()
 
     @Test
     fun testObserve() = commonTest.testObserve()
+
+    @Test
+    fun testTableVersions() = commonTest.testTableVersions()
+
+    @Test
+    fun testUnreadSelect() = commonTest.testUnreadSelect()
+
+    @Test
+    fun testObserveRestoresTracking() = commonTest.testObserveRestoresTracking()
 
     @Test
     fun testObserveForeignKeyAction() = commonTest.testObserveForeignKeyAction()
@@ -177,10 +188,34 @@ class NativeTest {
     fun testConflictClauses() = commonTest.testConflictClauses()
 
     @Test
+    fun testConflictResolutions() = commonTest.testConflictResolutions()
+
+    @Test
+    fun testTransactionModes() = commonTest.testTransactionModes()
+
+    @Test
+    fun testNestedTransaction() = commonTest.testNestedTransaction()
+
+    @Test
+    fun testIndexedBy() = commonTest.testIndexedBy()
+
+    @Test
+    fun testExplainQueryPlan() = commonTest.testExplainQueryPlan()
+
+    @Test
+    fun testClauseOnEarlierStatement() = commonTest.testClauseOnEarlierStatement()
+
+    @Test
+    fun testPragmas() = commonTest.testPragmas()
+
+    @Test
+    fun testMorePragmas() = commonTest.testMorePragmas()
+
+    @Test
     fun testFunction() = commonTest.testFunction()
 
     @Test
-    fun testJoinClause() = commonTest.testJoinClause()
+    fun testJoinWithoutFrom() = commonTest.testJoinWithoutFrom()
 
     @Test
     fun testConcurrency() = commonTest.testConcurrency()
@@ -250,6 +285,45 @@ class NativeTest {
 
     @Test
     fun testCollateNoCaseConstraint() = commonTest.testCollateNoCaseConstraint()
+
+    @Test
+    fun testCollations() = commonTest.testCollations()
+
+    @Test
+    fun testUpdateDeleteOrderByLimit() = commonTest.testUpdateDeleteOrderByLimit()
+
+    @Test
+    fun testPagingSourceLoads() = pagingTest.testPagingSourceLoads()
+
+    @Test
+    fun testPagingSourceRefreshKey() = pagingTest.testPagingSourceRefreshKey()
+
+    @Test
+    fun testPagingSourceInvalidation() = pagingTest.testPagingSourceInvalidation()
+
+    @Test
+    fun testPagingSourceQueries() = pagingTest.testPagingSourceQueries()
+
+    @Test
+    fun testPagingSourceWithPager() = pagingTest.testPagingSourceWithPager()
+
+    @Test
+    fun testConvertedConditions() = convertedTest.testConvertedConditions()
+
+    @Test
+    fun testConvertedStatements() = convertedTest.testConvertedStatements()
+
+    @Test
+    fun testConvertedEnums() = convertedTest.testConvertedEnums()
+
+    @Test
+    fun testConvertedSchema() = convertedTest.testConvertedSchema()
+
+    @Test
+    fun testConvertedOptIn() = convertedTest.testConvertedOptIn()
+
+    @Test
+    fun testConvertedErrors() = convertedTest.testConvertedErrors()
 
     @Test
     fun testCompositeUniqueConstraint() = commonTest.testCompositeUniqueConstraint()

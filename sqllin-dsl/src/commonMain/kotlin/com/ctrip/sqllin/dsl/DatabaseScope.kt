@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.dsl
 
 import com.ctrip.sqllin.driver.DatabaseConnection
+import com.ctrip.sqllin.driver.TransactionMode
 import com.ctrip.sqllin.dsl.annotation.AdvancedInsertAPI
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.KeyWordDslMaker
@@ -29,6 +30,7 @@ import com.ctrip.sqllin.dsl.sql.FtsTable
 import com.ctrip.sqllin.dsl.sql.ProjectedX
 import com.ctrip.sqllin.dsl.sql.RaiseIgnore
 import com.ctrip.sqllin.dsl.sql.RaiseResolution
+import com.ctrip.sqllin.dsl.sql.IndexedTable
 import com.ctrip.sqllin.dsl.sql.Relation
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.TriggerDefinition
@@ -52,13 +54,13 @@ import com.ctrip.sqllin.dsl.sql.operation.Select
 import com.ctrip.sqllin.dsl.sql.operation.Trigger
 import com.ctrip.sqllin.dsl.sql.operation.Update
 import com.ctrip.sqllin.dsl.sql.operation.Vacuum
+import com.ctrip.sqllin.dsl.sql.pragma.*
 import com.ctrip.sqllin.dsl.sql.statement.*
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.serializer
-import kotlin.concurrent.Volatile
 import kotlin.jvm.JvmName
 import kotlin.reflect.KProperty1
 
@@ -91,6 +93,11 @@ import kotlin.reflect.KProperty1
  * declared outside the scope and read its results after the scope has exited, as shown below.
  * For the same reason a query's result cannot inform a write in the same scope: a read-modify-write
  * has to be split into two scopes.
+ *
+ * **A scope isn't thread-safe**: use it only in the code that runs its block, and don't call its functions from
+ * threads or coroutines that run at the same time, as coroutines launched in the block of `suspendedScope` on a
+ * dispatcher of several threads would. A block that suspends may resume on another thread, which is safe, as the steps
+ * of a coroutine run one after another.
  *
  * Example:
  * ```kotlin
@@ -130,34 +137,50 @@ public class DatabaseScope internal constructor(
 
     // ========== Transaction Management ==========
 
-    @Volatile
     private var transactionStatementsGroup: TransactionStatementsGroup? = null
 
     private inline val isInTransaction
         get() = transactionStatementsGroup != null
 
     /**
-     * Begins a new transaction.
+     * How deeply the transactions being built are nested: 1 in the outermost one, and 0 outside any. Only the outermost
+     * one collects statements, and only its end ends it, so that the statements after an inner one are still in it.
+     */
+    private var transactionDepth = 0
+
+    /**
+     * Begins a new transaction, which begins IMMEDIATE, unless one has begun already, whose statements the new ones
+     * join. Each call has to be followed by one of [endTransaction], as [transaction] does.
      *
      * @return `true` if transaction started successfully, `false` if already in a transaction
      */
-    public fun beginTransaction(): Boolean {
+    public fun beginTransaction(): Boolean = beginTransaction(TransactionMode.IMMEDIATE)
+
+    /**
+     * Begins a new transaction, which begins in [mode], unless one has begun already, whose statements the new ones join.
+     *
+     * @return `true` if transaction started successfully, `false` if already in a transaction
+     */
+    @PublishedApi
+    internal fun beginTransaction(mode: TransactionMode): Boolean {
         check(triggerBody == null) { "A transaction can't begin in the body of a trigger, which runs in the statement that fires it." }
-        if (isInTransaction)
+        if (transactionDepth++ > 0)
             return false
-        transactionStatementsGroup = TransactionStatementsGroup(databaseConnection, enableSimpleSQLLog)
+        transactionStatementsGroup = TransactionStatementsGroup(databaseConnection, enableSimpleSQLLog, mode)
         executiveEngine.addStatement(transactionStatementsGroup!!)
         return true
     }
 
     /**
-     * Ends the current transaction.
+     * Ends the transaction that the last [beginTransaction] began, so that the statements after it aren't in it. A
+     * transaction in another one only ends itself: its statements are the outer one's, and so are those after it,
+     * until the outer one ends.
      *
-     * The transaction will be committed or rolled back based on whether
-     * [endTransaction] was called.
+     * The statements run, and the transaction commits, or rolls back if one of them fails, once the scope ends.
      */
     public fun endTransaction() {
-        transactionStatementsGroup = null
+        if (transactionDepth > 0 && --transactionDepth == 0)
+            transactionStatementsGroup = null
     }
 
     /**
@@ -166,11 +189,43 @@ public class DatabaseScope internal constructor(
      * If the block completes successfully, the transaction is committed.
      * If an exception is thrown, the transaction is rolled back.
      *
+     * A transaction in another one joins it: its statements, and those after it, are the outer one's, which commits or
+     * rolls back all of them.
+     *
      * @param block The block of SQL statements to execute
      * @return The result of the block
      */
     public inline fun <T> transaction(block: DatabaseScope.() -> T): T {
         beginTransaction()
+        try {
+            return block()
+        } finally {
+            endTransaction()
+        }
+    }
+
+    /**
+     * Executes a block of SQL statements as a single transaction, which begins in [mode], as SQL's `BEGIN DEFERRED`,
+     * `BEGIN IMMEDIATE` or `BEGIN EXCLUSIVE` does, which decides when it takes the write lock. [transaction] without a
+     * mode begins IMMEDIATE.
+     *
+     * Example:
+     * ```kotlin
+     * transaction(TransactionMode.EXCLUSIVE) {
+     *     PersonTable INSERT person
+     * }
+     * ```
+     *
+     * A transaction in another one joins it, whose mode it keeps. Android's framework can't begin a DEFERRED transaction
+     * that writes, so there it begins an IMMEDIATE one.
+     *
+     * @param mode How the transaction begins
+     * @param block The block of SQL statements to execute
+     * @return The result of the block
+     */
+    @ExperimentalDSLDatabaseAPI
+    public inline fun <T> transaction(mode: TransactionMode, block: DatabaseScope.() -> T): T {
+        beginTransaction(mode)
         try {
             return block()
         } finally {
@@ -197,12 +252,7 @@ public class DatabaseScope internal constructor(
     private val currentContainer: StatementContainer
         get() = triggerBody ?: transactionStatementsGroup ?: executiveEngine
 
-    private fun <T> addSelectStatement(statement: SelectStatement<T>) {
-        if (unionSelectStatementGroupStack.isNotEmpty())
-            (unionSelectStatementGroupStack.last() as UnionSelectStatementGroup<T>).addSelectStatement(statement)
-        else
-            addStatement(statement)
-    }
+    private fun <T> addSelectStatement(statement: SelectStatement<T>) = addStatement(statement)
 
     internal fun executeAllStatements() {
         check(definingTrigger == null) {
@@ -222,6 +272,12 @@ public class DatabaseScope internal constructor(
      */
     internal val writtenTables: Set<String>
         get() = executiveEngine.writtenTables
+
+    /**
+     * The tables and views the SELECTs of this scope read.
+     */
+    internal val readTables: Set<String>
+        get() = executiveEngine.readTables
 
     // ========== INSERT Operations ==========
 
@@ -347,7 +403,7 @@ public class DatabaseScope internal constructor(
      */
     @StatementDslMaker
     public infix fun <T> Table<T>.INSERT_OR_REPLACE(entities: Iterable<T>) {
-        val statement = Insert.insertOrReplace(this, databaseConnection, entities)
+        val statement = Insert.insertOr("INSERT OR REPLACE INTO ", this, databaseConnection, entities)
         addStatement(statement)
     }
 
@@ -396,7 +452,7 @@ public class DatabaseScope internal constructor(
      */
     @StatementDslMaker
     public infix fun <T> Table<T>.INSERT_OR_IGNORE(entities: Iterable<T>) {
-        val statement = Insert.insertOrIgnore(this, databaseConnection, entities)
+        val statement = Insert.insertOr("INSERT OR IGNORE INTO ", this, databaseConnection, entities)
         addStatement(statement)
     }
 
@@ -566,6 +622,165 @@ public class DatabaseScope internal constructor(
     public infix fun <T> Table<T>.INSERT_OR_REPLACE(select: SelectStatement<T>): Unit =
         insert("INSERT OR REPLACE INTO ", select)
 
+    // ========== INSERT OR ABORT, OR FAIL and OR ROLLBACK ==========
+    //
+    // Like INSERT_OR_IGNORE and INSERT_OR_REPLACE, they write the primary key even when the database assigns it, so that
+    // a conflict on it is seen; a null key still lets the database assign one.
+
+    /**
+     * Inserts [entities], and fails the statement on a conflict with a constraint, undoing what it changed, as SQL's `INSERT OR ABORT` does:
+     * what a plain [INSERT] does, but in place of the conflict clause of a constraint, such as
+     * `@Unique(onConflict = OnConflict.IGNORE)`.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ABORT(entities: Iterable<T>): Unit =
+        addStatement(Insert.insertOr("INSERT OR ABORT INTO ", this, databaseConnection, entities))
+
+    /**
+     * Inserts [entity], and fails on a conflict, undoing the statement, as `INSERT_OR_ABORT(listOf(entity))` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ABORT(entity: T): Unit = INSERT_OR_ABORT(listOf(entity))
+
+    /**
+     * Inserts a row of expressions, and fails on a conflict, undoing the statement, as SQL's `INSERT OR ABORT` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("insertOrAbortExpressions")
+    public infix fun <T> Table<T>.INSERT_OR_ABORT(values: Iterable<ResultColumn<T>>): Unit =
+        addStatement(Insert.insert("INSERT OR ABORT INTO ", this, databaseConnection, values))
+
+    /**
+     * Inserts a row of a single expression, and fails on a conflict, undoing the statement.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ABORT(value: ResultColumn<T>): Unit = INSERT_OR_ABORT(listOf(value))
+
+    /**
+     * Inserts a row of the default values of all columns, and fails on a conflict, undoing the statement, as SQL's
+     * `INSERT OR ABORT INTO table DEFAULT VALUES` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ABORT(defaultValues: DefaultValues): Unit =
+        addStatement(Insert.insertDefaultValues("INSERT OR ABORT INTO ", this, databaseConnection))
+
+    /**
+     * Inserts the rows [select] returns, and fails on a conflict, undoing the statement, as SQL's `INSERT OR ABORT INTO table SELECT ...` does.
+     *
+     * @see INSERT
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ABORT(select: SelectStatement<T>): Unit =
+        insert("INSERT OR ABORT INTO ", select)
+
+    /**
+     * Inserts [entities], and fails the statement on a conflict with a constraint, keeping the rows it inserted before the one that
+     * conflicts, as SQL's `INSERT OR FAIL` does, in place of the conflict clause of the constraint.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_FAIL(entities: Iterable<T>): Unit =
+        addStatement(Insert.insertOr("INSERT OR FAIL INTO ", this, databaseConnection, entities))
+
+    /**
+     * Inserts [entity], and fails on a conflict, keeping the rows inserted before, as `INSERT_OR_FAIL(listOf(entity))` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_FAIL(entity: T): Unit = INSERT_OR_FAIL(listOf(entity))
+
+    /**
+     * Inserts a row of expressions, and fails on a conflict, keeping the rows inserted before, as SQL's `INSERT OR FAIL` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("insertOrFailExpressions")
+    public infix fun <T> Table<T>.INSERT_OR_FAIL(values: Iterable<ResultColumn<T>>): Unit =
+        addStatement(Insert.insert("INSERT OR FAIL INTO ", this, databaseConnection, values))
+
+    /**
+     * Inserts a row of a single expression, and fails on a conflict, keeping the rows inserted before.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_FAIL(value: ResultColumn<T>): Unit = INSERT_OR_FAIL(listOf(value))
+
+    /**
+     * Inserts a row of the default values of all columns, and fails on a conflict, keeping the rows inserted before, as SQL's
+     * `INSERT OR FAIL INTO table DEFAULT VALUES` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_FAIL(defaultValues: DefaultValues): Unit =
+        addStatement(Insert.insertDefaultValues("INSERT OR FAIL INTO ", this, databaseConnection))
+
+    /**
+     * Inserts the rows [select] returns, and fails on a conflict, keeping the rows inserted before, as SQL's `INSERT OR FAIL INTO table SELECT ...` does.
+     *
+     * @see INSERT
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_FAIL(select: SelectStatement<T>): Unit =
+        insert("INSERT OR FAIL INTO ", select)
+
+    /**
+     * Inserts [entities], and rolls back the transaction it runs in on a conflict with a constraint, as SQL's `INSERT OR ROLLBACK` does,
+     * in place of the conflict clause of the constraint; outside a transaction, it fails as [INSERT_OR_ABORT] does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ROLLBACK(entities: Iterable<T>): Unit =
+        addStatement(Insert.insertOr("INSERT OR ROLLBACK INTO ", this, databaseConnection, entities))
+
+    /**
+     * Inserts [entity], and rolls back the transaction on a conflict, as `INSERT_OR_ROLLBACK(listOf(entity))` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ROLLBACK(entity: T): Unit = INSERT_OR_ROLLBACK(listOf(entity))
+
+    /**
+     * Inserts a row of expressions, and rolls back the transaction on a conflict, as SQL's `INSERT OR ROLLBACK` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    @JvmName("insertOrRollbackExpressions")
+    public infix fun <T> Table<T>.INSERT_OR_ROLLBACK(values: Iterable<ResultColumn<T>>): Unit =
+        addStatement(Insert.insert("INSERT OR ROLLBACK INTO ", this, databaseConnection, values))
+
+    /**
+     * Inserts a row of a single expression, and rolls back the transaction on a conflict.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ROLLBACK(value: ResultColumn<T>): Unit = INSERT_OR_ROLLBACK(listOf(value))
+
+    /**
+     * Inserts a row of the default values of all columns, and rolls back the transaction on a conflict, as SQL's
+     * `INSERT OR ROLLBACK INTO table DEFAULT VALUES` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ROLLBACK(defaultValues: DefaultValues): Unit =
+        addStatement(Insert.insertDefaultValues("INSERT OR ROLLBACK INTO ", this, databaseConnection))
+
+    /**
+     * Inserts the rows [select] returns, and rolls back the transaction on a conflict, as SQL's `INSERT OR ROLLBACK INTO table SELECT ...` does.
+     *
+     * @see INSERT
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.INSERT_OR_ROLLBACK(select: SelectStatement<T>): Unit =
+        insert("INSERT OR ROLLBACK INTO ", select)
+
     private fun <T> Table<T>.insert(insert: String, select: SelectStatement<T>) {
         select.checkComplete()
         select.container removeStatement select
@@ -578,46 +793,163 @@ public class DatabaseScope internal constructor(
     /**
      * Updates records in the table with SET clause.
      *
-     * Can be followed by WHERE to target specific records.
+     * Can be followed by WHERE to target specific records, and by ORDER BY and LIMIT, to update the first of them in
+     * an order.
      *
      * Example:
      * ```kotlin
      * PersonTable UPDATE SET { name = "Alice" } WHERE (age GTE 18)
+     * PersonTable UPDATE SET { name = "Alice" } WHERE (age GTE 18) ORDER_BY (age to ASC) LIMIT 1
      * ```
      */
     @StatementDslMaker
     public infix fun <T> Table<T>.UPDATE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
         Update.update(this, databaseConnection, currentContainer, clause).also { addStatement(it) }
 
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE] does, and fails the statement on a conflict with a constraint, undoing what it changed: what a plain [UPDATE] does, but in
+     * place of the conflict clause of a constraint, such as `@Unique(onConflict = OnConflict.IGNORE)`, as SQL's `UPDATE OR ABORT` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.UPDATE_OR_ABORT(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(this, databaseConnection, currentContainer, clause, "UPDATE OR ABORT ").also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE] does, and fails the statement on a conflict with a constraint, keeping the rows it updated before the one that conflicts, as SQL's `UPDATE OR FAIL` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.UPDATE_OR_FAIL(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(this, databaseConnection, currentContainer, clause, "UPDATE OR FAIL ").also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE] does, and leaves each row whose new values would conflict with a constraint as it was, and goes on, as SQL's `UPDATE OR IGNORE` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.UPDATE_OR_IGNORE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(this, databaseConnection, currentContainer, clause, "UPDATE OR IGNORE ").also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE] does, and deletes the rows that a row's new values conflict with on a PRIMARY KEY or UNIQUE constraint, writes the
+     * default value of a NOT NULL column it would set to NULL, and fails on a CHECK constraint, as SQL's `UPDATE OR REPLACE` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.UPDATE_OR_REPLACE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(this, databaseConnection, currentContainer, clause, "UPDATE OR REPLACE ").also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE] does, and rolls back the transaction it runs in on a conflict with a constraint, and outside a transaction fails as
+     * [UPDATE_OR_ABORT] does, as SQL's `UPDATE OR ROLLBACK` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> Table<T>.UPDATE_OR_ROLLBACK(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(this, databaseConnection, currentContainer, clause, "UPDATE OR ROLLBACK ").also { addStatement(it) }
+
     // ========== DELETE Operations ==========
 
     /**
-     * Deletes all records from the table.
+     * Deletes all records from the table, or the first in an order, which ORDER BY and LIMIT that follow choose.
      *
      * Example:
      * ```kotlin
      * PersonTable DELETE X
+     * PersonTable DELETE X ORDER_BY (PersonTable.age to ASC) LIMIT 10
      * ```
      */
     @StatementDslMaker
-    public infix fun Table<*>.DELETE(x: X) {
-        val statement = Delete.deleteAllEntities(this, databaseConnection)
-        addStatement(statement)
-    }
+    public infix fun <T> Table<T>.DELETE(x: X): WhereUpdateDeleteStatement<T> =
+        Delete.deleteAllEntities(this, databaseConnection, currentContainer).also { addStatement(it) }
 
     /**
-     * Deletes records matching the WHERE clause.
+     * Deletes records matching the WHERE clause, or the first of them in an order, which ORDER BY and LIMIT that follow
+     * choose.
      *
      * Example:
      * ```kotlin
      * PersonTable DELETE WHERE(age LT 18)
+     * PersonTable DELETE WHERE(age LT 18) ORDER_BY (age to ASC) LIMIT 10
      * ```
      */
     @StatementDslMaker
-    public infix fun <T> Table<T>.DELETE(clause: WhereClause<T>) {
-        val statement = Delete.delete(this, databaseConnection, clause)
-        addStatement(statement)
-    }
+    public infix fun <T> Table<T>.DELETE(clause: WhereClause<T>): WhereUpdateDeleteStatement<T> =
+        Delete.delete(this, databaseConnection, currentContainer, clause).also { addStatement(it) }
+
+    // ========== UPDATE and DELETE of a table with INDEXED BY or NOT INDEXED ==========
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE] does, looking them up as `INDEXED BY` or
+     * `NOT INDEXED` says, as SQL's `UPDATE table INDEXED BY index` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> IndexedTable<T>.UPDATE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(table, databaseConnection, currentContainer, clause, target = fromSQL).also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE_OR_ABORT] does, looking them up as `INDEXED BY` or
+     * `NOT INDEXED` says.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> IndexedTable<T>.UPDATE_OR_ABORT(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(table, databaseConnection, currentContainer, clause, "UPDATE OR ABORT ", fromSQL).also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE_OR_FAIL] does, looking them up as `INDEXED BY` or
+     * `NOT INDEXED` says.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> IndexedTable<T>.UPDATE_OR_FAIL(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(table, databaseConnection, currentContainer, clause, "UPDATE OR FAIL ", fromSQL).also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE_OR_IGNORE] does, looking them up as `INDEXED BY` or
+     * `NOT INDEXED` says.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> IndexedTable<T>.UPDATE_OR_IGNORE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(table, databaseConnection, currentContainer, clause, "UPDATE OR IGNORE ", fromSQL).also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE_OR_REPLACE] does, looking them up as `INDEXED BY` or
+     * `NOT INDEXED` says.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> IndexedTable<T>.UPDATE_OR_REPLACE(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(table, databaseConnection, currentContainer, clause, "UPDATE OR REPLACE ", fromSQL).also { addStatement(it) }
+
+    /**
+     * Updates the rows that WHERE selects with [clause], as [UPDATE_OR_ROLLBACK] does, looking them up as `INDEXED BY` or
+     * `NOT INDEXED` says.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> IndexedTable<T>.UPDATE_OR_ROLLBACK(clause: SetClause<T>): UpdateStatementWithoutWhereClause<T> =
+        Update.update(table, databaseConnection, currentContainer, clause, "UPDATE OR ROLLBACK ", fromSQL).also { addStatement(it) }
+
+    /**
+     * Deletes all rows of the table, looking them up as `INDEXED BY` or `NOT INDEXED` says.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> IndexedTable<T>.DELETE(x: X): WhereUpdateDeleteStatement<T> =
+        Delete.deleteAllEntities(table, databaseConnection, currentContainer, fromSQL).also { addStatement(it) }
+
+    /**
+     * Deletes the rows that [clause] selects, looking them up as `INDEXED BY` or `NOT INDEXED` says, as SQL's
+     * `DELETE FROM table INDEXED BY index WHERE ...` does.
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <T> IndexedTable<T>.DELETE(clause: WhereClause<T>): WhereUpdateDeleteStatement<T> =
+        Delete.delete(table, databaseConnection, currentContainer, clause, fromSQL).also { addStatement(it) }
 
     // ========== SELECT Operations ==========
 
@@ -641,7 +973,7 @@ public class DatabaseScope internal constructor(
         select(kSerializer(), true)
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, isDistinct: Boolean): FinalSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(From.of(this), isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -666,7 +998,7 @@ public class DatabaseScope internal constructor(
         select(kSerializer(), clause, true)
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: WhereClause<R>, isDistinct: Boolean): WhereSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -689,7 +1021,7 @@ public class DatabaseScope internal constructor(
         select(kSerializer(), clause, true)
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: OrderByClause<R>, isDistinct: Boolean): OrderBySelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -712,7 +1044,7 @@ public class DatabaseScope internal constructor(
         select(kSerializer(), clause, true)
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: LimitClause<R>, isDistinct: Boolean): LimitSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -735,7 +1067,7 @@ public class DatabaseScope internal constructor(
         select(kSerializer(), clause, true)
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: GroupByClause<R>, isDistinct: Boolean): GroupBySelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(From.of(this), clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -964,7 +1296,7 @@ public class DatabaseScope internal constructor(
         select(getKSerializer<R>(), columns, true)
 
     public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, columns: Iterable<ResultColumn<R>>, isDistinct: Boolean): ResultColumnSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(From.of(this), columns, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -1035,7 +1367,7 @@ public class DatabaseScope internal constructor(
         select.checkComplete()
         container removeStatement this
         select.container removeStatement select
-        val statement = Select.compound(this, operator, select, getSelectStatementGroup())
+        val statement = Select.compound(this, operator, select, currentContainer)
         addSelectStatement(statement)
         return statement
     }
@@ -1076,7 +1408,7 @@ public class DatabaseScope internal constructor(
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public infix fun <R> SelectStatement<R>.AS(view: View<R>): Relation<R> {
-        takeAsSubquery()
+        takeOut()
         return DerivedTable(view, this)
     }
 
@@ -1122,6 +1454,25 @@ public class DatabaseScope internal constructor(
         subqueryIn(this, select, "BLOBs") { it.serialName.removeSuffix("?") == BYTE_ARRAY_TYPE }
 
     /**
+     * Whether this value is among the values the single column of [select] returns: `column IN (SELECT ...)`. The
+     * column has to hold the values of the same serializer as this one, so that they compare as stored, as a column of
+     * the same type, with the same serializer, of another table does.
+     *
+     * @throws IllegalArgumentException if [select] doesn't return one column of the values of this serializer, or is
+     * incomplete
+     * @see IN
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <V : Any> ClauseConverted<V>.IN(select: SelectStatement<*>): SelectCondition {
+        val name = serializer.descriptor.serialName.removeSuffix("?")
+        return subqueryIn(this, select, "the values of the serializer of '$name'") {
+            it.serialName.removeSuffix("?") == name && it.kind == serializer.descriptor.kind
+        }
+    }
+
+    /**
      * Whether [select] returns any row: `EXISTS (SELECT ...)`.
      *
      * The SELECT can refer to the columns of the query it is in, as columns are written with their tables' names,
@@ -1138,13 +1489,10 @@ public class DatabaseScope internal constructor(
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public fun EXISTS(select: SelectStatement<*>): SelectCondition {
-        select.takeAsSubquery()
+        select.takeOut()
         return SelectCondition("EXISTS (${select.sqlStr})", select.parameters?.toMutableList(), select.tables)
     }
 
-    /**
-     * Takes this SELECT out of the statements the scope runs, as it becomes a subquery of another one.
-     */
     // A SELECT of a single column can also be a value, a scalar subquery: `select[R::property]` names the column, so
     // that the value has the property's type.
 
@@ -1209,11 +1557,49 @@ public class DatabaseScope internal constructor(
         require(descriptor.elementsCount == 1 && descriptor.getElementName(0) == property.name) {
             "A SELECT of '${descriptor.serialName}' can't be the value '${property.name}': a scalar subquery returns a single column, so its result type has to have that property only."
         }
-        select.takeAsSubquery()
+        select.takeOut()
         return element("(${inlineParameters(select.sqlStr, select.parameters)})", select.tables)
     }
 
-    private fun SelectStatement<*>.takeAsSubquery() {
+    /**
+     * Takes [select] out of the statements the scope runs, and runs in its place the SELECT of its rows from [offset] on,
+     * at most [limit] of them, `SELECT * FROM (select) LIMIT limit OFFSET offset`, and, if [countRows], the count of all
+     * of them, `SELECT count(*) FROM (select)`, which a PagingSource of sqllin-dsl-paging loads a page with, as Room's
+     * does. As a subquery, [select] can be any SELECT, with its own ORDER BY, LIMIT or compound operators, and SQLite
+     * returns its rows in the order of its ORDER BY; the rows keep its columns, which they are decoded by, and its tables,
+     * which [Database.versioned] tracks.
+     *
+     * @return The SELECT of the page, and the count of the rows, if [countRows]
+     */
+    internal fun <T> page(select: SelectStatement<T>, offset: Int, limit: Int, countRows: Boolean): Pair<SelectStatement<T>, RowCountStatement?> {
+        select.takeOut()
+        val count = if (countRows) {
+            RowCountStatement("SELECT count(*) FROM (${select.sqlStr})", databaseConnection, select.parameters?.toMutableList())
+                .also { addStatement(it) }
+        } else {
+            null
+        }
+        val page = FinalSelectStatement(
+            sqlStr = "SELECT * FROM (${select.sqlStr}) LIMIT $limit OFFSET $offset",
+            deserializer = select.deserializer,
+            connection = databaseConnection,
+            container = currentContainer,
+            parameters = select.parameters?.toMutableList(),
+            ungroupedError = null,
+            tables = select.tables,
+            isSimple = false,
+        )
+        addStatement(page)
+        return page to count
+    }
+
+    /**
+     * Takes this SELECT out of the statements the scope runs, as it becomes part of another one: a subquery, or the
+     * SELECT that `EXPLAIN QUERY PLAN` plans.
+     *
+     * @throws IllegalArgumentException if this SELECT is incomplete, as an aggregate query that needs GROUP BY
+     */
+    private fun SelectStatement<*>.takeOut() {
         checkComplete()
         container removeStatement this
     }
@@ -1233,7 +1619,7 @@ public class DatabaseScope internal constructor(
         require(holds(column)) {
             "$prefix: its column '${descriptor.getElementName(0)}' holds ${column.serialName.removeSuffix("?")}, while '${element.valueName}' holds $values."
         }
-        select.takeAsSubquery()
+        select.takeOut()
         val sql = buildString {
             element.appendSQL(this)
             append(" IN (")
@@ -1250,91 +1636,6 @@ public class DatabaseScope internal constructor(
         )
         val TEXT_TYPES = setOf("kotlin.String", "kotlin.Char")
         const val BYTE_ARRAY_TYPE = "kotlin.ByteArray"
-    }
-
-    // ========== UNION Operations (deprecated) ==========
-
-    private val unionSelectStatementGroupStack by lazy { ArrayDeque<UnionSelectStatementGroup<*>>() }
-
-    private fun getSelectStatementGroup(): StatementContainer = unionSelectStatementGroupStack.lastOrNull() ?: currentContainer
-
-    /**
-     * Combines multiple SELECT statements with UNION (removes duplicates).
-     *
-     * Example:
-     * ```kotlin
-     * val combined = PersonTable.UNION {
-     *     it SELECT WHERE(age LT 18)
-     *     it SELECT WHERE(age GTE 65)
-     * }
-     * ```
-     *
-     * **Deprecated**: the result is typed by the table's row type, but read into the first SELECT's result type, so
-     * a union of projections, result columns or joins fails with a `ClassCastException` when its results are used.
-     * A nested block is flattened into the SQL, which SQLite evaluates from left to right, so it changes its meaning
-     * when it isn't the first statement. Use the infix [UNION] instead: `(select1) UNION (select2)`.
-     */
-    @Deprecated("The UNION {} block reads the rows into its first SELECT's result type while returning the table's row type, so a union of projections, result columns or joins fails with a ClassCastException when its results are used, and a nested block is flattened into the SQL, which changes its meaning. " +
-            "Use the infix operators instead, as in (select1) UNION (select2), which also offer INTERSECT and EXCEPT. This block will be removed in a future version.")
-    @Suppress("DEPRECATION") // Its body calls the plumbing deprecated with it
-    public inline fun <T> Table<T>.UNION(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
-        beginUnion<T>()
-        var selectStatement: SelectStatement<T>? = null
-        try {
-            block(this)
-            selectStatement = createUnionSelectStatement(false)
-            return selectStatement
-        } finally {
-            endUnion(selectStatement)
-        }
-    }
-
-    /**
-     * Combines multiple SELECT statements with UNION ALL (keeps duplicates).
-     *
-     * **Deprecated** for the reasons given for the `UNION {}` block. Use the infix [UNION_ALL] instead:
-     * `(select1) UNION_ALL (select2)`.
-     */
-    @Deprecated("The UNION {} block reads the rows into its first SELECT's result type while returning the table's row type, so a union of projections, result columns or joins fails with a ClassCastException when its results are used, and a nested block is flattened into the SQL, which changes its meaning. " +
-            "Use the infix operators instead, as in (select1) UNION (select2), which also offer INTERSECT and EXCEPT. This block will be removed in a future version.")
-    @Suppress("DEPRECATION") // Its body calls the plumbing deprecated with it
-    @StatementDslMaker
-    public inline fun <T> Table<T>.UNION_ALL(block: Table<T>.(Table<T>) -> Unit): FinalSelectStatement<T> {
-        beginUnion<T>()
-        var selectStatement: SelectStatement<T>? = null
-        try {
-            block(this)
-            selectStatement = createUnionSelectStatement(true)
-            return selectStatement
-        } finally {
-            endUnion(selectStatement)
-        }
-    }
-
-    /**
-     * Begins a UNION statement group (for advanced usage).
-     */
-    @Deprecated("Part of the deprecated UNION {} block, which will be removed in a future version. Use the infix UNION instead.")
-    public fun <T> beginUnion() {
-        unionSelectStatementGroupStack.add(UnionSelectStatementGroup<T>())
-    }
-
-    /**
-     * Creates the final UNION select statement from accumulated SELECT statements.
-     */
-    @Deprecated("Part of the deprecated UNION {} block, which will be removed in a future version. Use the infix UNION instead.")
-    public fun <T> createUnionSelectStatement(isUnionAll: Boolean): FinalSelectStatement<T> {
-        check(unionSelectStatementGroupStack.isNotEmpty()) { "Please invoke the 'beginUnion' before you invoke this function!!!" }
-        return (unionSelectStatementGroupStack.last() as UnionSelectStatementGroup<T>).unionStatements(isUnionAll)
-    }
-
-    /**
-     * Ends the UNION statement group and adds the final statement.
-     */
-    @Deprecated("Part of the deprecated UNION {} block, which will be removed in a future version. Use the infix UNION instead.")
-    public fun <T> endUnion(selectStatement: SelectStatement<T>?) {
-        unionSelectStatementGroupStack.removeLast()
-        selectStatement?.let { addSelectStatement(it) }
     }
 
     // ========== SELECT from Joins ==========
@@ -1505,7 +1806,7 @@ public class DatabaseScope internal constructor(
 
     @ExperimentalDSLDatabaseAPI
     public fun <R> JoinedRelation.select(serializer: KSerializer<R>, isDistinct: Boolean): FinalSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(from, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -1513,7 +1814,7 @@ public class DatabaseScope internal constructor(
 
     @ExperimentalDSLDatabaseAPI
     public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: WhereClause<R>, isDistinct: Boolean): WhereSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -1521,7 +1822,7 @@ public class DatabaseScope internal constructor(
 
     @ExperimentalDSLDatabaseAPI
     public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: OrderByClause<R>, isDistinct: Boolean): OrderBySelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -1529,7 +1830,7 @@ public class DatabaseScope internal constructor(
 
     @ExperimentalDSLDatabaseAPI
     public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: LimitClause<R>, isDistinct: Boolean): LimitSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -1537,7 +1838,7 @@ public class DatabaseScope internal constructor(
 
     @ExperimentalDSLDatabaseAPI
     public fun <R> JoinedRelation.select(serializer: KSerializer<R>, clause: GroupByClause<R>, isDistinct: Boolean): GroupBySelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(from, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
@@ -1545,80 +1846,8 @@ public class DatabaseScope internal constructor(
 
     @ExperimentalDSLDatabaseAPI
     public fun <R> JoinedRelation.select(serializer: KSerializer<R>, columns: Iterable<ResultColumn<R>>, isDistinct: Boolean): ResultColumnSelectStatement<R> {
-        val container = getSelectStatementGroup()
+        val container = currentContainer
         val statement = Select.select(from, columns, isDistinct, serializer, databaseConnection, container)
-        addSelectStatement(statement)
-        return statement
-    }
-
-    // ========== JOIN Operations ==========
-
-    /**
-     * Selects with JOIN clause (requires ON condition).
-     *
-     * Example:
-     * ```kotlin
-     * val joined = PersonTable SELECT INNER_JOIN(AddressTable) ON ...
-     * ```
-     *
-     * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
-     * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
-     * against the joined relations, and can join more than two. See
-     * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
-     */
-    @StatementDslMaker
-    public inline infix fun <T, reified R> Relation<T>.SELECT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
-        select(getKSerializer(), clause, false)
-
-    /**
-     * Selects distinct rows with a JOIN clause, which ON or USING completes.
-     *
-     * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
-     * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
-     * against the joined relations, and can join more than two. See
-     * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
-     */
-    @StatementDslMaker
-    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: JoinClause<R>): JoinStatementWithoutCondition<R> =
-        select(getKSerializer(), clause, true)
-
-    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: JoinClause<R>, isDistinct: Boolean): JoinStatementWithoutCondition<R> {
-        val container = getSelectStatementGroup()
-        return Select.select(this, clause, isDistinct, serializer, databaseConnection, container, ::addSelectStatement)
-    }
-
-    /**
-     * Selects with NATURAL JOIN (joins on columns with same names).
-     *
-     * Example:
-     * ```kotlin
-     * val joined = PersonTable SELECT NATURAL_INNER_JOIN(AddressTable)
-     * ```
-     *
-     * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
-     * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
-     * against the joined relations, and can join more than two. See
-     * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
-     */
-    @StatementDslMaker
-    public inline infix fun <T, reified R> Relation<T>.SELECT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
-        select(getKSerializer(), clause, false)
-
-    /**
-     * Selects distinct rows with a NATURAL or CROSS JOIN clause.
-     *
-     * **To be removed in the next version after 2.5.0**: this join API is replaced by joins of relations, such as
-     * `(FROM(PersonTable) INNER_JOIN BookTable ON (...)) SELECT X<R>()`, which check the type their rows are read into
-     * against the joined relations, and can join more than two. See
-     * [JoinedRelation][com.ctrip.sqllin.dsl.sql.clause.JoinedRelation].
-     */
-    @StatementDslMaker
-    public inline infix fun <T, reified R> Relation<T>.SELECT_DISTINCT(clause: NaturalJoinClause<R>): JoinSelectStatement<R> =
-        select(getKSerializer(), clause, true)
-
-    public fun <T, R> Relation<T>.select(serializer: KSerializer<R>, clause: NaturalJoinClause<R>, isDistinct: Boolean): JoinSelectStatement<R> {
-        val container = getSelectStatementGroup()
-        val statement = Select.select(this, clause, isDistinct, serializer, databaseConnection, container)
         addSelectStatement(statement)
         return statement
     }
@@ -1678,8 +1907,9 @@ public class DatabaseScope internal constructor(
      * and DELETE operations.
      *
      * A function of the table's columns makes an expression index, which the queries comparing the same expression
-     * use, as `lower(email)` for case-insensitive lookups. `WHERE` after it makes a partial index of the rows that
-     * satisfy a condition.
+     * use, as `lower(email)` for case-insensitive lookups. The COLLATE operator gives a column of the index another
+     * collation than the column's, as `email COLLATE NOCASE`, which the queries comparing `(email COLLATE NOCASE)`
+     * use. `WHERE` after it makes a partial index of the rows that satisfy a condition.
      *
      * Example:
      * ```kotlin
@@ -1687,6 +1917,7 @@ public class DatabaseScope internal constructor(
      *     UserTable.CREATE_INDEX("idx_user_email", UserTable.email)
      *     UserTable.CREATE_INDEX("idx_user_name_age", UserTable.name, UserTable.age)
      *     UserTable.CREATE_INDEX("idx_user_lower_email", UserTable.lower(UserTable.email))
+     *     UserTable.CREATE_INDEX("idx_user_email_nocase", UserTable.email COLLATE NOCASE)
      * }
      * ```
      *
@@ -2191,6 +2422,605 @@ public class DatabaseScope internal constructor(
         addStatement(PRAGMA.optimize(databaseConnection))
     }
 
+    // ========== EXPLAIN QUERY PLAN ==========
+
+    /**
+     * Tells how SQLite would run [select], as the SQL `EXPLAIN QUERY PLAN` does, without running it: which tables it
+     * scans, which indexes it searches, and where it sorts the rows with a temporary B-tree. The plan is read, as the
+     * results of a SELECT are, once the scope has run.
+     *
+     * Example:
+     * ```kotlin
+     * val plan = database {
+     *     EXPLAIN_QUERY_PLAN(BookTable SELECT WHERE(BookTable.author EQ "Dan Brown") ORDER_BY (BookTable.price to ASC))
+     * }.getResults()
+     * println(plan)
+     * // QUERY PLAN
+     * // |--SEARCH book USING INDEX idx_book_author (author=?)
+     * // `--USE TEMP B-TREE FOR ORDER BY
+     * check(plan.details.any { "idx_book_author" in it })
+     * ```
+     *
+     * [select] can be any SELECT, with joins, subqueries or compound operators. It becomes part of the statement, so
+     * it no longer runs on its own, and it is planned with its parameters, as it would run. The plan depends on the
+     * indexes, and on the statistics that [ANALYZE] and [PRAGMA_OPTIMIZE] gather. Its details are SQLite's text, which
+     * differs between SQLite versions, as [QueryPlan] describes. A trigger can't run it.
+     *
+     * @return The statement, whose `getResults()` returns the plan once the scope has run
+     * @throws IllegalArgumentException if [select] is incomplete, as an aggregate query that needs GROUP BY
+     * @see QueryPlan
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun EXPLAIN_QUERY_PLAN(select: SelectStatement<*>): QueryPlanStatement {
+        select.takeOut()
+        val statement = QueryPlanStatement("EXPLAIN QUERY PLAN ${select.sqlStr}", databaseConnection, select.parameters?.toMutableList())
+        addStatement(statement)
+        return statement
+    }
+
+    // ========== PRAGMAs that check the database, read its schema and its file, or set how statements run ==========
+    //
+    // A PRAGMA that reads returns a PragmaStatement, whose getResults() returns what it read once the scope has run, as
+    // the results of a SELECT are read. Their types are in com.ctrip.sqllin.dsl.sql.pragma. A trigger can't run them.
+    // A PRAGMA that only newer versions of SQLite have fails with an IllegalStateException where the SQLite lacks it,
+    // which ignores it rather than failing, as its rows have no columns then.
+
+    /**
+     * Whether the database enforces foreign keys, as the SQL `PRAGMA foreign_keys` tells, which
+     * `PRAGMA_FOREIGN_KEYS(flag)` sets.
+     *
+     * @return The statement, whose `getResults()` returns whether it does once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FOREIGN_KEYS(): PragmaStatement<Boolean> = pragma(PRAGMA.isForeignKeysEnabled(databaseConnection))
+
+    /**
+     * Checks the whole database, as the SQL `PRAGMA integrity_check(N)` does: that its pages, rows and indexes are
+     * well-formed and agree with each other, and that the rows satisfy their NOT NULL and CHECK constraints, but not
+     * their foreign keys, which [PRAGMA_FOREIGN_KEY_CHECK] checks.
+     *
+     * Example:
+     * ```kotlin
+     * val problems = database { PRAGMA_INTEGRITY_CHECK() }.getResults()
+     * if (problems.isNotEmpty()) {
+     *     // The database is corrupt
+     * }
+     * ```
+     *
+     * It reads the whole database, so it takes long for a large one, which [PRAGMA_QUICK_CHECK] takes less long for.
+     *
+     * @param maxErrors How many problems to report at most
+     * @return The statement, whose `getResults()` returns the problems, in SQLite's words, or an empty list if there
+     * are none, once the scope has run
+     * @throws IllegalArgumentException if [maxErrors] isn't positive
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_INTEGRITY_CHECK(maxErrors: Int = 100): PragmaStatement<List<String>> {
+        require(maxErrors > 0) { "PRAGMA integrity_check needs a positive number of errors, rather than $maxErrors." }
+        return pragma(PRAGMA.check("integrity_check", maxErrors, databaseConnection))
+    }
+
+    /**
+     * Checks the whole database as [PRAGMA_INTEGRITY_CHECK] does, as the SQL `PRAGMA quick_check(N)` does, except that
+     * the indexes hold the rows of their tables, and that the rows satisfy their UNIQUE constraints, so that it takes
+     * time in proportion to the size of the database, rather than more.
+     *
+     * @param maxErrors How many problems to report at most
+     * @return The statement, whose `getResults()` returns the problems, in SQLite's words, or an empty list if there
+     * are none, once the scope has run
+     * @throws IllegalArgumentException if [maxErrors] isn't positive
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_QUICK_CHECK(maxErrors: Int = 100): PragmaStatement<List<String>> {
+        require(maxErrors > 0) { "PRAGMA quick_check needs a positive number of errors, rather than $maxErrors." }
+        return pragma(PRAGMA.check("quick_check", maxErrors, databaseConnection))
+    }
+
+    /**
+     * Checks [table] and its indexes as [PRAGMA_INTEGRITY_CHECK] checks the whole database, as the SQL
+     * `PRAGMA integrity_check(table)` does, reporting up to 100 problems.
+     *
+     * It needs SQLite 3.33.0, which Android has from API 34 on: an older SQLite takes the name of the table for a number
+     * of errors, which it ignores, so that it checks the whole database instead.
+     *
+     * @return The statement, whose `getResults()` returns the problems, in SQLite's words, or an empty list if there
+     * are none, once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_INTEGRITY_CHECK(table: Table<*>): PragmaStatement<List<String>> =
+        pragma(PRAGMA.check("integrity_check", table.tableName, databaseConnection))
+
+    /**
+     * Checks the table named [table] and its indexes, as the SQL `PRAGMA integrity_check(table)` does.
+     *
+     * @see PRAGMA_INTEGRITY_CHECK
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_INTEGRITY_CHECK(table: String): PragmaStatement<List<String>> =
+        pragma(PRAGMA.check("integrity_check", table, databaseConnection))
+
+    /**
+     * Checks [table] and its indexes as [PRAGMA_QUICK_CHECK] checks the whole database, as the SQL
+     * `PRAGMA quick_check(table)` does, reporting up to 100 problems.
+     *
+     * It needs SQLite 3.33.0, which Android has from API 34 on: an older SQLite takes the name of the table for a number
+     * of errors, which it ignores, so that it checks the whole database instead.
+     *
+     * @return The statement, whose `getResults()` returns the problems, in SQLite's words, or an empty list if there
+     * are none, once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_QUICK_CHECK(table: Table<*>): PragmaStatement<List<String>> =
+        pragma(PRAGMA.check("quick_check", table.tableName, databaseConnection))
+
+    /**
+     * Checks the table named [table] and its indexes, as the SQL `PRAGMA quick_check(table)` does.
+     *
+     * @see PRAGMA_QUICK_CHECK
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_QUICK_CHECK(table: String): PragmaStatement<List<String>> =
+        pragma(PRAGMA.check("quick_check", table, databaseConnection))
+
+    /**
+     * Finds the rows of all tables that violate their foreign keys, as the SQL `PRAGMA foreign_key_check` does, such as
+     * after a migration that turned foreign keys off with `PRAGMA_FOREIGN_KEYS(false)`. It checks them whether or not
+     * the database enforces them.
+     *
+     * @return The statement, whose `getResults()` returns the violations, or an empty list if there are none, once the
+     * scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FOREIGN_KEY_CHECK(): PragmaStatement<List<ForeignKeyViolation>> =
+        pragma(PRAGMA.foreignKeyCheck(null, databaseConnection))
+
+    /**
+     * Finds the rows of [table] that violate its foreign keys, as the SQL `PRAGMA foreign_key_check(table)` does.
+     *
+     * @see PRAGMA_FOREIGN_KEY_CHECK
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FOREIGN_KEY_CHECK(table: Table<*>): PragmaStatement<List<ForeignKeyViolation>> =
+        pragma(PRAGMA.foreignKeyCheck(table.tableName, databaseConnection))
+
+    /**
+     * Finds the rows of the table named [table] that violate its foreign keys, as the SQL
+     * `PRAGMA foreign_key_check(table)` does.
+     *
+     * @see PRAGMA_FOREIGN_KEY_CHECK
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FOREIGN_KEY_CHECK(table: String): PragmaStatement<List<ForeignKeyViolation>> =
+        pragma(PRAGMA.foreignKeyCheck(table, databaseConnection))
+
+    /**
+     * The columns of [table] in the database, as the SQL `PRAGMA table_info(table)` tells, such as to check in a
+     * migration whether a column exists. It doesn't list the hidden and generated columns. A table that doesn't exist
+     * has no columns.
+     *
+     * Example:
+     * ```kotlin
+     * val columns = database { PRAGMA_TABLE_INFO(PersonTable) }.getResults()
+     * val hasEmail = columns.any { it.name == "email" }
+     * ```
+     *
+     * @return The statement, whose `getResults()` returns the columns, in the order of the table, once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_TABLE_INFO(table: Table<*>): PragmaStatement<List<ColumnInfo>> =
+        pragma(PRAGMA.tableInfo(table.tableName, databaseConnection))
+
+    /**
+     * The columns of [view] in the database, as the SQL `PRAGMA table_info(view)` tells.
+     *
+     * @see PRAGMA_TABLE_INFO
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_TABLE_INFO(view: View<*>): PragmaStatement<List<ColumnInfo>> =
+        pragma(PRAGMA.tableInfo(view.tableName, databaseConnection))
+
+    /**
+     * The columns of the table or view named [name], as the SQL `PRAGMA table_info(name)` tells, such as of a table
+     * that the app no longer declares.
+     *
+     * @see PRAGMA_TABLE_INFO
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_TABLE_INFO(name: String): PragmaStatement<List<ColumnInfo>> =
+        pragma(PRAGMA.tableInfo(name, databaseConnection))
+
+    /**
+     * The columns of [table] in the database, its hidden and generated ones included, as the SQL
+     * `PRAGMA table_xinfo(table)` tells: [PRAGMA_TABLE_INFO] with the [ColumnInfo.kind] of each column, such as the
+     * hidden columns of an FTS table. A table that doesn't exist has no columns.
+     *
+     * It needs SQLite 3.26.0, which Android has from API 30 on, and fails with an [IllegalStateException] where the
+     * SQLite lacks it.
+     *
+     * @return The statement, whose `getResults()` returns the columns, in the order of the table, once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_TABLE_XINFO(table: Table<*>): PragmaStatement<List<ColumnInfo>> =
+        pragma(PRAGMA.tableXinfo(table.tableName, databaseConnection))
+
+    /**
+     * The columns of [view] in the database, as the SQL `PRAGMA table_xinfo(view)` tells.
+     *
+     * @see PRAGMA_TABLE_XINFO
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_TABLE_XINFO(view: View<*>): PragmaStatement<List<ColumnInfo>> =
+        pragma(PRAGMA.tableXinfo(view.tableName, databaseConnection))
+
+    /**
+     * The columns of the table or view named [name], as the SQL `PRAGMA table_xinfo(name)` tells.
+     *
+     * @see PRAGMA_TABLE_XINFO
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_TABLE_XINFO(name: String): PragmaStatement<List<ColumnInfo>> =
+        pragma(PRAGMA.tableXinfo(name, databaseConnection))
+
+    /**
+     * The tables and views of the databases of the connection, as the SQL `PRAGMA table_list` tells: those of `main`,
+     * with the virtual tables, as FTS tables, and the tables they keep their data in, and `sqlite_schema`, and those of
+     * `temp`, as the TEMP table that observed queries count changes with.
+     *
+     * It needs SQLite 3.37.0, which Android has from API 34 on, and fails with an [IllegalStateException] where the
+     * SQLite lacks it.
+     *
+     * @return The statement, whose `getResults()` returns the tables and views once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_TABLE_LIST(): PragmaStatement<List<RelationInfo>> = pragma(PRAGMA.tableList(databaseConnection))
+
+    /**
+     * The indexes of [table], as the SQL `PRAGMA index_list(table)` tells: those that CREATE INDEX created, and those
+     * that SQLite created for its UNIQUE and PRIMARY KEY constraints, except for an INTEGER PRIMARY KEY, which is the
+     * rowid, which needs none.
+     *
+     * @return The statement, whose `getResults()` returns the indexes once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_INDEX_LIST(table: Table<*>): PragmaStatement<List<IndexInfo>> =
+        pragma(PRAGMA.indexList(table.tableName, databaseConnection))
+
+    /**
+     * The indexes of the table named [table], as the SQL `PRAGMA index_list(table)` tells.
+     *
+     * @see PRAGMA_INDEX_LIST
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_INDEX_LIST(table: String): PragmaStatement<List<IndexInfo>> =
+        pragma(PRAGMA.indexList(table, databaseConnection))
+
+    /**
+     * The columns of the index named [index], as the SQL `PRAGMA index_xinfo(index)` tells: those it is keyed by, in
+     * order, with their sort orders and collations, then those it holds besides, as the rowid. An index that doesn't
+     * exist has no columns.
+     *
+     * @return The statement, whose `getResults()` returns the columns once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_INDEX_XINFO(index: String): PragmaStatement<List<IndexColumn>> =
+        pragma(PRAGMA.indexXinfo(index, databaseConnection))
+
+    /**
+     * The foreign keys of [table], as the SQL `PRAGMA foreign_key_list(table)` tells, a row for each of their columns.
+     *
+     * @return The statement, whose `getResults()` returns the columns of the foreign keys once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FOREIGN_KEY_LIST(table: Table<*>): PragmaStatement<List<ForeignKeyInfo>> =
+        pragma(PRAGMA.foreignKeyList(table.tableName, databaseConnection))
+
+    /**
+     * The foreign keys of the table named [table], as the SQL `PRAGMA foreign_key_list(table)` tells.
+     *
+     * @see PRAGMA_FOREIGN_KEY_LIST
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FOREIGN_KEY_LIST(table: String): PragmaStatement<List<ForeignKeyInfo>> =
+        pragma(PRAGMA.foreignKeyList(table, databaseConnection))
+
+    /**
+     * The options the SQLite was compiled with, as the SQL `PRAGMA compile_options` tells, without their `SQLITE_`
+     * prefix, as `ENABLE_FTS4` or `THREADSAFE=1`, which tell what the SQLite of a platform has.
+     *
+     * A SQLite can be built without the PRAGMA, as Android's is, where it fails with an [IllegalStateException].
+     *
+     * @return The statement, whose `getResults()` returns the options once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_COMPILE_OPTIONS(): PragmaStatement<List<String>> =
+        pragma(PRAGMA.names("compile_options", "compile_options", null, databaseConnection))
+
+    /**
+     * The names of the collations of the connection, as the SQL `PRAGMA collation_list` tells: SQLite's `BINARY`,
+     * `NOCASE` and `RTRIM`, and those the platform or the app registers, as Android's `LOCALIZED` and `UNICODE`.
+     *
+     * @return The statement, whose `getResults()` returns the names once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_COLLATION_LIST(): PragmaStatement<List<String>> =
+        pragma(PRAGMA.names("collation_list", "name", null, databaseConnection))
+
+    /**
+     * The databases of the connection, as the SQL `PRAGMA database_list` tells: `main`, with the path of its file,
+     * and `temp` once the connection has TEMP tables.
+     *
+     * @return The statement, whose `getResults()` returns the databases once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_DATABASE_LIST(): PragmaStatement<List<DatabaseInfo>> = pragma(PRAGMA.databaseList(databaseConnection))
+
+    /**
+     * The SQL functions of the connection, as the SQL `PRAGMA function_list` tells, such as to check whether the SQLite
+     * of a platform has the math functions, which Android's lacks.
+     *
+     * It needs SQLite 3.30.0, which Android has from API 31 on, and fails with an [IllegalStateException] where the
+     * SQLite lacks it.
+     *
+     * @return The statement, whose `getResults()` returns a row for each form of each function once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FUNCTION_LIST(): PragmaStatement<List<FunctionInfo>> = pragma(PRAGMA.functionList(databaseConnection))
+
+    /**
+     * The names of the modules of virtual tables of the connection, as the SQL `PRAGMA module_list` tells, as `fts4` or
+     * `rtree`, which tell the virtual tables the SQLite of a platform can create.
+     *
+     * It needs SQLite 3.30.0, which Android has from API 31 on, and fails with an [IllegalStateException] where the
+     * SQLite lacks it.
+     *
+     * @return The statement, whose `getResults()` returns the names once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_MODULE_LIST(): PragmaStatement<List<String>> =
+        pragma(PRAGMA.names("module_list", "name", "SQLite 3.30.0, which Android has from API 31 on", databaseConnection))
+
+    /**
+     * The names of the PRAGMAs the SQLite has, as the SQL `PRAGMA pragma_list` tells.
+     *
+     * It needs SQLite 3.30.0, which Android has from API 31 on, and fails with an [IllegalStateException] where the
+     * SQLite lacks it.
+     *
+     * @return The statement, whose `getResults()` returns the names once the scope has run
+     */
+    @PlatformDependentSQLiteAPI
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_PRAGMA_LIST(): PragmaStatement<List<String>> =
+        pragma(PRAGMA.names("pragma_list", "name", "SQLite 3.30.0, which Android has from API 31 on", databaseConnection))
+
+    /**
+     * Checkpoints the WAL, as the SQL `PRAGMA wal_checkpoint(mode)` does: copies the pages it holds into the database
+     * file, as SQLite does on its own once it holds 1000 pages, such as before copying the database file, which
+     * doesn't hold what the WAL does. A FULL, RESTART or TRUNCATE checkpoint waits for the other connections of the
+     * database as long as `busyTimeout`, and tells whether they kept it from finishing. A database that isn't in WAL
+     * mode has nothing to checkpoint.
+     *
+     * @param mode How to checkpoint
+     * @return The statement, whose `getResults()` returns the result of the checkpoint once the scope has run
+     * @throws IllegalStateException inside a transaction, as SQLite can't checkpoint there
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_WAL_CHECKPOINT(mode: CheckpointMode = CheckpointMode.PASSIVE): PragmaStatement<CheckpointResult> {
+        check(!isInTransaction) { "SQLite can't checkpoint the WAL inside a transaction." }
+        return pragma(PRAGMA.walCheckpoint(mode, databaseConnection))
+    }
+
+    /**
+     * The number of pages of the database file, as the SQL `PRAGMA page_count` tells, which, times
+     * [PRAGMA_PAGE_SIZE], is its size, without what its WAL holds.
+     *
+     * @return The statement, whose `getResults()` returns the number once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_PAGE_COUNT(): PragmaStatement<Long> = pragma(PRAGMA.size("page_count", isInTransaction, databaseConnection))
+
+    /**
+     * The number of unused pages of the database file, as the SQL `PRAGMA freelist_count` tells, which rows that were
+     * deleted leave, and which [VACUUM] removes, so that the file shrinks. A database whose auto_vacuum is on removes them
+     * at each commit, so that it has none: Android's SQLite creates a database with auto_vacuum FULL by default.
+     *
+     * @return The statement, whose `getResults()` returns the number once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_FREELIST_COUNT(): PragmaStatement<Long> = pragma(PRAGMA.size("freelist_count", isInTransaction, databaseConnection))
+
+    /**
+     * The size of a page of the database file in bytes, as the SQL `PRAGMA page_size` tells. Outside a transaction,
+     * it is read in a transaction of its own, as SQLite takes it from what the connection last read of the header of
+     * the file, which a transaction reads again.
+     *
+     * @return The statement, whose `getResults()` returns the size once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_PAGE_SIZE(): PragmaStatement<Long> = pragma(PRAGMA.size("page_size", isInTransaction, databaseConnection))
+
+    /**
+     * The number that the header of the database file holds to tell the app it belongs to, as the SQL
+     * `PRAGMA application_id` tells, which SQLite doesn't use, 0 unless it is set.
+     *
+     * @return The statement, whose `getResults()` returns the number once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_APPLICATION_ID(): PragmaStatement<Int> = pragma(PRAGMA.applicationId(databaseConnection))
+
+    /**
+     * Sets the number that the header of the database file holds to tell the app it belongs to, as the SQL
+     * `PRAGMA application_id = id` does, such as to tell a file of the app from others it opens.
+     *
+     * @param id The number
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_APPLICATION_ID(id: Int) {
+        pragma(PRAGMA.applicationId(id, databaseConnection))
+    }
+
+    /**
+     * Whether the database removes its unused pages, as the SQL `PRAGMA auto_vacuum` tells: Android's SQLite creates a
+     * database with [AutoVacuum.FULL] by default, and the others with [AutoVacuum.NONE]. Outside a transaction, it is
+     * read in a transaction of its own, as SQLite takes it from what the connection last read of the header of the
+     * file, which a transaction reads again: from Android 13 on, a query outside a transaction may run on a connection
+     * that reads, which would tell the mode before the last VACUUM.
+     *
+     * @return The statement, whose `getResults()` returns the mode once the scope has run
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_AUTO_VACUUM(): PragmaStatement<AutoVacuum> = pragma(PRAGMA.autoVacuum(isInTransaction, databaseConnection))
+
+    /**
+     * Sets whether the database removes its unused pages, as the SQL `PRAGMA auto_vacuum = mode` does. It applies to a
+     * database that has no tables yet, as in `create` of the configuration before the first CREATE, and otherwise
+     * only once [VACUUM] rebuilds the database, which it has to be followed by:
+     * ```kotlin
+     * database {
+     *     PRAGMA_AUTO_VACUUM(AutoVacuum.INCREMENTAL)
+     *     VACUUM()
+     * }
+     * ```
+     *
+     * @param mode Whether to remove them at each commit, or to keep them, as [AutoVacuum.INCREMENTAL] does until the
+     * SQL `PRAGMA incremental_vacuum` removes them, which SQLlin doesn't run: it removes a page each time it returns a
+     * row, which has no columns, and sqlite-jdbc runs such a statement only as far as its first row
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_AUTO_VACUUM(mode: AutoVacuum) {
+        pragma(PRAGMA.autoVacuum(mode, databaseConnection))
+    }
+
+    /**
+     * Defers the checks of foreign keys to the end of the transaction, or stops deferring them, as the SQL
+     * `PRAGMA defer_foreign_keys` does, so that the statements after it may violate them for a while, as when a row is
+     * inserted before the row it references. A violation that remains when the transaction commits fails the commit.
+     *
+     * Example:
+     * ```kotlin
+     * database { PRAGMA_FOREIGN_KEYS(true) }
+     * database {
+     *     transaction {
+     *         PRAGMA_DEFER_FOREIGN_KEYS(true)
+     *         OrderTable INSERT Order(userId = 1)
+     *         UserTable INSERT User(id = 1)
+     *     }
+     * }
+     * ```
+     *
+     * SQLite turns it off again when the transaction ends, so it can only be set in one. It only matters while the
+     * database enforces foreign keys, which `PRAGMA_FOREIGN_KEYS(true)` turns on, outside a transaction.
+     *
+     * @param flag Whether to defer the checks
+     * @throws IllegalStateException outside a transaction
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_DEFER_FOREIGN_KEYS(flag: Boolean) {
+        check(isInTransaction) { "PRAGMA defer_foreign_keys only lasts until the transaction ends, so it can only be set in transaction { }." }
+        pragma(PRAGMA.set("defer_foreign_keys", flag, databaseConnection))
+    }
+
+    /**
+     * Lets triggers fire recursively, or stops them, as the SQL `PRAGMA recursive_triggers` does: a statement that a
+     * trigger runs then fires the triggers of its table, the trigger itself included, which SQLite doesn't by default,
+     * up to a depth of 1000 by default. A REPLACE conflict resolution then also fires the DELETE triggers of the rows
+     * it deletes.
+     *
+     * It lasts as long as the database is open, for the scopes after this one too, until it is set again. In a
+     * transaction, it applies to the statements after it.
+     *
+     * @param flag Whether triggers fire recursively
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_RECURSIVE_TRIGGERS(flag: Boolean) {
+        pragma(PRAGMA.set("recursive_triggers", flag, databaseConnection))
+    }
+
+    /**
+     * Makes `ALTER_RENAME_TABLE_TO` rename a table as SQLite 3.25.0 and earlier did, or as it does now, as the SQL
+     * `PRAGMA legacy_alter_table` does: without rewriting the views and triggers that read the table, which then read
+     * a table of the old name, such as in a migration that rebuilds a table under the old name.
+     *
+     * It lasts as long as the database is open, for the scopes after this one too, until it is set again. Android's
+     * SQLite turns it on by default, so that a rename there doesn't rewrite them unless it is turned off.
+     *
+     * @param flag Whether to rename tables as SQLite 3.25.0 and earlier did
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_LEGACY_ALTER_TABLE(flag: Boolean) {
+        pragma(PRAGMA.set("legacy_alter_table", flag, databaseConnection))
+    }
+
+    /**
+     * Stops checking CHECK constraints, or checks them again, as the SQL `PRAGMA ignore_check_constraints` does, such
+     * as to import rows that predate a constraint; [PRAGMA_INTEGRITY_CHECK] then finds the rows that violate them.
+     *
+     * It lasts as long as the database is open, for the scopes after this one too, until it is set again.
+     *
+     * @param flag Whether to ignore CHECK constraints
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun PRAGMA_IGNORE_CHECK_CONSTRAINTS(flag: Boolean) {
+        pragma(PRAGMA.set("ignore_check_constraints", flag, databaseConnection))
+    }
+
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    private fun <R> pragma(statement: PragmaStatement<R>): PragmaStatement<R> {
+        addStatement(statement)
+        return statement
+    }
+
     // ========== CREATE TRIGGER and DROP TRIGGER ==========
 
     /** The trigger being defined, from ON to the end of BEGIN, whose rows `new()` and `old()` read. */
@@ -2321,9 +3151,10 @@ public class DatabaseScope internal constructor(
         val name = timing.trigger.name
         require(collected.statements.isNotEmpty()) { "The trigger '$name' needs at least one statement." }
         for (statement in collected.statements) {
-            require(statement is InsertStatement || statement is UpdateDeleteStatement || statement is UpdateStatementWithoutWhereClause<*> || statement is RaiseStatement) {
+            require(Changes.writtenTable(statement) != null || statement is RaiseStatement) {
                 "The trigger '$name' can only run INSERT, UPDATE, DELETE and RAISE, but not: ${statement.sqlStr}"
             }
+            statement.checkComplete()
         }
         addStatement(Trigger.create(this, collected.statements, databaseConnection))
     }

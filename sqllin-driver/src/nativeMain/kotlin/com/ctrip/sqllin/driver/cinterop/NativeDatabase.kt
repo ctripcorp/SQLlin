@@ -59,7 +59,7 @@ internal class NativeDatabase private constructor(val dbPointer: CPointer<sqlite
                 if (err != SQLITE_OK) {
                     val error = sqlite3_errmsg(db)?.toKString()
                     sqlite3_close_v2(db)
-                    throw sqliteException("Cannot set lookaside : sqlite3_db_config(..., ${configuration.lookasideSlotSize}, %${configuration.lookasideSlotCount}) failed, ${error ?: ""}", err)
+                    throw sqliteException("Cannot set lookaside : sqlite3_db_config(..., ${configuration.lookasideSlotSize}, ${configuration.lookasideSlotCount}) failed, ${error ?: ""}", err)
                 }
             }
 

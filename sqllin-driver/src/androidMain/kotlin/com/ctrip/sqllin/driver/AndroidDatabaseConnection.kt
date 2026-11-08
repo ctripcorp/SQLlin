@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.driver
 
 import android.database.sqlite.SQLiteCursor
+import android.os.Build
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteQuery
 
@@ -27,11 +28,36 @@ import android.database.sqlite.SQLiteQuery
  */
 internal class AndroidDatabaseConnection(private val database: SQLiteDatabase) : DatabaseConnection {
 
-    override fun execSQL(sql: String, bindParams: Array<out Any?>?) =
-        if (bindParams == null)
-            database.execSQL(sql)
-        else
-            database.execSQL(sql, Array(bindParams.size) { unsignedAsLong(bindParams[it]) })
+    /**
+     * Runs [sql], and a PRAGMA that sets how the connection runs statements on every connection of the database.
+     *
+     * From Android 13 on, a database in WAL mode has several connections: the one that writes, and those that read
+     * outside a transaction. The framework only prepares a PRAGMA such as `foreign_keys = ON` on the connection that
+     * writes, and steps it on one that reads, as `sqlite3_stmt_readonly()` reports it doesn't write. SQLite changes the
+     * setting when it prepares the PRAGMA, but only expires the statements the connection has compiled when it steps
+     * it, so the statements that the connection that writes has cached kept running as they were compiled, with the
+     * setting they had: without checking foreign keys, or with them; and the other connections that read didn't have
+     * it, which `PRAGMA foreign_keys` may read through. Such a PRAGMA runs on every connection,
+     * those opened later included, so that each steps it. In a transaction, which runs on the connection that writes,
+     * it runs there, where SQLite ignores a change of foreign_keys, as it does on the other platforms, and applies
+     * recursive_triggers to the statements after it, which only that connection runs. Before Android 13, a database
+     * that SQLlin opens has a single connection.
+     */
+    override fun execSQL(sql: String, bindParams: Array<out Any?>?) = when {
+        bindParams != null -> database.execSQL(sql, Array(bindParams.size) { unsignedAsLong(bindParams[it]) })
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !database.inTransaction() && CONNECTION_SETTING.containsMatchIn(sql) ->
+            database.execPerConnectionSQL(sql, null)
+        else -> database.execSQL(sql)
+    }
+
+    private companion object {
+        /**
+         * A PRAGMA that sets how the connection runs statements, which each connection has to run itself: foreign_keys,
+         * recursive_triggers and ignore_check_constraints, which SQLite compiles into the statements, and
+         * legacy_alter_table, which ALTER TABLE RENAME reads.
+         */
+        val CONNECTION_SETTING = Regex("""^\s*PRAGMA\s+(foreign_keys|recursive_triggers|legacy_alter_table|ignore_check_constraints)\s*[=(]""", RegexOption.IGNORE_CASE)
+    }
 
     /**
      * The framework binds a value it doesn't know, such as a `UInt`, as its string, so unsigned values are bound as
@@ -96,7 +122,15 @@ internal class AndroidDatabaseConnection(private val database: SQLiteDatabase) :
         }
     }
 
-    override fun beginTransaction() = database.beginTransaction()
+    override fun beginTransaction() = beginTransaction(TransactionMode.IMMEDIATE)
+
+    // beginTransactionNonExclusive begins an IMMEDIATE transaction, and beginTransaction an EXCLUSIVE one. The framework
+    // can't begin a DEFERRED one that writes, as it turns a BEGIN statement into an EXCLUSIVE transaction of its own, so
+    // that one is IMMEDIATE, which only takes the write lock earlier
+    override fun beginTransaction(mode: TransactionMode) = when (mode) {
+        TransactionMode.EXCLUSIVE -> database.beginTransaction()
+        TransactionMode.DEFERRED, TransactionMode.IMMEDIATE -> database.beginTransactionNonExclusive()
+    }
     override fun endTransaction() {
         try {
             database.endTransaction()

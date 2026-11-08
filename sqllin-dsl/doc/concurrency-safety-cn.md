@@ -29,8 +29,8 @@ fun sample() {
 我们使用新 API `Database#suspendedScope` 来代替旧 `database {}` 后，将会是这样：
 
 ```kotlin
-fun sample() {
-    database suspendScope {
+suspend fun sample() {
+    database suspendedScope {
         PersonTable { table ->
             table INSERT Person(age = 4, name = "Tom")
             table INSERT listOf(

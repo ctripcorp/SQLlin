@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.dsl.sql.statement
 
 import com.ctrip.sqllin.driver.DatabaseConnection
+import com.ctrip.sqllin.driver.TransactionMode
 import com.ctrip.sqllin.driver.withTransaction
 
 /**
@@ -28,12 +29,14 @@ import com.ctrip.sqllin.driver.withTransaction
  *
  * @property databaseConnection Connection for executing the transactional operations
  * @property enableSimpleSQLLog Whether to log each statement's SQL before execution
+ * @property mode How the transaction begins
  *
  * @author Yuang Qiao
  */
 internal class TransactionStatementsGroup(
     private val databaseConnection: DatabaseConnection,
     private val enableSimpleSQLLog: Boolean,
+    private val mode: TransactionMode,
 ) : ExecutableStatement, StatementContainer {
 
     private val statementList = ArrayDeque<SingleStatement>()
@@ -58,39 +61,36 @@ internal class TransactionStatementsGroup(
     val writtenTables: Set<String>
         get() = statementList.mapNotNullTo(LinkedHashSet()) { Changes.writtenTable(it) }
 
+    /**
+     * The tables and views the SELECTs of the transaction read.
+     *
+     * @see DatabaseExecuteEngine.readTables
+     */
+    val readTables: Set<String>
+        get() = statementList.flatMapTo(LinkedHashSet()) { (it as? SelectStatement<*>)?.tables.orEmpty() }
+
     override infix fun removeStatement(statement: SingleStatement) {
         statementList.remove(statement)
     }
 
     override fun replaceStatement(statement: SingleStatement, newStatement: SingleStatement) {
         val index = statementList.indexOf(statement)
-        check(index >= 0) { "The statement to replace isn't one of the transaction's." }
+        check(index >= 0) { "The statement isn't one of the transaction's: a clause was already appended to it, which replaced it, or it became part of another statement, as a subquery does." }
         statementList[index] = newStatement
     }
 
     /**
      * Checks that every statement of the transaction is complete, before any of them runs.
      *
-     * @see SelectStatement.checkComplete
+     * @see SingleStatement.checkComplete
      */
-    fun checkComplete() = statementList.forEach {
-        (it as? SelectStatement<*>)?.checkComplete()
-    }
+    fun checkComplete() = statementList.forEach { it.checkComplete() }
 
-    override fun execute() = databaseConnection.withTransaction {
+    override fun execute() = databaseConnection.withTransaction(mode) {
         statementList.forEach {
             if (enableSimpleSQLLog)
                 it.printlnSQL()
             it.execute()
         }
-    }
-
-    override infix fun changeLastStatement(statement: SingleStatement) {
-        if (statementList.lastOrNull() is UpdateStatementWithoutWhereClause<*>
-            || statementList.lastOrNull() is SelectStatement<*>) {
-            statementList.removeLast()
-            statementList.add(statement)
-        } else
-            throw IllegalStateException("Current statement can't append clause.")
     }
 }

@@ -52,6 +52,9 @@ jobs:
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:assemble -PonCICD
 
+      - name: Build sqllin-dsl-paging
+        run: ./gradlew :sqllin-dsl-paging:assemble -PonCICD
+
       - name: Run sqllin-dsl macOS Arm64 Tests
         run: ./gradlew :sqllin-dsl-test:cleanMacosArm64Test :sqllin-dsl-test:macosArm64Test --stacktrace
 
@@ -69,7 +72,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Test-Reports-macOS-dsl
-          path: sqllin-dsl/build/reports
+          path: sqllin-dsl-test/build/reports
         if: failure()
 
   build-on-windows:
@@ -112,6 +115,9 @@ jobs:
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:mingwX64MainKlibrary :sqllin-dsl:jvmJar
 
+      - name: Build sqllin-dsl-paging
+        run: ./gradlew :sqllin-dsl-paging:mingwX64MainKlibrary :sqllin-dsl-paging:jvmJar
+
       - name: Run sqllin-dsl MinGW X64 Tests
         run: ./gradlew :sqllin-dsl-test:cleanMingwX64Test && ./gradlew :sqllin-dsl-test:mingwX64Test --stacktrace
 
@@ -129,7 +135,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Test-Reports-Windows-dsl
-          path: sqllin-dsl/build/reports
+          path: sqllin-dsl-test/build/reports
         if: failure()
 
   build-on-linux:
@@ -175,6 +181,9 @@ jobs:
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:linuxX64MainKlibrary :sqllin-dsl:jvmJar
 
+      - name: Build sqllin-dsl-paging
+        run: ./gradlew :sqllin-dsl-paging:linuxX64MainKlibrary :sqllin-dsl-paging:jvmJar
+
       - name: Run sqllin-dsl Linux X64 Tests
         run: ./gradlew :sqllin-dsl-test:cleanLinuxX64Test :sqllin-dsl-test:linuxX64Test --stacktrace
 
@@ -192,7 +201,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Test-Reports-Linux-dsl
-          path: sqllin-dsl/build/reports
+          path: sqllin-dsl-test/build/reports
         if: failure()
 
   build-android-and-test:
@@ -216,7 +225,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build Android
-        run: ./gradlew :sqllin-driver:assembleAndroidMain :sqllin-dsl:assembleAndroidMain
+        run: ./gradlew :sqllin-driver:assembleAndroidMain :sqllin-dsl:assembleAndroidMain :sqllin-dsl-paging:assembleAndroidMain
 
       - name: Cache Robolectric Android-All Jars
         uses: actions/cache@v4

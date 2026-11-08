@@ -27,8 +27,12 @@ package com.ctrip.sqllin.driver
  * @property journalMode The SQLite journal mode. Default: [JournalMode.WAL]
  * @property synchronousMode The SQLite synchronous mode. Default: [SynchronousMode.NORMAL]
  * @property busyTimeout Timeout in milliseconds for database lock waits. Default: 5000ms
- * @property lookasideSlotSize Size of each lookaside memory slot. Default: 0 (use SQLite default)
- * @property lookasideSlotCount Number of lookaside memory slots. Default: 0 (use SQLite default)
+ * @property lookasideSlotSize The size in bytes of each slot of SQLite's lookaside memory allocator, set together with
+ * [lookasideSlotCount] when both are 0 or more. Default: -1, which leaves SQLite's default configuration; 0 disables the
+ * allocator. Android 9 and higher take it when both are positive or both 0, and lower versions don't take it; on the
+ * JVM, where sqlite-jdbc can't set it, it has no effect
+ * @property lookasideSlotCount The number of slots of SQLite's lookaside memory allocator of each connection, set
+ * together with [lookasideSlotSize]. Default: -1, which leaves SQLite's default configuration; 0 disables the allocator
  * @property create Callback invoked when creating a new database
  * @property upgrade Callback invoked when upgrading the database schema
  *
@@ -43,8 +47,8 @@ public data class DatabaseConfiguration(
     val journalMode: JournalMode = JournalMode.WAL,
     val synchronousMode: SynchronousMode = SynchronousMode.NORMAL,
     val busyTimeout: Int = 5000,
-    val lookasideSlotSize: Int = 0,
-    val lookasideSlotCount: Int = 0,
+    val lookasideSlotSize: Int = -1,
+    val lookasideSlotCount: Int = -1,
     val create: (databaseConnection: DatabaseConnection) -> Unit = {},
     val upgrade: (databaseConnection: DatabaseConnection, oldVersion: Int, newVersion: Int) -> Unit = { _, _, _ -> },
 )

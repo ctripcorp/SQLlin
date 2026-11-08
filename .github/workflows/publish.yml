@@ -49,5 +49,8 @@ jobs:
       - name: Build sqllin-dsl
         run: ./gradlew :sqllin-dsl:assemble
 
+      - name: Build sqllin-dsl-paging
+        run: ./gradlew :sqllin-dsl-paging:assemble
+
       - name: Publish to MavenCentral
         run: ./publish_all.sh

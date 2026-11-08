@@ -18,11 +18,14 @@ package com.ctrip.sqllin.driver.test
 
 import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.DatabasePath
+import com.ctrip.sqllin.driver.JournalMode
+import com.ctrip.sqllin.driver.TransactionMode
 import com.ctrip.sqllin.driver.openDatabase
 import com.ctrip.sqllin.driver.withQuery
 import com.ctrip.sqllin.driver.withTransaction
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.runTest
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
 
@@ -221,6 +224,148 @@ class CommonBasicTest(private val path: DatabasePath) {
                 connection.executeInsert("INSERT INTO parent VALUES (?)", arrayOf(1L))
             }
             assertEquals(1L, children())
+        }
+    }
+
+    /**
+     * SQLite rolls a transaction back itself for a constraint with ON CONFLICT ROLLBACK, or a trigger's RAISE(ROLLBACK),
+     * so that ending it fails too, which mustn't hide why it was rolled back; and the next transaction can begin.
+     */
+    fun testRolledBackBySQLite() {
+        openDatabase(getDefaultDBConfig(false)) {
+            it.execSQL("CREATE TABLE rolled_back(x INT UNIQUE ON CONFLICT ROLLBACK)")
+            it.execSQL("CREATE TRIGGER no_negative BEFORE INSERT ON rolled_back WHEN new.x < 0 BEGIN SELECT RAISE(ROLLBACK, 'negative'); END")
+            it.executeInsert("INSERT INTO rolled_back VALUES (?)", arrayOf(1L))
+            fun failure(value: Long): String = assertFails {
+                it.withTransaction { connection ->
+                    connection.executeInsert("INSERT INTO rolled_back VALUES (?)", arrayOf(2L))
+                    connection.executeInsert("INSERT INTO rolled_back VALUES (?)", arrayOf(value))
+                }
+            }.message ?: ""
+            assertContains(failure(1L), "UNIQUE constraint failed")
+            assertContains(failure(-1L), "negative")
+            it.withTransaction { connection ->
+                connection.executeInsert("INSERT INTO rolled_back VALUES (?)", arrayOf(3L))
+            }
+            val values = it.withQuery("SELECT x FROM rolled_back ORDER BY x") { cursor ->
+                buildList { cursor.forEachRow { add(cursor.getLong(0)) } }
+            }
+            assertEquals(listOf(1L, 3L), values)
+        }
+    }
+
+    /**
+     * A transaction takes the write lock when it begins, as BEGIN IMMEDIATE does, on every platform: another connection
+     * can't write until it ends.
+     */
+    fun testImmediateTransaction() {
+        openDatabase(getDefaultDBConfig(false)) {
+            openDatabase(getDefaultDBConfig(false).copy(busyTimeout = 0)) { other ->
+                it.withTransaction {
+                    assertFails {
+                        other.executeInsert(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96, byteArrayOf()))
+                    }
+                }
+                other.executeInsert(SQL.INSERT_BOOK, arrayOf("The Da Vinci Code", "Dan Brown", 454, 16.96, byteArrayOf()))
+            }
+        }
+    }
+
+    /**
+     * A transaction begins in the mode given: an IMMEDIATE or EXCLUSIVE one takes the write lock at once, so another
+     * connection can't write until it ends, while a DEFERRED one takes none until it writes, but on Android, whose
+     * framework begins an IMMEDIATE one instead.
+     */
+    fun testTransactionModes(isDeferredSupported: Boolean) {
+        val book = arrayOf<Any?>("The Da Vinci Code", "Dan Brown", 454, 16.96, byteArrayOf())
+        openDatabase(getDefaultDBConfig(false)) {
+            openDatabase(getDefaultDBConfig(false).copy(busyTimeout = 0)) { other ->
+                for (mode in listOf(TransactionMode.IMMEDIATE, TransactionMode.EXCLUSIVE)) {
+                    it.withTransaction(mode) {
+                        assertFails { other.executeInsert(SQL.INSERT_BOOK, book) }
+                    }
+                }
+                it.withTransaction(TransactionMode.DEFERRED) { connection ->
+                    if (isDeferredSupported)
+                        other.executeInsert(SQL.INSERT_BOOK, book)
+                    else
+                        assertFails { other.executeInsert(SQL.INSERT_BOOK, book) }
+                    // It takes the write lock once it writes
+                    connection.executeInsert(SQL.INSERT_BOOK, book)
+                }
+                val books = it.withQuery("SELECT count(*) FROM book") { cursor -> cursor.next(); cursor.getLong(0) }
+                assertEquals(if (isDeferredSupported) 2L else 1L, books)
+            }
+        }
+    }
+
+    /**
+     * A PRAGMA that sets how the connection runs statements, foreign_keys or recursive_triggers, applies to the
+     * statements that ran before it too, whose SQL the connection that writes has compiled with the setting they had:
+     * on Android 13 and higher, a database in WAL mode has several connections, which all have to run it. In a
+     * transaction, foreign_keys changes nothing, as SQLite says, and recursive_triggers applies to the statements after
+     * it, and to those after the transaction.
+     */
+    fun testConnectionPragmas() {
+        openDatabase(getDefaultDBConfig(false)) {
+            fun single(sql: String): Long = it.withQuery(sql) { cursor -> cursor.next(); cursor.getLong(0) }
+            it.execSQL("CREATE TABLE parent(id INTEGER PRIMARY KEY)")
+            it.execSQL("CREATE TABLE child(id INTEGER PRIMARY KEY, parentId INTEGER REFERENCES parent(id))")
+            val insertChild = "INSERT INTO child (parentId) VALUES (?)"
+            // Compiled without the checks of foreign keys, which are off
+            it.executeInsert(insertChild, arrayOf(1L))
+            it.execSQL("PRAGMA foreign_keys = ON")
+            assertEquals(1L, single("PRAGMA foreign_keys"))
+            assertContains(assertFails { it.executeInsert(insertChild, arrayOf(2L)) }.message.orEmpty(), "FOREIGN KEY constraint failed")
+            it.execSQL("PRAGMA foreign_keys = OFF")
+            assertEquals(0L, single("PRAGMA foreign_keys"))
+            it.executeInsert(insertChild, arrayOf(3L))
+            it.withTransaction { connection -> connection.execSQL("PRAGMA foreign_keys = ON") }
+            assertEquals(0L, single("PRAGMA foreign_keys"))
+            it.executeInsert(insertChild, arrayOf(4L))
+            assertEquals(3L, single("SELECT count(*) FROM child"))
+
+            it.execSQL("CREATE TABLE counter(id INTEGER PRIMARY KEY, n INT)")
+            it.execSQL("CREATE TRIGGER counter_chain AFTER INSERT ON counter WHEN new.n < 3 BEGIN INSERT INTO counter VALUES (new.id + 1, new.n + 1); END")
+            val insertCounter = "INSERT INTO counter VALUES (?, ?)"
+            fun counters(): List<Long> = it.withQuery("SELECT id FROM counter ORDER BY id") { cursor ->
+                buildList { cursor.forEachRow { add(cursor.getLong(0)) } }
+            }
+            // Compiled without recursive triggers, which are off
+            it.executeInsert(insertCounter, arrayOf(1L, 0L))
+            assertEquals(listOf(1L, 2L), counters())
+            it.execSQL("PRAGMA recursive_triggers = 1")
+            it.executeInsert(insertCounter, arrayOf(10L, 0L))
+            assertEquals(listOf(1L, 2L, 10L, 11L, 12L, 13L), counters())
+            it.withTransaction { connection ->
+                connection.execSQL("PRAGMA recursive_triggers = 0")
+                connection.executeInsert(insertCounter, arrayOf(20L, 0L))
+            }
+            it.executeInsert(insertCounter, arrayOf(30L, 0L))
+            assertEquals(listOf(1L, 2L, 10L, 11L, 12L, 13L, 20L, 21L, 30L, 31L), counters())
+        }
+    }
+
+    /**
+     * The database is in the journal mode of its configuration, WAL by default, to which it is switched when it is
+     * opened from the mode it was left in.
+     */
+    fun testJournalMode() {
+        fun journalMode(config: DatabaseConfiguration): String? = openDatabase(config) {
+            it.withQuery("PRAGMA journal_mode") { cursor -> cursor.next(); cursor.getString(0) }
+        }
+        val config = getDefaultDBConfig(false)
+        assertEquals("wal", journalMode(config))
+        assertEquals("delete", journalMode(config.copy(journalMode = JournalMode.DELETE)))
+        assertEquals("wal", journalMode(config))
+    }
+
+    /**
+     * SQLite waits as long as `busyTimeout` for a lock that another connection holds.
+     */
+    fun testBusyTimeout() {
+        openDatabase(getDefaultDBConfig(false).copy(busyTimeout = 1234)) {
+            assertEquals(1234L, it.withQuery("PRAGMA busy_timeout") { cursor -> cursor.next(); cursor.getLong(0) })
         }
     }
 

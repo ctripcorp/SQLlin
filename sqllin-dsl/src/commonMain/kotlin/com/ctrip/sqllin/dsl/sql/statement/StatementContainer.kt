@@ -19,26 +19,18 @@ package com.ctrip.sqllin.dsl.sql.statement
 /**
  * Container for managing and modifying SQL statements.
  *
- * Used by statement builders (e.g., UPDATE, JOIN) to replace or update the last statement
- * in a collection when DSL operations refine or extend it. For example, when an UPDATE
- * statement adds a WHERE clause, it replaces the initial UPDATE statement. A SELECT that
- * becomes part of an `INSERT INTO ... SELECT` is removed, as it no longer runs on its own.
+ * Used by statement builders to replace a statement when DSL operations refine or extend it. For example, when an
+ * UPDATE statement adds a WHERE clause, it replaces the initial UPDATE statement, wherever it is among the statements,
+ * rather than the last one, which another statement built since may be. A SELECT that becomes part of an
+ * `INSERT INTO ... SELECT` is removed, as it no longer runs on its own.
  *
  * Implementations:
  * - [DatabaseExecuteEngine]: Executes standalone statements
  * - [TransactionStatementsGroup]: Groups statements within a transaction
- * - [UnionSelectStatementGroup]: Accumulates SELECT statements for UNION operations
  *
  * @author Yuang Qiao
  */
 internal interface StatementContainer {
-
-    /**
-     * Replaces the most recently added statement with a modified version.
-     *
-     * Used when DSL operations progressively build up a statement (e.g., adding WHERE to UPDATE).
-     */
-    infix fun changeLastStatement(statement: SingleStatement)
 
     /**
      * Removes [statement] if this container holds it, wherever it is.
@@ -47,6 +39,9 @@ internal interface StatementContainer {
 
     /**
      * Replaces [statement] with [newStatement], where [statement] is, as when a clause completes it.
+     *
+     * @throws IllegalStateException if this container doesn't hold [statement]: a clause was already appended to it,
+     * which replaced it, or it became part of another statement, as a subquery does
      */
     fun replaceStatement(statement: SingleStatement, newStatement: SingleStatement)
 }

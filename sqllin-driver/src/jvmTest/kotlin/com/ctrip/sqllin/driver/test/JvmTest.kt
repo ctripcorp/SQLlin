@@ -50,6 +50,24 @@ class JvmTest {
     fun testFailedCommit() = commonTest.testFailedCommit()
 
     @Test
+    fun testRolledBackBySQLite() = commonTest.testRolledBackBySQLite()
+
+    @Test
+    fun testImmediateTransaction() = commonTest.testImmediateTransaction()
+
+    @Test
+    fun testTransactionModes() = commonTest.testTransactionModes(isDeferredSupported = true)
+
+    @Test
+    fun testJournalMode() = commonTest.testJournalMode()
+
+    @Test
+    fun testBusyTimeout() = commonTest.testBusyTimeout()
+
+    @Test
+    fun testConnectionPragmas() = commonTest.testConnectionPragmas()
+
+    @Test
     fun testConcurrency() = commonTest.testConcurrency()
 
     @AfterTest

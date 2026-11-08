@@ -20,7 +20,7 @@ fun sample() {
             table SELECT WHERE (age LTE 5) GROUP_BY age HAVING (upper(name) EQ "TOM") ORDER_BY (age to DESC) LIMIT 2 OFFSET 1
         }
     }
-    selectStatement.getResult().forEach { person ->
+    selectStatement.getResults().forEach { person ->
         println(person.name)
     }
 }
@@ -47,6 +47,7 @@ The architecture design of SQLlin is shown in the figure:
 SQLlin has 3 major parts: _sqllin-dsl_, _sqllin-driver_ and _sqllin-processor_. The _sqllin-driver_ is a set of common multiplatform SQLite low-level
 APIs, most of the time it is not recommended to use it directly. The _sqllin-dsl_ is DSL implementations for SQL statements, it is based on
 _sqllin-driver_. The _sqllin-processor_ uses KSP to process annotations and generate code for using with _sqllin-dsl_.
+The optional _sqllin-dsl-paging_ provides androidx.paging's `PagingSource` for the queries of _sqllin-dsl_.
 
 You can learn how to use _sqllin-dsl_ in these documentations:
 

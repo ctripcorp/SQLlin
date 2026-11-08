@@ -19,7 +19,9 @@ package com.ctrip.sqllin.sample
 import com.ctrip.sqllin.dsl.DSLDBConfiguration
 import com.ctrip.sqllin.dsl.Database
 import com.ctrip.sqllin.dsl.annotation.DBRow
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.annotation.PrimaryKey
+import com.ctrip.sqllin.dsl.sql.X
 import com.ctrip.sqllin.dsl.sql.clause.*
 import com.ctrip.sqllin.dsl.sql.clause.OrderByWay.DESC
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
@@ -78,29 +80,21 @@ object Sample {
 
     }
 
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun joinSample() {
         db {
-            PersonTable { table ->
-                table SELECT CROSS_JOIN<Student>(TranscriptTable)
-                table SELECT INNER_JOIN<Student>(TranscriptTable) USING name
-                table SELECT NATURAL_JOIN<Student>(TranscriptTable)
-                table SELECT LEFT_OUTER_JOIN<Student>(TranscriptTable) USING name
-                table SELECT NATURAL_LEFT_OUTER_JOIN<Student>(TranscriptTable)
-            }
+            (PersonTable INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()
+            (PersonTable NATURAL_JOIN TranscriptTable) SELECT X<Student>()
         }
     }
 
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun concurrentSafeCall() {
         CoroutineScope(Dispatchers.Default).launch {
             db suspendedScope {
-                PersonTable { table ->
-                    table SELECT CROSS_JOIN<Student>(TranscriptTable)
-                    table SELECT INNER_JOIN<Student>(TranscriptTable) USING name
-                    delay(100)
-                    table SELECT NATURAL_JOIN<Student>(TranscriptTable)
-                    table SELECT LEFT_OUTER_JOIN<Student>(TranscriptTable) USING name
-                    table SELECT NATURAL_LEFT_OUTER_JOIN<Student>(TranscriptTable)
-                }
+                (PersonTable INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()
+                delay(100)
+                (PersonTable NATURAL_JOIN TranscriptTable) SELECT X<Student>()
             }
         }
     }

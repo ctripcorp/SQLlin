@@ -43,13 +43,17 @@ import java.io.OutputStreamWriter
  *   - PRIMARY KEY with optional AUTOINCREMENT
  *   - NOT NULL constraints
  *   - UNIQUE constraints (single and composite)
- *   - COLLATE NOCASE for case-insensitive text columns
+ *   - COLLATE NOCASE for case-insensitive text columns, and COLLATE RTRIM for those that ignore trailing spaces
  *   - CHECK constraints of columns and of the table, optionally named
  * - **Type support**:
  *   - All Kotlin primitive types and unsigned variants
  *   - String, Char, Boolean, ByteArray
  *   - Enum classes (stored as integers)
  *   - Typealiases of supported types
+ *   - Any type whose serializer encodes it as one of these: a type with a built-in serializer, as `Uuid`, a value
+ *     class, or a type given a serializer with `@Serializable(with = ...)`, whose column has the type of the values the
+ *     serializer stores and whose element, a `ClauseConverted`, converts the values of its conditions with it; see
+ *     [ColumnTypes]
  *
  * A `@DBRow` class annotated with [@Fts4][com.ctrip.sqllin.dsl.annotation.Fts4] or
  * [@Fts3][com.ctrip.sqllin.dsl.annotation.Fts3] gets an `FtsTable` object instead, whose statement is a
@@ -66,6 +70,7 @@ import java.io.OutputStreamWriter
  * @see com.ctrip.sqllin.dsl.annotation.Unique
  * @see com.ctrip.sqllin.dsl.annotation.CompositeUnique
  * @see com.ctrip.sqllin.dsl.annotation.CollateNoCase
+ * @see com.ctrip.sqllin.dsl.annotation.CollateRTrim
  * @see com.ctrip.sqllin.dsl.annotation.Check
  */
 class ClauseProcessor(
@@ -90,10 +95,15 @@ class ClauseProcessor(
 
         /** The annotations that declare constraints, which only a table's columns can have. */
         val CONSTRAINT_ANNOTATIONS = listOf(
-            "PrimaryKey", "CompositePrimaryKey", "CollateNoCase", "Unique", "CompositeUnique",
+            "PrimaryKey", "CompositePrimaryKey", "CollateNoCase", "CollateRTrim", "Unique", "CompositeUnique",
             "ForeignKeyGroup", "References", "ForeignKey", "Default", "Check",
         ).map { "$ANNOTATION_PACKAGE.$it" }.toSet()
         const val ANNOTATION_SERIALIZABLE = "kotlinx.serialization.Serializable"
+        const val ANNOTATION_OPT_IN = "kotlin.OptIn"
+        const val ANNOTATION_REQUIRES_OPT_IN = "kotlin.RequiresOptIn"
+        const val EXPERIMENTAL_API = "com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI"
+        const val EXPERIMENTAL_API_NAME = "ExperimentalDSLDatabaseAPI"
+        const val CLAUSE_CONVERTED = "com.ctrip.sqllin.dsl.sql.clause.ClauseConverted"
         const val ANNOTATION_TRANSIENT = "kotlinx.serialization.Transient"
 
         /**
@@ -158,22 +168,13 @@ class ClauseProcessor(
             // Every stored property needs a column. A property of a type no column can hold used to be skipped silently:
             // left out of CREATE TABLE while its serializer still wrote and read it, so it only failed at runtime, and as
             // the last property it left a trailing comma that made CREATE TABLE itself invalid. Report all of them here.
-            val unsupportedProperties = propertyList.filter { getClauseElementTypeStr(it) == null }
-            unsupportedProperties.forEach { property ->
-                environment.logger.error(
-                    "The property '${property.simpleName.asString()}' of '@DBRow' class '$className' has the type " +
-                        "'${property.type.resolve()}', which no column can hold. Supported types are Byte, Short, Int, Long, " +
-                        "Float, Double and their unsigned variants, Boolean, Char, String, ByteArray, enum classes, and type " +
-                        "aliases of these. To keep the property out of the table, annotate it with @kotlinx.serialization.Transient.",
-                    property,
-                )
-            }
-            if (unsupportedProperties.isNotEmpty())
+            val columnTypes = propertyList.map { ColumnTypes.of(it, classDeclaration.containingFile) }
+            if (!reportUnsupported(propertyList, columnTypes, "'@DBRow' class '$className'"))
                 continue
 
             val ftsAnnotations = classDeclaration.annotations.filter { it.qualifiedName == ANNOTATION_FTS4 || it.qualifiedName == ANNOTATION_FTS3 }.toList()
             if (ftsAnnotations.isNotEmpty()) {
-                processFtsTable(classDeclaration, ftsAnnotations, propertyList, tableName as String, visibilityModifier)
+                processFtsTable(classDeclaration, ftsAnnotations, propertyList, columnTypes, tableName as String, visibilityModifier)
                 continue
             }
 
@@ -202,6 +203,11 @@ class ClauseProcessor(
                 // The column properties carry @ColumnNameDslMaker for IntelliJ IDEA's DSL highlighting, a target the compiler
                 // flags as having no effect on scope control. This code is compiled in the user's module, so keep it quiet.
                 writer.write("@Suppress(\"DSL_MARKER_APPLIED_TO_WRONG_TARGET\")\n")
+                // ClauseConverted is experimental, and so can be the type of a converted column, as Uuid is, and the
+                // entity itself, which its declarations opt in to or propagate
+                val hasConverted = columnTypes.any { it is ColumnType.Converted }
+                optInAnnotation(classDeclaration, propertyList, hasConverted, if (hasConverted) listOf(EXPERIMENTAL_API) else emptyList())
+                    ?.let { writer.write(it) }
                 writer.write("${visibilityModifier}object $objectName : Table<$className>(\"$tableName\") {\n\n")
 
                 writer.write("    override fun kSerializer() = $className.serializer()\n\n")
@@ -218,7 +224,7 @@ class ClauseProcessor(
 
                 // Process each property to generate column definitions
                 propertyList.forEachIndexed { index, property ->
-                    val clauseElementTypeName = checkNotNull(getClauseElementTypeStr(property)) // Rejected above
+                    val columnType = columnTypes[index]
                     val propertyName = property.simpleName.asString()
                     val elementName = "$className.serializer().descriptor.getElementName($index)"
                     val isNotNull = property.type.resolve().nullability == Nullability.NOT_NULL
@@ -227,7 +233,7 @@ class ClauseProcessor(
                     with(createSQLBuilder) {
                         append(propertyName)
 
-                        columnConstraintParser.parseProperty(this, property, propertyName, isNotNull)
+                        columnConstraintParser.parseProperty(this, property, propertyName, isNotNull, columnType, index)
 
                         // Before @References, whose constraint name SQLite would give the CHECK constraints after it
                         appendColumnChecks(this, property)
@@ -242,13 +248,14 @@ class ClauseProcessor(
                     // Write 'SelectClause' code.
                     writer.write("    @ColumnNameDslMaker\n")
                     writer.write("    val $propertyName\n")
-                    writer.write("        get() = $clauseElementTypeName($elementName, this, ${!isNotNull})\n\n")
+                    writer.write("        get() = ${clauseElement(columnType, elementName, isNotNull)}\n\n")
                     writer.write("    @ColumnNameDslMaker\n")
-                    writer.write("    var SetClause<$className>.$propertyName: ${property.typeName}")
+                    // A converted type, which can be generic, as a List, with its arguments
+                    writer.write("    var SetClause<$className>.$propertyName: ${(columnType as? ColumnType.Converted)?.typeName ?: property.typeName}")
                     writer.write(if (isNotNull) "\n" else "?\n")
                     writer.write(SET_CLAUSE_GETTER_DEPRECATION)
-                    writer.write("        get() = ${getSetClauseGetterValue(property)}\n")
-                    writer.write("        set(value) = ${appendFunction(elementName, property, isNotNull)}\n\n")
+                    writer.write("        get() = ${getSetClauseGetterValue(columnType)}\n")
+                    writer.write("        set(value) = ${appendFunction(elementName, columnType, isNotNull)}\n\n")
                 }
 
                 columnConstraintParser.generateCodeForPrimaryKey(writer, createSQLBuilder)
@@ -259,8 +266,19 @@ class ClauseProcessor(
                 }
                 createSQLBuilder.append(')')
 
-                // A CHECK expression or a DEFAULT value can hold characters that a Kotlin string literal escapes
-                writer.write("    override val createSQL = \"${kotlinStringContent(createSQLBuilder.toString())}\"\n")
+                // A CHECK expression or a DEFAULT value can hold characters that a Kotlin string literal escapes. The type
+                // of a converted column is the one its serializer stores, which the statement computes when it is read.
+                val createSQL = kotlinStringContent(createSQLBuilder.toString())
+                if (CONVERTED_TYPE.containsMatchIn(createSQL)) {
+                    val template = CONVERTED_TYPE.replace(createSQL) {
+                        val (index, collation) = it.destructured
+                        "\${columnType($index${if (collation.isEmpty()) "" else ", \"$collation\""})}"
+                    }
+                    writer.write("    override val createSQL: String\n")
+                    writer.write("        get() = \"$template\"\n")
+                } else {
+                    writer.write("    override val createSQL = \"$createSQL\"\n")
+                }
 
                 writer.write("}\n")
             }
@@ -289,6 +307,7 @@ class ClauseProcessor(
         classDeclaration: KSClassDeclaration,
         ftsAnnotations: List<KSAnnotation>,
         propertyList: List<KSPropertyDeclaration>,
+        columnTypes: List<ColumnType>,
         tableName: String,
         visibilityModifier: String,
     ) {
@@ -309,7 +328,7 @@ class ClauseProcessor(
 
         var rowIdProperty: KSPropertyDeclaration? = null
         val columns = ArrayList<String>()
-        for (property in propertyList) {
+        for ((property, columnType) in propertyList.zip(columnTypes)) {
             val propertyName = property.simpleName.asString()
             val constraints = property.annotations.filter { it.qualifiedName in CONSTRAINT_ANNOTATIONS }.toList()
             val primaryKey = constraints.find { it.qualifiedName == ANNOTATION_PRIMARY_KEY }
@@ -320,8 +339,8 @@ class ClauseProcessor(
                         error("The property '$propertyName' of FTS table '$className' is named as the rowid. $rules.", property)
                     primaryKey == null ->
                         error("The property '$propertyName' of FTS table '$className' has to be annotated with '@PrimaryKey'. $rules.", property)
-                    resolvedTypeName(property) != FullNameCache.LONG ->
-                        error("The property '$propertyName' of FTS table '$className' has the type '${property.type.resolve()}'. $rules.", property)
+                    columnType != ColumnType.Basic(FullNameCache.LONG) ->
+                        error("The property '$propertyName' of FTS table '$className' has the type '${property.type.resolve()}', or a serializer of its own. $rules, with its default serializer.", property)
                     primaryKey.arguments.any { it.name?.asString() == "autoIncrement" && it.value == true } ->
                         error("The rowid of FTS table '$className' can't be AUTOINCREMENT, which only a table's INTEGER PRIMARY KEY can be.", property)
                     rowIdProperty != null ->
@@ -338,8 +357,8 @@ class ClauseProcessor(
             (constraints - primaryKey).filterNotNull().forEach {
                 error("The property '$propertyName' of FTS table '$className' can't be annotated with '@${it.shortName.asString()}': an FTS table's columns have no constraints.", property)
             }
-            if (resolvedTypeName(property) != FullNameCache.STRING)
-                error("The property '$propertyName' of FTS table '$className' has the type '${property.type.resolve()}', but FTS indexes text, so its columns are String or String?.", property)
+            if (columnType != ColumnType.Basic(FullNameCache.STRING))
+                error("The property '$propertyName' of FTS table '$className' has the type '${property.type.resolve()}', or a serializer of its own, but FTS indexes text, so its columns are String or String? with their default serializer.", property)
             columns.add(propertyName)
         }
         if (columns.isEmpty())
@@ -389,24 +408,26 @@ class ClauseProcessor(
             writer.write("import com.ctrip.sqllin.dsl.sql.FtsTable\n")
             writer.write("import com.ctrip.sqllin.dsl.sql.PrimaryKeyInfo\n\n")
             // As for table objects, the column properties carry @ColumnNameDslMaker for IntelliJ IDEA's DSL
-            // highlighting. FtsTable is experimental, and the table object opts in so that its users don't have to.
+            // highlighting. FtsTable is experimental, and the table object opts in so that its users don't have to, as
+            // it does to the markers that the entity propagates, as its columns are never converted.
             writer.write("@Suppress(\"DSL_MARKER_APPLIED_TO_WRONG_TARGET\")\n")
-            writer.write("@OptIn(ExperimentalDSLDatabaseAPI::class)\n")
+            writer.write(checkNotNull(optInAnnotation(classDeclaration, propertyList, hasConverted = false, listOf(EXPERIMENTAL_API_NAME))))
             writer.write("${visibilityModifier}object $objectName : FtsTable<$className>(\"$tableName\") {\n\n")
             writer.write("    override fun kSerializer() = $className.serializer()\n\n")
             writer.write("    inline operator fun <R> invoke(block: $objectName.(table: $objectName) -> R): R = this.block(this)\n\n")
             propertyList.forEachIndexed { index, property ->
+                val columnType = columnTypes[index] // A String or a Long, checked above
                 val propertyName = property.simpleName.asString()
                 val elementName = "$className.serializer().descriptor.getElementName($index)"
                 val isNotNull = property.type.resolve().nullability == Nullability.NOT_NULL
                 writer.write("    @ColumnNameDslMaker\n")
                 writer.write("    val $propertyName\n")
-                writer.write("        get() = ${checkNotNull(getClauseElementTypeStr(property))}($elementName, this, ${!isNotNull})\n\n")
+                writer.write("        get() = ${clauseElement(columnType, elementName, isNotNull)}\n\n")
                 writer.write("    @ColumnNameDslMaker\n")
                 writer.write("    var SetClause<$className>.$propertyName: ${property.typeName}${if (isNotNull) "" else "?"}\n")
                 writer.write(SET_CLAUSE_GETTER_DEPRECATION)
-                writer.write("        get() = ${getSetClauseGetterValue(property)}\n")
-                writer.write("        set(value) = ${appendFunction(elementName, property, isNotNull)}\n\n")
+                writer.write("        get() = ${getSetClauseGetterValue(columnType)}\n")
+                writer.write("        set(value) = ${appendFunction(elementName, columnType, isNotNull)}\n\n")
             }
             val rowId = rowIdProperty
             if (rowId == null) {
@@ -498,14 +519,6 @@ class ClauseProcessor(
     }
 
     /**
-     * Returns the qualified name of a property's type, without nullability, through a type alias.
-     */
-    private fun resolvedTypeName(property: KSPropertyDeclaration): String? = when (val declaration = property.type.resolve().declaration) {
-        is KSTypeAlias -> declaration.type.resolve().declaration.typeName
-        else -> declaration.typeName
-    }
-
-    /**
      * Escapes [string] to be the content of a Kotlin string literal.
      */
     private fun kotlinStringContent(string: String): String =
@@ -551,7 +564,8 @@ class ClauseProcessor(
                     !property.annotations.any { ksAnnotation -> ksAnnotation.annotationType.resolve().isAssignableFrom(transientName) }
             }.toList()
 
-            var isValid = true
+            val columnTypes = propertyList.map { ColumnTypes.of(it, classDeclaration.containingFile) }
+            var isValid = reportUnsupported(propertyList, columnTypes, "'@DBView' class '$className'")
             classDeclaration.annotations.filter { it.qualifiedName in CONSTRAINT_ANNOTATIONS }.forEach {
                 environment.logger.error("The view '$className' can't be annotated with '@${it.shortName.asString()}': a view has no constraints.", classDeclaration)
                 isValid = false
@@ -561,15 +575,6 @@ class ClauseProcessor(
                 property.annotations.filter { it.qualifiedName in CONSTRAINT_ANNOTATIONS }.forEach {
                     environment.logger.error(
                         "The property '$propertyName' of view '$className' can't be annotated with '@${it.shortName.asString()}': a view's columns have no constraints.",
-                        property,
-                    )
-                    isValid = false
-                }
-                if (getClauseElementTypeStr(property) == null) {
-                    environment.logger.error(
-                        "The property '$propertyName' of '@DBView' class '$className' has the type '${property.type.resolve()}', which no column can hold. " +
-                            "Supported types are Byte, Short, Int, Long, Float, Double and their unsigned variants, Boolean, Char, String, ByteArray, enum classes, " +
-                            "and type aliases of these. To leave the property out of the view, annotate it with @kotlinx.serialization.Transient.",
                         property,
                     )
                     isValid = false
@@ -601,16 +606,16 @@ class ClauseProcessor(
                 // As for table objects, the column properties carry @ColumnNameDslMaker for IntelliJ IDEA's DSL
                 // highlighting. View is experimental, and the view object opts in so that its users don't have to.
                 writer.write("@Suppress(\"DSL_MARKER_APPLIED_TO_WRONG_TARGET\")\n")
-                writer.write("@OptIn(ExperimentalDSLDatabaseAPI::class)\n")
+                val hasConverted = columnTypes.any { it is ColumnType.Converted }
+                writer.write(checkNotNull(optInAnnotation(classDeclaration, propertyList, hasConverted, listOf(EXPERIMENTAL_API_NAME))))
                 writer.write("${visibilityModifier}object $objectName : View<$className>(\"$viewName\") {\n\n")
                 writer.write("    override fun kSerializer() = $className.serializer()\n\n")
                 writer.write("    inline operator fun <R> invoke(block: $objectName.(view: $objectName) -> R): R = this.block(this)\n\n")
                 propertyList.forEachIndexed { index, property ->
-                    val clauseElementTypeName = checkNotNull(getClauseElementTypeStr(property)) // Rejected above
                     val isNotNull = property.type.resolve().nullability == Nullability.NOT_NULL
                     writer.write("    @ColumnNameDslMaker\n")
                     writer.write("    val ${property.simpleName.asString()}\n")
-                    writer.write("        get() = $clauseElementTypeName($className.serializer().descriptor.getElementName($index), this, ${!isNotNull})\n\n")
+                    writer.write("        get() = ${clauseElement(columnTypes[index], "$className.serializer().descriptor.getElementName($index)", isNotNull)}\n\n")
                 }
                 writer.write("}\n")
             }
@@ -622,33 +627,67 @@ class ClauseProcessor(
         get() = annotationType.resolve().declaration.qualifiedName?.asString()
 
     /**
-     * Maps a property's Kotlin type to the corresponding clause element type name.
+     * Reports the properties that no column can hold, as [columnTypes] give them, of [owner], as `'@DBRow' class 'Person'`.
      *
-     * Handles three categories:
-     * - **Typealiases**: Resolves to underlying type and maps to appropriate clause type
-     * - **Enum classes**: Maps to `ClauseEnum<EnumType>` for type-safe enum operations
-     * - **Standard types**: Maps to `ClauseNumber<Type>`, `ClauseString<Type>`, ClauseBoolean, or ClauseBlob
-     *
-     * The type argument is the property's type without nullability, as an element knows the type of its values, so
-     * that `AS` only selects it into a property of that type.
-     *
-     * @param property The property declaration to analyze
-     * @return The clause type (such as `ClauseNumber<kotlin.Int>` or `ClauseEnum<com.example.Status>`), or null if unsupported
+     * @return Whether there are none
      */
-    private fun getClauseElementTypeStr(property: KSPropertyDeclaration): String? = when (
-        val declaration = property.type.resolve().declaration
-    ) {
-        is KSTypeAlias -> {
-            val realDeclaration = declaration.type.resolve().declaration
-            getClauseElementTypeStrByTypeName(realDeclaration.typeName) ?: kotlin.run {
-                if (realDeclaration is KSClassDeclaration && realDeclaration.classKind == ClassKind.ENUM_CLASS)
-                    "ClauseEnum<${realDeclaration.typeName}>"
-                else
-                    null
+    private fun reportUnsupported(propertyList: List<KSPropertyDeclaration>, columnTypes: List<ColumnType>, owner: String): Boolean {
+        var isValid = true
+        propertyList.zip(columnTypes).forEach { (property, columnType) ->
+            if (columnType is ColumnType.Unsupported) {
+                environment.logger.error("The property '${property.simpleName.asString()}' of $owner ${columnType.reason}.", property)
+                isValid = false
             }
         }
-        is KSClassDeclaration if declaration.classKind == ClassKind.ENUM_CLASS -> "ClauseEnum<${declaration.typeName}>"
-        else -> getClauseElementTypeStrByTypeName(declaration.typeName)
+        return isValid
+    }
+
+    /**
+     * Returns the `@OptIn` annotation of the object generated for [classDeclaration], with a line break, which opts in
+     * to [markers], as they are written, and to the markers that the object needs because of the entity's declarations:
+     * those that the class, its [properties] or its file are annotated with, which propagate their requirement to the
+     * uses of the class, as the object's are; and, if the table [hasConverted] columns, those that their `@OptIn`s give,
+     * as the type of a converted column, as `Uuid`, can need, as it is written in the object. Null if there are none.
+     */
+    private fun optInAnnotation(
+        classDeclaration: KSClassDeclaration,
+        properties: List<KSPropertyDeclaration>,
+        hasConverted: Boolean,
+        markers: List<String>,
+    ): String? {
+        val annotations = classDeclaration.annotations + properties.asSequence().flatMap { it.annotations } +
+            classDeclaration.containingFile?.annotations.orEmpty()
+        val propagated = annotations
+            .map { it.annotationType.resolve().declaration }
+            .filter { declaration -> declaration.annotations.any { it.qualifiedName == ANNOTATION_REQUIRES_OPT_IN } }
+            .mapNotNull { it.qualifiedName?.asString() }
+        val optedIn = if (hasConverted) {
+            annotations
+                .filter { it.qualifiedName == ANNOTATION_OPT_IN }
+                .flatMap { annotation -> annotation.arguments.flatMap { (it.value as? List<*>).orEmpty() } }
+                .mapNotNull { (it as? KSType)?.declaration?.qualifiedName?.asString() }
+        } else {
+            emptySequence()
+        }
+        // ExperimentalDSLDatabaseAPI is written by its simple name where the object imports it
+        val all = (markers.asSequence() + propagated + optedIn)
+            .distinctBy { if (it == EXPERIMENTAL_API_NAME) EXPERIMENTAL_API else it }
+            .toList()
+        return if (all.isEmpty()) null else "@OptIn(${all.joinToString { "$it::class" }})\n"
+    }
+
+    /**
+     * Returns the Kotlin expression of the element of a column of [columnType], named [elementName], as
+     * `ClauseNumber<kotlin.Int>(name, this, false)`.
+     *
+     * The type argument is the property's type without nullability, as an element knows the type of its values, so
+     * that `AS` only selects it into a property of that type. A converted column's element gets its serializer.
+     */
+    private fun clauseElement(columnType: ColumnType, elementName: String, isNotNull: Boolean): String = when (columnType) {
+        is ColumnType.Basic -> "${checkNotNull(getClauseElementTypeStrByTypeName(columnType.typeName))}($elementName, this, ${!isNotNull})"
+        is ColumnType.DefaultEnum -> "ClauseEnum<${columnType.declaration.typeName}>($elementName, this, ${!isNotNull})"
+        is ColumnType.Converted -> "$CLAUSE_CONVERTED<${columnType.typeName}>($elementName, this, ${!isNotNull}, ${columnType.serializer})"
+        is ColumnType.Unsupported -> error("The unsupported column has been reported") // Rejected before generating
     }
 
     /**
@@ -660,7 +699,7 @@ class ClauseProcessor(
      * - Boolean → ClauseBoolean
      * - ByteArray → ClauseBlob
      *
-     * Note: Enum types are handled separately by [getClauseElementTypeStr].
+     * Note: Enum types are handled separately by [clauseElement].
      *
      * @param typeName The fully qualified type name to map
      * @return The clause type (such as `ClauseNumber<kotlin.Int>`), or null if unsupported
@@ -688,29 +727,18 @@ class ClauseProcessor(
     }
 
     /**
-     * Generates the default getter value for SetClause properties based on type.
-     * Supports typealiases by resolving them to their underlying types.
-     *
-     * @return The default value string for the property type, or null if unsupported
+     * Generates the getter value of a SetClause property, a placeholder that is never read, as reading it is an error:
+     * a default value of its type, the first entry of an enum, or, for a converted type, which has no known value, a
+     * call that throws.
      */
-    private fun getSetClauseGetterValue(property: KSPropertyDeclaration): String? {
-        fun KSClassDeclaration.firstEnum() = declarations
+    private fun getSetClauseGetterValue(columnType: ColumnType): String? = when (columnType) {
+        is ColumnType.Basic -> getDefaultValueByType(columnType.typeName)
+        is ColumnType.DefaultEnum -> columnType.declaration.declarations
             .filterIsInstance<KSClassDeclaration>()
             .firstOrNull { it.classKind == ClassKind.ENUM_ENTRY }
             ?.qualifiedName?.asString()
-        return when (val declaration = property.type.resolve().declaration) {
-            is KSTypeAlias -> {
-                val realDeclaration = declaration.type.resolve().declaration
-                getDefaultValueByType(realDeclaration.typeName) ?: kotlin.run {
-                    if (realDeclaration is KSClassDeclaration && realDeclaration.classKind == ClassKind.ENUM_CLASS)
-                        realDeclaration.firstEnum()
-                    else
-                        null
-                }
-            }
-            is KSClassDeclaration if declaration.classKind == ClassKind.ENUM_CLASS -> declaration.firstEnum()
-            else -> getDefaultValueByType(declaration.typeName)
-        }
+        is ColumnType.Converted -> "error(\"A column in SET {} can only be assigned.\")"
+        is ColumnType.Unsupported -> null
     }
 
     /**
@@ -741,33 +769,20 @@ class ClauseProcessor(
     }
 
     /**
-     * Generates the appropriate append function call for SetClause setters.
-     * Supports typealiases by resolving them to their underlying types.
-     *
-     * For enum types, converts the enum value to its ordinal before appending, with a safe call only
-     * when the enum is nullable.
+     * Generates the call of a SetClause setter that appends its value: as it is, as the ordinal of an enum entry, with a
+     * safe call only when the enum is nullable, or converted by the serializer of a converted column, as it is stored.
      *
      * @param elementName The serialized element name
-     * @param property The property declaration
+     * @param columnType What the column holds
      * @param isNotNull Whether the setter's `value` is non-null, as for the SetClause property it belongs to
      * @return The append function call string, or null if unsupported type
      */
-    private fun appendFunction(elementName: String, property: KSPropertyDeclaration, isNotNull: Boolean): String? {
+    private fun appendFunction(elementName: String, columnType: ColumnType, isNotNull: Boolean): String? = when (columnType) {
+        is ColumnType.Basic -> appendFunctionByTypeName(elementName, columnType.typeName)
         // A safe call on a non-null value is reported as unnecessary, in the module compiling the generated code
-        val appendEnum = "appendAny($elementName, value${if (isNotNull) "" else "?"}.ordinal)"
-        return when (val declaration = property.type.resolve().declaration) {
-            is KSTypeAlias -> {
-                val realDeclaration = declaration.type.resolve().declaration
-                appendFunctionByTypeName(elementName, realDeclaration.typeName) ?: kotlin.run {
-                    if (realDeclaration is KSClassDeclaration && realDeclaration.classKind == ClassKind.ENUM_CLASS)
-                        appendEnum
-                    else
-                        null
-                }
-            }
-            is KSClassDeclaration if declaration.classKind == ClassKind.ENUM_CLASS -> appendEnum
-            else -> appendFunctionByTypeName(elementName, declaration.typeName)
-        }
+        is ColumnType.DefaultEnum -> "appendAny($elementName, value${if (isNotNull) "" else "?"}.ordinal)"
+        is ColumnType.Converted -> "appendConverted($elementName, value, ${columnType.serializer})"
+        is ColumnType.Unsupported -> null
     }
 
     /**

@@ -95,17 +95,10 @@ internal fun StringBuilder.appendDBColumnName(
     if (isInsertId) {
         appendDBColumnName(descriptor)
     } else {
-        val lastIndex = descriptor.elementsCount - 1
-        for (i in 0 ..< lastIndex) {
-            val elementName = descriptor.getElementName(i)
-            if (elementName != primaryKeyName) {
-                append(elementName)
-                append(',')
-            }
-        }
-        val elementName = descriptor.getElementName(lastIndex)
-        if (elementName != primaryKeyName)
-            append(elementName)
+        val columnNames = (0 ..< descriptor.elementsCount)
+            .map(descriptor::getElementName)
+            .filter { it != primaryKeyName }
+        append(columnNames.joinToString(","))
     }
 }
 

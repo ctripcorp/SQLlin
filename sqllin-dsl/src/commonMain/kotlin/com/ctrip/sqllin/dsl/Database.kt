@@ -18,11 +18,13 @@ package com.ctrip.sqllin.dsl
 
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
+import com.ctrip.sqllin.dsl.sql.statement.Changes
 import com.ctrip.sqllin.dsl.sql.statement.SelectStatement
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
@@ -67,19 +69,24 @@ public class Database internal constructor(
      * All SQL operations within the block are executed when the scope exits.
      * Statements are batched and executed in order.
      *
+     * Unlike [suspendedScope], it isn't serialized with the scopes of other threads, nor with the queries of
+     * [observe], which run on `Dispatchers.IO` by default: on the JVM and Kotlin/Native, where the connection is locked
+     * for each statement rather than for a transaction, their statements can run in its transaction. To share the
+     * database between threads, use [suspendedScope].
+     *
      * @param block The DSL block containing SQL operations
      * @return The result of the block
      */
     public operator fun <T> invoke(block: DatabaseScope.() -> T): T {
         val databaseScope = DatabaseScope(databaseConnection, enableSimpleSQLLog)
         val result = databaseScope.block()
-        execute(databaseScope)
+        notifyingChanges { execute(databaseScope) }
         return result
     }
 
     /**
-     * The tracker of the tables that observed queries read, which the first observed query creates, so that the code of
-     * a database that observes no query doesn't reach the tracker, which code shrinkers then remove.
+     * The tracker of the tables that observed queries and versioned reads read, which the first of them creates, so
+     * that the code of a database that uses neither doesn't reach the tracker, which code shrinkers then remove.
      */
     @Volatile
     private var invalidationTracker: InvalidationTracker? = null
@@ -91,16 +98,34 @@ public class Database internal constructor(
 
     /**
      * Runs the statements of [databaseScope], then tells the observed queries what they changed. They are told even
-     * when a statement fails, as the ones before it may have changed something.
+     * when a statement fails, as the ones before it may have changed something, and then a failure to tell them is
+     * added to the statement's, rather than taking its place.
      */
     private fun execute(databaseScope: DatabaseScope) {
         val changes = databaseScope.changes
         val writtenTables = databaseScope.writtenTables
         try {
             databaseScope.executeAllStatements()
-        } finally {
-            invalidationTracker?.refresh(changes, writtenTables)
+        } catch (e: Throwable) {
+            runCatching { invalidationTracker?.refresh(changes, writtenTables) }.exceptionOrNull()?.let(e::addSuppressed)
+            throw e
         }
+        invalidationTracker?.refresh(changes, writtenTables)
+    }
+
+    /**
+     * Runs [run], which executes a scope, then the callbacks of [onChange] whose tables it changed. They run once the
+     * executive lock is released, so that a callback that uses the database doesn't wait for it forever, and even when
+     * a statement fails, as the ones before it may have changed something.
+     */
+    private inline fun notifyingChanges(run: () -> Unit) {
+        try {
+            run()
+        } catch (e: Throwable) {
+            runCatching { invalidationTracker?.dispatch() }.exceptionOrNull()?.let(e::addSuppressed)
+            throw e
+        }
+        invalidationTracker?.dispatch()
     }
 
     private val executiveMutex by lazy { Mutex() }
@@ -117,8 +142,10 @@ public class Database internal constructor(
     public suspend infix fun <T> suspendedScope(block: suspend DatabaseScope.() -> T): T {
         val databaseScope = DatabaseScope(databaseConnection, enableSimpleSQLLog)
         val result = databaseScope.block()
-        executiveMutex.withLock {
-            execute(databaseScope)
+        notifyingChanges {
+            executiveMutex.withLock {
+                execute(databaseScope)
+            }
         }
         return result
     }
@@ -140,7 +167,8 @@ public class Database internal constructor(
      * UPDATE or DELETE that matches no rows. Several changes in a row may lead to a single query.
      *
      * Only changes made through this database are seen, not those of another database instance or connection on the
-     * same file, or of another process. To combine the results of several SELECTs, combine the flows that observe them;
+     * same file, or of another process. The queries run in [context], on another thread than the one that writes, so
+     * write through [suspendedScope], which they are serialized with, rather than [invoke], which they aren't. To combine the results of several SELECTs, combine the flows that observe them;
      * as each runs its query on its own, a change to the tables of both may briefly show the new results of one with the
      * old results of the other.
      *
@@ -169,4 +197,82 @@ public class Database internal constructor(
                 emit(statement.getResults())
             }
         }.distinctUntilChanged().flowOn(context)
+
+    /**
+     * Runs the read-only scope [block], and returns its result with a token of the versions of the tables its SELECTs
+     * read, so that a reader such as a `PagingSource` learns when they change, which [awaitChange] and [onChange] tell.
+     *
+     * Example:
+     * ```kotlin
+     * val (page, since) = database.versioned {
+     *     PersonTable SELECT ORDER_BY(PersonTable.age to ASC) LIMIT 20 OFFSET 40
+     * }
+     * val persons = page.getResults()
+     * // Once a statement run through this database changes the person table
+     * database.awaitChange(since)
+     * ```
+     *
+     * The tables are tracked, and their versions captured, under the lock that the SELECTs run under, before they run,
+     * so that no change made after them is missed; a change they already include may make the token stale too. A view
+     * stands for the tables it reads, and a subquery's tables count. The token only sees the changes made through this
+     * database, as [observe] does. To cover reads of several scopes, as when a query is built from the results of
+     * another, combine their tokens with [TableVersions.plus].
+     *
+     * @param block Builds the SELECTs to run, which are its only statements
+     * @return The result of [block], and the token of the versions of the tables its SELECTs read
+     * @throws IllegalArgumentException if [block] writes, as its token couldn't tell its own changes from others',
+     * in which case none of its statements run
+     */
+    @ExperimentalDSLDatabaseAPI
+    public suspend fun <T> versioned(block: suspend DatabaseScope.() -> T): Pair<T, TableVersions> {
+        val databaseScope = DatabaseScope(databaseConnection, enableSimpleSQLLog)
+        val result = databaseScope.block()
+        require(databaseScope.changes == Changes.NONE) {
+            "versioned { } only runs SELECTs, as its token couldn't tell its own changes from others': write in another scope."
+        }
+        val tracker = invalidationTracker()
+        val versions = executiveMutex.withLock {
+            // Tracked before the SELECTs run, so that no change after them is missed
+            val tables = tracker.track(databaseScope.readTables)
+            val versions = tables.associateWith { tracker.versions.value[it] ?: 0L }
+            execute(databaseScope)
+            versions
+        }
+        return result to TableVersions(tracker, versions)
+    }
+
+    /**
+     * Suspends until a statement run through this database changes one of the tables of [since], or returns at once
+     * if one already has.
+     *
+     * @throws IllegalArgumentException if [since] is a token of another database
+     */
+    @ExperimentalDSLDatabaseAPI
+    public suspend fun awaitChange(since: TableVersions) {
+        trackerOf(since).versions.first { since.isStaleIn(it) }
+    }
+
+    /**
+     * Registers [callback] to run once, when a statement run through this database changes one of the tables of
+     * [since], unless one already has: then it registers nothing and returns null, so that the caller acts on the change
+     * itself, as a `PagingSource` returns `LoadResult.Invalid()`. It registers before it checks, so that a change between
+     * the read and the registration either makes it return null or runs [callback], never neither.
+     *
+     * [callback] runs on the thread that wrote, once the writing scope has released the database's lock, so it may use
+     * the database, but should return quickly, as the scope's caller waits for it. The registration holds [callback]
+     * until it runs or is closed.
+     *
+     * @return What closes the registration, so that [callback] no longer runs, or null when [since] is already stale
+     * @throws IllegalArgumentException if [since] is a token of another database
+     */
+    @ExperimentalDSLDatabaseAPI
+    public fun onChange(since: TableVersions, callback: () -> Unit): AutoCloseable? =
+        trackerOf(since).register(since, callback)
+
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    private fun trackerOf(since: TableVersions): InvalidationTracker {
+        val tracker = invalidationTracker
+        require(tracker != null && since.tracker === tracker) { "The token belongs to another database, whose changes this one doesn't see." }
+        return tracker
+    }
 }

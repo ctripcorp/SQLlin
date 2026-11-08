@@ -52,38 +52,32 @@ public fun <T> LIMIT(count: Int): LimitClause<T> = LimitClause(count)
 @StatementDslMaker
 public infix fun <T> WhereSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
 public infix fun <T> OrderBySelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
 public infix fun <T> HavingSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
-        container changeLastStatement it
-    }
-
-@StatementDslMaker
-public infix fun <T> JoinSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
-    appendToLimit(LimitClause(count)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @ExperimentalDSLDatabaseAPI
 @StatementDslMaker
 public infix fun <T> CompoundSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
 public infix fun <T> ResultColumnSelectStatement<T>.LIMIT(count: Int): LimitSelectStatement<T> =
     appendToLimit(LimitClause(count)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 /**
@@ -110,5 +104,61 @@ public class OffsetClause<T> internal constructor(
 @StatementDslMaker
 public infix fun <T> LimitSelectStatement<T>.OFFSET(rowNo: Int): FinalSelectStatement<T> =
     appendToFinal(OffsetClause(rowNo)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
+
+// ========== LIMIT and OFFSET of UPDATE and DELETE ==========
+
+/**
+ * Makes this UPDATE or DELETE write at most [count] rows, the first in the order of the ORDER BY before it if it has
+ * one, and otherwise any, as in `PersonTable DELETE WHERE(PersonTable.age LT 18) LIMIT 1000`, which deletes the rows in
+ * batches; a negative count is no limit, which only OFFSET then gives, as in
+ * `ORDER_BY (MessageTable.time to DESC) LIMIT -1 OFFSET 100`, the rows after the first 100.
+ *
+ * SQLlin writes it as the subquery that SQLite turns it into, which every platform runs, as
+ * [WhereUpdateDeleteStatement.ORDER_BY] describes.
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <T> WhereUpdateDeleteStatement<T>.LIMIT(count: Int): LimitUpdateDeleteStatement<T> =
+    LimitUpdateDeleteStatement<T>(parts.copy(limit = count), container, connection).also {
+        container.replaceStatement(this, it)
+    }
+
+/**
+ * Makes this UPDATE or DELETE write at most [count] rows, the first in the order of its ORDER BY.
+ *
+ * @see WhereUpdateDeleteStatement.LIMIT
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <T> OrderByUpdateDeleteStatement<T>.LIMIT(count: Int): LimitUpdateDeleteStatement<T> =
+    LimitUpdateDeleteStatement<T>(parts.copy(limit = count), container, connection).also {
+        container.replaceStatement(this, it)
+    }
+
+/**
+ * Makes this UPDATE without WHERE write at most [count] rows of the table.
+ *
+ * @see WhereUpdateDeleteStatement.LIMIT
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <T> UpdateStatementWithoutWhereClause<T>.LIMIT(count: Int): LimitUpdateDeleteStatement<T> =
+    LimitUpdateDeleteStatement<T>(parts.copy(limit = count), statementContainer, connection).also {
+        statementContainer.replaceStatement(this, it)
+    }
+
+/**
+ * Makes this UPDATE or DELETE skip [rowNo] rows before those its LIMIT chooses, in the order of its ORDER BY.
+ *
+ * @see WhereUpdateDeleteStatement.LIMIT
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <T> LimitUpdateDeleteStatement<T>.OFFSET(rowNo: Int): UpdateDeleteStatement {
+    val final = parts.copy(offset = rowNo)
+    return UpdateDeleteStatement(final.sql, connection, final.parameters, final.tableName).also {
+        container.replaceStatement(this, it)
+    }
+}

@@ -45,5 +45,5 @@ internal class HavingClause<T>(val selectCondition: SelectCondition) : Condition
 @StatementDslMaker
 public infix fun <T> GroupBySelectStatement<T>.HAVING(condition: SelectCondition): HavingSelectStatement<T> =
     appendToHaving(HavingClause(condition)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }

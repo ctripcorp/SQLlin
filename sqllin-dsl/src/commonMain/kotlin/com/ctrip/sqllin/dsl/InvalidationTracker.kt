@@ -19,6 +19,7 @@ package com.ctrip.sqllin.dsl
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.driver.withQuery
 import com.ctrip.sqllin.driver.withTransaction
+import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.statement.Changes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -43,10 +44,14 @@ import kotlinx.coroutines.flow.update
  * only means the queries run once more.
  *
  * TEMP tables and triggers belong to the connection, so changes made through another connection, or by another
- * process, aren't seen. A table stays tracked until the connection closes.
+ * process, aren't seen. A table stays tracked until the connection closes. They are also rolled back with the
+ * transaction they are created in: on the JVM and Kotlin/Native, the connection is locked for each statement rather
+ * than for a transaction, so a blocking database scope on another thread can have one open while [track] creates them,
+ * and its rollback takes them with it. [refresh] creates them again then.
  *
  * @author Yuang Qiao
  */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
 internal class InvalidationTracker(private val connection: DatabaseConnection) {
 
     private val trackedTables = MutableStateFlow<Set<String>>(emptySet())
@@ -67,6 +72,71 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
      * The count of changes to each tracked table. It only grows.
      */
     val versions: StateFlow<Map<String, Long>> = _versions
+
+    /**
+     * The callbacks of [register] that wait for a change of the tables of their tokens. The list is replaced as a
+     * whole, so that registering, closing and firing are atomic, from whichever thread they run on.
+     */
+    private val registrations = MutableStateFlow<List<Registration>>(emptyList())
+
+    private class Registration(val since: TableVersions, val callback: () -> Unit)
+
+    /**
+     * Registers [callback] to run once a table of [since] changes, unless one already has, in which case it registers
+     * nothing and returns null.
+     *
+     * It registers before it checks, so that a change between the read that captured [since] and the registration is
+     * either seen here, or fires the callback: never neither, and never both.
+     *
+     * @return What closes the registration, or null when [since] is already stale
+     */
+    fun register(since: TableVersions, callback: () -> Unit): AutoCloseable? {
+        val registration = Registration(since, callback)
+        registrations.update { it + registration }
+        if (since.isStaleIn(versions.value) && remove(listOf(registration)).isNotEmpty())
+            return null
+        return object : AutoCloseable {
+            override fun close() {
+                remove(listOf(registration))
+            }
+        }
+    }
+
+    /**
+     * Removes [toRemove] from the registrations, and returns those of them that this call removed, rather than another
+     * that ran at the same time.
+     */
+    private fun remove(toRemove: List<Registration>): List<Registration> {
+        while (true) {
+            val current = registrations.value
+            val removed = toRemove.filter { it in current }
+            if (removed.isEmpty() || registrations.compareAndSet(current, current - removed.toSet()))
+                return removed
+        }
+    }
+
+    /**
+     * Runs the callbacks whose tokens are stale, once each, after a scope that may have written. It runs once the scope
+     * released the executive lock, so that a callback that uses the database doesn't wait for it forever, on the thread
+     * that wrote. A failure of a callback is thrown once the others have run.
+     */
+    fun dispatch() {
+        val current = versions.value
+        val fired = remove(registrations.value.filter { it.since.isStaleIn(current) })
+        var failure: Throwable? = null
+        for (registration in fired) {
+            try {
+                registration.callback()
+            } catch (e: Throwable) {
+                val first = failure
+                if (first == null)
+                    failure = e
+                else
+                    first.addSuppressed(e)
+            }
+        }
+        failure?.let { throw it }
+    }
 
     /**
      * Starts tracking the tables that the tables and views named [relations] read, creating their triggers, unless they
@@ -158,7 +228,10 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
             val virtual = tables intersect virtualTables()
             virtualTables.value = virtual
             triggeredTables.value = if (virtual.isEmpty()) emptySet() else triggeredTables()
-            for (table in tables - virtual)
+        }
+        restoreLostObjects(tables)
+        if (changes == Changes.SCHEMA) {
+            for (table in tables - virtualTables.value)
                 createTriggers(table)
             connection.execSQL(COUNT_ALL)
         } else {
@@ -179,6 +252,42 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
         }
         _versions.update { versions ->
             versions + counts.filter { (table, count) -> count > (versions[table] ?: -1L) }
+        }
+    }
+
+    /**
+     * Creates the TEMP table and the triggers of the tracked [tables] again where they are gone, as a rollback can take
+     * them, and counts a change of each table whose row or triggers were gone, as its changes may have been missed.
+     */
+    private fun restoreLostObjects(tables: Set<String>) {
+        // On Android, a query outside a transaction may run on a reader connection, which has no TEMP objects
+        val (loggedTables, triggerCounts) = connection.withTransaction {
+            val logExists = it.withQuery(LOG_EXISTS) { cursor -> cursor.next() && cursor.getLong(0) > 0 }
+            val logged = if (logExists) it.withQuery(SELECT_LOGGED_TABLES) { cursor ->
+                buildSet<String> {
+                    cursor.forEachRow { add(cursor.getString(0)!!) }
+                }
+            } else null
+            val triggers = it.withQuery(COUNT_TRIGGERS) { cursor ->
+                buildMap<String, Long> {
+                    cursor.forEachRow { put(cursor.getString(0)!!, cursor.getLong(1)) }
+                }
+            }
+            logged to triggers
+        }
+        val virtual = virtualTables.value
+        val lostTables = tables.filter { table ->
+            loggedTables == null || table !in loggedTables || (table !in virtual && (triggerCounts[table] ?: 0L) < OPERATIONS.size)
+        }
+        if (lostTables.isEmpty())
+            return
+        connection.execSQL(CREATE_LOG)
+        for (table in lostTables) {
+            // Above the version last read, so that the queries that read the table run again
+            connection.execSQL(INSERT_LOG_VERSION, arrayOf<Any?>(table, _versions.value[table] ?: 0L))
+            connection.execSQL(COUNT_TABLE, arrayOf(table))
+            if (table !in virtual)
+                createTriggers(table)
         }
     }
 
@@ -211,8 +320,13 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
         const val LOG = "sqllin_modification_log"
         const val CREATE_LOG = "CREATE TEMP TABLE IF NOT EXISTS $LOG(table_name TEXT PRIMARY KEY NOT NULL, version INTEGER NOT NULL DEFAULT 0)"
         const val INSERT_LOG_ROW = "INSERT OR IGNORE INTO $LOG(table_name) VALUES(?)"
+        const val INSERT_LOG_VERSION = "INSERT OR IGNORE INTO $LOG(table_name, version) VALUES(?, ?)"
         const val COUNT_ALL = "UPDATE $LOG SET version = version + 1"
+        const val COUNT_TABLE = "$COUNT_ALL WHERE table_name = ?"
         const val SELECT_LOG = "SELECT table_name, version FROM $LOG"
+        const val SELECT_LOGGED_TABLES = "SELECT table_name FROM $LOG"
+        const val LOG_EXISTS = "SELECT count(*) FROM sqlite_temp_master WHERE type = 'table' AND name = '$LOG'"
+        const val COUNT_TRIGGERS = "SELECT tbl_name, count(*) FROM sqlite_temp_master WHERE type = 'trigger' AND name LIKE 'sqllin\\_modification\\_trigger\\_%' ESCAPE '\\' GROUP BY tbl_name"
         val OPERATIONS = listOf("INSERT", "UPDATE", "DELETE")
 
         fun identifier(name: String): String = "\"${name.replace("\"", "\"\"")}\""

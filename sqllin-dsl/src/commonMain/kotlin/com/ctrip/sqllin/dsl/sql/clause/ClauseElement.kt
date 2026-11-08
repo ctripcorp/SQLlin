@@ -30,6 +30,8 @@ import com.ctrip.sqllin.dsl.sql.Relation
  * - [ClauseString]: String column/function references with text comparison operators
  * - [ClauseBlob]: BLOB (ByteArray) column references with comparison operators
  * - [ClauseEnum]: Enum column references with ordinal-based comparison operators
+ * - [ClauseConverted]: References to the columns of a type whose serializer converts its values, which its conditions
+ *   compare as stored
  *
  * Used in:
  * - WHERE/HAVING conditions

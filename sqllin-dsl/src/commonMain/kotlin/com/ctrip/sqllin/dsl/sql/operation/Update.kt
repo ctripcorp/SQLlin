@@ -21,6 +21,7 @@ import com.ctrip.sqllin.dsl.sql.statement.StatementContainer
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.clause.SetClause
 import com.ctrip.sqllin.dsl.sql.clause.writtenColumns
+import com.ctrip.sqllin.dsl.sql.statement.UpdateDeleteParts
 import com.ctrip.sqllin.dsl.sql.statement.UpdateStatementWithoutWhereClause
 
 /**
@@ -48,16 +49,20 @@ internal object Update : Operation {
      * @param clause SET clause with column assignments
      * @return Statement that can either execute or be refined with WHERE
      */
+    /**
+     * Builds an UPDATE statement, which [update] starts with: `UPDATE `, or one with a conflict resolution, as
+     * `UPDATE OR IGNORE `, of [target], the table, or the table with `INDEXED BY` or `NOT INDEXED`.
+     */
     fun <T> update(
         table: Table<T>,
         connection: DatabaseConnection,
         container: StatementContainer,
         clause: SetClause<T>,
+        update: String = sqlStr,
+        target: String = table.tableName,
     ): UpdateStatementWithoutWhereClause<T> {
         val assignments = clause.assignments
         val sql = buildString {
-            append(sqlStr)
-            append(table.tableName)
             append(" SET ")
             if (assignments == null) {
                 append(clause.finalize())
@@ -71,6 +76,13 @@ internal object Update : Operation {
                 }
             }
         }
-        return UpdateStatementWithoutWhereClause(sql, container, connection, clause.parameters, table.tableName)
+        val parts = UpdateDeleteParts(
+            statement = update,
+            table = table,
+            target = target,
+            assignments = sql,
+            assignmentParameters = clause.parameters,
+        )
+        return UpdateStatementWithoutWhereClause(parts, container, connection)
     }
 }

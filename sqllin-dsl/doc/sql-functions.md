@@ -125,7 +125,9 @@ fun sample() {
   `notes NEQ literal("vip")` leaves out. They do what `IS DISTINCT FROM` does, on every SQLite version.
 - `COLLATE` compares and sorts a string by a collation, `BINARY`, `NOCASE` or `RTRIM`:
   `(name COLLATE NOCASE) EQ "ann"` matches `'Ann'` too, and `ORDER_BY((name COLLATE NOCASE) to ASC)` sorts ignoring
-  case. `NOCASE` only ignores the case of the ASCII letters.
+  case. `NOCASE` only ignores the case of the ASCII letters. It also gives a column of an index its collation, as
+  [CREATE INDEX](modify-database-and-transaction.md#create-index---creating-indexes) describes, while `@CollateNoCase`
+  and `@CollateRTrim` give a column its own.
 - `and`, `or`, `inv()`, `shl` and `shr` are the bitwise operators of `Int` and `Long`, named as Kotlin names them.
 - A _SELECT_ of a single column can be a value, as described in [Scalar Subqueries](advanced-query.md#scalar-subqueries).
 

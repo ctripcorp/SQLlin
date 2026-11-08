@@ -18,6 +18,7 @@ package com.ctrip.sqllin.dsl.test
 
 import com.ctrip.sqllin.dsl.annotation.Check
 import com.ctrip.sqllin.dsl.annotation.CollateNoCase
+import com.ctrip.sqllin.dsl.annotation.CollateRTrim
 import com.ctrip.sqllin.dsl.annotation.CompositePrimaryKey
 import com.ctrip.sqllin.dsl.annotation.CompositeUnique
 import com.ctrip.sqllin.dsl.annotation.DBRow
@@ -125,6 +126,13 @@ data class PersonWithId(
     val age: Age,
 )
 
+@DBRow("generated_key_last")
+@Serializable
+data class GeneratedKeyLast(
+    val name: String,
+    @PrimaryKey val id: Long? = null,
+)
+
 @DBRow("product")
 @Serializable
 data class Product(
@@ -230,6 +238,29 @@ data class CollateNoCaseTest(
     @CollateNoCase val username: String,
     @CollateNoCase @Unique val email: String,
     val description: String,
+)
+
+/**
+ * A table with a column named `rowid`, which `rowid` then means in SQL rather than the table's rowid, as the ORDER BY
+ * and LIMIT of an UPDATE or DELETE have to tell apart.
+ */
+@DBRow("row_id_named")
+@Serializable
+data class RowIdNamed(
+    val rowid: Long,
+    val name: String,
+)
+
+/**
+ * Test entity for @CollateRTrim, a column whose values compare ignoring the spaces at their ends.
+ */
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow("collate_rtrim_test")
+@Serializable
+data class CollateRTrimTest(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @CollateRTrim @Unique val code: String,
+    val name: String,
 )
 
 /**
@@ -1019,3 +1050,12 @@ data class PersonBookTitle(val age: Age, val title: String?)
  */
 @Serializable
 data class AuthorCode(val age: Age, val code: Code)
+
+/**
+ * The TEMP table in which SQLlin counts the changes of the tables of observed queries, which a test removes rows of,
+ * and drops, as a rollback on another thread can.
+ */
+@Suppress("PropertyName")
+@DBRow("sqllin_modification_log")
+@Serializable
+data class ModificationLog(val table_name: String, val version: Long)

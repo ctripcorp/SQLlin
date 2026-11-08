@@ -73,8 +73,8 @@ val databaseConnection = openDatabase(
         journalMode = JournalMode.WAL,
         synchronousMode = SynchronousMode.NORMAL,
         busyTimeout = 5000,
-        lookasideSlotSize = 0,
-        lookasideSlotCount = 0,
+        lookasideSlotSize = -1,
+        lookasideSlotCount = -1,
         create = {
             it.execSQL("create table person (id integer primary key autoincrement, name text, age integer)")
         },

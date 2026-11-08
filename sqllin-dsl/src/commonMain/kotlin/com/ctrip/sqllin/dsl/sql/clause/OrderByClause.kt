@@ -157,7 +157,7 @@ public inline infix fun <T> WhereSelectStatement<T>.ORDER_BY(column2Way: Pair<Cl
 @StatementDslMaker
 public infix fun <T> WhereSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, Ordering>): OrderBySelectStatement<T> =
     appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
@@ -167,7 +167,7 @@ public inline infix fun <T> HavingSelectStatement<T>.ORDER_BY(column2Way: Pair<C
 @StatementDslMaker
 public infix fun <T> HavingSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, Ordering>): OrderBySelectStatement<T> =
     appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
@@ -177,17 +177,7 @@ public inline infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column2Way: Pair<
 @StatementDslMaker
 public infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, Ordering>): OrderBySelectStatement<T> =
     appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
-        container changeLastStatement it
-    }
-
-@StatementDslMaker
-public inline infix fun <T> JoinSelectStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement<*>, Ordering>): OrderBySelectStatement<T> =
-    ORDER_BY(mapOf(column2Way))
-
-@StatementDslMaker
-public infix fun <T> JoinSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, Ordering>): OrderBySelectStatement<T> =
-    appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @ExperimentalDSLDatabaseAPI
@@ -199,7 +189,7 @@ public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(column2Way: Pair<Clause
 @StatementDslMaker
 public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, Ordering>): OrderBySelectStatement<T> =
     appendToOrderBy(CompleteOrderByClause(column2WayMap, isQualified = false)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @ExperimentalDSLDatabaseAPI
@@ -211,7 +201,7 @@ public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(column: ClauseElement<*
 @StatementDslMaker
 public infix fun <T> CompoundSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement<*>>): OrderBySelectStatement<T> =
     appendToOrderBy(SimpleOrderByClause(columns, isQualified = false)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
@@ -221,7 +211,7 @@ public infix fun <T> ResultColumnSelectStatement<T>.ORDER_BY(column2Way: Pair<Cl
 @StatementDslMaker
 public infix fun <T> ResultColumnSelectStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, Ordering>): OrderBySelectStatement<T> =
     appendToOrderBy(CompleteOrderByClause(column2WayMap)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 internal class SimpleOrderByClause<T>(
@@ -259,7 +249,7 @@ public inline infix fun <T> WhereSelectStatement<T>.ORDER_BY(column: ClauseEleme
 @StatementDslMaker
 public infix fun <T> WhereSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement<*>>): OrderBySelectStatement<T> =
     appendToOrderBy(SimpleOrderByClause(columns)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
@@ -269,7 +259,7 @@ public inline infix fun <T> HavingSelectStatement<T>.ORDER_BY(column: ClauseElem
 @StatementDslMaker
 public infix fun <T> HavingSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement<*>>): OrderBySelectStatement<T> =
     appendToOrderBy(SimpleOrderByClause(columns)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
@@ -279,17 +269,7 @@ public inline infix fun <T> GroupBySelectStatement<T>.ORDER_BY(column: ClauseEle
 @StatementDslMaker
 public infix fun <T> GroupBySelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement<*>>): OrderBySelectStatement<T> =
     appendToOrderBy(SimpleOrderByClause(columns)).also {
-        container changeLastStatement it
-    }
-
-@StatementDslMaker
-public inline infix fun <T> JoinSelectStatement<T>.ORDER_BY(column: ClauseElement<*>): OrderBySelectStatement<T> =
-    ORDER_BY(listOf(column))
-
-@StatementDslMaker
-public infix fun <T> JoinSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement<*>>): OrderBySelectStatement<T> =
-    appendToOrderBy(SimpleOrderByClause(columns)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
@@ -299,5 +279,58 @@ public infix fun <T> ResultColumnSelectStatement<T>.ORDER_BY(column: ClauseEleme
 @StatementDslMaker
 public infix fun <T> ResultColumnSelectStatement<T>.ORDER_BY(columns: Iterable<ClauseElement<*>>): OrderBySelectStatement<T> =
     appendToOrderBy(SimpleOrderByClause(columns)).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
+    }
+
+// ========== ORDER BY of UPDATE and DELETE ==========
+
+/**
+ * Orders the rows that this UPDATE or DELETE writes by [column2Way], so that the LIMIT that has to follow chooses the
+ * first in that order, as in
+ * `PersonTable DELETE WHERE(PersonTable.age LT 18) ORDER_BY (PersonTable.age to ASC) LIMIT 10`.
+ *
+ * SQLite only takes ORDER BY and LIMIT in an UPDATE or DELETE when it is built with an option that Android's SQLite
+ * lacks, so SQLlin writes the subquery that SQLite turns them into, which every platform runs:
+ * `DELETE FROM person WHERE rowid IN (SELECT rowid FROM person WHERE person.age<? ORDER BY person.age ASC LIMIT 10)`.
+ * A scope with an ORDER BY that LIMIT doesn't follow fails with an [IllegalArgumentException] before any of its
+ * statements runs, as SQLite rejects it.
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <T> WhereUpdateDeleteStatement<T>.ORDER_BY(column2Way: Pair<ClauseElement<*>, Ordering>): OrderByUpdateDeleteStatement<T> =
+    ORDER_BY(mapOf(column2Way))
+
+/**
+ * Orders the rows that this UPDATE or DELETE writes by the columns of [column2WayMap], in its order.
+ *
+ * @see WhereUpdateDeleteStatement.ORDER_BY
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <T> WhereUpdateDeleteStatement<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, Ordering>): OrderByUpdateDeleteStatement<T> =
+    OrderByUpdateDeleteStatement<T>(parts.copy(orderBy = CompleteOrderByClause<T>(column2WayMap)), container, connection).also {
+        container.replaceStatement(this, it)
+    }
+
+/**
+ * Orders the rows of the table that this UPDATE without WHERE writes by [column2Way], so that the LIMIT that has to
+ * follow chooses the first in that order.
+ *
+ * @see WhereUpdateDeleteStatement.ORDER_BY
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <T> UpdateStatementWithoutWhereClause<T>.ORDER_BY(column2Way: Pair<ClauseElement<*>, Ordering>): OrderByUpdateDeleteStatement<T> =
+    ORDER_BY(mapOf(column2Way))
+
+/**
+ * Orders the rows of the table that this UPDATE without WHERE writes by the columns of [column2WayMap], in its order.
+ *
+ * @see WhereUpdateDeleteStatement.ORDER_BY
+ */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <T> UpdateStatementWithoutWhereClause<T>.ORDER_BY(column2WayMap: Map<ClauseElement<*>, Ordering>): OrderByUpdateDeleteStatement<T> =
+    OrderByUpdateDeleteStatement<T>(parts.copy(orderBy = CompleteOrderByClause<T>(column2WayMap)), statementContainer, connection).also {
+        statementContainer.replaceStatement(this, it)
     }

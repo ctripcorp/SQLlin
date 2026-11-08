@@ -19,7 +19,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Person(
     @PrimaryKey(autoIncrement = true)
-    val id: Long = 0,
+    val id: Long? = null,
     val name: String,
     val age: Int,
 )
@@ -119,6 +119,11 @@ fun sample() {
 索引的每一列都可以像 `ORDER_BY` 那样指定排序方向：`PersonTable.CREATE_INDEX("idx_person_age", PersonTable.age to DESC)` 就是
 `CREATE INDEX idx_person_age ON person(age DESC)`。它是实验性 API。按这个顺序或相反顺序排序的查询，可以按顺序读取索引。
 
+索引的列默认按列自己的排序规则比较，用 `COLLATE` 运算符可以给它指定另一种（同样是实验性 API）：
+`PersonTable.CREATE_INDEX("idx_person_name_nocase", PersonTable.name COLLATE NOCASE)` 就是
+`CREATE INDEX idx_person_name_nocase ON person(name COLLATE NOCASE)`，比较 `(name COLLATE NOCASE)` 的查询会用到它，而 `name`
+在其他地方仍按字节比较。它也可以指定排序方向，例如 `(PersonTable.name COLLATE NOCASE) to DESC`。
+
 在 `CREATE_INDEX` 或 `CREATE_UNIQUE_INDEX` 后面加上 `WHERE` 就是部分索引：只索引满足条件的行。它比索引所有行的索引更小，唯一的部分
 索引只保证这些行之间的值不相同，例如未删除用户的邮箱。部分索引是实验性 API：
 
@@ -145,6 +150,24 @@ fun sample() {
     }
 }
 ```
+
+语句通过哪个索引查找行，由 SQLite 的查询规划器选择。`INDEXED_BY` 让它使用指定的索引，`NOT_INDEXED` 让它不使用索引，就像 SQL 的
+`INDEXED BY` 和 `NOT INDEXED` 那样。带有它们的表可以被 _SELECT_（包括 Join）读取，也可以被 _UPDATE_ 和 _DELETE_ 写入，但不能用于
+_INSERT_，因为 SQL 不允许。它们是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // SELECT ... FROM person INDEXED BY idx_person_name WHERE person.name = ?
+        (PersonTable INDEXED_BY "idx_person_name") SELECT WHERE(PersonTable.name EQ "Tom")
+        // DELETE FROM person NOT INDEXED WHERE person.age < ?
+        PersonTable.NOT_INDEXED DELETE WHERE(PersonTable.age LT 18)
+    }
+}
+```
+
+如果 SQLite 无法通过指定的索引执行语句，比如索引不存在，语句会失败，并报 "no such index"。
 
 ### IF NOT EXISTS 与 IF EXISTS
 
@@ -428,7 +451,8 @@ fun sample() {
 
 _INSERT_ 语句可以直接插入对象，你可以一次插入一个或多个对象。
 
-`INSERT_OR_IGNORE` 会跳过与表中已有行冲突的对象，`INSERT_OR_REPLACE` 则会替换那一行。它们接受的参数与 `INSERT` 相同。
+`INSERT_OR_IGNORE` 会跳过与表中已有行冲突的对象，`INSERT_OR_REPLACE` 则会替换那一行。它们接受的参数与 `INSERT` 相同，其他
+[冲突处理方式](#冲突处理)也一样。
 
 _INSERT_ 还可以插入一条 _SELECT_ 返回的行，就像 `INSERT INTO ... SELECT` 那样，前提是这条 _SELECT_ 读出的是这张表的行类型。
 这些行可以来自任意一张表，借助投影或结果列：
@@ -581,6 +605,79 @@ fun sample() {
 
 你也可以编写没有 _WHERE_ 子句的 _UPDATE_ 语句用于更新所有的行，但使用它的时候你应该谨慎。
 
+## 删除和更新中的 ORDER BY 与 LIMIT
+
+在 _DELETE_ 或 _UPDATE_ 后面（无论有没有 _WHERE_）加上 `LIMIT`，最多只删除或更新这么多行；在它前面再加上 `ORDER_BY`，就是按这个顺序
+排在前面的那些行。比如删除某个聊天中最新 100 条以外的消息，或者取出下一个要执行的任务。`LIMIT` 后面的 `OFFSET` 会先跳过这么多行；
+`LIMIT` 为负数时表示不限制，这样 `OFFSET` 就会保留排在前面的行。它们是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        MessageTable { table ->
+            // 删除这个聊天中最早的 10 条消息
+            table DELETE WHERE(chatId EQ 1) ORDER_BY (time to ASC) LIMIT 10
+            // 删除这个聊天中最新 100 条以外的消息
+            table DELETE WHERE(chatId EQ 1) ORDER_BY (time to DESC) LIMIT -1 OFFSET 100
+            // 最多删除 1000 条过期消息，作为分批删除中的一批
+            table DELETE WHERE(expired IS true) LIMIT 1000
+        }
+        TaskTable { table ->
+            // 开始执行优先级最高的待办任务
+            table UPDATE SET { status = 1 } WHERE (status EQ 0) ORDER_BY (priority to DESC) LIMIT 1
+        }
+    }
+}
+```
+
+SQLite 只有在编译时打开 `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` 选项，才接受 _DELETE_ 和 _UPDATE_ 中的 _ORDER BY_ 与 _LIMIT_，而 Android
+的 SQLite 没有打开它；打开时，SQLite 会把它们改写成一个子查询，选出这些行的 rowid。所以 SQLlin 自己生成这个子查询，所有平台都能执行，
+查询计划也完全相同：
+
+```sql
+DELETE FROM message WHERE rowid IN (SELECT rowid FROM message WHERE message.chatId=? ORDER BY message.time ASC LIMIT 10)
+```
+
+它也可以写在触发器体里，而 SQLite 自己的语法在触发器里是不允许的，比如每次 INSERT 之后只保留最新消息的触发器。`INDEXED_BY` 和
+`NOT_INDEXED` 决定子查询如何查找这些行。如果表中有名为 `rowid` 的列，就改用 `_rowid_` 或 `oid` 读取 rowid。和 SQLite 的规定一样，
+`ORDER_BY` 后面必须接 `LIMIT`：作用域中如果有 _DELETE_ 或 _UPDATE_ 的 `ORDER_BY` 后面没有接 `LIMIT`，在任何语句执行之前就会抛出
+`IllegalArgumentException`。
+
+## 冲突处理
+
+违反约束的语句会失败，并撤销它所做的修改，除非约束声明了别的处理方式，比如 `@Unique(onConflict = OnConflict.IGNORE)`。语句也可以
+指定自己的处理方式，它会取代约束的处理方式：`INSERT_OR_ABORT`、`INSERT_OR_FAIL`、`INSERT_OR_ROLLBACK`、`INSERT_OR_IGNORE` 和
+`INSERT_OR_REPLACE` 接受的参数与 `INSERT` 相同；`UPDATE_OR_ABORT`、`UPDATE_OR_FAIL`、`UPDATE_OR_IGNORE`、`UPDATE_OR_REPLACE`
+和 `UPDATE_OR_ROLLBACK` 的写法与 `UPDATE` 相同。除了插入对象和 _SELECT_ 的 `INSERT_OR_IGNORE`、`INSERT_OR_REPLACE`，它们都是实验性
+API：
+
+| 处理方式 | 与 PRIMARY KEY、UNIQUE、NOT NULL 或 CHECK 约束冲突时 |
+| --- | --- |
+| `ABORT` | 语句失败，撤销它所做的修改，这是默认方式 |
+| `FAIL` | 语句失败，但保留它在冲突行之前写入的行 |
+| `ROLLBACK` | 语句失败，并回滚它所在的事务 |
+| `IGNORE` | 跳过冲突的行，继续执行 |
+| `REPLACE` | 删除在 PRIMARY KEY 或 UNIQUE 约束上冲突的行；NOT NULL 列要写入 NULL 时改写其默认值；违反 CHECK 约束时像 `ABORT` 一样失败 |
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        // INSERT OR FAIL INTO person(id,name,age) VALUES (?,?,?),(?,?,?)
+        PersonTable INSERT_OR_FAIL listOf(tom, jerry)
+        PersonTable { table ->
+            // UPDATE OR IGNORE person SET name=? WHERE person.name=?
+            table UPDATE_OR_IGNORE SET { name = "Tom" } WHERE (name EQ "Thomas")
+        }
+    }
+}
+```
+
+即使主键由数据库分配，_INSERT_ 语句也会写入主键，否则主键上的冲突无法被发现；主键为 null 时仍由数据库分配。无论语句指定哪种处理
+方式，违反 FOREIGN KEY 约束都会让语句失败。在 `transaction {...}` 中，失败的语句会结束事务并让它回滚，所以 `ABORT`、`FAIL` 和
+`ROLLBACK` 只在事务之外有区别：`FAIL` 会保留一条多行语句在冲突行之前写入的行，而 `ROLLBACK` 与 `ABORT` 效果相同。
+
 ## 事务
 
 在 SQLlin 中使用事务非常简单，你只需要使用 `transaction {...}` 包裹你的 SQL 语句：
@@ -604,6 +701,31 @@ fun sample() {
 ```
 
 `transaction {...}` 是 `Database` 的成员函数，将它写在 `TABLE(databaseName) {...}` 函数的内部或外部没有特别限制。
+
+在所有平台上，事务都以 `BEGIN IMMEDIATE` 开始：它一开始就拿到写锁，所以要写入的其他连接或者其他事务，最多会按 `busyTimeout` 等待它结束。
+
+`transaction(mode) {...}` 可以用其他方式开始事务，它是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        transaction(TransactionMode.EXCLUSIVE) {
+            PersonTable INSERT Person(age = 4, name = "Tom")
+        }
+    }
+}
+```
+
+* `TransactionMode.IMMEDIATE` 是默认方式，一开始就拿到写锁。
+* `TransactionMode.EXCLUSIVE` 同样一开始就拿到写锁；在 `DELETE` 日志模式下，还会在事务结束前阻止其他连接读取。在 WAL 模式下，它与
+  `IMMEDIATE` 相同。
+* `TransactionMode.DEFERRED` 在事务读取之前不拿任何锁，在写入之前不拿写锁，所以在此之前其他连接可以写入。但如果事务先读后写，而此时
+  另一个连接正在写入，它会立即以 "database is locked" 失败，不会按 `busyTimeout` 等待。Android 框架无法开始一个可以写入的 DEFERRED
+  事务，所以在 Android 上它会以 `IMMEDIATE` 方式开始。
+
+嵌套在另一个事务中的事务会并入外层事务，沿用外层的开始方式。使用 _sqllin-driver_ 时，`withTransaction(mode) {...}` 和
+`DatabaseConnection#beginTransaction(mode)` 同样可以指定开始方式。
 
 ## VACUUM
 
@@ -645,6 +767,68 @@ fun sample() {
     }
 }
 ```
+
+## PRAGMA
+
+SQLlin 支持用来检查数据库、读取表结构和 SQLite 自身的信息、执行 WAL 检查点、读取文件大小和文件头，以及设置语句执行方式的
+PRAGMA。读取类的 PRAGMA
+返回一条语句，作用域执行完之后，用它的 `getResults()` 取得读到的内容，和 _SELECT_ 的结果一样。它们是实验性 API，结果类型
+都在 `com.ctrip.sqllin.dsl.sql.pragma` 包中：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    lateinit var problems: PragmaStatement<List<String>>
+    lateinit var violations: PragmaStatement<List<ForeignKeyViolation>>
+    lateinit var columns: PragmaStatement<List<ColumnInfo>>
+    database {
+        problems = PRAGMA_INTEGRITY_CHECK()
+        violations = PRAGMA_FOREIGN_KEY_CHECK()
+        columns = PRAGMA_TABLE_INFO(PersonTable)
+    }
+    if (problems.getResults().isNotEmpty()) {
+        // 数据库已损坏
+    }
+    val hasEmail = columns.getResults().any { it.name == "email" }
+}
+```
+
+* **检查数据库**：`PRAGMA_INTEGRITY_CHECK(maxErrors)` 检查页、行和索引是否完好、是否相互一致，以及行是否满足 NOT NULL 和
+  CHECK 约束，返回发现的问题，没有问题时返回空列表；`PRAGMA_QUICK_CHECK(maxErrors)` 不检查索引和 UNIQUE 约束，其余相同，速度
+  更快。`PRAGMA_FOREIGN_KEY_CHECK()` 或 `PRAGMA_FOREIGN_KEY_CHECK(table)` 返回违反外键的行，不管外键是否启用，比如在关闭外键
+  做完迁移之后检查；`PRAGMA_FOREIGN_KEYS()` 返回外键是否启用。`PRAGMA_INTEGRITY_CHECK(table)` 和 `PRAGMA_QUICK_CHECK(table)`
+  只检查一张表和它的索引。
+* **读取表结构**：`PRAGMA_TABLE_INFO(table)` 返回表或视图的列，可以在迁移时用来判断，`PRAGMA_INDEX_LIST(table)` 返回表的索引，
+  `PRAGMA_INDEX_XINFO(index)` 返回索引的列，包括排序方向和排序规则，`PRAGMA_FOREIGN_KEY_LIST(table)` 返回表的外键。它们也都可以
+  传入名字，比如应用已经不再声明的表。不存在的表或索引没有列、索引或外键。另一个连接（比如另一个进程）刚建的表或索引也可能这样，
+  直到本连接执行一条读写表的语句为止：SQLite 找不到这个名字时，未必会检查之前读到的表结构是否已经过期。
+  `PRAGMA_TABLE_XINFO(table)` 额外列出隐藏列和生成列，由 `ColumnInfo.kind` 区分，比如 FTS 表的隐藏列；`PRAGMA_TABLE_LIST()`
+  返回 `main` 和 `temp` 中的表和视图，包括虚拟表，以及虚拟表用来存放数据的表。
+* **SQLite 自身的信息**：`PRAGMA_COMPILE_OPTIONS()` 返回 SQLite 的编译选项，`PRAGMA_COLLATION_LIST()` 返回排序规则，
+  `PRAGMA_DATABASE_LIST()` 返回连接上的数据库及其文件，`PRAGMA_FUNCTION_LIST()` 返回 SQL 函数，比如可以用来判断有没有数学函数，
+  `PRAGMA_MODULE_LIST()` 返回虚拟表模块（比如 `fts4`），`PRAGMA_PRAGMA_LIST()` 返回 SQLite 支持的 PRAGMA。
+* **数据库文件**：`PRAGMA_WAL_CHECKPOINT(mode)` 把 WAL 中的页复制进数据库文件，比如在复制数据库文件之前，因为文件里没有 WAL
+  中的内容；SQLite 不能在事务中执行检查点，所以在 `transaction {...}` 中调用会抛出 `IllegalStateException`。
+  `PRAGMA_PAGE_COUNT()` 乘以 `PRAGMA_PAGE_SIZE()` 就是文件的大小，`PRAGMA_FREELIST_COUNT()` 是文件中未使用的页数，
+  [`VACUUM()`](#vacuum) 会去掉这些页；开启了 auto_vacuum 的数据库（Android 的 SQLite 默认就这样创建数据库）每次提交都会去掉
+  它们，所以没有未使用的页。`PRAGMA_AUTO_VACUUM()` 返回是否开启了 auto_vacuum，`PRAGMA_AUTO_VACUUM(mode)` 设置它：对还没有表的
+  数据库立即生效，否则要在它之后执行一次 `VACUUM()` 重建数据库才生效。SQLlin 不执行 `PRAGMA incremental_vacuum`（`INCREMENTAL`
+  模式保留的页要靠它去掉）：它每返回一行才去掉一页，而这些行没有列，sqlite-jdbc 执行这样的语句只会执行到第一行。
+  `PRAGMA_APPLICATION_ID()` 读取、`PRAGMA_APPLICATION_ID(id)` 设置文件头中标识文件属于哪个应用的数字。
+* **语句的执行方式**：`PRAGMA_DEFER_FOREIGN_KEYS(true)` 把外键检查推迟到提交时，这样就可以先插入引用其他行的行；SQLite 会在
+  事务结束时把它关掉，所以在 `transaction {...}` 之外调用会抛出 `IllegalStateException`。`PRAGMA_RECURSIVE_TRIGGERS(true)`
+  允许触发器递归触发；`PRAGMA_LEGACY_ALTER_TABLE(true)` 让 `ALTER_RENAME_TABLE_TO` 不改写读取这张表的视图和触发器，Android 的
+  SQLite 默认就是这样；`PRAGMA_IGNORE_CHECK_CONSTRAINTS(true)` 不再检查 CHECK 约束。这几个设置在数据库关闭之前一直有效，对之前
+  执行过的语句同样生效。
+
+其中一些需要较新的 SQLite，有些平台没有，所以标有 [`@PlatformDependentSQLiteAPI`](#依赖-sqlite-版本的-api)：
+`PRAGMA_TABLE_XINFO` 需要 SQLite 3.26.0，Android 从 API 30 起才有；`PRAGMA_FUNCTION_LIST`、`PRAGMA_MODULE_LIST` 和
+`PRAGMA_PRAGMA_LIST` 需要 3.30.0，从 API 31 起；`PRAGMA_TABLE_LIST` 需要 3.37.0，从 API 34 起。SQLite 遇到不支持的 PRAGMA
+不会报错，只会忽略，所以这些 API 会检查 SQLite 返回的行有没有列，没有就抛出 `IllegalStateException` 并说明需要什么，而不是
+返回空结果。`PRAGMA_INTEGRITY_CHECK(table)` 和 `PRAGMA_QUICK_CHECK(table)` 需要 SQLite 3.33.0（从 API 34 起），更早的版本会
+改为检查整个数据库。`PRAGMA_COMPILE_OPTIONS` 在 Android 上会抛出异常，因为 Android 的 SQLite 编译时去掉了它。
+
+检查返回的问题描述是 SQLite 自己的文字。PRAGMA 不会修改任何表，所以可以写在 `versioned { }` 中。
 
 ## 接下来
 

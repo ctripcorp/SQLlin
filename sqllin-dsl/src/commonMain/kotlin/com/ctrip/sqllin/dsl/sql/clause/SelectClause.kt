@@ -29,7 +29,6 @@ package com.ctrip.sqllin.dsl.sql.clause
  * - [OffsetClause]: OFFSET row skipping
  * - [GroupByClause]: GROUP BY aggregation grouping
  * - [HavingClause]: HAVING condition for grouped data
- * - [JoinClause], [InnerJoinClause], [LeftOuterJoinClause], [CrossJoinClause], [NaturalJoinClause]: JOIN operations
  *
  * @param T The entity type this clause operates on
  * @property clauseStr The SQL string representation (e.g., " WHERE id = ?", " ORDER BY name ASC")
