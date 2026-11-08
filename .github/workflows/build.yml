@@ -72,7 +72,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Test-Reports-macOS-dsl
-          path: sqllin-dsl/build/reports
+          path: sqllin-dsl-test/build/reports
         if: failure()
 
   build-on-windows:
@@ -135,7 +135,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Test-Reports-Windows-dsl
-          path: sqllin-dsl/build/reports
+          path: sqllin-dsl-test/build/reports
         if: failure()
 
   build-on-linux:
@@ -201,7 +201,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Test-Reports-Linux-dsl
-          path: sqllin-dsl/build/reports
+          path: sqllin-dsl-test/build/reports
         if: failure()
 
   build-android-and-test:
