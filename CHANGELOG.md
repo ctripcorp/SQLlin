@@ -6,7 +6,8 @@
 
 ### All
 
-* Update `AGP`'s version to `9.5.0`
+* Update `AGP`'s version to `9.5.1`
+* Update `Gradle`'s version to `9.9.0`
 * Update `kotlinx.serialization`'s version to `1.12.0`
 
 ### sqllin-dsl
