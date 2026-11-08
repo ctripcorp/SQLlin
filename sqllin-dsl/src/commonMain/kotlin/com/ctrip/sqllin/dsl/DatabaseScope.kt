@@ -1454,6 +1454,25 @@ public class DatabaseScope internal constructor(
         subqueryIn(this, select, "BLOBs") { it.serialName.removeSuffix("?") == BYTE_ARRAY_TYPE }
 
     /**
+     * Whether this value is among the values the single column of [select] returns: `column IN (SELECT ...)`. The
+     * column has to hold the values of the same serializer as this one, so that they compare as stored, as a column of
+     * the same type, with the same serializer, of another table does.
+     *
+     * @throws IllegalArgumentException if [select] doesn't return one column of the values of this serializer, or is
+     * incomplete
+     * @see IN
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public infix fun <V : Any> ClauseConverted<V>.IN(select: SelectStatement<*>): SelectCondition {
+        val name = serializer.descriptor.serialName.removeSuffix("?")
+        return subqueryIn(this, select, "the values of the serializer of '$name'") {
+            it.serialName.removeSuffix("?") == name && it.kind == serializer.descriptor.kind
+        }
+    }
+
+    /**
      * Whether [select] returns any row: `EXISTS (SELECT ...)`.
      *
      * The SELECT can refer to the columns of the query it is in, as columns are written with their tables' names,

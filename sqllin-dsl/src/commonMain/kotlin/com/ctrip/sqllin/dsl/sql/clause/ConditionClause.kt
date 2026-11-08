@@ -32,6 +32,7 @@ import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
  * - String: LT, LTE, EQ, NEQ, GT, GTE, IN, BETWEEN, LIKE, GLOB
  * - Blob: LT, LTE, EQ, NEQ, GT, GTE, IN, BETWEEN
  * - Enum: LT, LTE, EQ, NEQ, GT, GTE
+ * - Converted ([ClauseConverted]): LT, LTE, EQ, NEQ, GT, GTE, IN, BETWEEN, IS, ISNOT
  * - Boolean: IS, ISNOT
  * - Logic: AND, OR
  *
@@ -360,6 +361,90 @@ public infix fun <T : Enum<T>> ClauseEnum<T>.IS(other: ClauseEnum<T>): SelectCon
 @ExperimentalDSLDatabaseAPI
 @StatementDslMaker
 public infix fun <T : Enum<T>> ClauseEnum<T>.ISNOT(other: ClauseEnum<T>): SelectCondition = nullSafe("IS NOT", other)
+
+// Conditions of a column whose serializer converts its values, which compare the values it stores with those the
+// serializer stores for the values given. LT, LTE, GT, GTE and BETWEEN compare the stored values, which are in the
+// order of the Kotlin values only if the serializer keeps it, as ClauseConverted explains.
+
+/** Whether this value, as stored, is less than [value]: `<`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.LT(value: V): SelectCondition = lt(value)
+
+/** Whether this value, as stored, is less than that of [other]: `<`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.LT(other: ClauseConverted<V>): SelectCondition = lt(other)
+
+/** Whether this value, as stored, is less than or equal to [value]: `<=`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.LTE(value: V): SelectCondition = lte(value)
+
+/** Whether this value, as stored, is less than or equal to that of [other]: `<=`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.LTE(other: ClauseConverted<V>): SelectCondition = lte(other)
+
+/** Whether this value equals [value]: `=`, or `IS NULL` for null. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.EQ(value: V?): SelectCondition = eq(value)
+
+/** Whether this value equals that of [other]: `=`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.EQ(other: ClauseConverted<V>): SelectCondition = eq(other)
+
+/** Whether this value differs from [value]: `!=`, or `IS NOT NULL` for null. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.NEQ(value: V?): SelectCondition = neq(value)
+
+/** Whether this value differs from that of [other]: `!=`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.NEQ(other: ClauseConverted<V>): SelectCondition = neq(other)
+
+/** Whether this value, as stored, is greater than [value]: `>`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.GT(value: V): SelectCondition = gt(value)
+
+/** Whether this value, as stored, is greater than that of [other]: `>`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.GT(other: ClauseConverted<V>): SelectCondition = gt(other)
+
+/** Whether this value, as stored, is greater than or equal to [value]: `>=`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.GTE(value: V): SelectCondition = gte(value)
+
+/** Whether this value, as stored, is greater than or equal to that of [other]: `>=`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.GTE(other: ClauseConverted<V>): SelectCondition = gte(other)
+
+/** Whether this value is one of [values]: `IN (...)`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.IN(values: Iterable<V>): SelectCondition = inIterable(values)
+
+/** Whether this value, as stored, is between the two of [range], both included: `BETWEEN ... AND ...`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.BETWEEN(range: Pair<V, V>): SelectCondition = between(range)
+
+/** Whether this value equals that of [other], NULL equaling NULL: `this IS other`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.IS(other: ClauseConverted<V>): SelectCondition = nullSafe("IS", other)
+
+/** Whether this value differs from that of [other], NULL equaling NULL: `this IS NOT other`. */
+@ExperimentalDSLDatabaseAPI
+@StatementDslMaker
+public infix fun <V : Any> ClauseConverted<V>.ISNOT(other: ClauseConverted<V>): SelectCondition = nullSafe("IS NOT", other)
 
 private fun ClauseElement<*>.nullSafe(operator: String, other: ClauseElement<*>): SelectCondition =
     condition("$sql $operator ${other.sql}", null, other)

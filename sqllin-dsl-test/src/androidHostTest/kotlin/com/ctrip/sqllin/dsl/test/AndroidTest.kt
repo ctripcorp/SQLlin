@@ -24,6 +24,7 @@ class AndroidTest {
 
     private val commonTest = CommonBasicTest(context.toDatabasePath())
     private val pagingTest = CommonPagingTest(context.toDatabasePath())
+    private val convertedTest = CommonConvertedTest(context.toDatabasePath())
 
     @Test
     fun testInsert() = commonTest.testInsert()
@@ -294,6 +295,21 @@ class AndroidTest {
 
     @Test
     fun testPagingSourceWithPager() = pagingTest.testPagingSourceWithPager()
+
+    @Test
+    fun testConvertedConditions() = convertedTest.testConvertedConditions()
+
+    @Test
+    fun testConvertedStatements() = convertedTest.testConvertedStatements()
+
+    @Test
+    fun testConvertedEnums() = convertedTest.testConvertedEnums()
+
+    @Test
+    fun testConvertedSchema() = convertedTest.testConvertedSchema()
+
+    @Test
+    fun testConvertedErrors() = convertedTest.testConvertedErrors()
 
     @Test
     fun testCompositeUniqueConstraint() = commonTest.testCompositeUniqueConstraint()

@@ -18,6 +18,7 @@ package com.ctrip.sqllin.dsl.sql.operation
 
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.sql.Table
+import com.ctrip.sqllin.dsl.sql.columnTypeOf
 import com.ctrip.sqllin.dsl.sql.clause.ClauseElement
 import com.ctrip.sqllin.dsl.sql.statement.SingleStatement
 import com.ctrip.sqllin.dsl.sql.statement.TableStructureStatement
@@ -71,12 +72,14 @@ internal object Alter : Operation {
     /**
      * Creates an ALTER TABLE ADD COLUMN statement.
      *
-     * Adds a new column to an existing table.
+     * Adds a new column to an existing table, of the type its property's serializer stores, as `CREATE TABLE` gives
+     * it.
      *
      * @param table The table to modify
      * @param newColumn The column definition to add
      * @param connection The database connection for executing the statement
      * @return A [TableStructureStatement] representing the ADD COLUMN operation
+     * @throws IllegalArgumentException if the serializer of the column's property encodes a structure
      */
     fun addColumn(table: Table<*>, newColumn: ClauseElement<*>, connection: DatabaseConnection): SingleStatement {
         val sql = buildString {
@@ -84,10 +87,8 @@ internal object Alter : Operation {
             append(table.tableName)
             append(ADD_COLUMN)
             append(newColumn.valueName)
-            val propertyDescriptor = table.kSerializer().descriptor
-            val index = propertyDescriptor.getElementIndex(newColumn.valueName)
-            val descriptor = propertyDescriptor.getElementDescriptor(index)
-            append(FullNameCache.getTypeNameBySerialName(descriptor, newColumn.valueName, table))
+            append(' ')
+            append(table.columnTypeOf(newColumn.valueName))
         }
         return TableStructureStatement(sql, connection)
     }

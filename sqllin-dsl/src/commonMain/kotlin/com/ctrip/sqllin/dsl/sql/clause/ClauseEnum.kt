@@ -26,6 +26,10 @@ import com.ctrip.sqllin.dsl.sql.Relation
  * during serialization/deserialization. `max` and `min` of an enum column are elements
  * of the same enum type.
  *
+ * Only an enum with its default serializer, which encodes the ordinal of an entry, is stored so: one with a serializer
+ * of its own, given on its class or on the property, as one that stores its name, gets a [ClauseConverted], which
+ * compares what that serializer stores.
+ *
  * Available operators:
  * - `lt`: Less than (<) - compares ordinal values
  * - `lte`: Less than or equal to (<=) - compares ordinal values

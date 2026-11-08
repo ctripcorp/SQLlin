@@ -23,8 +23,16 @@ import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSPropertyDeclaration
 import com.google.devtools.ksp.symbol.KSType
-import com.google.devtools.ksp.symbol.KSTypeAlias
 import java.io.Writer
+
+/**
+ * The placeholder of the type of a converted column in the CREATE statement, `\u0001index\u0002collation\u0001`, which
+ * the table computes from the serializer at the element index, and checks to be text if it has the collation. A
+ * placeholder contains none of the characters a Kotlin string literal escapes.
+ */
+internal val CONVERTED_TYPE = Regex("\u0001(\\d+)\u0002([A-Z]*)\u0001")
+
+private fun convertedType(elementIndex: Int, collation: String?) = "\u0001$elementIndex\u0002${collation.orEmpty()}\u0001"
 
 /**
  * Parser for column constraint annotations during CREATE TABLE statement generation.
@@ -184,6 +192,12 @@ class ColumnConstraintParser(resolver: Resolver) {
      * // Later appended: ,UNIQUE(email,phone),UNIQUE(email,username)
      * ```
      *
+     * #### Converted Type
+     * ```kotlin
+     * val id: Uuid
+     * // Generated: id ${columnType(0)} NOT NULL, the type the serializer stores, TEXT for Uuid
+     * ```
+     *
      * ### Processing Order
      * 1. Determine SQLite type via [getSQLiteType]
      * 2. Apply PRIMARY KEY constraint if [@PrimaryKey] present
@@ -204,6 +218,9 @@ class ColumnConstraintParser(resolver: Resolver) {
      * @param property The property declaration to process
      * @param propertyName The name of the database column (may differ from property name)
      * @param isNotNull Whether the property type is non-nullable in Kotlin
+     * @param columnType What the property's column holds
+     * @param elementIndex The index of the property in the serializer's descriptor, which a converted column's type is
+     * computed from
      *
      * @throws IllegalArgumentException if validation fails (see class-level documentation for rules)
      *
@@ -216,16 +233,29 @@ class ColumnConstraintParser(resolver: Resolver) {
         property: KSPropertyDeclaration,
         propertyName: String,
         isNotNull: Boolean,
+        columnType: ColumnType,
+        elementIndex: Int,
     ) {
         // Collect the information of the primary key(s).
         val annotationKSType = property.annotations.map { it.annotationType.resolve() }
         val isPrimaryKey = annotationKSType.any { it.isAssignableFrom(primaryKeyAnnotationName) }
 
         with(createSQLBuilder) {
-            val type = getSQLiteType(property, isPrimaryKey)
+            val isNoCase = annotationKSType.any { it.isAssignableFrom(noCaseAnnotationName) }
+            val isRTrim = annotationKSType.any { it.isAssignableFrom(rTrimAnnotationName) }
+            check(!(isNoCase && isRTrim)) { PROMPT_ONE_COLLATION }
+
+            // The type of a converted column is the one its serializer stores, which the statement computes, and checks
+            // to be text if the column has a collation
+            val isConverted = columnType is ColumnType.Converted
+            val type = if (isConverted)
+                " " + convertedType(elementIndex, if (isNoCase) "NOCASE" else if (isRTrim) "RTRIM" else null)
+            else
+                getSQLiteType(columnType, isPrimaryKey)
             append(type)
 
-            // Only a Long @PrimaryKey becomes `INTEGER PRIMARY KEY`, an alias of SQLite's rowid
+            // Only a Long @PrimaryKey becomes `INTEGER PRIMARY KEY`, an alias of SQLite's rowid, which a converted
+            // column never is, as its type isn't known before it is created
             val isRowIdAlias = isPrimaryKey && type == " INTEGER"
 
             // Handle @PrimaryKey annotation
@@ -263,10 +293,7 @@ class ColumnConstraintParser(resolver: Resolver) {
                 append(" NOT NULL")
 
             // Handle @CollateNoCase and @CollateRTrim annotations - must be on text columns, which have one collation
-            val isNoCase = annotationKSType.any { it.isAssignableFrom(noCaseAnnotationName) }
-            val isRTrim = annotationKSType.any { it.isAssignableFrom(rTrimAnnotationName) }
-            check(!(isNoCase && isRTrim)) { PROMPT_ONE_COLLATION }
-            val isText = type == " TEXT" || type == " CHAR(1)"
+            val isText = isConverted || type == " TEXT" || type == " CHAR(1)"
             if (isNoCase) {
                 check(isText) { PROMPT_NO_CASE_MUST_FOR_TEXT }
                 append(" COLLATE NOCASE")
@@ -469,16 +496,12 @@ class ColumnConstraintParser(resolver: Resolver) {
     }
 
     /**
-     * Determines the SQLite type declaration for a given property.
-     *
-     * This function resolves the Kotlin type of a property to its corresponding SQLite type
-     * string, handling type aliases and enum classes. The result is used in compile-time
-     * CREATE TABLE statement generation.
+     * Determines the SQLite type declaration of a column of a basic type, or of an enum, which a converted column's
+     * type, computed from its serializer, isn't.
      *
      * ### Type Resolution Strategy
-     * 1. **Type Aliases**: Resolves to the underlying type, then maps to SQLite type
-     * 2. **Enum Classes**: Maps to SQLite INT type (enums are stored as ordinals)
-     * 3. **Standard Types**: Direct mapping via [FullNameCache.getSQLTypeName]
+     * 1. **Enum Classes**: Maps to SQLite INT type (enums are stored as ordinals)
+     * 2. **Basic Types**: Direct mapping via [FullNameCache.getSQLTypeName], which a type alias of one is too
      *
      * ### Primary Key Special Handling
      * When `isPrimaryKey` is true and the property is of type [Long], the function returns
@@ -498,28 +521,16 @@ class ColumnConstraintParser(resolver: Resolver) {
      * val status: Status  // → " INT"
      * ```
      *
-     * @param property The KSP property declaration to analyze
+     * @param columnType What the column holds
      * @param isPrimaryKey Whether this property is annotated with [@PrimaryKey]
      * @return SQLite type declaration string with leading space (e.g., " INT", " TEXT")
      * @throws IllegalStateException if the property type is not supported by SQLlin
      *
      * @see FullNameCache.getSQLTypeName
      */
-    private fun getSQLiteType(property: KSPropertyDeclaration, isPrimaryKey: Boolean): String {
-        val declaration = property.type.resolve().declaration
-        return when (declaration) {
-            is KSTypeAlias -> {
-                val realDeclaration = declaration.type.resolve().declaration
-                FullNameCache.getSQLTypeName(realDeclaration.typeName, isPrimaryKey) ?: kotlin.run {
-                    if (realDeclaration is KSClassDeclaration && realDeclaration.classKind == ClassKind.ENUM_CLASS)
-                        FullNameCache.getSQLTypeName(FullNameCache.INT, isPrimaryKey)
-                    else
-                        null
-                }
-            }
-            is KSClassDeclaration if declaration.classKind == ClassKind.ENUM_CLASS ->
-                FullNameCache.getSQLTypeName(FullNameCache.INT, isPrimaryKey)
-            else -> FullNameCache.getSQLTypeName(declaration.typeName, isPrimaryKey)
-        } ?: throw IllegalStateException("Hasn't support the type '${declaration.typeName}' yet")
-    }
+    private fun getSQLiteType(columnType: ColumnType, isPrimaryKey: Boolean): String = when (columnType) {
+        is ColumnType.Basic -> FullNameCache.getSQLTypeName(columnType.typeName, isPrimaryKey)
+        is ColumnType.DefaultEnum -> FullNameCache.getSQLTypeName(FullNameCache.INT, isPrimaryKey)
+        is ColumnType.Converted, is ColumnType.Unsupported -> null
+    } ?: throw IllegalStateException("Hasn't support the type '$columnType' yet")
 }

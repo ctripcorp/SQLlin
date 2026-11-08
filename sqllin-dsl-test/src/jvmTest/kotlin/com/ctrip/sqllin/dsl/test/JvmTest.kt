@@ -16,6 +16,7 @@ class JvmTest {
     private val path = System.getProperty("user.dir").toDatabasePath()
     private val commonTest = CommonBasicTest(path)
     private val pagingTest = CommonPagingTest(path)
+    private val convertedTest = CommonConvertedTest(path)
 
     @Test
     fun testInsert() = commonTest.testInsert()
@@ -286,6 +287,21 @@ class JvmTest {
 
     @Test
     fun testPagingSourceWithPager() = pagingTest.testPagingSourceWithPager()
+
+    @Test
+    fun testConvertedConditions() = convertedTest.testConvertedConditions()
+
+    @Test
+    fun testConvertedStatements() = convertedTest.testConvertedStatements()
+
+    @Test
+    fun testConvertedEnums() = convertedTest.testConvertedEnums()
+
+    @Test
+    fun testConvertedSchema() = convertedTest.testConvertedSchema()
+
+    @Test
+    fun testConvertedErrors() = convertedTest.testConvertedErrors()
 
     @Test
     fun testCompositeUniqueConstraint() = commonTest.testCompositeUniqueConstraint()
