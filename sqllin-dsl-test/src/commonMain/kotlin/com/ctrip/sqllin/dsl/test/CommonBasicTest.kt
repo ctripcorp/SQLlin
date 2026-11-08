@@ -666,6 +666,28 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers a SELECT whose results are never read: it is read when its scope runs it, so that its statement ends with
+     * the scope. Left open until its results were read, the statement kept reading its table, which couldn't be dropped
+     * then, and kept the connection of Kotlin/Native open after the database was closed, as `sqlite3_close_v2` waits for
+     * the statements, so that Windows couldn't delete the database file.
+     */
+    fun testUnreadSelect() {
+        val book = Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251)
+        lateinit var unread: SelectStatement<Book>
+        Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+            database {
+                BookTable INSERT book
+                unread = BookTable SELECT X
+                BookTable SELECT WHERE(BookTable.pages GT 0)
+            }
+            database { DROP(BookTable) }
+        }
+        assertEquals(listOf(book), unread.getResults())
+        // Nothing keeps the closed database open
+        assertEquals(true, deleteDatabase(path, DATABASE_NAME))
+    }
+
+    /**
      * Covers the tracker of observed queries creating its TEMP table and triggers again where they are gone, as a
      * rollback on another thread can take them on the JVM and Kotlin/Native. Removing the row of a table from the TEMP
      * table, and dropping it, stand for that rollback.

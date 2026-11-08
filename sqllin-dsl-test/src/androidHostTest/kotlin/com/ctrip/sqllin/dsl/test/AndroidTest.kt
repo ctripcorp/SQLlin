@@ -60,6 +60,9 @@ class AndroidTest {
     fun testTableVersions() = commonTest.testTableVersions()
 
     @Test
+    fun testUnreadSelect() = commonTest.testUnreadSelect()
+
+    @Test
     fun testObserveRestoresTracking() = commonTest.testObserveRestoresTracking()
 
     @Test

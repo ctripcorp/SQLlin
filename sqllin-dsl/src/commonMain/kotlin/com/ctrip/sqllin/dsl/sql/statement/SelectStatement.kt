@@ -16,7 +16,6 @@
 
 package com.ctrip.sqllin.dsl.sql.statement
 
-import com.ctrip.sqllin.driver.CommonCursor
 import com.ctrip.sqllin.driver.DatabaseConnection
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
 import com.ctrip.sqllin.dsl.sql.clause.elementTables
@@ -33,8 +32,9 @@ import kotlin.concurrent.Volatile
  * The class hierarchy enforces SQL clause ordering at compile time - each subclass accepts only valid
  * subsequent clauses (e.g., WHERE can be followed by GROUP BY, ORDER BY, or LIMIT).
  *
- * Results are lazily evaluated and cached after [execute] is called. Use [getResults] to retrieve
- * the deserialized entities.
+ * [execute] reads the rows, and decodes them, when the statement runs, in its scope, under the lock of the scope and
+ * in its transaction, and closes the cursor, so that the statement ends with the scope that runs it. Use [getResults]
+ * to retrieve the deserialized entities.
  *
  * @param T The entity type returned by this query
  * @property deserializer kotlinx.serialization strategy for decoding cursor rows to entities
@@ -62,30 +62,32 @@ public sealed class SelectStatement<T>(
     @Volatile
     private var result: List<T>? = null
 
-    @Volatile
-    private var cursor: CommonCursor? = null
-
+    /**
+     * Runs the query, and reads its rows at once. A cursor left open until the results were read would keep its
+     * statement, and with it a read of its tables, which couldn't be dropped meanwhile, and on Kotlin/Native the
+     * connection itself, as `sqlite3_close_v2` only closes it once its statements end, so that a database whose results
+     * weren't all read kept its file open after it was closed, which Windows then couldn't delete.
+     */
     final override fun execute() {
-        cursor = connection.query(sqlStr, params)
+        result = connection.query(sqlStr, params).use { cursor ->
+            val decoder = QueryDecoder(cursor)
+            buildList {
+                cursor.forEachRow {
+                    add(decoder.decodeSerializableValue(deserializer))
+                }
+            }
+        }
     }
 
     /**
-     * Retrieves the query results as a list of deserialized entities.
+     * Retrieves the query results as a list of deserialized entities, which [execute] read.
      *
-     * Results are lazily computed on first call and cached for subsequent calls.
      * Throws [IllegalStateException] if called before [execute].
      *
      * @return List of entities matching the query
      */
-    public fun getResults(): List<T> = result ?: cursor?.use {
-        val decoder = QueryDecoder(it)
-        result = buildList {
-            it.forEachRow {
-                add(decoder.decodeSerializableValue(deserializer))
-            }
-        }
-        result!!
-    } ?: throw IllegalStateException("You have to call 'execute' function before call 'getResults'!!!")
+    public fun getResults(): List<T> =
+        result ?: throw IllegalStateException("You have to call 'execute' function before call 'getResults'!!!")
 
     /**
      * Checks what can only be checked once no clause can be appended anymore: that a statement that needs GROUP BY has
