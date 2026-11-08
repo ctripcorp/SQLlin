@@ -40,6 +40,7 @@ done. A new item takes the next number.
 Items that aren't planned, as they are of little use, or would cost more than they give, until a need for them comes up.
 
 * F68: Support `PRAGMA incremental_vacuum`, which removes the unused pages that the INCREMENTAL mode of `PRAGMA_AUTO_VACUUM(mode)` keeps: it removes a page each time it returns a row, which has no columns, so it has to run as a query whose rows are all read. Android's framework and Kotlin/Native would run it so, but sqlite-jdbc doesn't run a statement that returns no columns as a query, and runs it as a statement only as far as its first row, removing one page, so the JVM would have to run `PRAGMA incremental_vacuum(1)` once for each page, in a transaction. Few databases are in INCREMENTAL mode, and Android's SQLite creates them in FULL mode
+* F69: Support `PRAGMA data_version`, which changes when another connection or process commits to the database, so that the table version tokens of F66, and what is built on them, as the `PagingSource` of F13, could see those changes too, as they only see those made through the same `Database`. It tells that the database changed, not which tables did, and each connection has its own count, so Android's pool of connections, which can run a read on any of them, needs a design of its own; left out of F30
 
 ## Supported
 
