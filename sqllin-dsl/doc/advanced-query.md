@@ -55,26 +55,20 @@ _LIMIT_ keeps them to itself, as SQLlin writes it as a subquery too:
 
 The statements become part of the compound, so they no longer run on their own, and their results can't be read.
 
-### The deprecated `UNION {...}` block
+### Migrating From the `UNION {...}` Block
 
-Earlier versions combined _SELECT_ statements with `UNION {...}` and `UNION_ALL {...}` blocks. **They are deprecated
-and will be removed in a future version**, because they have bugs that won't be fixed:
-
-- A block's result is typed by the table's row type, but its rows are read into the first _SELECT_'s result type. So
-  a union of projections, result columns or joins compiles, and then fails with a `ClassCastException` when its
-  results are used.
-- A nested block is flattened into the SQL, which SQLite evaluates from left to right, so
-  `UNION { a; UNION_ALL { b; c } }` runs as `(a UNION b) UNION ALL c`, not as its nesting suggests.
-
-Use the infix operators instead:
+Before 2.6.0, _SELECT_ statements could also be combined with `UNION {...}` and `UNION_ALL {...}` blocks, deprecated
+in 2.5.0 for bugs that wouldn't be fixed: a block read its rows into its first _SELECT_'s result type while returning the
+table's row type, so a union of projections, result columns or joins failed with a `ClassCastException`, and a nested
+block was flattened into the SQL, which changed its meaning. 2.6.0 removed them. Write them with the infix operators:
 
 ```kotlin
-// Deprecated
+// Before 2.6.0
 UNION {
     table SELECT WHERE(age LT 18)
     table SELECT WHERE(age GTE 65)
 }
-// Instead
+// Now
 (table SELECT WHERE(age LT 18)) UNION (table SELECT WHERE(age GTE 65))
 ```
 
@@ -183,9 +177,10 @@ from a [join](#join) too. Arithmetic, `CASE` and subqueries that give a single v
 
 ## Join
 
-A join reads the rows of several relations, tables, views or derived tables, together. Start one with
-`FROM(relation)`, extend it with join operators, and select from it as from a table. Joins are experimental, so opt in
-with `@OptIn(ExperimentalDSLDatabaseAPI::class)`.
+A join reads the rows of several relations, tables, views or derived tables, together. Start one with a join operator
+applied to its first relation, as `PersonTable INNER_JOIN TranscriptTable`, or with `FROM(relation)`, extend it with more
+join operators, and select from it as from a table. Joins are experimental, so opt in with
+`@OptIn(ExperimentalDSLDatabaseAPI::class)`.
 
 The examples use another table, and types for the rows of joins, which don't need `@DBRow`:
 
@@ -221,10 +216,10 @@ fun joinSample() {
     lateinit var scores: SelectStatement<StudentScore>
     database {
         // SELECT name,person.age,transcript.math,transcript.english FROM person INNER JOIN transcript USING (name)
-        students = (FROM(PersonTable) INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()
+        students = (PersonTable INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()
         // SELECT person.name AS name,count(transcript.math) AS tests,max(transcript.math) AS bestMath
         //     FROM person LEFT OUTER JOIN transcript ON person.name = transcript.name GROUP BY person.name
-        scores = (FROM(PersonTable) LEFT_OUTER_JOIN TranscriptTable ON (PersonTable.name EQ TranscriptTable.name)) SELECT listOf(
+        scores = (PersonTable LEFT_OUTER_JOIN TranscriptTable ON (PersonTable.name EQ TranscriptTable.name)) SELECT listOf(
             PersonTable.name AS StudentScore::name,
             PersonTable.count(TranscriptTable.math) AS StudentScore::tests,
             PersonTable.max(TranscriptTable.math) AS StudentScore::bestMath,
@@ -249,7 +244,7 @@ they are marked with `@PlatformDependentSQLiteAPI`, which you have to opt in to,
 [APIs That Depend on the SQLite Version](modify-database-and-transaction.md#apis-that-depend-on-the-sqlite-version).
 
 Joins are applied in the order they are written, and each can have its own condition:
-`FROM(a) INNER_JOIN b ON (...) LEFT_OUTER_JOIN c ON (...)`. A relation can only be joined once: to join a table with
+`a INNER_JOIN b ON (...) LEFT_OUTER_JOIN c ON (...)`. A relation can only be joined once: to join a table with
 itself, join a [derived table](#derived-tables) of its rows, which gives it another name.
 
 A join's rows have no type of their own, so a _SELECT_ of a join names the type it reads them into: with
@@ -265,12 +260,15 @@ joined relations when the statement is built:
 SQLlin writes the columns with their relations' names, so that a condition, a function, _GROUP BY_ or _ORDER BY_ can
 name a column that another relation has too. An observed query of a join watches all its relations.
 
-### The Old Join API
+### Migrating From the Old Join API
 
-Before 2.5.0, joins were written as clauses of _SELECT_: `PersonTable SELECT INNER_JOIN<Student>(TranscriptTable) USING name`,
-with `CROSS_JOIN`, `NATURAL_JOIN`, `LEFT_OUTER_JOIN` and the others. They still work, but they don't check the type
-their rows are read into, can't join more than two relations each with its own condition, and can't select result
-columns. **They will be removed in the next version after 2.5.0**, so write joins as above.
+Before 2.6.0, joins could also be written as clauses of _SELECT_, as
+`PersonTable SELECT INNER_JOIN<Student>(TranscriptTable) USING name`, with `CROSS_JOIN`, `NATURAL_JOIN`,
+`LEFT_OUTER_JOIN` and the others. 2.6.0 removed them. Such a join is now written as above:
+`(PersonTable INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()`. As its result type is now
+checked against the joined relations, a type that reads a column two relations have, or reads a column that an outer
+join can leave NULL into a non-null property, is rejected when the statement is built: select such a column with `AS`,
+or make the property nullable.
 
 ## Subqueries
 
@@ -316,7 +314,7 @@ fun sample() {
         //     WHERE author_books.books>?
         prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
         // SELECT person.name,author_books.books FROM person INNER JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
-        personBooks = (FROM(PersonTable) INNER_JOIN authorBooks ON (PersonTable.id EQ AuthorBooksView.authorId)) SELECT X<PersonBooks>()
+        personBooks = (PersonTable INNER_JOIN authorBooks ON (PersonTable.id EQ AuthorBooksView.authorId)) SELECT X<PersonBooks>()
     }
 }
 ```
@@ -342,7 +340,7 @@ database {
     } AS ElderView
     // SELECT person.name,elder.elderName FROM person
     //     INNER JOIN (SELECT person.name AS elderName,person.age AS elderAge FROM person) AS elder ON elder.elderAge>person.age
-    pairs = (FROM(PersonTable) INNER_JOIN elders ON (ElderView.elderAge GT PersonTable.age)) SELECT X<YoungerAndElder>()
+    pairs = (PersonTable INNER_JOIN elders ON (ElderView.elderAge GT PersonTable.age)) SELECT X<YoungerAndElder>()
 }
 ```
 
@@ -437,6 +435,88 @@ To combine the results of several _SELECT_ statements, combine the flows that ob
 kotlinx.coroutines. As each runs its query on its own, a change to the tables of both may briefly show the new results of
 one with the old results of the other. When the results come from several tables, a single _SELECT_ with a join gives
 them at once.
+
+### Table Version Tokens
+
+An observed query gives results. A reader that only needs to know when the tables it read change, such as a
+`PagingSource` that invalidates itself and reads its pages on its own, reads through `versioned { }` instead. It runs a
+scope of _SELECT_ statements, and returns the scope's result with a token of the versions of the tables they read.
+`awaitChange(token)` suspends until a statement run through the database changes one of those tables, and
+`onChange(token) { }` registers a callback for it. They are experimental, so opt in with
+`@OptIn(ExperimentalDSLDatabaseAPI::class)`. The example only shows how they fit together: _sqllin-dsl-paging_ provides
+a whole `PagingSource`, as [PagingSource](#pagingsource) describes.
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+class PersonPagingSource(private val database: Database) : PagingSource<Int, Person>() {
+
+    private var registration: AutoCloseable? = null
+
+    override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Person> {
+        val offset = params.key ?: 0
+        val (page, since) = database.versioned {
+            PersonTable SELECT ORDER_BY(PersonTable.age to ASC) LIMIT params.loadSize OFFSET offset
+        }
+        if (registration == null) {
+            // null when a statement changed the table since the read
+            registration = database.onChange(since) { invalidate() } ?: return LoadResult.Invalid()
+            registerInvalidatedCallback { registration?.close() }
+        }
+        val persons = page.getResults()
+        return LoadResult.Page(persons, prevKey = null, nextKey = if (persons.isEmpty()) null else offset + persons.size)
+    }
+
+    override fun getRefreshKey(state: PagingState<Int, Person>): Int? = null
+}
+```
+
+The token is captured under the lock that the _SELECT_ statements run under, after their tables are tracked, so that no
+change made after them is missed; a change that they already include may make it stale too. It covers the tables of
+every _SELECT_ of the scope, a view standing for the tables it reads, and only sees the changes made through the same
+`Database` instance, as an observed query does. A scope that writes is rejected, as its token couldn't tell its own
+changes from others'.
+
+* **Combining tokens**: when a query is built from the results of another, as from ids that a first scope returned, it
+  runs in a scope of its own. `token1 + token2` covers the tables of both reads, with the earlier version of a table
+  that both read, so that it is stale when either is. The tokens of two `Database` instances can't be combined.
+* **onChange** registers before it checks the token, so that a change between the read and the registration is never
+  missed: when the token is already stale, it registers nothing and returns `null`, and the caller acts on the change
+  itself, as a `PagingSource` returns `LoadResult.Invalid()`. Otherwise its callback runs once, on the thread that
+  wrote, after the writing scope has released the database's lock, so it may use the database, but should return
+  quickly. The registration holds the callback until it runs, or until the `AutoCloseable` it returns is closed.
+
+### PagingSource
+
+The optional module _sqllin-dsl-paging_, `com.ctrip.kotlin:sqllin-dsl-paging`, provides androidx.paging's
+`PagingSource` of a query, which loads its rows a page at a time, by their offsets, as Room's `LimitOffsetPagingSource`
+does, on every platform that androidx.paging has, which are all of SQLlin's. `database.pagingSource { }` builds the
+_SELECT_ to page, as `observe { }` does, and is experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun persons(database: Database): Flow<PagingData<Person>> =
+    Pager(PagingConfig(pageSize = 20)) {
+        database.pagingSource { PersonTable SELECT ORDER_BY(PersonTable.id to ASC) }
+    }.flow
+```
+
+* **The pages**: a page is `SELECT * FROM (select) LIMIT ... OFFSET ...`, so the _SELECT_ can have a _WHERE_, a join or
+  compound operators, and should have an _ORDER BY_ that orders all of its rows, as SQLite returns them in no order
+  otherwise, so that two pages could have the same rows. The first page also counts the rows, so that each page tells
+  how many rows are before and after it, which placeholders show, and a refresh past the last row, as after rows are
+  deleted, loads the last ones. The keys are offsets at the borders between pages, so that two pages never share a row,
+  wherever a refresh starts, and a page after the first row can always prepend the rows above it, as after a
+  `RemoteMediator` invalidates the source. A refresh starts half the initial load before the row last read, with
+  placeholders or without them.
+* **Invalidation**: the source registers with `onChange` from its first page, so that a statement run through the same
+  `Database` that changes a table the _SELECT_ reads invalidates it, and its `Pager` loads a new one; a page that reads
+  rows changed since the first is `LoadResult.Invalid()`, so that no list mixes rows from before and after a change. It
+  registers weakly, so that a source that its `Pager` drops can still be garbage collected, and an invalidation from
+  elsewhere, as a refresh, closes the registration. As with an observed query, only the changes made through the same
+  `Database` instance are seen.
+* **The thread**: the pages load in `Dispatchers.IO`, or the context given to `pagingSource(context) { }`, as a `Pager`
+  may load them on the main thread. Write through `suspendedScope`, which the loads are serialized with, as for an
+  observed query.
 
 ## Full-Text Search
 
@@ -564,6 +644,37 @@ So `Database#observe` counts the changes to it from SQLlin's _INSERT_, _UPDATE_ 
 trigger can write it, from those on any table that has triggers: a change made with other SQL isn't seen, and neither
 is a change to an FTS table that a view reads. A rolled back transaction still counts its statements, which only runs
 the query once more.
+
+## Query Plans
+
+`EXPLAIN_QUERY_PLAN(select)` tells how SQLite would run a _SELECT_, as the SQL `EXPLAIN QUERY PLAN` does, without
+running it: which tables it scans, which indexes it searches, and where it sorts the rows with a temporary B-tree. It
+helps to check that a query uses the index meant for it, as after `INDEXED_BY`, or a test that asserts so. It is
+experimental, so opt in with `@OptIn(ExperimentalDSLDatabaseAPI::class)`:
+
+```kotlin
+val plan = database {
+    EXPLAIN_QUERY_PLAN(BookTable SELECT WHERE(BookTable.author EQ "Dan Brown") ORDER_BY (BookTable.price to ASC))
+}.getResults()
+println(plan)
+// QUERY PLAN
+// |--SEARCH book USING INDEX idx_book_author (author=?)
+// `--USE TEMP B-TREE FOR ORDER BY
+check(plan.details.any { "idx_book_author" in it })
+```
+
+The _SELECT_ can be any, with joins, subqueries or compound operators. It becomes part of the statement, so it no
+longer runs on its own, and it is planned with its parameters, as it would run. As with the results of a _SELECT_, the
+plan is read once the scope has run. A `QueryPlan` has the `steps` of the plan, each with its `detail` and its
+`children`, as the steps of a subquery or of each _SELECT_ of a compound are; `details` lists the details of all steps,
+and `toString()` writes them as a tree, as the `sqlite3` shell does. The plan depends on the indexes, and on the
+statistics that `ANALYZE` and `PRAGMA_OPTIMIZE` gather.
+
+The details are SQLite's own text, which is meant to be read, and which differs between SQLite versions, as
+`SCAN TABLE book` and `SCAN book` do. So check a plan by the names of tables and indexes, and by phrases such as
+`USING INDEX`, `USING COVERING INDEX` and `TEMP B-TREE`, rather than by whole details. A SQLite older than 3.24.0, as
+Android's before API 30 is, doesn't tell which step another belongs to, so its plans list all steps in a row, with no
+children. None of this needs the version of SQLite to be known: the plan is read the same way on every platform.
 
 ## Finally
 

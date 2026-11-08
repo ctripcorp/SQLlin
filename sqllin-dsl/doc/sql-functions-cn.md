@@ -112,7 +112,9 @@ fun sample() {
   `notes ISNOT literal("vip")` 也会匹配 `notes` 为 NULL 的行，而 `notes NEQ literal("vip")` 会把它们排除掉。它们的作用和
   `IS DISTINCT FROM` 相同，并且所有版本的 SQLite 都支持。
 - `COLLATE` 按指定的排序规则（`BINARY`、`NOCASE` 或 `RTRIM`）比较和排序字符串：`(name COLLATE NOCASE) EQ "ann"` 也会匹配
-  `'Ann'`，`ORDER_BY((name COLLATE NOCASE) to ASC)` 会忽略大小写排序。`NOCASE` 只忽略 ASCII 字母的大小写。
+  `'Ann'`，`ORDER_BY((name COLLATE NOCASE) to ASC)` 会忽略大小写排序。`NOCASE` 只忽略 ASCII 字母的大小写。它还可以给索引的某一列
+  指定排序规则，见 [CREATE INDEX](modify-database-and-transaction-cn.md#create-index---创建索引)；而列本身的排序规则由
+  `@CollateNoCase` 和 `@CollateRTrim` 声明。
 - `and`、`or`、`inv()`、`shl` 和 `shr` 是 `Int` 和 `Long` 的位运算，名字和 Kotlin 自己的一致。
 - 只返回一列的 _SELECT_ 可以作为一个值，详见[标量子查询](advanced-query-cn.md#标量子查询)。
 

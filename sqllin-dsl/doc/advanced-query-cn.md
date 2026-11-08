@@ -50,25 +50,19 @@ a UNION (b UNION_ALL c)  // a UNION SELECT * FROM (b UNION ALL c)
 
 参与组合的语句会成为组合的一部分，因此不再单独执行，也无法读取它们各自的结果。
 
-### 已废弃的 `UNION {...}` 块
+### 从 `UNION {...}` 块迁移
 
-以前的版本用 `UNION {...}` 和 `UNION_ALL {...}` 块来合并 _SELECT_ 语句。**它们已经废弃，将在未来的版本中移除**，因为它们存在
-不会再修复的 bug：
-
-- 块的结果类型取自表的行类型，结果行却按第一条 _SELECT_ 的结果类型读取。所以对投影、结果列或 Join 做 UNION 时，代码能编译通过，
-  但使用结果时会抛出 `ClassCastException`。
-- 嵌套的块在生成 SQL 时会被展平，而 SQLite 按从左到右的顺序计算，所以 `UNION { a; UNION_ALL { b; c } }` 实际执行的是
-  `(a UNION b) UNION ALL c`，而不是嵌套所表达的含义。
-
-请改用中缀运算符：
+在 2.6.0 之前，还可以用 `UNION {...}` 和 `UNION_ALL {...}` 块来合并 _SELECT_ 语句。它们在 2.5.0 中因不会再修复的 bug 而废弃：
+块的结果行按第一条 _SELECT_ 的结果类型读取，返回的却是表的行类型，所以对投影、结果列或 Join 做 UNION 时会抛出
+`ClassCastException`；嵌套的块在生成 SQL 时会被展平，从而改变含义。2.6.0 删除了它们，请改用中缀运算符：
 
 ```kotlin
-// 已废弃
+// 2.6.0 之前
 UNION {
     table SELECT WHERE(age LT 18)
     table SELECT WHERE(age GTE 65)
 }
-// 改为
+// 现在
 (table SELECT WHERE(age LT 18)) UNION (table SELECT WHERE(age GTE 65))
 ```
 
@@ -171,8 +165,9 @@ fun sample() {
 
 ## Join
 
-Join 把多个关系（表、视图或派生表）的行合在一起读取。用 `FROM(relation)` 开始一个 Join，用 Join 运算符扩展它，然后像查询表一样
-从中查询。Join 是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`。
+Join 把多个关系（表、视图或派生表）的行合在一起读取。对第一个关系直接使用 Join 运算符即可开始一个 Join，比如
+`PersonTable INNER_JOIN TranscriptTable`，也可以用 `FROM(relation)` 开始；再用更多 Join 运算符扩展它，然后像查询表一样从中查询。
+Join 是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`。
 
 示例用到另一张表，以及几个表示 Join 结果的类型，它们不需要 `@DBRow`：
 
@@ -208,10 +203,10 @@ fun joinSample() {
     lateinit var scores: SelectStatement<StudentScore>
     database {
         // SELECT name,person.age,transcript.math,transcript.english FROM person INNER JOIN transcript USING (name)
-        students = (FROM(PersonTable) INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()
+        students = (PersonTable INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()
         // SELECT person.name AS name,count(transcript.math) AS tests,max(transcript.math) AS bestMath
         //     FROM person LEFT OUTER JOIN transcript ON person.name = transcript.name GROUP BY person.name
-        scores = (FROM(PersonTable) LEFT_OUTER_JOIN TranscriptTable ON (PersonTable.name EQ TranscriptTable.name)) SELECT listOf(
+        scores = (PersonTable LEFT_OUTER_JOIN TranscriptTable ON (PersonTable.name EQ TranscriptTable.name)) SELECT listOf(
             PersonTable.name AS StudentScore::name,
             PersonTable.count(TranscriptTable.math) AS StudentScore::tests,
             PersonTable.max(TranscriptTable.math) AS StudentScore::bestMath,
@@ -235,7 +230,7 @@ Join 运算符有：
 `@PlatformDependentSQLiteAPI`，需要按[依赖 SQLite 版本的 API](modify-database-and-transaction-cn.md#依赖-sqlite-版本的-api) 所说的
 方式声明同意。
 
-Join 按书写的顺序执行，每一个都可以有自己的条件：`FROM(a) INNER_JOIN b ON (...) LEFT_OUTER_JOIN c ON (...)`。一个关系只能被连接
+Join 按书写的顺序执行，每一个都可以有自己的条件：`a INNER_JOIN b ON (...) LEFT_OUTER_JOIN c ON (...)`。一个关系只能被连接
 一次：要让表和自身 Join，请连接由它的行构成的[派生表](#派生表)，这相当于给它起了另一个名字。
 
 Join 的行没有自己的类型，所以从 Join 查询时要指定读取成的类型：用 `X<R>()`、`WHERE<R>(...)` 这类子句函数，或者结果列。构建语句时，
@@ -249,11 +244,13 @@ Join 的行没有自己的类型，所以从 Join 查询时要指定读取成的
 SQLlin 写列时都带上关系的名字，所以条件、函数、_GROUP BY_ 和 _ORDER BY_ 都能使用其他关系中也有的列名。可观察查询会观察 Join 中的
 所有关系。
 
-### 旧的 Join API
+### 从旧的 Join API 迁移
 
-在 2.5.0 之前，Join 写作 _SELECT_ 的子句：`PersonTable SELECT INNER_JOIN<Student>(TranscriptTable) USING name`，以及 `CROSS_JOIN`、
-`NATURAL_JOIN`、`LEFT_OUTER_JOIN` 等。它们仍然可用，但不会检查行被读取成的类型，无法连接两个以上各带条件的关系，也不能选取结果列。
-**它们将在 2.5.0 之后的下一个版本中删除**，请按上面的方式书写 Join。
+在 2.6.0 之前，Join 还可以写作 _SELECT_ 的子句，比如 `PersonTable SELECT INNER_JOIN<Student>(TranscriptTable) USING name`，
+以及 `CROSS_JOIN`、`NATURAL_JOIN`、`LEFT_OUTER_JOIN` 等。2.6.0 删除了这些写法，请按上面的方式书写：
+`(PersonTable INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()`。由于现在会对照被连接的关系检查结果类型，
+如果一个类型读取了两个关系都有的列，或者把外连接可能为 NULL 的列读进非空属性，构建语句时就会被拒绝：请用 `AS` 选取这样的列，
+或者把属性改为可空。
 
 ## 子查询
 
@@ -297,7 +294,7 @@ fun sample() {
         //     WHERE author_books.books>?
         prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
         // SELECT person.name,author_books.books FROM person INNER JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
-        personBooks = (FROM(PersonTable) INNER_JOIN authorBooks ON (PersonTable.id EQ AuthorBooksView.authorId)) SELECT X<PersonBooks>()
+        personBooks = (PersonTable INNER_JOIN authorBooks ON (PersonTable.id EQ AuthorBooksView.authorId)) SELECT X<PersonBooks>()
     }
 }
 ```
@@ -322,7 +319,7 @@ database {
     } AS ElderView
     // SELECT person.name,elder.elderName FROM person
     //     INNER JOIN (SELECT person.name AS elderName,person.age AS elderAge FROM person) AS elder ON elder.elderAge>person.age
-    pairs = (FROM(PersonTable) INNER_JOIN elders ON (ElderView.elderAge GT PersonTable.age)) SELECT X<YoungerAndElder>()
+    pairs = (PersonTable INNER_JOIN elders ON (ElderView.elderAge GT PersonTable.age)) SELECT X<YoungerAndElder>()
 }
 ```
 
@@ -407,6 +404,75 @@ _DELETE_ 也不会。
 要组合几条 _SELECT_ 的结果，可以用 kotlinx.coroutines 的 `combine` 组合观察它们的几个 Flow。由于每个 Flow 各自执行查询，一次
 同时影响两边的表的修改，可能会短暂地呈现一边的新结果和另一边的旧结果。如果结果来自几张表，用一条带 Join 的 _SELECT_ 可以一次
 得到。
+
+### 表版本令牌
+
+可观察查询给出的是结果。如果读取方只需要知道它读过的表何时发生变化，比如自己读取分页、需要自行失效的 `PagingSource`，就改用
+`versioned { }` 读取。它执行一个由 _SELECT_ 组成的作用域，返回作用域的结果，以及这些 _SELECT_ 读到的表的版本令牌。
+`awaitChange(token)` 会挂起，直到经由该数据库执行的语句修改了其中某张表；`onChange(token) { }` 则为此注册一个回调。它们是实验性
+API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`。下面的示例只是演示它们如何配合使用；_sqllin-dsl-paging_ 提供了完整的
+`PagingSource`，见 [PagingSource](#pagingsource)。
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+class PersonPagingSource(private val database: Database) : PagingSource<Int, Person>() {
+
+    private var registration: AutoCloseable? = null
+
+    override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Person> {
+        val offset = params.key ?: 0
+        val (page, since) = database.versioned {
+            PersonTable SELECT ORDER_BY(PersonTable.age to ASC) LIMIT params.loadSize OFFSET offset
+        }
+        if (registration == null) {
+            // 读取之后已有语句修改了这张表时返回 null
+            registration = database.onChange(since) { invalidate() } ?: return LoadResult.Invalid()
+            registerInvalidatedCallback { registration?.close() }
+        }
+        val persons = page.getResults()
+        return LoadResult.Page(persons, prevKey = null, nextKey = if (persons.isEmpty()) null else offset + persons.size)
+    }
+
+    override fun getRefreshKey(state: PagingState<Int, Person>): Int? = null
+}
+```
+
+令牌在执行这些 _SELECT_ 时持有的锁内捕获，并且是在开始跟踪它们的表之后，所以不会漏掉它们执行之后的任何修改；它们已经包含的修改
+也可能让令牌过期。令牌覆盖作用域中每条 _SELECT_ 读到的表，视图按它读取的表计算；和可观察查询一样，只能感知经由同一个 `Database`
+实例的修改。包含写入语句的作用域会被拒绝，因为它的令牌无法区分自己的修改和别人的修改。
+
+* **组合令牌**：如果一条查询要用另一条查询的结果来构建，比如用第一个作用域返回的 id，它就只能在自己的作用域中执行。
+  `token1 + token2` 覆盖两次读取的表；两者都读过的表取较早的版本，所以任何一边过期，组合后的令牌就过期。两个 `Database` 实例的令牌
+  不能组合。
+* **onChange** 先注册、再检查令牌，所以读取和注册之间的修改不会被漏掉：如果令牌已经过期，它不注册，直接返回 `null`，由调用方自行
+  处理，比如 `PagingSource` 返回 `LoadResult.Invalid()`。否则它的回调只执行一次：在写入的线程上，在写入作用域释放数据库的锁之后
+  执行，所以回调里可以使用数据库，但应当尽快返回。注册会一直持有回调，直到回调执行，或者它返回的 `AutoCloseable` 被关闭。
+
+### PagingSource
+
+可选模块 _sqllin-dsl-paging_（`com.ctrip.kotlin:sqllin-dsl-paging`）为查询提供 androidx.paging 的 `PagingSource`：它像 Room 的
+`LimitOffsetPagingSource` 一样，按偏移量每次加载一页。androidx.paging 支持的平台都能用，SQLlin 支持的平台都在其中。
+`database.pagingSource { }` 像 `observe { }` 一样构建要分页的 _SELECT_，它是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun persons(database: Database): Flow<PagingData<Person>> =
+    Pager(PagingConfig(pageSize = 20)) {
+        database.pagingSource { PersonTable SELECT ORDER_BY(PersonTable.id to ASC) }
+    }.flow
+```
+
+* **分页**：每一页都是 `SELECT * FROM (select) LIMIT ... OFFSET ...`，所以 _SELECT_ 可以带 _WHERE_、连接或组合查询运算符。它应当带有
+  能给所有行排序的 _ORDER BY_，否则 SQLite 返回的行没有固定顺序，两页可能出现相同的行。第一页还会统计总行数，这样每一页都能说明它前后
+  各有多少行，占位符依赖这些数字；刷新时如果起点已经超过最后一行（比如有行被删除了），就改为加载最后那些行。key 是相邻两页之间边界处的
+  偏移量，所以无论从哪里开始刷新，两页都不会包含同一行；而且第一行之后的页总能向前加载它上面的行，比如 `RemoteMediator` 让数据源
+  失效之后。刷新从最后读取的那一行往前退初始加载量的一半开始，开不开占位符都一样。
+* **失效**：数据源从第一页起用 `onChange` 注册，所以经由同一个 `Database` 执行的语句只要修改了 _SELECT_ 读取的表，数据源就会失效，
+  它的 `Pager` 会加载一个新的数据源；如果某一页读到了第一页之后被修改过的行，就返回 `LoadResult.Invalid()`，这样列表里不会混入修改前后
+  的行。它以弱引用的方式注册，所以 `Pager` 丢弃的数据源仍然可以被垃圾回收；从别处让它失效（比如刷新）时，也会关闭这次注册。和可观察查询
+  一样，只能感知经由同一个 `Database` 实例的修改。
+* **线程**：分页在 `Dispatchers.IO` 中加载，也可以用 `pagingSource(context) { }` 指定别的上下文，因为 `Pager` 可能在主线程上加载。
+  和可观察查询一样，写入要通过 `suspendedScope` 执行，因为分页的加载和它是串行的。
 
 ## 全文搜索
 
@@ -525,6 +591,33 @@ FTS4 和 FTS3 不会给匹配结果排序：_SELECT_ 按 rowid 的顺序返回�
 FTS 表是虚拟表，无法拥有[可观察查询](#可观察查询)用来计数修改的触发器。所以 `Database#observe` 改为根据 SQLlin 对它执行的
 _INSERT_、_UPDATE_ 和 _DELETE_ 来计数；由于触发器可能写入它，对任何带触发器的表执行的这些语句也会计入：用其他 SQL 所做的修改
 感知不到，视图所读取的 FTS 表的修改也感知不到。回滚的事务仍会计入其中的语句，这只会让查询多执行一次。
+
+## 查询计划
+
+`EXPLAIN_QUERY_PLAN(select)` 和 SQL 的 `EXPLAIN QUERY PLAN` 一样，告诉你 SQLite 会怎样执行一条 _SELECT_，但不会真的执行它：
+扫描哪些表、查找哪些索引、在哪里用临时 B 树给行排序。它可以用来确认查询用上了为它准备的索引（比如用了 `INDEXED_BY` 之后），
+也可以在测试中做这样的断言。它是实验性 API，使用时需要 `@OptIn(ExperimentalDSLDatabaseAPI::class)`：
+
+```kotlin
+val plan = database {
+    EXPLAIN_QUERY_PLAN(BookTable SELECT WHERE(BookTable.author EQ "Dan Brown") ORDER_BY (BookTable.price to ASC))
+}.getResults()
+println(plan)
+// QUERY PLAN
+// |--SEARCH book USING INDEX idx_book_author (author=?)
+// `--USE TEMP B-TREE FOR ORDER BY
+check(plan.details.any { "idx_book_author" in it })
+```
+
+任何 _SELECT_ 都可以，包括连接、子查询和组合查询。它会成为这条语句的一部分，所以不再单独执行；规划时会绑定它的参数，和它真正
+执行时一样。和 _SELECT_ 的结果一样，计划要在作用域执行完之后才能读取。`QueryPlan` 的 `steps` 是计划的各个步骤，每一步有它的
+`detail` 和 `children`，比如子查询的步骤、组合查询中每条 _SELECT_ 的步骤；`details` 列出所有步骤的描述，`toString()` 则像
+`sqlite3` 命令行那样把它们写成一棵树。计划取决于索引，以及 `ANALYZE` 和 `PRAGMA_OPTIMIZE` 收集的统计信息。
+
+步骤的描述是 SQLite 自己的文字，是给人读的，在不同的 SQLite 版本之间会有差异，比如 `SCAN TABLE book` 和 `SCAN book`。所以检查
+计划时，请看表名、索引名，以及 `USING INDEX`、`USING COVERING INDEX`、`TEMP B-TREE` 这样的短语，不要比较整条描述。低于 3.24.0
+的 SQLite（比如 API 30 之前的 Android）不会告诉你一个步骤属于哪个步骤，所以它的计划把所有步骤平铺列出，没有子步骤。这些都不需要
+你知道 SQLite 的版本：在每个平台上，计划的读取方式都一样。
 
 ## 最后
 

@@ -47,7 +47,9 @@ public object RTRIM : Collation("RTRIM")
 
 /**
  * The COLLATE operator: this string compared and sorted by [collation], as in `(name COLLATE NOCASE) EQ "ann"`, which
- * matches `'Ann'` too, or in `ORDER_BY((name COLLATE NOCASE) to ASC)`.
+ * matches `'Ann'` too, or in `ORDER_BY((name COLLATE NOCASE) to ASC)`. Of a column, it is also a column of an index
+ * with that collation, as in `PersonTable.CREATE_INDEX("idx_person_name_nocase", PersonTable.name COLLATE NOCASE)`,
+ * which the queries comparing `(name COLLATE NOCASE)` use.
  */
 @ExperimentalDSLDatabaseAPI
 @StatementDslMaker

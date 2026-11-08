@@ -49,7 +49,8 @@ public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnectio
     val connection = AndroidDatabaseConnection(database)
     if (!isEqualsOrHigherThanAndroidP) {
         connection.updateSynchronousMode(config.synchronousMode)
-        connection.updateJournalMode(config.journalMode)
+        if (!database.isReadOnly)
+            connection.updateJournalMode(config.journalMode)
     }
     return connection
 }

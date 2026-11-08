@@ -59,7 +59,7 @@ public inline fun <T> openDatabase(config: DatabaseConfiguration, block: (Databa
 }
 
 /**
- * Executes a block within a database transaction.
+ * Executes a block within a database transaction, which begins in [mode], IMMEDIATE unless another is given.
  *
  * The transaction is committed if the block completes successfully,
  * or rolled back if an exception is thrown.
@@ -68,11 +68,12 @@ public inline fun <T> openDatabase(config: DatabaseConfiguration, block: (Databa
  * SQLite rolls some transactions back itself, as for a constraint with ON CONFLICT ROLLBACK or a trigger's
  * RAISE(ROLLBACK), and then the ROLLBACK fails, as no transaction is active.
  *
+ * @param mode How the transaction begins, which decides when it takes the write lock
  * @param block The block to execute within the transaction
  * @return The result of the block
  */
-public inline fun <T> DatabaseConnection.withTransaction(block: (DatabaseConnection) -> T): T {
-    beginTransaction()
+public inline fun <T> DatabaseConnection.withTransaction(mode: TransactionMode = TransactionMode.IMMEDIATE, block: (DatabaseConnection) -> T): T {
+    beginTransaction(mode)
     var failure: Throwable? = null
     try {
         val result = block(this)
@@ -124,16 +125,20 @@ public expect fun deleteDatabase(path: DatabasePath, name: String): Boolean
  * Updates the database's synchronous mode if different from current.
  */
 internal infix fun DatabaseConnection.updateSynchronousMode(mode: SynchronousMode) {
-    val currentJournalMode = withQuery("PRAGMA synchronous;") {
+    val currentSynchronousMode = withQuery("PRAGMA synchronous;") {
         it.next()
         it.getInt(0)
     }
-    if (currentJournalMode != mode.value)
+    if (currentSynchronousMode != mode.value)
         execSQL("PRAGMA synchronous=${mode.value};")
 }
 
 /**
  * Updates the database's journal mode if different from current.
+ *
+ * The PRAGMA returns the mode as a row, which is read, as a query on Android and Kotlin/Native only runs as its cursor
+ * is read: without it, the mode never changed. A connection that is read-only can't change it, as SQLite writes WAL
+ * mode to the header of the file, so it isn't called for one.
  */
 internal infix fun DatabaseConnection.updateJournalMode(mode: JournalMode) {
     val currentJournalMode = withQuery("PRAGMA journal_mode;") {
@@ -141,7 +146,7 @@ internal infix fun DatabaseConnection.updateJournalMode(mode: JournalMode) {
         it.getString(0)
     }
     if (!currentJournalMode.equals(mode.name, ignoreCase = true))
-        withQuery("PRAGMA journal_mode=${mode.name};") {}
+        withQuery("PRAGMA journal_mode=${mode.name};") { it.next() }
 }
 
 /**

@@ -16,7 +16,8 @@
 
 package com.ctrip.sqllin.dsl.sql.operation
 
-import com.ctrip.sqllin.dsl.sql.Table
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.SerialKind
 
@@ -27,7 +28,7 @@ import kotlinx.serialization.descriptors.SerialKind
  * These names are matched against kotlinx.serialization descriptor serial names to determine
  * the appropriate SQLite column type.
  *
- * Used by [Create.buildSQL] to map Kotlin types to SQLite types:
+ * Used by [columnTypeOf] to map Kotlin types to SQLite types:
  * - Integer types → TINYINT, SMALLINT, INT, BIGINT, INTEGER
  * - Floating-point types → FLOAT, DOUBLE
  * - Boolean → BOOLEAN
@@ -59,12 +60,10 @@ internal object FullNameCache {
     val BYTE_ARRAY = ByteArray::class.qualifiedName!!
 
     /**
-     * Maps a Kotlin type's serial descriptor to its corresponding SQLite column type declaration.
-     *
-     * This function converts kotlinx.serialization descriptors into appropriate SQLite column type
-     * strings for use in DDL statements like CREATE TABLE and ALTER TABLE ADD COLUMN. It analyzes
-     * both the serial name (fully qualified type name) and the descriptor kind (e.g., ENUM) to
-     * determine the correct SQLite type.
+     * Returns the SQLite type of the column of a property, which [descriptor], the descriptor of its serializer,
+     * describes, without NULL: the type of SQLlin's default mapping of a Kotlin type, as `INT` for an `Int` or an enum,
+     * stored as its ordinal; or, for a serializer that converts the values of another type, the type of the value it
+     * encodes, as `TEXT` for the built-in serializer of `Uuid`, or the type of the value of a value class.
      *
      * Type mapping rules:
      * - **Byte/UByte** → TINYINT
@@ -80,45 +79,38 @@ internal object FullNameCache {
      * - **String** → TEXT
      * - **ByteArray** → BLOB
      *
-     * Special handling for Long type:
-     * - Returns " INTEGER" when the column is the table's primary key (required by SQLite for auto-increment)
-     * - Returns " BIGINT" for non-primary key Long columns
+     * A serializer of another type stores the values of the kind of its descriptor, as a `PrimitiveKind.LONG`, which is
+     * BIGINT, as it isn't a `Long` property that can be the rowid. A value class stores the value it holds.
      *
-     * Example usage:
-     * ```kotlin
-     * val descriptor = User.serializer().descriptor.getElementDescriptor(0)
-     * val sqlType = getSerialNameBySerialName(descriptor, "username", userTable)
-     * // Returns: " TEXT"
-     *
-     * val pkDescriptor = User.serializer().descriptor.getElementDescriptor(1)
-     * val pkType = getSerialNameBySerialName(pkDescriptor, "id", userTable)
-     * // Returns: " INTEGER" (if "id" is the primary key) or " BIGINT" (if not)
-     *
-     * val enumDescriptor = User.serializer().descriptor.getElementDescriptor(2)
-     * val enumType = getSerialNameBySerialName(enumDescriptor, "status", userTable)
-     * // Returns: " INT" (enum stored as ordinal)
-     * ```
-     *
-     * @param descriptor The kotlinx.serialization serial descriptor for the type
-     * @param elementName The property/column name being processed
-     * @param table The table definition, used to check primary key information
-     * @return A string starting with a space followed by the SQLite type name (e.g., " TEXT", " INTEGER", " INT")
-     * @throws IllegalStateException if the type is not supported by SQLlin
+     * @param descriptor The descriptor of the serializer of the property, nullable or not
+     * @param isPrimaryKey Whether the property is the table's primary key, which makes a `Long` the rowid
+     * @return The SQLite type, as `TEXT`, or null if the serializer encodes a structure, which no column holds
      */
-    fun getTypeNameBySerialName(descriptor: SerialDescriptor, elementName: String, table: Table<*>): String = with(descriptor.serialName) {
-        when {
-            startsWith(BYTE) || startsWith(UBYTE) -> " TINYINT"
-            startsWith(SHORT) || startsWith(USHORT) -> " SMALLINT"
-            startsWith(INT) || startsWith(UINT) || descriptor.kind == SerialKind.ENUM -> " INT"
-            startsWith(LONG) -> if (elementName == table.primaryKeyInfo?.primaryKeyName) " INTEGER" else " BIGINT"
-            startsWith(ULONG) -> " BIGINT"
-            startsWith(FLOAT) -> " FLOAT"
-            startsWith(DOUBLE) -> " DOUBLE"
-            startsWith(BOOLEAN) -> " BOOLEAN"
-            startsWith(CHAR) -> " CHAR(1)"
-            startsWith(STRING) -> " TEXT"
-            startsWith(BYTE_ARRAY) -> " BLOB"
-            else -> throw IllegalStateException("Hasn't support the type '$this' yet")
+    @OptIn(ExperimentalSerializationApi::class)
+    fun columnTypeOf(descriptor: SerialDescriptor, isPrimaryKey: Boolean): String? = when (descriptor.serialName.removeSuffix("?")) {
+        BYTE, UBYTE -> "TINYINT"
+        SHORT, USHORT -> "SMALLINT"
+        INT, UINT -> "INT"
+        LONG -> if (isPrimaryKey) "INTEGER" else "BIGINT"
+        ULONG -> "BIGINT"
+        FLOAT -> "FLOAT"
+        DOUBLE -> "DOUBLE"
+        BOOLEAN -> "BOOLEAN"
+        CHAR -> "CHAR(1)"
+        STRING -> "TEXT"
+        BYTE_ARRAY -> "BLOB"
+        else -> when (descriptor.kind) {
+            SerialKind.ENUM -> "INT"
+            PrimitiveKind.BYTE -> "TINYINT"
+            PrimitiveKind.SHORT -> "SMALLINT"
+            PrimitiveKind.INT -> "INT"
+            PrimitiveKind.LONG -> "BIGINT"
+            PrimitiveKind.FLOAT -> "FLOAT"
+            PrimitiveKind.DOUBLE -> "DOUBLE"
+            PrimitiveKind.BOOLEAN -> "BOOLEAN"
+            PrimitiveKind.CHAR -> "CHAR(1)"
+            PrimitiveKind.STRING -> "TEXT"
+            else -> if (descriptor.isInline) columnTypeOf(descriptor.getElementDescriptor(0), isPrimaryKey = false) else null
         }
     }
 }

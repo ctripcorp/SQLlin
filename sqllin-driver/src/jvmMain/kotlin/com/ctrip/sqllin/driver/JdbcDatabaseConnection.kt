@@ -57,18 +57,19 @@ internal class JdbcDatabaseConnection(private val connection: Connection) : Abst
     private val isTransactionSuccess = AtomicBoolean(false)
 
     /**
-     * Begins an IMMEDIATE transaction, which takes the write lock at once, as on every platform, or a deferred one on a
-     * read-only connection, which can't take it.
+     * Begins a transaction in [mode], or a deferred one on a read-only connection, which can't take the write lock.
      *
      * It is begun with SQL, in auto-commit mode, rather than by leaving auto-commit mode: sqlite-jdbc begins another
      * transaction of its configured kind as soon as one is committed or rolled back, which an IMMEDIATE one couldn't
      * do while another connection writes, so that a COMMIT that succeeded would fail.
      */
-    override fun beginTransaction() {
+    override fun beginTransaction(mode: TransactionMode) {
         if (isTransactionSuccess.get())
             isTransactionSuccess.set(false)
-        execSQL(if (connection.isReadOnly) "BEGIN" else "BEGIN IMMEDIATE", null)
+        execSQL(if (connection.isReadOnly) "BEGIN" else "BEGIN ${mode.name}", null)
     }
+
+    override fun beginTransaction() = beginTransaction(TransactionMode.IMMEDIATE)
 
     override fun setTransactionSuccessful() {
         isTransactionSuccess.set(true)

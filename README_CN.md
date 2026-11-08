@@ -43,6 +43,7 @@ SQLlin 的架构设计如下图所示：
 
 SQLlin 拥有三个主要部分：_sqllin-dsl_、_sqllin-driver_ 及 _sqllin-processor_。_sqllin-driver_ 是一套通用的多平台 SQLite 低阶 API，大多数情况下不推荐直接使用。
 _sqllin-dsl_ 是 SQL 语句的 DSL 实现并且它基于 _sqllin-driver_。_sqllin-processor_ 使用 KSP 处理注解并生成用于与 _sqllin-dsl_ 配合使用的代码。
+可选的 _sqllin-dsl-paging_ 为 _sqllin-dsl_ 的查询提供 androidx.paging 的 `PagingSource`。
 
 你可以在下列文档中学习如何使用 _sqllin-dsl_：
 

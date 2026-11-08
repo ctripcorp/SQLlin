@@ -20,7 +20,6 @@ package com.ctrip.sqllin.dsl.sql.clause
 
 import com.ctrip.sqllin.dsl.annotation.StatementDslMaker
 import com.ctrip.sqllin.dsl.sql.statement.GroupBySelectStatement
-import com.ctrip.sqllin.dsl.sql.statement.JoinSelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.ResultColumnSelectStatement
 import com.ctrip.sqllin.dsl.sql.statement.WhereSelectStatement
 
@@ -66,26 +65,13 @@ public fun <T> GROUP_BY(vararg elements: ClauseElement<*>): GroupByClause<T> = G
 @StatementDslMaker
 public infix fun <T> WhereSelectStatement<T>.GROUP_BY(element: ClauseElement<*>): GroupBySelectStatement<T> =
     appendToGroupBy(GroupByClause(listOf(element))).also {
-        container changeLastStatement it
+        container.replaceStatement(this, it)
     }
 
 @StatementDslMaker
 public infix fun <T> WhereSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement<*>>): GroupBySelectStatement<T> {
     val statement = appendToGroupBy(GroupByClause(elements))
-    container changeLastStatement statement
-    return statement
-}
-
-@StatementDslMaker
-public infix fun <T> JoinSelectStatement<T>.GROUP_BY(element: ClauseElement<*>): GroupBySelectStatement<T> =
-    appendToGroupBy(GroupByClause(listOf(element))).also {
-        container changeLastStatement it
-    }
-
-@StatementDslMaker
-public infix fun <T> JoinSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement<*>>): GroupBySelectStatement<T> {
-    val statement = appendToGroupBy(GroupByClause(elements))
-    container changeLastStatement statement
+    container.replaceStatement(this, statement)
     return statement
 }
 
@@ -96,6 +82,6 @@ public infix fun <T> ResultColumnSelectStatement<T>.GROUP_BY(element: ClauseElem
 @StatementDslMaker
 public infix fun <T> ResultColumnSelectStatement<T>.GROUP_BY(elements: Iterable<ClauseElement<*>>): GroupBySelectStatement<T> {
     val statement = appendToGroupBy(GroupByClause(elements))
-    container changeLastStatement statement
+    container.replaceStatement(this, statement)
     return statement
 }

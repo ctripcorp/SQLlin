@@ -30,6 +30,8 @@ kotlin {
                 implementation("com.ctrip.kotlin:sqllin-dsl:$sqllinVersion")
                 // sqllin-driver
                 implementation("com.ctrip.kotlin:sqllin-driver:$sqllinVersion")
+                // Optional, since 2.6.0: androidx.paging's PagingSource of sqllin-dsl's queries
+                implementation("com.ctrip.kotlin:sqllin-dsl-paging:$sqllinVersion")
                 
                 // The sqllin-dsl serialization and deserialization depends on kotlinx-serialization
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.9.0")
@@ -428,6 +430,29 @@ data class User(
 - `ORDER BY` clauses sort case-insensitively
 - Indexes on the column are case-insensitive
 
+#### @CollateRTrim - Text Comparison Ignoring Trailing Spaces
+
+`@CollateRTrim` makes a text column compare its values ignoring the spaces at their ends, for SQL `COLLATE RTRIM`, so
+that `'abc  '` equals `'abc'`, and its UNIQUE constraint and indexes treat them as the same value. The values are still
+stored as they are written. It is experimental, and can only be applied to `String` and `Char` properties:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow
+@Serializable
+data class Product(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @CollateRTrim @Unique val code: String,
+)
+// Generated SQL: CREATE TABLE Product(id INTEGER PRIMARY KEY AUTOINCREMENT,code TEXT NOT NULL COLLATE RTRIM UNIQUE)
+```
+
+A column has one collation, so a property can't have both `@CollateNoCase` and `@CollateRTrim`. A column without either
+compares its values by their bytes, as the `BINARY` collation does. The `COLLATE` operator compares them by another
+collation in a single expression, as [More Expression Syntax](sql-functions.md#more-expression-syntax) describes, and
+gives a column of an index its own collation, as
+[CREATE INDEX](modify-database-and-transaction.md#create-index---creating-indexes) describes.
+
 #### Combining Multiple Constraints
 
 You can combine multiple constraint annotations on the same property:
@@ -619,7 +644,7 @@ column's constraint or the table's refers to.
 
 ### Supported Types
 
-SQLlin supports the following Kotlin types for properties in `@DBRow` data classes. A property of any other type is a compile-time error; to keep such a property out of the table, annotate it with `kotlinx.serialization.Transient`:
+SQLlin supports the following Kotlin types for properties in `@DBRow` data classes, and any other type whose serializer converts it to one of them (see [Types Converted by Serializers](#types-converted-by-serializers)). A property of any other type is a compile-time error; to keep such a property out of the table, annotate it with `kotlinx.serialization.Transient`:
 
 #### Numeric Types
 - **Integer types:** `Byte`, `Short`, `Int`, `Long`
@@ -685,7 +710,76 @@ data class User(
 **Important notes:**
 - Enum values are stored as their ordinal (integer) values
 - Changing the order of enum constants will affect the stored values
-- Consider using String if you need more stable storage
+- To store an enum more stably, as its name, give it a serializer that does, on the enum class or on the property: it is then a [type converted by its serializer](#types-converted-by-serializers), stored as TEXT
+
+#### Types Converted by Serializers
+
+The serializer that kotlinx.serialization writes a property with is the property's converter: a property of any type can be a column if its serializer encodes it as one value of the types above, which the column holds. These need nothing more:
+- `kotlin.uuid.Uuid`, `kotlin.time.Instant` and `kotlin.time.Duration`, whose built-in serializers store strings
+- a value class, which stores the value it holds
+- a type whose class declares its serializer with `@Serializable(with = ...)`, as the types of kotlinx-datetime do
+- any type, enums and `String` included, given a serializer with `@Serializable(with = ...)` on the property, on the use of its type or in a type alias, or by `@file:UseSerializers(...)`
+
+```kotlin
+object EpochMillisSerializer : KSerializer<Instant> {
+    override val descriptor = PrimitiveSerialDescriptor("EpochMillis", PrimitiveKind.LONG)
+    override fun serialize(encoder: Encoder, value: Instant) = encoder.encodeLong(value.toEpochMilliseconds())
+    override fun deserialize(decoder: Decoder) = Instant.fromEpochMilliseconds(decoder.decodeLong())
+}
+
+@JvmInline
+@Serializable
+value class Score(val value: Int)
+
+@DBRow
+@Serializable
+data class Event(
+    @PrimaryKey val id: Uuid,                                                   // TEXT PRIMARY KEY
+    @Serializable(with = EpochMillisSerializer::class) val startsAt: Instant,  // BIGINT
+    val score: Score,                                                           // INT
+)
+```
+
+The column has the type of the value the serializer stores, which `CREATE` computes from it, and conditions and `SET {}` convert the values given to them with the same serializer, so that they compare with, and store, what the column holds:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        EventTable { table ->
+            table SELECT WHERE(startsAt GTE since) ORDER_BY (startsAt to ASC)
+            table UPDATE SET { score = Score(10) } WHERE (id EQ eventId)
+        }
+    }
+}
+```
+
+The column's element is a `ClauseConverted<T>`, which is experimental. It has `EQ`, `NEQ`, `LT`, `LTE`, `GT`, `GTE`, `IN`, `BETWEEN`, `IS` and `ISNOT`, and is taken like any column by `max`, `min`, `coalesce`, `CASE`, `ORDER_BY`, `GROUP_BY`, indexes and views. `literal(value, serializer)` is a literal of a converted type.
+
+**Important notes:**
+- A comparison other than an equality, and `ORDER_BY`, compare the stored values, which are in the order of the Kotlin values only if the serializer keeps it. The built-in serializer of `kotlin.time.Instant` writes ISO-8601 strings, with a fraction of a second only if there is one, so that `2024-01-01T00:00:00.5Z` comes before `2024-01-01T00:00:00Z`: store instants as numbers, as `EpochMillisSerializer` does, to compare or order them
+- A converted column is never the rowid: a value class of a `Long` as the primary key is a `BIGINT PRIMARY KEY` supplied by the caller
+- A serializer that encodes a structure, as the generated serializer of a data class or of a `List` does, can't be a column. The processor rejects the types it knows to be structures, and `CREATE` fails for a serializer it can't tell. Store such a value as one, as JSON in a string, with a serializer of your own:
+
+```kotlin
+object TagsAsJsonSerializer : KSerializer<List<String>> {
+    private val tags = ListSerializer(String.serializer())
+    override val descriptor = PrimitiveSerialDescriptor("TagsAsJson", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: List<String>) = encoder.encodeString(Json.encodeToString(tags, value))
+    override fun deserialize(decoder: Decoder) = Json.decodeFromString(tags, decoder.decodeString())
+}
+
+@DBRow
+@Serializable
+data class Note(
+    @PrimaryKey val id: Long?,
+    @Serializable(with = TagsAsJsonSerializer::class) val tags: List<String>,  // TEXT
+)
+```
+
+- `@Contextual` and `@UseContextualSerialization` aren't supported, as SQLlin has no `SerializersModule` to find the serializer in: give the property its serializer with `@Serializable(with = ...)`. An enum or a basic type serialized contextually is stored as by default
+- A `@CollateNoCase` or `@CollateRTrim` column has to store text, which `CREATE` checks
+- FTS tables only have `String` columns with their default serializer
 
 #### SQLite Type Mappings
 
@@ -703,6 +797,7 @@ data class User(
 | String | TEXT |
 | ByteArray | BLOB |
 | Enum | INT |
+| A type converted by its serializer | The type of the value it stores, as TEXT for `Uuid` |
 
 ### Foreign Key Constraints
 

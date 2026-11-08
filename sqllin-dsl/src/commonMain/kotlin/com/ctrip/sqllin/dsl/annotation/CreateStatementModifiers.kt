@@ -134,6 +134,37 @@ public annotation class CompositePrimaryKey(val onConflict: OnConflict = OnConfl
 public annotation class CollateNoCase
 
 /**
+ * Marks a text column to compare its values ignoring the spaces at their ends, as the SQL `COLLATE RTRIM` of the
+ * column's definition does, so that `'abc  '` equals `'abc'`, and its UNIQUE constraint and indexes treat them as the
+ * same value. The values are stored as they are written, spaces included.
+ *
+ * A column has one collation, so a property can't have both this and [CollateNoCase]. A column without either compares
+ * its values as BINARY does, by their bytes; the COLLATE operator compares them otherwise in a single expression, as in
+ * `(code COLLATE BINARY) EQ "abc"`.
+ *
+ * ```kotlin
+ * @OptIn(ExperimentalDSLDatabaseAPI::class)
+ * @DBRow
+ * @Serializable
+ * data class Product(
+ *     @PrimaryKey val id: Long?,
+ *     @CollateRTrim @Unique val code: String,
+ * )
+ * // CREATE TABLE Product(id INTEGER PRIMARY KEY,code TEXT NOT NULL COLLATE RTRIM UNIQUE)
+ * ```
+ *
+ * It can only be applied to properties of type `String` or `Char`, and their nullable variants, which the compiler
+ * checks.
+ *
+ * @see CollateNoCase
+ * @see DBRow
+ */
+@ExperimentalDSLDatabaseAPI
+@Target(AnnotationTarget.PROPERTY)
+@Retention(AnnotationRetention.BINARY)
+public annotation class CollateRTrim
+
+/**
  * Marks a column as unique, enforcing a UNIQUE constraint in the database.
  *
  * This annotation adds the `UNIQUE` keyword to the column definition in the

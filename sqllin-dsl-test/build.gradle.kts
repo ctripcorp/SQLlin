@@ -61,10 +61,12 @@ kotlin {
             kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
             dependencies {
                 implementation(project(":sqllin-dsl"))
+                implementation(project(":sqllin-dsl-paging"))
                 implementation(libs.kotlinx.serialization)
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(kotlin("test"))
                 implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.androidx.paging.testing)
             }
         }
         getByName("androidHostTest").dependencies {

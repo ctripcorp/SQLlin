@@ -17,10 +17,11 @@
 package com.ctrip.sqllin.dsl.sql.operation
 
 import com.ctrip.sqllin.driver.DatabaseConnection
-import com.ctrip.sqllin.dsl.sql.statement.SingleStatement
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.clause.WhereClause
-import com.ctrip.sqllin.dsl.sql.statement.UpdateDeleteStatement
+import com.ctrip.sqllin.dsl.sql.statement.StatementContainer
+import com.ctrip.sqllin.dsl.sql.statement.UpdateDeleteParts
+import com.ctrip.sqllin.dsl.sql.statement.WhereUpdateDeleteStatement
 
 /**
  * DELETE operation builder.
@@ -36,41 +37,49 @@ internal object Delete : Operation {
         get() = "DELETE FROM "
 
     /**
-     * Builds a DELETE statement with WHERE clause.
+     * Builds a DELETE statement with WHERE clause, which ORDER BY and LIMIT can follow.
      *
      * Generates SQL in the format: `DELETE FROM table WHERE condition`
      *
      * @param table Table to delete from
      * @param connection Database connection for execution
+     * @param container The container the statement is added to, in which a clause that follows replaces it
      * @param whereClause WHERE condition specifying which rows to delete
-     * @return Final DELETE statement ready for execution
+     * @param target The table, or the table with INDEXED BY or NOT INDEXED, which the rows are looked up through
+     * @return DELETE statement ready for execution
      */
-    fun <T> delete(table: Table<*>, connection: DatabaseConnection, whereClause: WhereClause<T>): SingleStatement {
-        val sql = buildString {
-            buildBaseDeleteStatement(table)
-            append(whereClause.clauseStr)
-        }
-        return UpdateDeleteStatement(sql, connection, whereClause.selectCondition.parameters, table.tableName)
-    }
+    fun <T> delete(
+        table: Table<T>,
+        connection: DatabaseConnection,
+        container: StatementContainer,
+        whereClause: WhereClause<T>,
+        target: String = table.tableName,
+    ): WhereUpdateDeleteStatement<T> =
+        WhereUpdateDeleteStatement(parts(table, target).copy(where = whereClause.selectCondition), container, connection)
 
     /**
-     * Builds a DELETE statement without WHERE clause (deletes all rows).
+     * Builds a DELETE statement without WHERE clause (deletes all rows), which ORDER BY and LIMIT can follow.
      *
      * Generates SQL in the format: `DELETE FROM table`
      *
      * @param table Table to delete all rows from
      * @param connection Database connection for execution
-     * @return Final DELETE statement ready for execution
+     * @param container The container the statement is added to, in which a clause that follows replaces it
+     * @param target The table, or the table with INDEXED BY or NOT INDEXED, which the rows are looked up through
+     * @return DELETE statement ready for execution
      */
-    fun deleteAllEntities(table: Table<*>, connection: DatabaseConnection): SingleStatement {
-        val sql = buildString {
-            buildBaseDeleteStatement(table)
-        }
-        return UpdateDeleteStatement(sql, connection, null, table.tableName)
-    }
+    fun <T> deleteAllEntities(
+        table: Table<T>,
+        connection: DatabaseConnection,
+        container: StatementContainer,
+        target: String = table.tableName,
+    ): WhereUpdateDeleteStatement<T> = WhereUpdateDeleteStatement(parts(table, target), container, connection)
 
-    private fun StringBuilder.buildBaseDeleteStatement(table: Table<*>) {
-        append(sqlStr)
-        append(table.tableName)
-    }
+    private fun parts(table: Table<*>, target: String) = UpdateDeleteParts(
+        statement = sqlStr,
+        table = table,
+        target = target,
+        assignments = "",
+        assignmentParameters = null,
+    )
 }

@@ -28,6 +28,8 @@ kotlin {
                 implementation("com.ctrip.kotlin:sqllin-dsl:$sqllinVersion")
                 // sqllin-driver
                 implementation("com.ctrip.kotlin:sqllin-driver:$sqllinVersion")
+                // 可选，2.6.0 起：为 sqllin-dsl 的查询提供 androidx.paging 的 PagingSource
+                implementation("com.ctrip.kotlin:sqllin-dsl-paging:$sqllinVersion")
 
                 // The sqllin-dsl serialization and deserialization depends on kotlinx-serialization
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.9.0")
@@ -416,6 +418,26 @@ data class User(
 - `ORDER BY` 子句不区分大小写排序
 - 列上的索引不区分大小写
 
+#### @CollateRTrim - 忽略末尾空格的文本比较
+
+`@CollateRTrim` 让文本列在比较时忽略值末尾的空格，对应 SQL 的 `COLLATE RTRIM`：`'abc  '` 等于 `'abc'`，列上的 UNIQUE 约束和索引
+也把它们当作同一个值。值本身仍按写入时的原样存储。它是实验性 API，只能用于 `String` 和 `Char` 属性：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+@DBRow
+@Serializable
+data class Product(
+    @PrimaryKey(autoIncrement = true) val id: Long?,
+    @CollateRTrim @Unique val code: String,
+)
+// Generated SQL: CREATE TABLE Product(id INTEGER PRIMARY KEY AUTOINCREMENT,code TEXT NOT NULL COLLATE RTRIM UNIQUE)
+```
+
+一列只有一种排序规则，所以同一个属性不能同时使用 `@CollateNoCase` 和 `@CollateRTrim`。两者都没有的列按字节比较，即 `BINARY`
+排序规则。`COLLATE` 运算符可以在单个表达式里改用别的排序规则，见[更多表达式语法](sql-functions-cn.md#更多表达式语法)；
+也可以给索引的某一列指定它自己的排序规则，见 [CREATE INDEX](modify-database-and-transaction-cn.md#create-index---创建索引)。
+
 #### 组合多个约束
 
 你可以在同一个属性上组合多个约束注解：
@@ -600,7 +622,7 @@ SQLite 的 `ALTER TABLE` 不能给表添加约束，`ALTER_ADD_COLUMN` 添加的
 
 ### 支持的类型
 
-SQLlin 支持以下 Kotlin 类型用于 `@DBRow` 数据类的属性。其他任何类型的属性都会导致编译错误；如果想让这样的属性不进入表中，请为它加上 `kotlinx.serialization.Transient` 注解：
+SQLlin 支持以下 Kotlin 类型用于 `@DBRow` 数据类的属性；其他类型只要它的 serializer 把它转换成其中一种，也同样支持（见[由 serializer 转换的类型](#由-serializer-转换的类型)）。其他任何类型的属性都会导致编译错误；如果想让这样的属性不进入表中，请为它加上 `kotlinx.serialization.Transient` 注解：
 
 #### 数值类型
 - **整数类型：** `Byte`、`Short`、`Int`、`Long`
@@ -666,7 +688,76 @@ data class User(
 **重要注意事项：**
 - 枚举值存储为其序数（整数）值
 - 更改枚举常量的顺序会影响存储的值
-- 如果需要更稳定的存储，考虑使用 String
+- 如果需要更稳定的存储，比如按名字存，可以在枚举类或属性上给它一个这样存储的 serializer：这样它就成了[由 serializer 转换的类型](#由-serializer-转换的类型)，存为 TEXT
+
+#### 由 serializer 转换的类型
+
+kotlinx.serialization 用哪个 serializer 写一个属性，这个 serializer 就是该属性的转换器：任何类型的属性，只要它的 serializer 把它编码成上述类型中的单个值，就可以作为一列，列中存的就是这个值。以下情况无需任何额外操作：
+- `kotlin.uuid.Uuid`、`kotlin.time.Instant` 和 `kotlin.time.Duration`，它们的内置 serializer 存为字符串
+- 值类（value class），存它所持有的值
+- 在类上用 `@Serializable(with = ...)` 声明了 serializer 的类型，kotlinx-datetime 的类型就是这样
+- 任何类型（包括枚举和 `String`），在属性上、类型的使用处或类型别名里用 `@Serializable(with = ...)` 指定了 serializer，或者由 `@file:UseSerializers(...)` 指定
+
+```kotlin
+object EpochMillisSerializer : KSerializer<Instant> {
+    override val descriptor = PrimitiveSerialDescriptor("EpochMillis", PrimitiveKind.LONG)
+    override fun serialize(encoder: Encoder, value: Instant) = encoder.encodeLong(value.toEpochMilliseconds())
+    override fun deserialize(decoder: Decoder) = Instant.fromEpochMilliseconds(decoder.decodeLong())
+}
+
+@JvmInline
+@Serializable
+value class Score(val value: Int)
+
+@DBRow
+@Serializable
+data class Event(
+    @PrimaryKey val id: Uuid,                                                   // TEXT PRIMARY KEY
+    @Serializable(with = EpochMillisSerializer::class) val startsAt: Instant,  // BIGINT
+    val score: Score,                                                           // INT
+)
+```
+
+列的类型是 serializer 所存值的类型，由 `CREATE` 根据 serializer 计算得出。条件和 `SET {}` 会用同一个 serializer 转换传给它们的值，所以比较的、写入的都和列中存的一致：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+fun sample() {
+    database {
+        EventTable { table ->
+            table SELECT WHERE(startsAt GTE since) ORDER_BY (startsAt to ASC)
+            table UPDATE SET { score = Score(10) } WHERE (id EQ eventId)
+        }
+    }
+}
+```
+
+这种列的元素是 `ClauseConverted<T>`，属于实验性 API。它支持 `EQ`、`NEQ`、`LT`、`LTE`、`GT`、`GTE`、`IN`、`BETWEEN`、`IS` 和 `ISNOT`，并且和其他列一样可以用在 `max`、`min`、`coalesce`、`CASE`、`ORDER_BY`、`GROUP_BY`、索引和视图中。`literal(value, serializer)` 可以创建转换类型的字面量。
+
+**重要注意事项：**
+- 除相等以外的比较，以及 `ORDER_BY`，比较的都是存储的值；只有 serializer 保持了顺序，存储值的顺序才和 Kotlin 值的顺序一致。`kotlin.time.Instant` 的内置 serializer 写的是 ISO-8601 字符串，只在有小数秒时才写小数部分，因此 `2024-01-01T00:00:00.5Z` 会排在 `2024-01-01T00:00:00Z` 前面。如果要比较或排序时间，请像 `EpochMillisSerializer` 那样把它存成数字
+- 转换类型的列永远不会是 rowid：以 `Long` 值类作为主键时，它是由调用方提供值的 `BIGINT PRIMARY KEY`
+- 把值编码成结构的 serializer（比如 data class 或 `List` 自动生成的 serializer）不能作为一列。处理器会拒绝它能确定是结构的类型；对于它无法判断的 serializer，`CREATE` 会失败。这类值需要存成单个值，比如用自己写的 serializer 存成 JSON 字符串：
+
+```kotlin
+object TagsAsJsonSerializer : KSerializer<List<String>> {
+    private val tags = ListSerializer(String.serializer())
+    override val descriptor = PrimitiveSerialDescriptor("TagsAsJson", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: List<String>) = encoder.encodeString(Json.encodeToString(tags, value))
+    override fun deserialize(decoder: Decoder) = Json.decodeFromString(tags, decoder.decodeString())
+}
+
+@DBRow
+@Serializable
+data class Note(
+    @PrimaryKey val id: Long?,
+    @Serializable(with = TagsAsJsonSerializer::class) val tags: List<String>,  // TEXT
+)
+```
+
+- 不支持 `@Contextual` 和 `@UseContextualSerialization`，因为 SQLlin 没有可以查找 serializer 的 `SerializersModule`：请用 `@Serializable(with = ...)` 给属性指定 serializer。以上下文方式序列化的枚举或基础类型，仍按默认方式存储
+- 带 `@CollateNoCase` 或 `@CollateRTrim` 的列必须存文本，`CREATE` 会检查这一点
+- FTS 表只能有使用默认 serializer 的 `String` 列
 
 #### SQLite 类型映射
 
@@ -684,6 +775,7 @@ data class User(
 | String | TEXT |
 | ByteArray | BLOB |
 | Enum | INT |
+| 由 serializer 转换的类型 | 它所存值的类型，比如 `Uuid` 为 TEXT |
 
 ### 外键约束
 

@@ -17,7 +17,13 @@
 package com.ctrip.sqllin.dsl.sql
 
 import com.ctrip.sqllin.dsl.annotation.ExperimentalDSLDatabaseAPI
+import com.ctrip.sqllin.dsl.sql.clause.SetClause
+import com.ctrip.sqllin.dsl.sql.compiler.storedValueOf
+import com.ctrip.sqllin.dsl.sql.operation.FullNameCache
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerializationStrategy
+import kotlinx.serialization.descriptors.SerialDescriptor
 
 /**
  * What a SELECT reads: a [Table], or a [View].
@@ -122,6 +128,8 @@ public abstract class Table<T>(tableName: String) : Relation<T>(tableName) {
      * - Kotlin types are mapped to SQLite types (Int→INT, String→TEXT, etc.)
      * - Annotations like [@PrimaryKey], [@Unique], [@CollateNoCase], etc. add corresponding SQL clauses
      * - Enum properties are stored as INTEGER (ordinal values)
+     * - A property whose serializer converts its values, as one of a `Uuid` or a value class, gets the type of the value
+     *   its serializer stores, which the statement computes when it is read, as [columnType] does
      *
      * ### Example
      * For a data class:
@@ -152,7 +160,55 @@ public abstract class Table<T>(tableName: String) : Relation<T>(tableName) {
      * @see com.ctrip.sqllin.dsl.annotation.CollateNoCase
      */
     public abstract val createSQL: String
+
+    /**
+     * Returns the SQLite type of the column of the property at [elementIndex] of the rows' descriptor, as the
+     * property's serializer stores it, which the CREATE statement of a generated table gives a property whose
+     * serializer converts its values, as `TEXT` for a `Uuid`, so that the column has the type of the values written to
+     * it. Such a column is never the rowid, as a `Long` primary key is.
+     *
+     * @param collation The collation of the column, as `NOCASE`, which only a column of text can have, or null
+     * @throws IllegalArgumentException if the serializer encodes a structure, which no column holds, or [collation] is
+     * given and it doesn't store text
+     */
+    protected fun columnType(elementIndex: Int, collation: String? = null): String {
+        val descriptor = kSerializer().descriptor
+        val name = descriptor.getElementName(elementIndex)
+        val type = columnTypeOf(descriptor.getElementDescriptor(elementIndex), name, isPrimaryKey = false)
+        require(collation == null || type == "TEXT" || type == "CHAR(1)") {
+            "The column '$name' of table '$tableName' has the collation $collation, which compares text, but its serializer stores it as $type."
+        }
+        return type
+    }
+
+    /**
+     * Assigns [propertyValue] to the column [propertyName] in `SET {}`, converted by [serializer], the serializer of the
+     * column's property, as the setter that a generated table gives a property whose serializer converts its values
+     * does, so that the column is set to what the serializer stores for the value, as an INSERT would.
+     */
+    protected fun <V : Any> SetClause<T>.appendConverted(propertyName: String, propertyValue: V?, serializer: SerializationStrategy<V>): Unit =
+        appendAny(propertyName, propertyValue?.let { storedValueOf(serializer, it) })
 }
+
+/**
+ * Returns the SQLite type of the column [elementName] of this table, as the serializer of its property stores it, which
+ * `ALTER TABLE ... ADD COLUMN` gives it.
+ *
+ * @throws IllegalArgumentException if the serializer encodes a structure, which no column holds
+ */
+internal fun Table<*>.columnTypeOf(elementName: String): String {
+    val descriptor = kSerializer().descriptor
+    val elementDescriptor = descriptor.getElementDescriptor(descriptor.getElementIndex(elementName))
+    return columnTypeOf(elementDescriptor, elementName, isPrimaryKey = elementName == primaryKeyInfo?.primaryKeyName)
+}
+
+@OptIn(ExperimentalSerializationApi::class)
+private fun Table<*>.columnTypeOf(descriptor: SerialDescriptor, elementName: String, isPrimaryKey: Boolean): String =
+    requireNotNull(FullNameCache.columnTypeOf(descriptor, isPrimaryKey)) {
+        "The column '$elementName' of table '$tableName' is written by the serializer of '${descriptor.serialName.removeSuffix("?")}', " +
+            "which encodes a structure (${descriptor.kind}), while a column holds one value: a number, a string, a Boolean or a ByteArray. " +
+            "Give the property a serializer that encodes it as one of them, as JSON in a string, for example."
+    }
 
 /**
  * Returns a table with the structure of this one under another [name], as needed to rebuild a table.

@@ -13,9 +13,10 @@ repositories {
     mavenCentral()
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+// The JDK of the other modules, which compiles both the Java and the Kotlin classes for it, rather than the Kotlin ones
+// for the JDK that runs the build
+kotlin {
+    jvmToolchain(libs.versions.jvm.toolchain.get().toInt())
 }
 
 dependencies {

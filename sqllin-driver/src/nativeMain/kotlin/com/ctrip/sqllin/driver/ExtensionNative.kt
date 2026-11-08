@@ -34,7 +34,8 @@ public actual fun openDatabase(config: DatabaseConfiguration): DatabaseConnectio
     val realConnection = RealDatabaseConnection(database)
     realConnection.apply {
         updateSynchronousMode(config.synchronousMode)
-        updateJournalMode(config.journalMode)
+        if (!database.isActualReadOnly)
+            updateJournalMode(config.journalMode)
         try {
             migrateIfNeeded(config.create, config.upgrade, config.version, database.isActualReadOnly)
         } catch (e: Exception) {
