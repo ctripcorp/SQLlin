@@ -2,6 +2,13 @@
 
 - Date format: YYYY-MM-dd
 
+## 2.7.0 / 2026-xx-xx
+
+### sqllin-dsl
+
+* New guide: [Testing](sqllin-dsl/doc/testing.md), in English and Chinese, about testing the code that uses SQLlin against a real SQLite database: where one runs in the tests of each platform; the setup of Android host tests with Robolectric, whose SDK level chooses the framework code that runs but not the SQLite version, which is 3.32.2 at every level up to 34 with Robolectric 4.17, so that what depends on the SQLite version needs an emulator or a device; closing and deleting the database of a test; `observe` and `pagingSource` under `runTest`; generating the table objects of the `@DBRow` classes of a test source set, by adding sqllin-processor to the KSP configuration of the test compilation, as `kspAndroidHostTest`; and testing a migration
+* The guide to getting started says that the table object of a class with a column converted by its serializer computes its `createSQL` when it is read, so that the generated code holds no whole CREATE statement. The guide to advanced queries says that a page of `pagingSource` is the rows of one SELECT, so that it can't hold a one-to-many relation, which can be a converted column where no query filters by it, or a `PagingSource` of one's own on table version tokens otherwise
+
 ## 2.6.0 / 2026-11-08
 
 ### All

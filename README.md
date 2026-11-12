@@ -57,6 +57,7 @@ You can learn how to use _sqllin-dsl_ in these documentations:
 - [Concurrency Safety](./sqllin-dsl/doc/concurrency-safety.md)
 - [SQL Functions](./sqllin-dsl/doc/sql-functions.md)
 - [Advanced Query](./sqllin-dsl/doc/advanced-query.md)
+- [Testing](./sqllin-dsl/doc/testing.md)
 
 I don't recommend using _sqllin-driver_ directly, but if you want to learn more about it, you can read:
 

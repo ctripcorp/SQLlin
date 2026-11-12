@@ -517,6 +517,15 @@ fun persons(database: Database): Flow<PagingData<Person>> =
 * **The thread**: the pages load in `Dispatchers.IO`, or the context given to `pagingSource(context) { }`, as a `Pager`
   may load them on the main thread. Write through `suspendedScope`, which the loads are serialized with, as for an
   observed query.
+* **One SELECT**: a page is the rows of one _SELECT_, read into one type, so it can't hold the rows of a one-to-many
+  relation, as the tags of a note, which a second query would read. Where no query filters by those rows, store them in
+  the row itself, as a `List` in a column converted by its serializer, which
+  [Getting Start](getting-start.md#types-converted-by-serializers) describes; the list also keeps its order so, which
+  the rows of another table only do with a column to order them by. Where queries need them as rows, write a
+  `PagingSource` of your own on [table version tokens](#table-version-tokens): read the page and the related rows each
+  through `versioned { }`, and register the sum of their tokens with `onChange`, so that a change of either table
+  invalidates it. Read the related rows for every page that has rows, even when you know there are none: a table that
+  no read touched isn't in the token, so a row added to it later would never invalidate the source.
 
 ## Full-Text Search
 

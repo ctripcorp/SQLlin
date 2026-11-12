@@ -780,6 +780,10 @@ data class Note(
 - `@Contextual` and `@UseContextualSerialization` aren't supported, as SQLlin has no `SerializersModule` to find the serializer in: give the property its serializer with `@Serializable(with = ...)`. An enum or a basic type serialized contextually is stored as by default
 - A `@CollateNoCase` or `@CollateRTrim` column has to store text, which `CREATE` checks
 - FTS tables only have `String` columns with their default serializer
+- The type of a converted column comes from its serializer, so the table object computes its `createSQL` when it is
+  read, where that of a table without such columns is a constant: the generated code holds no whole _CREATE_ statement to
+  search for. Read the table object's `createSQL`, or the columns that `PRAGMA_TABLE_INFO(table)` returns, to see what
+  is created
 
 #### SQLite Type Mappings
 
@@ -1163,3 +1167,4 @@ You have learned all the preparations, you can start learn how to operate databa
 - [Concurrency Safety](concurrency-safety.md)
 - [SQL Functions](sql-functions.md)
 - [Advanced Query](advanced-query.md)
+- [Testing](testing.md)
