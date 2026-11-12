@@ -5253,6 +5253,109 @@ class CommonBasicTest(private val path: DatabasePath) {
     }
 
     /**
+     * Covers dropping a table and a view by their names, with which a migration drops what has no class any more: a
+     * table and a view that version 1 created are gone after the upgrade to version 2, which only names them, and what
+     * it doesn't name stays. DROP_TABLE and DROP_VIEW fail for what doesn't exist, where their IF_EXISTS forms do
+     * nothing; each fails for the other's kind, IF EXISTS or not; an FTS table is dropped as a table; and a blank name
+     * is rejected as the statement is built, so that no statement of its scope runs.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testDropByName() {
+        fun Database.columnsOf(name: String): List<String> {
+            lateinit var columns: PragmaStatement<List<ColumnInfo>>
+            this { columns = PRAGMA_TABLE_INFO(name) }
+            return columns.getResults().map { it.name }
+        }
+
+        // Version 1 has a table under a name that no class of version 2 has, and a view
+        val version1 = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(BookTable)
+                CREATE(BookTable.withName("legacy_book"))
+                CREATE(PersonWithIdTable)
+                CREATE_VIEW(AdultPersonView) AS (PersonWithIdTable SELECT WHERE<AdultPerson>(PersonWithIdTable.age GTE 18))
+            },
+        )
+        Database(version1).databaseAutoClose { database ->
+            database { BookTable.withName("legacy_book") INSERT Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251) }
+            assertEquals(true, database.columnsOf("legacy_book").isNotEmpty())
+            assertEquals(true, database.columnsOf("adult_person").isNotEmpty())
+        }
+
+        val version2 = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 2,
+            create = {
+                CREATE(BookTable)
+                CREATE(PersonWithIdTable)
+            },
+            upgrade = { oldVersion, _ ->
+                if (oldVersion < 2) {
+                    DROP_TABLE("legacy_book")
+                    DROP_VIEW("adult_person")
+                }
+            },
+        )
+        Database(version2).databaseAutoClose { database ->
+            assertEquals(emptyList(), database.columnsOf("legacy_book"))
+            assertEquals(emptyList(), database.columnsOf("adult_person"))
+            assertEquals(true, database.columnsOf("book").isNotEmpty())
+            assertEquals(true, database.columnsOf("person_with_id").isNotEmpty())
+
+            // What doesn't exist
+            assertFails { database { DROP_TABLE("legacy_book") } }
+            assertFails { database { DROP_VIEW("adult_person") } }
+            database {
+                DROP_TABLE_IF_EXISTS("legacy_book")
+                DROP_VIEW_IF_EXISTS("adult_person")
+            }
+
+            // The other kind: DROP TABLE doesn't drop a view, nor DROP VIEW a table, IF EXISTS or not
+            database {
+                CREATE_VIEW(AdultPersonView) AS (PersonWithIdTable SELECT WHERE<AdultPerson>(PersonWithIdTable.age GTE 18))
+            }
+            assertFails { database { DROP_TABLE("adult_person") } }
+            assertFails { database { DROP_TABLE_IF_EXISTS("adult_person") } }
+            assertFails { database { DROP_VIEW("book") } }
+            assertFails { database { DROP_VIEW_IF_EXISTS("book") } }
+            assertEquals(true, database.columnsOf("adult_person").isNotEmpty())
+            assertEquals(true, database.columnsOf("book").isNotEmpty())
+
+            // A blank name is rejected as the statement is built: the INSERT before it in the scope doesn't run
+            assertFailsWith<IllegalArgumentException> {
+                database {
+                    PersonWithIdTable INSERT PersonWithId(id = null, name = "Ann", age = 30)
+                    DROP_TABLE(" ")
+                }
+            }
+            assertFailsWith<IllegalArgumentException> { database { DROP_TABLE_IF_EXISTS("") } }
+            assertFailsWith<IllegalArgumentException> { database { DROP_VIEW(" ") } }
+            assertFailsWith<IllegalArgumentException> { database { DROP_VIEW_IF_EXISTS("") } }
+            lateinit var persons: SelectStatement<PersonWithId>
+            database { persons = PersonWithIdTable SELECT X }
+            assertEquals(emptyList(), persons.getResults())
+
+            // IF EXISTS drops what exists, and an FTS table is a table
+            database { CREATE(ArticleTable) }
+            assertEquals(true, database.columnsOf("articles").isNotEmpty())
+            database {
+                DROP_VIEW_IF_EXISTS("adult_person")
+                DROP_TABLE_IF_EXISTS("book")
+                DROP_TABLE("articles")
+            }
+            assertEquals(emptyList(), database.columnsOf("adult_person"))
+            assertEquals(emptyList(), database.columnsOf("book"))
+            assertEquals(emptyList(), database.columnsOf("articles"))
+            assertEquals(true, database.selectFails { BookTable SELECT X })
+            assertEquals(true, database.selectFails { ArticleTable SELECT X })
+        }
+    }
+
+    /**
      * Covers partial indexes: a unique index with WHERE keeps out the duplicates of the rows that satisfy its condition
      * only, with the values of the condition, a quote among them, written into the SQL; a subquery there, and a second
      * WHERE, are rejected.

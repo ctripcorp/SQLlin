@@ -3,10 +3,6 @@
 Each item has an ID, `Fx`, which stays the same when the item moves to another priority, and under Supported once it is
 done. A new item takes the next number.
 
-## High Priority
-
-* F70: Support dropping a table or a view by its name, `DROP_TABLE(name)`, `DROP_TABLE_IF_EXISTS(name)`, `DROP_VIEW(name)` and `DROP_VIEW_IF_EXISTS(name)`, as `DROP_INDEX(name)` and `DROP_TRIGGER(name)` do, so that a migration can drop a table whose class is gone, without naming it through another table's `withName`; the kind is in the name, as `DROP TABLE` fails on a view
-
 ## Medium Priority
 
 * F8: Support WASM platform DSL
@@ -49,6 +45,7 @@ Items that aren't planned, as they are of little use, or would cost more than th
 
 ## Supported
 
+* F70: Support dropping a table or a view by its name, `DROP_TABLE(name)`, `DROP_TABLE_IF_EXISTS(name)`, `DROP_VIEW(name)` and `DROP_VIEW_IF_EXISTS(name)`, as `DROP_INDEX(name)` and `DROP_TRIGGER(name)` do, so that a migration can drop a table whose class is gone; the kind is in the name, as `DROP TABLE` fails on a view (2.7.0 ✅)
 * F12: Support type converters: store a property of any type through a serializer that encodes it to a type SQLite supports, with type-safe WHERE and SET on its column. The serializer kotlinx.serialization writes the property with is the converter: built-in ones of `Uuid`, `Instant` and `Duration`, value classes, and any given with `@Serializable(with = ...)` or `@file:UseSerializers`; the column's element, `ClauseConverted`, converts the values of its conditions with it (2.6.0 ✅)
 * F13: Provide a `PagingSource` for androidx.paging built on the table version tokens of F66, like Room's `LimitOffsetPagingSource`, in the new module sqllin-dsl-paging, `Database#pagingSource { }` (2.6.0 ✅)
 * F25: Support ORDER BY and LIMIT in UPDATE and DELETE, which SQLite only takes with its `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` option, which Android's lacks: SQLlin writes the subquery of rowids that SQLite turns them into, which every platform runs (2.6.0 ✅)

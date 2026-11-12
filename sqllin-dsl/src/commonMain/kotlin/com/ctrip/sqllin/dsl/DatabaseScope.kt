@@ -2099,6 +2099,43 @@ public class DatabaseScope internal constructor(
     public fun <T> Table<T>.DROP_IF_EXISTS(): Unit = DROP_IF_EXISTS(this)
 
     /**
+     * Drops the table named [name], as the SQL `DROP TABLE name` does: a table that has no class any more, as one that
+     * an earlier version of the app created and a migration removes, which [DROP] can't take, having no [Table] for it.
+     * An FTS table is dropped so too.
+     *
+     * Example:
+     * ```kotlin
+     * upgrade = { oldVersion, _ ->
+     *     if (oldVersion < 3)
+     *         DROP_TABLE("movie_genres")
+     * }
+     * ```
+     *
+     * It fails for a table that doesn't exist, which [DROP_TABLE_IF_EXISTS] leaves alone, and for a view, which
+     * [DROP_VIEW] drops, as SQLite's `DROP TABLE` doesn't drop a view.
+     *
+     * @param name The name of the table to drop
+     * @throws IllegalArgumentException if [name] is blank
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_TABLE(name: String) {
+        addStatement(Drop.dropTable(name, databaseConnection))
+    }
+
+    /**
+     * Drops the table named [name] if it exists, as the SQL `DROP TABLE IF EXISTS` does, so that a migration step can
+     * run more than once. It still fails for a view.
+     *
+     * @see DROP_TABLE
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_TABLE_IF_EXISTS(name: String) {
+        addStatement(Drop.dropTable(name, databaseConnection, isIfExists = true))
+    }
+
+    /**
      * Drops the index named [indexName], as the SQL `DROP INDEX name` does, such as one that [CREATE_INDEX] or
      * [CREATE_UNIQUE_INDEX] created.
      *
@@ -2205,6 +2242,33 @@ public class DatabaseScope internal constructor(
     @StatementDslMaker
     @JvmName("dropIfExists")
     public fun <T> View<T>.DROP_IF_EXISTS(): Unit = DROP_IF_EXISTS(this)
+
+    /**
+     * Drops the view named [name], as the SQL `DROP VIEW name` does: a view that has no class any more, which [DROP]
+     * can't take, having no [View] for it.
+     *
+     * It fails for a view that doesn't exist, which [DROP_VIEW_IF_EXISTS] leaves alone, and for a table, which
+     * [DROP_TABLE] drops.
+     *
+     * @param name The name of the view to drop
+     * @throws IllegalArgumentException if [name] is blank
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_VIEW(name: String) {
+        addStatement(Drop.dropView(name, databaseConnection))
+    }
+
+    /**
+     * Drops the view named [name] if it exists, as the SQL `DROP VIEW IF EXISTS` does. It still fails for a table.
+     *
+     * @see DROP_VIEW
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_VIEW_IF_EXISTS(name: String) {
+        addStatement(Drop.dropView(name, databaseConnection, isIfExists = true))
+    }
 
     // ========== ALTER Operations ==========
 

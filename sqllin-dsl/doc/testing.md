@@ -211,7 +211,8 @@ fun upgradesFrom2To3() {
 
 - **The old structure** is a `@DBRow` class of the test, under the table's name, whose table object the processor
   generates as the section above describes. Where only the name of a table matters, another table's `withName(name)`
-  stands in for it
+  stands in for it. The upgrade itself needs no class to drop the table: `DROP_TABLE_IF_EXISTS("movie_genres")` drops
+  it by its name
 - **`PRAGMA_TABLE_INFO(name)`** returns the columns of a table, and an empty list for a table that doesn't exist, so it
   checks both what a migration created and what it dropped. Insert rows at the old version and select them after the
   upgrade to check what it kept

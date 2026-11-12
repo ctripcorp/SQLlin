@@ -105,6 +105,9 @@ class AndroidTest {
     fun testIfNotExists() = commonTest.testIfNotExists()
 
     @Test
+    fun testDropByName() = commonTest.testDropByName()
+
+    @Test
     fun testPartialIndex() = commonTest.testPartialIndex()
 
     @Test

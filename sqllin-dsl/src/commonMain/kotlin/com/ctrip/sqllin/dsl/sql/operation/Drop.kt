@@ -53,12 +53,19 @@ internal object Drop : Operation {
      * @param connection The database connection for executing the statement
      * @return A [TableStructureStatement] representing the DROP TABLE operation
      */
-    fun drop(table: Table<*>, connection: DatabaseConnection, isIfExists: Boolean = false): SingleStatement {
+    fun drop(table: Table<*>, connection: DatabaseConnection, isIfExists: Boolean = false): SingleStatement =
+        dropTable(table.tableName, connection, isIfExists)
+
+    /**
+     * Builds a DROP TABLE statement for the table named [tableName], which needs no [Table].
+     */
+    fun dropTable(tableName: String, connection: DatabaseConnection, isIfExists: Boolean = false): SingleStatement {
+        require(tableName.isNotBlank()) { "The name of a table can't be blank." }
         val sql = buildString {
             append(sqlStr)
             if (isIfExists)
                 append(IF_EXISTS)
-            append(table.tableName)
+            append(tableName)
         }
         return TableStructureStatement(sql, connection)
     }
@@ -72,7 +79,15 @@ internal object Drop : Operation {
      */
     @OptIn(ExperimentalDSLDatabaseAPI::class)
     fun dropView(view: View<*>, connection: DatabaseConnection, isIfExists: Boolean = false): SingleStatement =
-        TableStructureStatement("DROP VIEW ${if (isIfExists) IF_EXISTS else ""}${view.tableName}", connection)
+        dropView(view.tableName, connection, isIfExists)
+
+    /**
+     * Builds a DROP VIEW statement for the view named [viewName], which needs no [View].
+     */
+    fun dropView(viewName: String, connection: DatabaseConnection, isIfExists: Boolean = false): SingleStatement {
+        require(viewName.isNotBlank()) { "The name of a view can't be blank." }
+        return TableStructureStatement("DROP VIEW ${if (isIfExists) IF_EXISTS else ""}$viewName", connection)
+    }
 
     /**
      * Builds a DROP INDEX statement for the index named [indexName].
