@@ -3,6 +3,10 @@
 Each item has an ID, `Fx`, which stays the same when the item moves to another priority, and under Supported once it is
 done. A new item takes the next number.
 
+## High Priority
+
+* F70: Support dropping a table or a view by its name, `DROP_TABLE(name)`, `DROP_TABLE_IF_EXISTS(name)`, `DROP_VIEW(name)` and `DROP_VIEW_IF_EXISTS(name)`, as `DROP_INDEX(name)` and `DROP_TRIGGER(name)` do, so that a migration can drop a table whose class is gone, without naming it through another table's `withName`; the kind is in the name, as `DROP TABLE` fails on a view
+
 ## Medium Priority
 
 * F8: Support WASM platform DSL
@@ -34,6 +38,7 @@ done. A new item takes the next number.
 * F64: Support the JSON functions and JSON's `->` and `->>` operators (SQLite 3.38.0, Android API 34), left out of F46
 * F65: Support the conflict clause of NOT NULL, as `NOT NULL ON CONFLICT REPLACE`, which writes the default value instead of NULL, left out of F17: a property's type declares NOT NULL, so no annotation can hold the clause yet; it could be a new annotation, or a parameter of `@Default`. SQLlin's statements rarely write NULL to a non-null column, so it is of little use for now
 * F67: Support the PRAGMAs that set how each connection runs statements, such as cache_size, temp_store, mmap_size, query_only, automatic_index, trusted_schema, threads, cache_spill, analysis_limit, journal_size_limit, wal_autocheckpoint, max_page_count, secure_delete and cell_size_check, as parameters of `DatabaseConfiguration` and `DSLDBConfiguration` rather than as statements: Android's framework reads through several connections of a database in WAL mode from Android 13 on, while a statement sets a PRAGMA on the one connection that writes, so they have to be set on every connection, as `busyTimeout` is, and Android's framework sets journal_size_limit and wal_autocheckpoint on each connection it opens; and a change of temp_store deletes the TEMP tables and triggers, which observed queries count changes with
+* F71: Support reads that depend on a page in the `PagingSource` of F13, as `pagingSource(query) { rows -> ... }`, which loads the rows that a one-to-many relation joins to the page's rows, such as tags filtered by, with one batched `IN` of the page's ids: each read takes a token of the table versions of F66, which the page's token takes in, so that a change of a related table invalidates the source too; the reads return one item for each row, in the same order, as the keys are offsets of the page's SELECT, and must not be skipped for what the page holds, but an empty page, or their tables could be declared up front, so that their versions are taken even when nothing reads them. The page and its reads run in scopes of their own, which the combined token keeps consistent; reading them in one transaction needs F31
 
 ## Shelved
 
