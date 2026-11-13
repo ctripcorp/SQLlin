@@ -93,7 +93,10 @@ val version = SQLiteDatabase.create(null).use { database ->
 ```
 
 Test what depends on the SQLite version, as the APIs marked with `@PlatformDependentSQLiteAPI` do, on an emulator or a
-device of the API level in question.
+device of the API level in question. What a version of SQLite takes can also be told without Android: SQLlin's own CI
+runs its native tests on Linux linked with the SQLite versions of older Android, 3.9.2, 3.18.2, 3.22.0 and 3.28.0,
+which `scripts/build-sqlite.sh` of its repository builds. That doesn't tell what Android's own build of them, or its
+framework, does.
 
 ## The Database of a Test
 

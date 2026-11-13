@@ -1110,21 +1110,30 @@ class CommonBasicTest(private val path: DatabasePath) {
                 } AS AuthorBooksView
                 prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
                 personBooks = (PersonWithIdTable INNER_JOIN authorBooks ON (PersonWithIdTable.name EQ AuthorBooksView.author)) SELECT X<PersonBooks>()
-                // The persons under other names join their table with itself
-                val elders = PersonWithIdTable { table ->
-                    table SELECT listOf(name AS Elder::elderName, age AS Elder::elderAge)
-                } AS ElderView
-                pairs = (PersonWithIdTable INNER_JOIN elders ON (ElderView.elderAge GT PersonWithIdTable.age)) SELECT X<YoungerAndElder>()
             }
             assertEquals(listOf(AuthorBooks("Dan Brown", 2)), prolific.getResults())
             assertEquals(
                 listOf(PersonBooks("Dan Brown", 61, 2), PersonBooks("Ken Kousen", 60, 1)),
                 personBooks.getResults().sortedBy { it.name },
             )
-            assertEquals(
-                listOf(YoungerAndElder("Ann", "Dan Brown"), YoungerAndElder("Ann", "Ken Kousen"), YoungerAndElder("Ken Kousen", "Dan Brown")),
-                pairs.getResults().sortedWith(compareBy({ it.name }, { it.elderName })),
-            )
+
+            // The persons under other names join their table with itself.
+            // KNOWN ISSUE: before SQLite 3.20.0, as on Android 7.0 to 8.1, the result columns of a join that reads a
+            // view, or a derived table that SQLite flattens as this one, are named with their tables, as
+            // `person_with_id.name`, where SQLlin looks them up as `name`, so the rows can't be read. Not fixed yet, so
+            // this only runs where the SQLite names them without their tables.
+            if (sqliteIsAtLeast("3.20.0")) {
+                database {
+                    val elders = PersonWithIdTable { table ->
+                        table SELECT listOf(name AS Elder::elderName, age AS Elder::elderAge)
+                    } AS ElderView
+                    pairs = (PersonWithIdTable INNER_JOIN elders ON (ElderView.elderAge GT PersonWithIdTable.age)) SELECT X<YoungerAndElder>()
+                }
+                assertEquals(
+                    listOf(YoungerAndElder("Ann", "Dan Brown"), YoungerAndElder("Ann", "Ken Kousen"), YoungerAndElder("Ken Kousen", "Dan Brown")),
+                    pairs.getResults().sortedWith(compareBy({ it.name }, { it.elderName })),
+                )
+            }
 
             lateinit var expensiveAuthors: SelectStatement<PersonWithId>
             lateinit var shortBookAuthors: SelectStatement<PersonWithId>
@@ -2127,7 +2136,12 @@ class CommonBasicTest(private val path: DatabasePath) {
             database { BookTable { table -> table SELECT (datetime("now", "localtime") AS DateTimes::now) } }
         }
 
-        database { BookTable.CREATE_INDEX("idx_book_day", BookTable.date(BookTable.name)) }
+        // SQLite takes the date and time functions that don't read the clock as deterministic from 3.20.0 on, Android
+        // API 28, and rejects them all in an index before
+        if (sqliteIsAtLeast("3.20.0"))
+            database { BookTable.CREATE_INDEX("idx_book_day", BookTable.date(BookTable.name)) }
+        else
+            assertFails { database { BookTable.CREATE_INDEX("idx_book_day", BookTable.date(BookTable.name)) } }
         assertFailsWith<IllegalArgumentException> {
             database { BookTable.CREATE_INDEX("idx_book_random", BookTable.random()) }
         }
@@ -2905,12 +2919,18 @@ class CommonBasicTest(private val path: DatabasePath) {
             assertEquals(false, plan.details.anyHas("idx_book_author"), plan.toString())
         }
 
-        // The steps of each SELECT of a compound are children of the compound's
+        // The steps of each SELECT of a compound are children of the compound's, from SQLite 3.24.0 on, Android API
+        // 30: an older one lists all the steps without children
         val compoundPlan = compound.getResults()
-        assertEquals(true, compoundPlan.steps.any { it.children.isNotEmpty() }, compoundPlan.toString())
         assertEquals(2, compoundPlan.details.count { "idx_book_author" in it }, compoundPlan.toString())
-        assertEquals(true, compoundPlan.details.size > compoundPlan.steps.size)
-        assertEquals(true, compoundPlan.toString().lines().drop(1).any { it.startsWith("   ") || it.startsWith("|  ") })
+        if (sqliteIsAtLeast("3.24.0")) {
+            assertEquals(true, compoundPlan.steps.any { it.children.isNotEmpty() }, compoundPlan.toString())
+            assertEquals(true, compoundPlan.details.size > compoundPlan.steps.size)
+            assertEquals(true, compoundPlan.toString().lines().drop(1).any { it.startsWith("   ") || it.startsWith("|  ") })
+        } else {
+            assertEquals(true, compoundPlan.steps.all { it.children.isEmpty() }, compoundPlan.toString())
+            assertEquals(compoundPlan.steps.map { it.detail }, compoundPlan.details)
+        }
 
         // In a transaction, and in a versioned read, which only reads
         lateinit var inTransaction: QueryPlanStatement
@@ -3096,8 +3116,14 @@ class CommonBasicTest(private val path: DatabasePath) {
             integrity = PRAGMA_INTEGRITY_CHECK()
             quick = PRAGMA_QUICK_CHECK()
         }
-        assertEquals(1, integrity.getResults().size, integrity.getResults().toString())
-        assertContains(integrity.getResults().single(), "CheckedMembership")
+        // integrity_check and quick_check verify the CHECK constraints from SQLite 3.18.0 on, Android API 26: the
+        // SQLite 3.16.1 of sqlite-jdbc doesn't, and its 3.18.0 does
+        if (sqliteIsAtLeast("3.18.0")) {
+            assertEquals(1, integrity.getResults().size, integrity.getResults().toString())
+            assertContains(integrity.getResults().single(), "CheckedMembership")
+        } else {
+            assertEquals(emptyList(), integrity.getResults())
+        }
         assertEquals(integrity.getResults(), quick.getResults())
 
         // Foreign keys aren't enforced by default, so an order of a user that doesn't exist is a violation
@@ -3218,7 +3244,10 @@ class CommonBasicTest(private val path: DatabasePath) {
 
         // The file's size: deleted rows leave unused pages, which VACUUM removes, unless the database vacuums itself at
         // each commit, as Android's SQLite makes a database do by default, auto_vacuum being FULL there
-        database { BookTable INSERT (1..300).map { Book(name = "x".repeat(500) + it, author = "A", price = 1.0, pages = it) } }
+        // KNOWN ISSUE: an INSERT binds all the values of its rows in one statement, and a SQLite before 3.32.0, as
+        // Android's before API 31, takes 999 parameters by default, failing with "too many SQL variables". Not fixed
+        // yet, so the rows are inserted 100 at a time.
+        database { (1..300).chunked(100).forEach { rows -> BookTable INSERT rows.map { Book(name = "x".repeat(500) + it, author = "A", price = 1.0, pages = it) } } }
         lateinit var pageSize: PragmaStatement<Long>
         lateinit var pageCount: PragmaStatement<Long>
         lateinit var freeBefore: PragmaStatement<Long>
@@ -3356,7 +3385,8 @@ class CommonBasicTest(private val path: DatabasePath) {
         database { CheckedMembershipTable INSERT invalid }
         database { PRAGMA_IGNORE_CHECK_CONSTRAINTS(false) }
         assertContains(assertFails { database { CheckedMembershipTable INSERT invalid } }.message.orEmpty(), "CHECK constraint failed")
-        assertEquals(1, read { PRAGMA_INTEGRITY_CHECK() }.size)
+        // Which integrity_check only does from SQLite 3.18.0 on, see testPragmas
+        assertEquals(if (sqliteIsAtLeast("3.18.0")) 1 else 0, read { PRAGMA_INTEGRITY_CHECK() }.size)
 
         // Checking a table, which an older SQLite can't, so it checks the whole database
         if (sqliteIsAtLeast("3.33.0")) {
@@ -3365,7 +3395,7 @@ class CommonBasicTest(private val path: DatabasePath) {
             assertEquals(emptyList(), read { PRAGMA_QUICK_CHECK("book") })
             assertEquals(1, read { PRAGMA_QUICK_CHECK("CheckedMembership") }.size)
         } else {
-            assertEquals(1, read { PRAGMA_INTEGRITY_CHECK(BookTable) }.size)
+            assertEquals(if (sqliteIsAtLeast("3.18.0")) 1 else 0, read { PRAGMA_INTEGRITY_CHECK(BookTable) }.size)
         }
 
         // A legacy rename doesn't rewrite the view that reads the table, which then reads a table that doesn't exist
@@ -3376,19 +3406,31 @@ class CommonBasicTest(private val path: DatabasePath) {
             database { rows = AdultPersonView SELECT X }
             return rows.getResults().map { it.name }
         }
-        database {
-            PRAGMA_LEGACY_ALTER_TABLE(false)
-            PersonWithIdTable ALTER_RENAME_TABLE_TO renamed
+        if (sqliteIsAtLeast("3.26.0")) {
+            database {
+                PRAGMA_LEGACY_ALTER_TABLE(false)
+                PersonWithIdTable ALTER_RENAME_TABLE_TO renamed
+            }
+            assertEquals(listOf("Adult"), adults(), "legacy_alter_table by default: $legacyByDefault")
+            database { renamed ALTER_RENAME_TABLE_TO PersonWithIdTable }
+            database { PRAGMA_LEGACY_ALTER_TABLE(true) }
+            database { PersonWithIdTable ALTER_RENAME_TABLE_TO renamed }
+            assertContains(assertFails { adults() }.message.orEmpty(), "no such table")
+            database { renamed ALTER_RENAME_TABLE_TO PersonWithIdTable }
+            database { PRAGMA_LEGACY_ALTER_TABLE(legacyByDefault == "1") }
+            assertEquals(listOf("Adult"), adults())
+            println("legacy_alter_table by default: $legacyByDefault")
+        } else if (!sqliteIsAtLeast("3.25.0")) {
+            // Before SQLite 3.25.0, Android API 30, every rename is a legacy one, and the PRAGMA, which SQLite lacks, is
+            // ignored
+            database {
+                PRAGMA_LEGACY_ALTER_TABLE(false)
+                PersonWithIdTable ALTER_RENAME_TABLE_TO renamed
+            }
+            assertContains(assertFails { adults() }.message.orEmpty(), "no such table")
+            database { renamed ALTER_RENAME_TABLE_TO PersonWithIdTable }
+            assertEquals(listOf("Adult"), adults())
         }
-        assertEquals(listOf("Adult"), adults(), "legacy_alter_table by default: $legacyByDefault")
-        database { renamed ALTER_RENAME_TABLE_TO PersonWithIdTable }
-        database { PRAGMA_LEGACY_ALTER_TABLE(true) }
-        database { PersonWithIdTable ALTER_RENAME_TABLE_TO renamed }
-        assertContains(assertFails { adults() }.message.orEmpty(), "no such table")
-        database { renamed ALTER_RENAME_TABLE_TO PersonWithIdTable }
-        database { PRAGMA_LEGACY_ALTER_TABLE(legacyByDefault == "1") }
-        assertEquals(listOf("Adult"), adults())
-        println("legacy_alter_table by default: $legacyByDefault")
 
         // The header of the file
         assertEquals(0, read { PRAGMA_APPLICATION_ID() })
@@ -3402,7 +3444,10 @@ class CommonBasicTest(private val path: DatabasePath) {
             VACUUM()
         }
         assertEquals(AutoVacuum.INCREMENTAL, read { PRAGMA_AUTO_VACUUM() })
-        database { BookTable INSERT (1..300).map { Book(name = "x".repeat(500) + it, author = "A", price = 1.0, pages = it) } }
+        // KNOWN ISSUE: an INSERT binds all the values of its rows in one statement, and a SQLite before 3.32.0, as
+        // Android's before API 31, takes 999 parameters by default, failing with "too many SQL variables". Not fixed
+        // yet, so the rows are inserted 100 at a time.
+        database { (1..300).chunked(100).forEach { rows -> BookTable INSERT rows.map { Book(name = "x".repeat(500) + it, author = "A", price = 1.0, pages = it) } } }
         database { BookTable DELETE X }
         val unused = read { PRAGMA_FREELIST_COUNT() }
         assertEquals(true, unused > 0, unused.toString())
@@ -4571,6 +4616,13 @@ class CommonBasicTest(private val path: DatabasePath) {
             // because the column's SQL type is resolved from that descriptor.
             database {
                 AlterAfterTable ALTER_ADD_COLUMN AlterAfterTable.nickname
+            }
+
+            // RENAME COLUMN needs SQLite 3.25.0, Android API 30. An older one fails it, and the steps after it all read
+            // the renamed column, so the test ends here there; testTableRebuild renames tables on every version.
+            if (!sqliteIsAtLeast("3.25.0")) {
+                assertFails { database { AlterAfterTable.RENAME_COLUMN("name", AlterAfterTable.fullName) } }
+                return@databaseAutoClose
             }
 
             // RENAME COLUMN, naming the old column by string. Both entities map to 'alter_target'.

@@ -86,7 +86,10 @@ val version = SQLiteDatabase.create(null).use { database ->
 }
 ```
 
-依赖 SQLite 版本的功能，比如标有 `@PlatformDependentSQLiteAPI` 的 API，要在对应 API 级别的模拟器或设备上测试。
+依赖 SQLite 版本的功能，比如标有 `@PlatformDependentSQLiteAPI` 的 API，要在对应 API 级别的模拟器或设备上测试。某个版本的
+SQLite 接受什么，不用 Android 也能知道：SQLlin 自己的 CI 会在 Linux 上让原生测试链接旧版 Android 的 SQLite 版本（3.9.2、
+3.18.2、3.22.0 和 3.28.0）再跑一遍，这些库由仓库里的 `scripts/build-sqlite.sh` 编译。但这说明不了 Android 自己编译的 SQLite
+或它的框架会怎么做。
 
 ## 测试用的数据库
 

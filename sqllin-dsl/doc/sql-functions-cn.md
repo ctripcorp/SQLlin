@@ -138,7 +138,8 @@ fun sample() {
 的值或修饰符时返回 NULL，所以总是可空，只有不带修饰符的 `datetime("now")` 除外。`typeof` 是 Kotlin 的保留字，所以没有提供。
 
 当前时间、`"localtime"` 和 `"utc"` 修饰符会让日期时间函数的结果随时间变化，`random()` 也是这样，所以索引不能包含这样的函数：
-`CREATE_INDEX` 会拒绝它，而 SQLite 要等表里有数据时才会报错。
+`CREATE_INDEX` 会拒绝它，而 SQLite 要等表里有数据时才会报错。3.20.0 之前的 SQLite（比如 API 28 之前的 Android）把所有日期时间
+函数都当作这样的函数，索引里一个都不能用。
 
 有些函数需要较新的 SQLite，或者 SQLite 的某个编译选项，而有的平台没有，所以它们都标有
 [`@PlatformDependentSQLiteAPI`](modify-database-and-transaction-cn.md#依赖-sqlite-版本的-api)：
