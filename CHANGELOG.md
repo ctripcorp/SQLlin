@@ -4,6 +4,10 @@
 
 ## 2.7.0 / 2026-xx-xx
 
+### All
+
+* The SQLite static libraries that the native tests on Linux and Windows link are no longer in the repository: CI builds them from the sources that sqlite.org publishes, whose SHA-256 it checks, with the new `scripts/build-sqlite.sh` and zig, and caches them, and the script builds them for whoever runs those tests on a Linux or Windows machine. For SQLite 3.51.1 it gives the bytes of the libraries that were in `libs`. On Windows, the tests now link this library before one that MSYS2 may have, as they do on Linux before the system's
+
 ### sqllin-dsl
 
 * New experimental DSL API: `DROP_TABLE(name)`, `DROP_TABLE_IF_EXISTS(name)`, `DROP_VIEW(name)` and `DROP_VIEW_IF_EXISTS(name)`, for SQL syntax `DROP TABLE` and `DROP VIEW`, which drop a table or a view by its name, as `DROP_INDEX(name)` and `DROP_TRIGGER(name)` do an index and a trigger, so that a migration can drop one whose class is gone, where `DROP` and `DROP_IF_EXISTS` need its table object. The kind is in the name, as SQLite's `DROP TABLE` fails for a view and `DROP VIEW` for a table, with `IF EXISTS` too; an FTS table is dropped as a table; and a blank name is rejected with an `IllegalArgumentException` as the statement is built. The guide to modifying the database describes them

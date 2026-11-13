@@ -83,6 +83,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Build SQLite
+        uses: ./.github/actions/sqlite
+        with:
+          version: 3.51.1
+          target: windows
+
       - name: Validate Gradle Wrapper
         uses: gradle/actions/wrapper-validation@v3
 
@@ -145,6 +151,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Build SQLite
+        uses: ./.github/actions/sqlite
+        with:
+          version: 3.51.1
+          target: linux
 
       - name: Validate Gradle Wrapper
         uses: gradle/actions/wrapper-validation@v3
