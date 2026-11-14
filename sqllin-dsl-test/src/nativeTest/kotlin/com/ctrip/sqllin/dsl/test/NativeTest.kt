@@ -41,6 +41,9 @@ class NativeTest {
     fun testInsertGeneratedKeyLast() = commonTest.testInsertGeneratedKeyLast()
 
     @Test
+    fun testInsertManyRows() = commonTest.testInsertManyRows()
+
+    @Test
     fun testDelete() = commonTest.testDelete()
 
     @Test

@@ -514,6 +514,12 @@ fun sample() {
 
 The _INSERT_ statements could insert objects directly. You can insert one or multiple objects once.
 
+The values of the objects are bound as parameters of one statement. A SQLite before 3.32.0, as Android's before API 31,
+takes 999 parameters in a statement by default, so where there are more, the objects are inserted in batches that bind
+at most 999 each, whatever the SQLite. The batches run in a transaction, so that all the objects are inserted or none, as
+one statement would, but those of `INSERT_OR_FAIL`, which keeps the objects inserted before the one that fails, as one
+statement does. A trigger that inserts objects writes them all into its body, which binds nothing.
+
 `INSERT_OR_IGNORE` skips the objects that conflict with a row already in the table, and `INSERT_OR_REPLACE` replaces
 that row. They take the same arguments as `INSERT`, as the other [conflict resolutions](#conflict-resolutions) do.
 

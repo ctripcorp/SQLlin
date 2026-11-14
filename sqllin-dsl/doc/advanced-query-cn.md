@@ -336,6 +336,10 @@ data class AuthorId(val authorId: Long)
 PersonTable SELECT WHERE(PersonTable.id IN (BookTable SELECT WHERE<AuthorId>(BookTable.price GT 30.0)))
 ```
 
+`IN` 也可以接受一个值的列表，比如 `PersonTable.id IN listOf(1L, 2L)`，每个值都作为一个参数绑定。3.32.0 之前的 SQLite（比如
+API 31 之前的 Android）默认一条语句最多接受 999 个参数，语句其余部分的参数也算在内，所以更长的列表在那里会报错 "too many SQL
+variables"：这时改为用子查询从一张表里读取这些值。
+
 `EXISTS` 检查一条 _SELECT_ 是否返回了任意一行。由于 SQLlin 写列时都带上表名，_SELECT_ 可以引用外层查询的列，这会让它对外层查询的
 每一行执行一次：
 

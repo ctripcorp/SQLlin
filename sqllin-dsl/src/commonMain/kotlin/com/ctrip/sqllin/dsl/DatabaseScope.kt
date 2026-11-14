@@ -288,6 +288,11 @@ public class DatabaseScope internal constructor(
      * set the ID property to `null` to let SQLite automatically generate the ID. If you need to insert
      * entities with pre-defined IDs (e.g., during data migration), use [INSERT_WITH_ID] instead.
      *
+     * The values of all the entities are bound as parameters of one statement. Where they are more than 999, the most a
+     * SQLite before 3.32.0 takes by default, as Android's before API 31, the entities are inserted in batches, in a
+     * transaction, so that all of them are inserted or none, as one statement would. So are those of the other
+     * INSERTs of entities, but `INSERT_OR_FAIL`, which keeps those inserted before the one that fails.
+     *
      * Example:
      * ```kotlin
      * val person = Person(id = null, name = "Alice", age = 25) // ID will be auto-generated

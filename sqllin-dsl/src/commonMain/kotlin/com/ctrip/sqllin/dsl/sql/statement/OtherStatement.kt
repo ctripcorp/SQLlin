@@ -17,6 +17,7 @@
 package com.ctrip.sqllin.dsl.sql.statement
 
 import com.ctrip.sqllin.driver.DatabaseConnection
+import com.ctrip.sqllin.driver.withTransaction
 import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.clause.CompleteOrderByClause
 import com.ctrip.sqllin.dsl.sql.clause.SelectCondition
@@ -218,8 +219,9 @@ public class UpdateDeleteStatement internal constructor(
 /**
  * INSERT statement (final form).
  *
- * Represents a complete INSERT operation with entities encoded as parameterized VALUES.
- * Executes as a single batch insert for all entities.
+ * Represents a complete INSERT operation with entities encoded as parameterized VALUES, whose SQL is one statement of all
+ * of them. One that binds more values than SQLite takes in a statement by default runs as its [batches] instead, in a
+ * transaction where it [isAtomic], see [Insert][com.ctrip.sqllin.dsl.sql.operation.Insert].
  *
  * @author Yuang Qiao
  */
@@ -228,9 +230,22 @@ public class InsertStatement internal constructor(
     private val connection: DatabaseConnection,
     override val parameters: MutableList<Any?>?,
     internal val table: String,
+    private val batches: List<InsertBatch>? = null,
+    private val isAtomic: Boolean = true,
 ) : SingleStatement(sqlStr) {
-    public override fun execute(): Unit = connection.executeInsert(sqlStr, params)
+    public override fun execute() {
+        when {
+            batches == null -> connection.executeInsert(sqlStr, params)
+            isAtomic -> connection.withTransaction { batches.forEach { connection.executeInsert(it.sql, it.parameters) } }
+            else -> batches.forEach { connection.executeInsert(it.sql, it.parameters) }
+        }
+    }
 }
+
+/**
+ * An INSERT of some of the rows of an [InsertStatement], with the values they bind.
+ */
+internal class InsertBatch(val sql: String, val parameters: Array<Any?>)
 
 /**
  * CREATE, DROP, ALTER statement (final form).

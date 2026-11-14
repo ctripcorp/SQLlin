@@ -103,6 +103,57 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(book, statement?.getResults()?.firstOrNull())
     }
 
+    /**
+     * Covers an INSERT of more rows than SQLite takes the values of in one statement, 999 before SQLite 3.32.0 and
+     * 32766 from then on, by default, which runs in batches: all the rows are inserted, and a conflict in a later batch
+     * undoes the earlier ones, as one statement would, but where `INSERT OR FAIL` keeps the rows before the one that
+     * fails, and `INSERT OR IGNORE` skips it; and in a transaction, `INSERT OR ROLLBACK` rolls back the whole of it.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testInsertManyRows() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        fun skus(): List<String> {
+            lateinit var products: SelectStatement<Product>
+            database { products = ProductTable SELECT X }
+            return products.getResults().map { it.sku }
+        }
+
+        // 12,000 rows of 3 columns bind 36,000 values, more than any SQLite takes by default
+        val many = (1..12_000).map { Product(sku = "SKU-$it", name = "Product $it", price = it.toDouble()) }
+        database { ProductTable INSERT many }
+        assertEquals(many.map { it.sku }.toSet(), skus().toSet())
+        assertEquals(12_000, skus().size)
+
+        // 400 rows bind 1,200 values, so the batches are 333 rows and 67: the last row conflicts, in the second batch
+        val conflicting = (1..399).map { Product(sku = "NEW-$it", name = "New $it", price = 1.0) } +
+            Product(sku = "SKU-1", name = "Duplicate", price = 1.0)
+        fun newRows(): Int = skus().count { it.startsWith("NEW-") }
+
+        assertFails { database { ProductTable INSERT conflicting } }
+        assertEquals(0, newRows())
+        assertFails { database { ProductTable INSERT_OR_ABORT conflicting } }
+        assertEquals(0, newRows())
+
+        assertFails { database { ProductTable INSERT_OR_FAIL conflicting } }
+        assertEquals(399, newRows())
+        database { ProductTable DELETE WHERE(ProductTable.sku LIKE "NEW-%") }
+
+        database { ProductTable INSERT_OR_IGNORE conflicting }
+        assertEquals(399, newRows())
+        database { ProductTable DELETE WHERE(ProductTable.sku LIKE "NEW-%") }
+
+        // In a transaction, a statement before, the earlier batch and the later one are all rolled back
+        assertFails {
+            database {
+                transaction {
+                    ProductTable INSERT Product(sku = "NEW-0", name = "New 0", price = 1.0)
+                    ProductTable INSERT_OR_ROLLBACK conflicting
+                }
+            }
+        }
+        assertEquals(0, newRows())
+        assertEquals(12_000, skus().size)
+    }
+
     fun testInsertGeneratedKeyLast() = Database(getDefaultDBConfig()).databaseAutoClose { database ->
         val result = database {
             CREATE(GeneratedKeyLastTable)
@@ -3244,10 +3295,7 @@ class CommonBasicTest(private val path: DatabasePath) {
 
         // The file's size: deleted rows leave unused pages, which VACUUM removes, unless the database vacuums itself at
         // each commit, as Android's SQLite makes a database do by default, auto_vacuum being FULL there
-        // KNOWN ISSUE: an INSERT binds all the values of its rows in one statement, and a SQLite before 3.32.0, as
-        // Android's before API 31, takes 999 parameters by default, failing with "too many SQL variables". Not fixed
-        // yet, so the rows are inserted 100 at a time.
-        database { (1..300).chunked(100).forEach { rows -> BookTable INSERT rows.map { Book(name = "x".repeat(500) + it, author = "A", price = 1.0, pages = it) } } }
+        database { BookTable INSERT (1..300).map { Book(name = "x".repeat(500) + it, author = "A", price = 1.0, pages = it) } }
         lateinit var pageSize: PragmaStatement<Long>
         lateinit var pageCount: PragmaStatement<Long>
         lateinit var freeBefore: PragmaStatement<Long>
@@ -3444,10 +3492,7 @@ class CommonBasicTest(private val path: DatabasePath) {
             VACUUM()
         }
         assertEquals(AutoVacuum.INCREMENTAL, read { PRAGMA_AUTO_VACUUM() })
-        // KNOWN ISSUE: an INSERT binds all the values of its rows in one statement, and a SQLite before 3.32.0, as
-        // Android's before API 31, takes 999 parameters by default, failing with "too many SQL variables". Not fixed
-        // yet, so the rows are inserted 100 at a time.
-        database { (1..300).chunked(100).forEach { rows -> BookTable INSERT rows.map { Book(name = "x".repeat(500) + it, author = "A", price = 1.0, pages = it) } } }
+        database { BookTable INSERT (1..300).map { Book(name = "x".repeat(500) + it, author = "A", price = 1.0, pages = it) } }
         database { BookTable DELETE X }
         val unused = read { PRAGMA_FREELIST_COUNT() }
         assertEquals(true, unused > 0, unused.toString())

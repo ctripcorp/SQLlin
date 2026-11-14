@@ -358,6 +358,11 @@ data class AuthorId(val authorId: Long)
 PersonTable SELECT WHERE(PersonTable.id IN (BookTable SELECT WHERE<AuthorId>(BookTable.price GT 30.0)))
 ```
 
+`IN` also takes a list of values, as `PersonTable.id IN listOf(1L, 2L)`, each of which is bound as a parameter. A SQLite
+before 3.32.0, as Android's before API 31, takes 999 parameters in a statement by default, those of the rest of the
+statement included, so that a longer list fails there with "too many SQL variables": read the values from a table with a
+subquery instead.
+
 `EXISTS` checks whether a _SELECT_ returns any row. The _SELECT_ can refer to the columns of the query it is in, which
 makes it run for each row of that query, as SQLlin writes columns with their tables' names:
 
