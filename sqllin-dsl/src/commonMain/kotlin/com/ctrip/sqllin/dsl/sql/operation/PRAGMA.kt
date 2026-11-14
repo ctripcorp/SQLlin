@@ -235,12 +235,21 @@ internal object PRAGMA : Operation {
         }
 
     /**
-     * `PRAGMA compile_options`, `PRAGMA collation_list`, `PRAGMA module_list` or `PRAGMA pragma_list`: the values of
-     * [column], one in each row. A SQLite can be built without compile_options, as Android's is, and the others, which
-     * SQLite 3.30.0 has in every build, only [requirement] has.
+     * `PRAGMA collation_list`, `PRAGMA module_list` or `PRAGMA pragma_list`: the values of [column], one in each row.
+     * The last two, which SQLite 3.30.0 has in every build, only [requirement] has.
      */
     fun names(pragma: String, column: String, requirement: String?, connection: DatabaseConnection): PragmaStatement<List<String>> =
-        newer(pragma, column, requirement, connection) { cursor -> cursor.mapRows { string(column)!! } }
+        newer(pragma, listOf(column), requirement, connection) { cursor, found -> cursor.mapRows { string(found)!! } }
+
+    /**
+     * `PRAGMA compile_options`: the options the SQLite was compiled with, one in each row. Its column is named
+     * `compile_option` before SQLite 3.16.0, as in the SQLite 3.9 of Android API 24, which a SQLite of those versions
+     * that has the PRAGMA returns, and `compile_options` from then on. A SQLite can be built without it, as Android's is.
+     */
+    fun compileOptions(connection: DatabaseConnection): PragmaStatement<List<String>> =
+        newer("compile_options", listOf("compile_options", "compile_option"), null, connection) { cursor, found ->
+            cursor.mapRows { string(found)!! }
+        }
 
     /**
      * `PRAGMA database_list`, the databases of the connection.
@@ -339,14 +348,26 @@ internal object PRAGMA : Operation {
         requirement: String?,
         connection: DatabaseConnection,
         read: (CommonCursor) -> R,
+    ): PragmaStatement<R> = newer(pragma, listOf(column), requirement, connection) { cursor, _ -> read(cursor) }
+
+    /**
+     * A PRAGMA as above, whose first column has one of the names in [columns], as SQLite has renamed some, which
+     * [read] gets as the name that the rows have.
+     */
+    private fun <R> newer(
+        pragma: String,
+        columns: List<String>,
+        requirement: String?,
+        connection: DatabaseConnection,
+        read: (CommonCursor, String) -> R,
     ): PragmaStatement<R> = statement(pragma, connection) { cursor ->
         // Every driver throws for a column that the rows don't have
-        val hasColumn = runCatching { cursor.getColumnIndex(column) }.getOrNull()?.let { it >= 0 } ?: false
-        check(hasColumn) {
+        val column = columns.firstOrNull { name -> runCatching { cursor.getColumnIndex(name) }.getOrNull()?.let { it >= 0 } ?: false }
+        check(column != null) {
             val name = pragma.substringBefore('(')
             if (requirement == null) "This SQLite doesn't have PRAGMA $name." else "This SQLite doesn't have PRAGMA $name, which needs $requirement."
         }
-        read(cursor)
+        read(cursor, column)
     }
 
     private fun columnKind(hidden: Int): ColumnKind = when (hidden) {

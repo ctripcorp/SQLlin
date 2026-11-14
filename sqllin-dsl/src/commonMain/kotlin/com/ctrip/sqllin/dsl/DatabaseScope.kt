@@ -2830,7 +2830,7 @@ public class DatabaseScope internal constructor(
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public fun PRAGMA_COMPILE_OPTIONS(): PragmaStatement<List<String>> =
-        pragma(PRAGMA.names("compile_options", "compile_options", null, databaseConnection))
+        pragma(PRAGMA.compileOptions(databaseConnection))
 
     /**
      * The names of the collations of the connection, as the SQL `PRAGMA collation_list` tells: SQLite's `BINARY`,
