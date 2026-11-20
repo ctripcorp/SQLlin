@@ -21,6 +21,12 @@ kotlin {
         withHostTest {
             isIncludeAndroidResources = true
         }
+        // On an emulator or a device, which the workflow emulator.yml runs
+        withDeviceTestBuilder {
+            sourceSetTreeName = "test"
+        }.configure {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
     }
 
     jvm {
@@ -69,10 +75,26 @@ kotlin {
                 implementation(libs.androidx.paging.testing)
             }
         }
-        getByName("androidHostTest").dependencies {
-            implementation(libs.junit)
-            implementation(libs.androidx.test.core)
-            implementation(libs.robolectric)
+        // The class of the Android tests is in androidSharedTest, which both the tests on Robolectric and those on a
+        // device compile: its runner, AndroidJUnit4, runs it on Robolectric on the JVM
+        getByName("androidHostTest") {
+            kotlin.srcDir("src/androidSharedTest/kotlin")
+            dependencies {
+                implementation(libs.junit)
+                implementation(libs.androidx.test.core)
+                implementation(libs.androidx.test.ext.junit)
+                implementation(libs.robolectric)
+            }
+        }
+        getByName("androidDeviceTest") {
+            kotlin.srcDir("src/androidSharedTest/kotlin")
+            dependencies {
+                implementation(libs.junit)
+                implementation(libs.androidx.test.core)
+                implementation(libs.androidx.test.runner)
+                implementation(libs.androidx.test.ext.junit)
+                implementation(libs.robolectric.annotations)
+            }
         }
     }
 }
