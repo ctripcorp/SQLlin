@@ -111,6 +111,9 @@ class AndroidTest {
     fun testDropByName() = commonTest.testDropByName()
 
     @Test
+    fun testJoinColumnNames() = commonTest.testJoinColumnNames()
+
+    @Test
     fun testPartialIndex() = commonTest.testPartialIndex()
 
     @Test

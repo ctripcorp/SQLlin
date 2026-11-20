@@ -215,7 +215,8 @@ fun joinSample() {
     lateinit var students: SelectStatement<Student>
     lateinit var scores: SelectStatement<StudentScore>
     database {
-        // SELECT name,person.age,transcript.math,transcript.english FROM person INNER JOIN transcript USING (name)
+        // SELECT name AS name,person.age AS age,transcript.math AS math,transcript.english AS english
+        //     FROM person INNER JOIN transcript USING (name)
         students = (PersonTable INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()
         // SELECT person.name AS name,count(transcript.math) AS tests,max(transcript.math) AS bestMath
         //     FROM person LEFT OUTER JOIN transcript ON person.name = transcript.name GROUP BY person.name
@@ -258,7 +259,10 @@ joined relations when the statement is built:
   relation NULL in the rows where it finds no matching row, and so every expression of them but `count`.
 
 SQLlin writes the columns with their relations' names, so that a condition, a function, _GROUP BY_ or _ORDER BY_ can
-name a column that another relation has too. An observed query of a join watches all its relations.
+name a column that another relation has too. Each column a join selects is named as its property with `AS`, as
+`person.age AS age`, by which its rows are read: SQLite only names a column as the SQL says where it has `AS`, and before
+3.20.0, as on Android before API 28, it named the columns of a join with a view, or with a derived table, as they are
+written. An observed query of a join watches all its relations.
 
 ### Migrating From the Old Join API
 
@@ -313,7 +317,8 @@ fun sample() {
         // SELECT authorId,books FROM (SELECT authorId,count(*) AS books FROM book GROUP BY book.authorId) AS author_books
         //     WHERE author_books.books>?
         prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
-        // SELECT person.name,author_books.books FROM person INNER JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
+        // SELECT person.name AS name,author_books.books AS books
+        //     FROM person INNER JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
         personBooks = (PersonTable INNER_JOIN authorBooks ON (PersonTable.id EQ AuthorBooksView.authorId)) SELECT X<PersonBooks>()
     }
 }

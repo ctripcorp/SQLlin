@@ -1168,23 +1168,18 @@ class CommonBasicTest(private val path: DatabasePath) {
                 personBooks.getResults().sortedBy { it.name },
             )
 
-            // The persons under other names join their table with itself.
-            // KNOWN ISSUE: before SQLite 3.20.0, as on Android 7.0 to 8.1, the result columns of a join that reads a
-            // view, or a derived table that SQLite flattens as this one, are named with their tables, as
-            // `person_with_id.name`, where SQLlin looks them up as `name`, so the rows can't be read. Not fixed yet, so
-            // this only runs where the SQLite names them without their tables.
-            if (sqliteIsAtLeast("3.20.0")) {
-                database {
-                    val elders = PersonWithIdTable { table ->
-                        table SELECT listOf(name AS Elder::elderName, age AS Elder::elderAge)
-                    } AS ElderView
-                    pairs = (PersonWithIdTable INNER_JOIN elders ON (ElderView.elderAge GT PersonWithIdTable.age)) SELECT X<YoungerAndElder>()
-                }
-                assertEquals(
-                    listOf(YoungerAndElder("Ann", "Dan Brown"), YoungerAndElder("Ann", "Ken Kousen"), YoungerAndElder("Ken Kousen", "Dan Brown")),
-                    pairs.getResults().sortedWith(compareBy({ it.name }, { it.elderName })),
-                )
+            // The persons under other names join their table with itself, through a derived table that SQLite flattens
+            // into the query, which names the result columns as they are written before SQLite 3.20.0, but with AS
+            database {
+                val elders = PersonWithIdTable { table ->
+                    table SELECT listOf(name AS Elder::elderName, age AS Elder::elderAge)
+                } AS ElderView
+                pairs = (PersonWithIdTable INNER_JOIN elders ON (ElderView.elderAge GT PersonWithIdTable.age)) SELECT X<YoungerAndElder>()
             }
+            assertEquals(
+                listOf(YoungerAndElder("Ann", "Dan Brown"), YoungerAndElder("Ann", "Ken Kousen"), YoungerAndElder("Ken Kousen", "Dan Brown")),
+                pairs.getResults().sortedWith(compareBy({ it.name }, { it.elderName })),
+            )
 
             lateinit var expensiveAuthors: SelectStatement<PersonWithId>
             lateinit var shortBookAuthors: SelectStatement<PersonWithId>
@@ -5281,6 +5276,66 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertFailsWith<IllegalArgumentException> {
             database { ProductTable.CREATE_INDEX("idx_other_table", BookTable.lower(BookTable.name)) }
         }
+    }
+
+    /**
+     * Covers the names of the columns of a join with a view, which SQLite flattens into the query: before SQLite 3.20.0,
+     * as on Android before API 28, a column without AS is named as it is written, as `adult_person.age`, so that the
+     * rows couldn't be read by their properties' names. Every column of a join is named with AS, in a projection, in
+     * result columns, with DISTINCT, in a compound SELECT and in an outer join.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testJoinColumnNames() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            CREATE_VIEW(AdultPersonView) AS (PersonWithIdTable SELECT WHERE<AdultPerson>(PersonWithIdTable.age GTE 18))
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "Ann", age = 30),
+                PersonWithId(id = null, name = "Bob", age = 40),
+                PersonWithId(id = null, name = "Kid", age = 10),
+            )
+            BookTable INSERT listOf(
+                Book(name = "A1", author = "Ann", price = 1.0, pages = 1),
+                Book(name = "A2", author = "Ann", price = 2.0, pages = 2),
+                Book(name = "B1", author = "Bob", price = 3.0, pages = 3),
+                Book(name = "K1", author = "Kid", price = 4.0, pages = 4),
+                Book(name = "N1", author = "Nobody", price = 5.0, pages = 5),
+            )
+        }
+        lateinit var projection: SelectStatement<BookAuthorAge>
+        lateinit var resultColumns: SelectStatement<BookTitleAge>
+        lateinit var distinct: SelectStatement<BookAuthorAge>
+        lateinit var compound: SelectStatement<BookAuthorAge>
+        lateinit var outer: SelectStatement<BookAuthorMaybeAge>
+        database {
+            fun adults() = BookTable INNER_JOIN AdultPersonView ON (AdultPersonView.name EQ BookTable.author)
+            projection = adults() SELECT X<BookAuthorAge>()
+            resultColumns = adults() SELECT listOf(BookTable.name AS BookTitleAge::title)
+            distinct = adults() SELECT_DISTINCT X<BookAuthorAge>()
+            compound = (adults() SELECT WHERE<BookAuthorAge>(BookTable.author EQ "Ann")) UNION
+                (adults() SELECT WHERE<BookAuthorAge>(BookTable.author EQ "Bob"))
+            outer = (BookTable LEFT_OUTER_JOIN AdultPersonView ON (AdultPersonView.name EQ BookTable.author)) SELECT X<BookAuthorMaybeAge>()
+        }
+        assertContains(projection.sqlStr, "book.author AS author,adult_person.age AS age")
+        assertEquals(
+            listOf(BookAuthorAge("Ann", 30), BookAuthorAge("Ann", 30), BookAuthorAge("Bob", 40)),
+            projection.getResults().sortedBy { it.author },
+        )
+        assertEquals(
+            listOf(BookTitleAge("A1", 30), BookTitleAge("A2", 30), BookTitleAge("B1", 40)),
+            resultColumns.getResults().sortedBy { it.title },
+        )
+        assertEquals(listOf(BookAuthorAge("Ann", 30), BookAuthorAge("Bob", 40)), distinct.getResults().sortedBy { it.author })
+        assertEquals(listOf(BookAuthorAge("Ann", 30), BookAuthorAge("Bob", 40)), compound.getResults().sortedBy { it.author })
+        assertEquals(
+            listOf(
+                BookAuthorMaybeAge("Ann", 30),
+                BookAuthorMaybeAge("Ann", 30),
+                BookAuthorMaybeAge("Bob", 40),
+                BookAuthorMaybeAge("Kid", null),
+                BookAuthorMaybeAge("Nobody", null),
+            ),
+            outer.getResults().sortedBy { it.author },
+        )
     }
 
     /**

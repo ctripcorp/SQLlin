@@ -202,7 +202,8 @@ fun joinSample() {
     lateinit var students: SelectStatement<Student>
     lateinit var scores: SelectStatement<StudentScore>
     database {
-        // SELECT name,person.age,transcript.math,transcript.english FROM person INNER JOIN transcript USING (name)
+        // SELECT name AS name,person.age AS age,transcript.math AS math,transcript.english AS english
+        //     FROM person INNER JOIN transcript USING (name)
         students = (PersonTable INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()
         // SELECT person.name AS name,count(transcript.math) AS tests,max(transcript.math) AS bestMath
         //     FROM person LEFT OUTER JOIN transcript ON person.name = transcript.name GROUP BY person.name
@@ -241,8 +242,10 @@ Join 的行没有自己的类型，所以从 Join 查询时要指定读取成的
 * 列或表达式可能为 NULL 时，属性必须可空。外连接在找不到匹配行的地方，会让一个关系的列为 NULL，因此除 `count` 以外，关于这些列的
   表达式也是如此。
 
-SQLlin 写列时都带上关系的名字，所以条件、函数、_GROUP BY_ 和 _ORDER BY_ 都能使用其他关系中也有的列名。可观察查询会观察 Join 中的
-所有关系。
+SQLlin 写列时都带上关系的名字，所以条件、函数、_GROUP BY_ 和 _ORDER BY_ 都能使用其他关系中也有的列名。Join 选取的每一列都用 `AS`
+命名为对应的属性名，比如 `person.age AS age`，读取结果行时就按这个名字找列：只有写了 `AS`，SQLite 才保证列名和 SQL 里写的一致；
+3.20.0 之前（比如 API 28 之前的 Android），Join 了视图或派生表时，SQLite 会用列在 SQL 里的原文给结果列命名。可观察查询会观察 Join
+中的所有关系。
 
 ### 从旧的 Join API 迁移
 
@@ -293,7 +296,8 @@ fun sample() {
         // SELECT authorId,books FROM (SELECT authorId,count(*) AS books FROM book GROUP BY book.authorId) AS author_books
         //     WHERE author_books.books>?
         prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
-        // SELECT person.name,author_books.books FROM person INNER JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
+        // SELECT person.name AS name,author_books.books AS books
+        //     FROM person INNER JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
         personBooks = (PersonTable INNER_JOIN authorBooks ON (PersonTable.id EQ AuthorBooksView.authorId)) SELECT X<PersonBooks>()
     }
 }

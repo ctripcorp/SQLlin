@@ -1028,6 +1028,24 @@ data class Elder(val elderName: String, val elderAge: Age)
 data class YoungerAndElder(val name: String, val elderName: String)
 
 /**
+ * The author of a book, with their age, from book joined with the view [AdultPerson].
+ */
+@Serializable
+data class BookAuthorAge(val author: String, val age: Age)
+
+/**
+ * The title of a book, as a result column, with its author's age, from book joined with the view [AdultPerson].
+ */
+@Serializable
+data class BookTitleAge(val title: String, val age: Age)
+
+/**
+ * The author of a book, with their age where they are an adult, from book outer joined with the view [AdultPerson].
+ */
+@Serializable
+data class BookAuthorMaybeAge(val author: String, val age: Age?)
+
+/**
  * The age of the oldest person: a SELECT of a single column, which an IN subquery compares with.
  */
 @Serializable
