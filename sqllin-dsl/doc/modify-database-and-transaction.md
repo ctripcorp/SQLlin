@@ -62,6 +62,36 @@ fun sample() {
 
 **⚠️ WARNING**: DROP is a destructive operation. Once executed, the table and all its data are permanently deleted. Use with caution.
 
+#### Dropping by Name
+
+A migration often drops a table whose class is gone, so that there is no table object to give to `DROP`.
+`DROP_TABLE(name)` drops a table by its name, and `DROP_VIEW(name)` a view, as `DROP_INDEX(name)` and
+`DROP_TRIGGER(name)` do an index and a trigger; `DROP_TABLE_IF_EXISTS(name)` and `DROP_VIEW_IF_EXISTS(name)` do nothing
+when there is none of that name. They are experimental:
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+val database = Database(
+    DSLDBConfiguration(
+        name = "Movie.db",
+        path = getGlobalDatabasePath(),
+        version = 3,
+        create = { CREATE(MovieTable) },
+        upgrade = { oldVersion, _ ->
+            if (oldVersion < 3) {
+                // Version 2 had these, and version 3 has no classes for them
+                DROP_TABLE_IF_EXISTS("movie_genres")
+                DROP_VIEW_IF_EXISTS("movies_by_genre")
+            }
+        }
+    )
+)
+```
+
+The kind is in the function's name because SQLite's `DROP TABLE` doesn't drop a view, nor `DROP VIEW` a table: each
+fails for the other's kind, with `IF EXISTS` too. An FTS table is dropped as a table. A blank name is rejected with an
+`IllegalArgumentException`.
+
 ### CREATE VIEW - Creating Views
 
 A view is a stored _SELECT_ that queries read like a table. Declare its rows with `@DBView`, as you declare a table's
@@ -203,7 +233,9 @@ fun sample() {
 }
 ```
 
-`IF NOT EXISTS` only checks the name: if a table of that name exists with other columns, it stays as it is.
+`IF NOT EXISTS` only checks the name: if a table of that name exists with other columns, it stays as it is. A table or
+a view that has no class is dropped by its name, with `DROP_TABLE_IF_EXISTS(name)` and `DROP_VIEW_IF_EXISTS(name)`, see
+[Dropping by Name](#dropping-by-name).
 
 ### CREATE TRIGGER - Creating Triggers
 
@@ -481,6 +513,12 @@ fun sample() {
 ```
 
 The _INSERT_ statements could insert objects directly. You can insert one or multiple objects once.
+
+The values of the objects are bound as parameters of one statement. A SQLite before 3.32.0, as Android's before API 31,
+takes 999 parameters in a statement by default, so where there are more, the objects are inserted in batches that bind
+at most 999 each, whatever the SQLite. The batches run in a transaction, so that all the objects are inserted or none, as
+one statement would, but those of `INSERT_OR_FAIL`, which keeps the objects inserted before the one that fails, as one
+statement does. A trigger that inserts objects writes them all into its body, which binds nothing.
 
 `INSERT_OR_IGNORE` skips the objects that conflict with a row already in the table, and `INSERT_OR_REPLACE` replaces
 that row. They take the same arguments as `INSERT`, as the other [conflict resolutions](#conflict-resolutions) do.

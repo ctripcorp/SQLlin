@@ -2,21 +2,23 @@ package com.ctrip.sqllin.dsl.test
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.ctrip.sqllin.driver.toDatabasePath
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Android unit test that runs on the JVM via Robolectric. The `sdk` levels cover both
- * the `SQLiteDatabase.OpenParams` code path (Android P and above) and the legacy one.
+ * The Android tests, which run on the JVM via Robolectric, as `testAndroidHostTest`, and on an emulator or a device,
+ * as `connectedAndroidDeviceTest`: [AndroidJUnit4] runs them on Robolectric on the JVM, where the `sdk` levels of
+ * [Config] cover both the `SQLiteDatabase.OpenParams` code path (Android P and above) and the legacy one, and on the
+ * device otherwise, at its own level, where [Config] does nothing.
  * @author Yuang Qiao
  */
 
-@RunWith(RobolectricTestRunner::class)
+@RunWith(AndroidJUnit4::class)
 @Config(sdk = [26, 37])
 class AndroidTest {
 
@@ -31,6 +33,9 @@ class AndroidTest {
 
     @Test
     fun testInsertGeneratedKeyLast() = commonTest.testInsertGeneratedKeyLast()
+
+    @Test
+    fun testInsertManyRows() = commonTest.testInsertManyRows()
 
     @Test
     fun testDelete() = commonTest.testDelete()
@@ -103,6 +108,12 @@ class AndroidTest {
 
     @Test
     fun testIfNotExists() = commonTest.testIfNotExists()
+
+    @Test
+    fun testDropByName() = commonTest.testDropByName()
+
+    @Test
+    fun testJoinColumnNames() = commonTest.testJoinColumnNames()
 
     @Test
     fun testPartialIndex() = commonTest.testPartialIndex()

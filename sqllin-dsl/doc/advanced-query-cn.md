@@ -202,7 +202,8 @@ fun joinSample() {
     lateinit var students: SelectStatement<Student>
     lateinit var scores: SelectStatement<StudentScore>
     database {
-        // SELECT name,person.age,transcript.math,transcript.english FROM person INNER JOIN transcript USING (name)
+        // SELECT name AS name,person.age AS age,transcript.math AS math,transcript.english AS english
+        //     FROM person INNER JOIN transcript USING (name)
         students = (PersonTable INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()
         // SELECT person.name AS name,count(transcript.math) AS tests,max(transcript.math) AS bestMath
         //     FROM person LEFT OUTER JOIN transcript ON person.name = transcript.name GROUP BY person.name
@@ -241,8 +242,10 @@ Join 的行没有自己的类型，所以从 Join 查询时要指定读取成的
 * 列或表达式可能为 NULL 时，属性必须可空。外连接在找不到匹配行的地方，会让一个关系的列为 NULL，因此除 `count` 以外，关于这些列的
   表达式也是如此。
 
-SQLlin 写列时都带上关系的名字，所以条件、函数、_GROUP BY_ 和 _ORDER BY_ 都能使用其他关系中也有的列名。可观察查询会观察 Join 中的
-所有关系。
+SQLlin 写列时都带上关系的名字，所以条件、函数、_GROUP BY_ 和 _ORDER BY_ 都能使用其他关系中也有的列名。Join 选取的每一列都用 `AS`
+命名为对应的属性名，比如 `person.age AS age`，读取结果行时就按这个名字找列：只有写了 `AS`，SQLite 才保证列名和 SQL 里写的一致；
+3.20.0 之前（比如 API 28 之前的 Android），Join 了视图或派生表时，SQLite 会用列在 SQL 里的原文给结果列命名。可观察查询会观察 Join
+中的所有关系。
 
 ### 从旧的 Join API 迁移
 
@@ -293,7 +296,8 @@ fun sample() {
         // SELECT authorId,books FROM (SELECT authorId,count(*) AS books FROM book GROUP BY book.authorId) AS author_books
         //     WHERE author_books.books>?
         prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
-        // SELECT person.name,author_books.books FROM person INNER JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
+        // SELECT person.name AS name,author_books.books AS books
+        //     FROM person INNER JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
         personBooks = (PersonTable INNER_JOIN authorBooks ON (PersonTable.id EQ AuthorBooksView.authorId)) SELECT X<PersonBooks>()
     }
 }
@@ -335,6 +339,10 @@ data class AuthorId(val authorId: Long)
 // SELECT id,name,age FROM person WHERE person.id IN (SELECT authorId FROM book WHERE book.price>?)
 PersonTable SELECT WHERE(PersonTable.id IN (BookTable SELECT WHERE<AuthorId>(BookTable.price GT 30.0)))
 ```
+
+`IN` 也可以接受一个值的列表，比如 `PersonTable.id IN listOf(1L, 2L)`，每个值都作为一个参数绑定。3.32.0 之前的 SQLite（比如
+API 31 之前的 Android）默认一条语句最多接受 999 个参数，语句其余部分的参数也算在内，所以更长的列表在那里会报错 "too many SQL
+variables"：这时改为用子查询从一张表里读取这些值。
 
 `EXISTS` 检查一条 _SELECT_ 是否返回了任意一行。由于 SQLlin 写列时都带上表名，_SELECT_ 可以引用外层查询的列，这会让它对外层查询的
 每一行执行一次：
@@ -473,6 +481,12 @@ fun persons(database: Database): Flow<PagingData<Person>> =
   一样，只能感知经由同一个 `Database` 实例的修改。
 * **线程**：分页在 `Dispatchers.IO` 中加载，也可以用 `pagingSource(context) { }` 指定别的上下文，因为 `Pager` 可能在主线程上加载。
   和可观察查询一样，写入要通过 `suspendedScope` 执行，因为分页的加载和它是串行的。
+* **一条 SELECT**：每一页是一条 _SELECT_ 的行，读成一种类型，所以它装不下一对多关联的行，比如一条笔记的标签，那需要第二条查询来读。
+  如果没有查询按这些行筛选，就把它们存进这一行本身，作为由 serializer 转换的列里的一个 `List`，见
+  [开始使用](getting-start-cn.md#由-serializer-转换的类型)；这样列表还能保持原有的顺序，而另一张表的行只有靠一个用来排序的列才能做到。
+  如果查询需要把它们当作行来用，就基于[表版本令牌](#表版本令牌)自己写一个 `PagingSource`：这一页和关联的行各自通过 `versioned { }`
+  读取，再把两个令牌相加后用 `onChange` 注册，这样任何一张表有变化都会让它失效。只要这一页有行，就要读取关联的行，即使你知道没有：
+  没有被任何读取碰过的表不在令牌里，之后往里面加的行永远不会让数据源失效。
 
 ## 全文搜索
 

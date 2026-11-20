@@ -24,7 +24,9 @@ import com.ctrip.sqllin.dsl.sql.Table
 import com.ctrip.sqllin.dsl.sql.clause.ResultColumn
 import com.ctrip.sqllin.dsl.sql.clause.writtenColumns
 import com.ctrip.sqllin.dsl.sql.compiler.appendDBColumnName
-import com.ctrip.sqllin.dsl.sql.compiler.encodeEntities2InsertValues
+import com.ctrip.sqllin.dsl.sql.compiler.InsertRows
+import com.ctrip.sqllin.dsl.sql.compiler.encodeInsertRows
+import com.ctrip.sqllin.dsl.sql.statement.InsertBatch
 
 /**
  * INSERT operation builder.
@@ -53,16 +55,8 @@ internal object Insert : Operation {
      * @param isInsertWithId Whether to include the primary key column for auto-increment keys
      * @return INSERT statement ready for execution
      */
-    fun <T> insert(table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>, isInsertWithId: Boolean = false): SingleStatement {
-        val parameters = ArrayList<Any?>()
-        val sql = buildString {
-            append(sqlStr)
-            append(table.tableName)
-            append(' ')
-            encodeEntities2InsertValues(table, this,entities, parameters, isInsertWithId)
-        }
-        return InsertStatement(sql, connection, parameters, table.tableName)
-    }
+    fun <T> insert(table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>, isInsertWithId: Boolean = false): SingleStatement =
+        insertRows(sqlStr, table, connection, entities, isInsertWithId, isAtomic = true)
 
     /**
      * Builds an INSERT statement of [entities] with a conflict resolution, which [insert] starts with, as
@@ -71,15 +65,72 @@ internal object Insert : Operation {
      * The primary key is written even when the database would assign it, as a conflict on it could never be seen
      * otherwise; a null key still lets the database assign it.
      */
-    fun <T> insertOr(insert: String, table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>): SingleStatement {
+    fun <T> insertOr(insert: String, table: Table<T>, connection: DatabaseConnection, entities: Iterable<T>): SingleStatement =
+        insertRows(insert, table, connection, entities, isInsertWithId = true, isAtomic = insert != INSERT_OR_FAIL)
+
+    /**
+     * The most parameters that an INSERT of entities binds in one statement: the limit of SQLite before 3.32.0, as on
+     * Android before API 31, by default, which is 32766 from then on. An INSERT of more rows runs as several INSERTs,
+     * whatever the SQLite, as its limit is a compile-time option that a connection can lower, and that not every platform
+     * can read.
+     */
+    const val MAX_PARAMETERS: Int = 999
+
+    private const val INSERT_OR_FAIL = "INSERT OR FAIL INTO "
+
+    /**
+     * Builds the INSERT of [entities], which [insert] starts with, as `INSERT INTO ` or `INSERT OR IGNORE INTO `.
+     *
+     * Its SQL is one statement of all the rows, which a trigger writes into its body, where nothing is bound. Where the
+     * rows bind more than [MAX_PARAMETERS] values, it runs as batches of rows that bind at most that many each, a row
+     * never being split: in a transaction, so that it inserts all its rows or none, as one statement does, unless it is
+     * [isAtomic] not, as `INSERT OR FAIL`, which keeps the rows a statement inserted before the one that fails, and so
+     * those of the batches before.
+     */
+    private fun <T> insertRows(
+        insert: String,
+        table: Table<T>,
+        connection: DatabaseConnection,
+        entities: Iterable<T>,
+        isInsertWithId: Boolean,
+        isAtomic: Boolean,
+    ): SingleStatement {
         val parameters = ArrayList<Any?>()
-        val sql = buildString {
-            append(insert)
-            append(table.tableName)
-            append(' ')
-            encodeEntities2InsertValues(table, this, entities, parameters, isInsertWithId = true)
+        val rows = encodeInsertRows(table, entities, parameters, isInsertWithId)
+        val start = "$insert${table.tableName} ${rows.columns} values "
+        val sql = start + rows.rows.joinToString(",")
+        return InsertStatement(sql, connection, parameters, table.tableName, batchesOf(start, rows, parameters), isAtomic)
+    }
+
+    /**
+     * The batches of [rows] that bind at most [MAX_PARAMETERS] values each, or null where all of them bind no more.
+     */
+    private fun batchesOf(start: String, rows: InsertRows, parameters: List<Any?>): List<InsertBatch>? {
+        if (parameters.size <= MAX_PARAMETERS)
+            return null
+        val batches = ArrayList<InsertBatch>()
+        var first = 0
+        var firstParameter = 0
+        var count = 0
+        fun flush(end: Int) {
+            val lastParameter = firstParameter + count
+            batches.add(
+                InsertBatch(
+                    start + rows.rows.subList(first, end).joinToString(","),
+                    parameters.subList(firstParameter, lastParameter).toTypedArray(),
+                )
+            )
+            first = end
+            firstParameter = lastParameter
+            count = 0
         }
-        return InsertStatement(sql, connection, parameters, table.tableName)
+        rows.parameterCounts.forEachIndexed { index, rowCount ->
+            if (index > first && count + rowCount > MAX_PARAMETERS)
+                flush(index)
+            count += rowCount
+        }
+        flush(rows.rows.size)
+        return batches
     }
 
     /**

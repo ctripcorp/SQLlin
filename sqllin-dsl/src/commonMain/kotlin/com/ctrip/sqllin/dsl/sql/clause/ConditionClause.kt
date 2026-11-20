@@ -96,7 +96,13 @@ public infix fun ClauseNumber<*>.GTE(number: Number): SelectCondition = gte(numb
 @StatementDslMaker
 public infix fun ClauseNumber<*>.GTE(clauseNumber: ClauseNumber<*>): SelectCondition = gte(clauseNumber)
 
-// If the 'number' in the 'numbers'
+/**
+ * Whether this number is one of [numbers]: `IN (?,?,...)`.
+ *
+ * Each value is bound as a parameter, and a SQLite before 3.32.0, as Android's before API 31, takes 999 parameters in a
+ * statement by default, those of the rest of the statement included, so that a longer list fails there with "too many
+ * SQL variables": read the values from a table with a subquery instead.
+ */
 @StatementDslMaker
 public infix fun ClauseNumber<*>.IN(numbers: Iterable<Number>): SelectCondition = inIterable(numbers)
 
@@ -172,7 +178,13 @@ public infix fun ClauseString<*>.GTE(str: String): SelectCondition = gte(str)
 @StatementDslMaker
 public infix fun ClauseString<*>.GTE(clauseString: ClauseString<*>): SelectCondition = gte(clauseString)
 
-// If the 'string' in the 'strings'
+/**
+ * Whether this string is one of [strings]: `IN (?,?,...)`.
+ *
+ * Each value is bound as a parameter, and a SQLite before 3.32.0, as Android's before API 31, takes 999 parameters in a
+ * statement by default, those of the rest of the statement included, so that a longer list fails there with "too many
+ * SQL variables": read the values from a table with a subquery instead.
+ */
 @StatementDslMaker
 public infix fun ClauseString<*>.IN(strings: Iterable<String>): SelectCondition = inIterable(strings)
 
@@ -228,7 +240,13 @@ public infix fun ClauseBlob.GTE(byteArray: ByteArray): SelectCondition = gte(byt
 @StatementDslMaker
 public infix fun ClauseBlob.GTE(blob: ClauseBlob): SelectCondition = gte(blob)
 
-// If the 'blob' in the 'blobs'
+/**
+ * Whether this BLOB is one of [blobs]: `IN (?,?,...)`.
+ *
+ * Each value is bound as a parameter, and a SQLite before 3.32.0, as Android's before API 31, takes 999 parameters in a
+ * statement by default, those of the rest of the statement included, so that a longer list fails there with "too many
+ * SQL variables": read the values from a table with a subquery instead.
+ */
 @StatementDslMaker
 public infix fun ClauseBlob.IN(blobs: Iterable<ByteArray>): SelectCondition = inIterable(blobs)
 
@@ -426,7 +444,13 @@ public infix fun <V : Any> ClauseConverted<V>.GTE(value: V): SelectCondition = g
 @StatementDslMaker
 public infix fun <V : Any> ClauseConverted<V>.GTE(other: ClauseConverted<V>): SelectCondition = gte(other)
 
-/** Whether this value is one of [values]: `IN (...)`. */
+/**
+ * Whether this value is one of [values]: `IN (...)`.
+ *
+ * Each value is bound as a parameter, and a SQLite before 3.32.0, as Android's before API 31, takes 999 parameters in a
+ * statement by default, those of the rest of the statement included, so that a longer list fails there with "too many
+ * SQL variables": read the values from a table with a subquery instead.
+ */
 @ExperimentalDSLDatabaseAPI
 @StatementDslMaker
 public infix fun <V : Any> ClauseConverted<V>.IN(values: Iterable<V>): SelectCondition = inIterable(values)

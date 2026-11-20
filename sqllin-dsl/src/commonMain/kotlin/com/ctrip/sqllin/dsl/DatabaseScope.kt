@@ -288,6 +288,11 @@ public class DatabaseScope internal constructor(
      * set the ID property to `null` to let SQLite automatically generate the ID. If you need to insert
      * entities with pre-defined IDs (e.g., during data migration), use [INSERT_WITH_ID] instead.
      *
+     * The values of all the entities are bound as parameters of one statement. Where they are more than 999, the most a
+     * SQLite before 3.32.0 takes by default, as Android's before API 31, the entities are inserted in batches, in a
+     * transaction, so that all of them are inserted or none, as one statement would. So are those of the other
+     * INSERTs of entities, but `INSERT_OR_FAIL`, which keeps those inserted before the one that fails.
+     *
      * Example:
      * ```kotlin
      * val person = Person(id = null, name = "Alice", age = 25) // ID will be auto-generated
@@ -2099,6 +2104,43 @@ public class DatabaseScope internal constructor(
     public fun <T> Table<T>.DROP_IF_EXISTS(): Unit = DROP_IF_EXISTS(this)
 
     /**
+     * Drops the table named [name], as the SQL `DROP TABLE name` does: a table that has no class any more, as one that
+     * an earlier version of the app created and a migration removes, which [DROP] can't take, having no [Table] for it.
+     * An FTS table is dropped so too.
+     *
+     * Example:
+     * ```kotlin
+     * upgrade = { oldVersion, _ ->
+     *     if (oldVersion < 3)
+     *         DROP_TABLE("movie_genres")
+     * }
+     * ```
+     *
+     * It fails for a table that doesn't exist, which [DROP_TABLE_IF_EXISTS] leaves alone, and for a view, which
+     * [DROP_VIEW] drops, as SQLite's `DROP TABLE` doesn't drop a view.
+     *
+     * @param name The name of the table to drop
+     * @throws IllegalArgumentException if [name] is blank
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_TABLE(name: String) {
+        addStatement(Drop.dropTable(name, databaseConnection))
+    }
+
+    /**
+     * Drops the table named [name] if it exists, as the SQL `DROP TABLE IF EXISTS` does, so that a migration step can
+     * run more than once. It still fails for a view.
+     *
+     * @see DROP_TABLE
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_TABLE_IF_EXISTS(name: String) {
+        addStatement(Drop.dropTable(name, databaseConnection, isIfExists = true))
+    }
+
+    /**
      * Drops the index named [indexName], as the SQL `DROP INDEX name` does, such as one that [CREATE_INDEX] or
      * [CREATE_UNIQUE_INDEX] created.
      *
@@ -2205,6 +2247,33 @@ public class DatabaseScope internal constructor(
     @StatementDslMaker
     @JvmName("dropIfExists")
     public fun <T> View<T>.DROP_IF_EXISTS(): Unit = DROP_IF_EXISTS(this)
+
+    /**
+     * Drops the view named [name], as the SQL `DROP VIEW name` does: a view that has no class any more, which [DROP]
+     * can't take, having no [View] for it.
+     *
+     * It fails for a view that doesn't exist, which [DROP_VIEW_IF_EXISTS] leaves alone, and for a table, which
+     * [DROP_TABLE] drops.
+     *
+     * @param name The name of the view to drop
+     * @throws IllegalArgumentException if [name] is blank
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_VIEW(name: String) {
+        addStatement(Drop.dropView(name, databaseConnection))
+    }
+
+    /**
+     * Drops the view named [name] if it exists, as the SQL `DROP VIEW IF EXISTS` does. It still fails for a table.
+     *
+     * @see DROP_VIEW
+     */
+    @ExperimentalDSLDatabaseAPI
+    @StatementDslMaker
+    public fun DROP_VIEW_IF_EXISTS(name: String) {
+        addStatement(Drop.dropView(name, databaseConnection, isIfExists = true))
+    }
 
     // ========== ALTER Operations ==========
 
@@ -2766,7 +2835,7 @@ public class DatabaseScope internal constructor(
     @ExperimentalDSLDatabaseAPI
     @StatementDslMaker
     public fun PRAGMA_COMPILE_OPTIONS(): PragmaStatement<List<String>> =
-        pragma(PRAGMA.names("compile_options", "compile_options", null, databaseConnection))
+        pragma(PRAGMA.compileOptions(databaseConnection))
 
     /**
      * The names of the collations of the connection, as the SQL `PRAGMA collation_list` tells: SQLite's `BINARY`,

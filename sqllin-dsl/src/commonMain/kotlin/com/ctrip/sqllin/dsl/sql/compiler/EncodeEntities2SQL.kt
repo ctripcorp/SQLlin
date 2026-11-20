@@ -26,11 +26,22 @@ import kotlinx.serialization.descriptors.SerialDescriptor
  */
 
 /**
- * Encodes a collection of entities into an INSERT statement's VALUES clause.
+ * The column list and the VALUES tuples of an INSERT of entities: `(column1,column2,...)`, and `(?,?,...)` for each
+ * entity, whose values [encodeInsertRows] adds to its parameters, as many as [InsertRows.parameterCounts] tells for each
+ * row, in the order of the rows.
  *
- * Generates SQL in the format:
+ * @author Yuang Qiao
+ */
+internal class InsertRows(
+    val columns: String,
+    val rows: List<String>,
+    val parameterCounts: List<Int>,
+)
+
+/**
+ * Encodes [values] into the column list and the VALUES tuples of an INSERT, adding their values to [parameters]:
  * ```
- * (column1, column2, ...) VALUES (?, ?, ...), (?, ?, ...), ...
+ * (column1, column2, ...) and (?, ?, ...), (?, ?, ...), ...
  * ```
  *
  * Handles primary key logic:
@@ -40,43 +51,36 @@ import kotlinx.serialization.descriptors.SerialDescriptor
  *   includes all columns
  *
  * @param table The table definition containing serialization and primary key metadata
- * @param builder StringBuilder to append the SQL to
  * @param values The entities to insert
  * @param parameters Mutable list to collect parameterized query values
  * @param isInsertWithId Whether to include the primary key column even when the database would assign it
  */
-internal fun <T> encodeEntities2InsertValues(
+internal fun <T> encodeInsertRows(
     table: Table<T>,
-    builder: StringBuilder,
     values: Iterable<T>,
     parameters: MutableList<Any?>,
     isInsertWithId: Boolean,
-) = with(builder) {
+): InsertRows {
     val isInsertId = table.primaryKeyInfo?.run {
         !isGeneratedByDatabase || isInsertWithId
     } ?: true
     val serializer = table.kSerializer()
-    append('(')
     val primaryKeyName = table.primaryKeyInfo?.primaryKeyName
-    appendDBColumnName(serializer.descriptor, primaryKeyName, isInsertId)
-    append(')')
-    append(" values ")
-    val iterator = values.iterator()
-    fun appendNext() {
-        val value = iterator.next()
+    val columns = buildString {
+        append('(')
+        appendDBColumnName(serializer.descriptor, primaryKeyName, isInsertId)
+        append(')')
+    }
+    val rows = ArrayList<String>()
+    val parameterCounts = ArrayList<Int>()
+    for (value in values) {
+        val before = parameters.size
         val encoder = InsertValuesEncoder(parameters, primaryKeyName, isInsertId)
         encoder.encodeSerializableValue(serializer, value)
-        append(encoder.valuesSQL)
+        rows.add(encoder.valuesSQL)
+        parameterCounts.add(parameters.size - before)
     }
-    if (iterator.hasNext()) {
-        appendNext()
-    } else {
-        return@with
-    }
-    while (iterator.hasNext()) {
-        append(',')
-        appendNext()
-    }
+    return InsertRows(columns, rows, parameterCounts)
 }
 
 /**

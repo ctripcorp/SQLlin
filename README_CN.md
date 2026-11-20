@@ -53,6 +53,7 @@ _sqllin-dsl_ 是 SQL 语句的 DSL 实现并且它基于 _sqllin-driver_。_sqll
 - [并发安全](./sqllin-dsl/doc/concurrency-safety-cn.md)
 - [SQL 函数](./sqllin-dsl/doc/sql-functions-cn.md)
 - [高级查询](./sqllin-dsl/doc/advanced-query-cn.md)
+- [测试](./sqllin-dsl/doc/testing-cn.md)
 
 虽然不建议直接使用 _sqllin-driver_，但如果你想了解更多信息则可以阅读：
 

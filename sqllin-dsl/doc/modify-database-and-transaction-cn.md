@@ -59,6 +59,34 @@ fun sample() {
 
 **⚠️ 警告**：DROP 是一个破坏性操作。执行后，表及其所有数据将被永久删除。请谨慎使用。
 
+#### 按名字删除
+
+迁移时常常要删除一张类已经不存在的表，这时没有表对象可以传给 `DROP`。`DROP_TABLE(name)` 按名字删除表，`DROP_VIEW(name)` 按名字
+删除视图，就像 `DROP_INDEX(name)` 和 `DROP_TRIGGER(name)` 删除索引和触发器那样；`DROP_TABLE_IF_EXISTS(name)` 和
+`DROP_VIEW_IF_EXISTS(name)` 在没有这个名字的表或视图时什么也不做。它们是实验性 API：
+
+```kotlin
+@OptIn(ExperimentalDSLDatabaseAPI::class)
+val database = Database(
+    DSLDBConfiguration(
+        name = "Movie.db",
+        path = getGlobalDatabasePath(),
+        version = 3,
+        create = { CREATE(MovieTable) },
+        upgrade = { oldVersion, _ ->
+            if (oldVersion < 3) {
+                // 版本 2 有它们，而版本 3 里已经没有对应的类
+                DROP_TABLE_IF_EXISTS("movie_genres")
+                DROP_VIEW_IF_EXISTS("movies_by_genre")
+            }
+        }
+    )
+)
+```
+
+函数名里写明是表还是视图，是因为 SQLite 的 `DROP TABLE` 不能删除视图，`DROP VIEW` 也不能删除表：用错了种类都会失败，带
+`IF EXISTS` 也一样。FTS 表按表来删除。空白的名字会被拒绝，抛出 `IllegalArgumentException`。
+
 ### CREATE VIEW - 创建视图
 
 视图是保存在数据库里的一条 _SELECT_，查询时可以像表一样读取它。用 `@DBView` 声明视图的行，就像用 `@DBRow` 声明表的行一样，
@@ -191,7 +219,8 @@ fun sample() {
 }
 ```
 
-`IF NOT EXISTS` 只检查名字：如果同名的表已经存在但列不同，它会保持原样。
+`IF NOT EXISTS` 只检查名字：如果同名的表已经存在但列不同，它会保持原样。没有类的表或视图按名字删除，用
+`DROP_TABLE_IF_EXISTS(name)` 和 `DROP_VIEW_IF_EXISTS(name)`，见[按名字删除](#按名字删除)。
 
 ### CREATE TRIGGER - 创建触发器
 
@@ -450,6 +479,11 @@ fun sample() {
 ```
 
 _INSERT_ 语句可以直接插入对象，你可以一次插入一个或多个对象。
+
+所有对象的值都作为一条语句的参数绑定。3.32.0 之前的 SQLite（比如 API 31 之前的 Android）默认一条语句最多接受 999 个参数，所以
+超过时，无论 SQLite 是哪个版本，对象都会分批插入，每批最多绑定 999 个参数。这些批次在一个事务里执行，因此和一条语句一样，要么
+全部插入，要么都不插入；只有 `INSERT_OR_FAIL` 例外，它和一条语句一样，保留失败的那个对象之前已经插入的对象。插入对象的触发器会把
+它们全部写进触发器体，不绑定任何参数。
 
 `INSERT_OR_IGNORE` 会跳过与表中已有行冲突的对象，`INSERT_OR_REPLACE` 则会替换那一行。它们接受的参数与 `INSERT` 相同，其他
 [冲突处理方式](#冲突处理)也一样。

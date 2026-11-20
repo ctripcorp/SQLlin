@@ -758,6 +758,8 @@ data class Note(
 - 不支持 `@Contextual` 和 `@UseContextualSerialization`，因为 SQLlin 没有可以查找 serializer 的 `SerializersModule`：请用 `@Serializable(with = ...)` 给属性指定 serializer。以上下文方式序列化的枚举或基础类型，仍按默认方式存储
 - 带 `@CollateNoCase` 或 `@CollateRTrim` 的列必须存文本，`CREATE` 会检查这一点
 - FTS 表只能有使用默认 serializer 的 `String` 列
+- 转换列的类型来自它的 serializer，所以表对象的 `createSQL` 在读取时才计算，而没有转换列的表的 `createSQL` 是常量：生成的代码里
+  找不到完整的 _CREATE_ 语句。要查看实际创建的内容，可以读取表对象的 `createSQL`，或者 `PRAGMA_TABLE_INFO(table)` 返回的列
 
 #### SQLite 类型映射
 
@@ -1139,3 +1141,4 @@ fun setupDatabase() {
 - [并发安全](concurrency-safety-cn.md)
 - [SQL 函数](sql-functions-cn.md)
 - [高级查询](advanced-query-cn.md)
+- [测试](testing-cn.md)

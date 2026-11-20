@@ -17,3 +17,4 @@ local.properties
 /sample/build
 *.podspec
 .kotlin
+/libs
