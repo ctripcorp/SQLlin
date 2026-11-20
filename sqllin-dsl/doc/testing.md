@@ -96,7 +96,8 @@ Test what depends on the SQLite version, as the APIs marked with `@PlatformDepen
 device of the API level in question. What a version of SQLite takes can also be told without Android: SQLlin's own CI
 runs its native tests on Linux linked with the SQLite versions of older Android, 3.9.2, 3.18.2, 3.22.0 and 3.28.0,
 which `scripts/build-sqlite.sh` of its repository builds. That doesn't tell what Android's own build of them, or its
-framework, does.
+framework, does, which its workflow `emulator.yml` checks by hand: it runs its Android tests on emulators of API 24, 30,
+34 and 37, one of each path its Android driver takes and of each version of SQLite its APIs need.
 
 ## The Database of a Test
 
