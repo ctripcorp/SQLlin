@@ -32,13 +32,23 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # Kotlin/Native's compiler and the dependencies it downloads, which only change with the Kotlin version: keyed by
+      # it, rather than by the build scripts, whose every change stored another copy of hundreds of megabytes. Without
+      # restore-keys, so that a new version doesn't keep the files of the one before
+      - name: Read the Kotlin version
+        id: kotlin
+        shell: bash
+        run: |
+          # Without the CR of the lines that a checkout on Windows ends with CRLF
+          version=$(tr -d '\r' < gradle/libs.versions.toml | sed -n 's/^kotlin = "\(.*\)"$/\1/p')
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Cache Kotlin/Native
         uses: actions/cache@v4
         with:
           path: ~/.konan
-          key: ${{ runner.os }}-konan-${{ hashFiles('**/*.gradle.kts') }}
-          restore-keys: |
-            ${{ runner.os }}-konan-
+          key: ${{ runner.os }}-konan-${{ steps.kotlin.outputs.version }}
 
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:assemble -PonCICD
@@ -101,13 +111,23 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # Kotlin/Native's compiler and the dependencies it downloads, which only change with the Kotlin version: keyed by
+      # it, rather than by the build scripts, whose every change stored another copy of hundreds of megabytes. Without
+      # restore-keys, so that a new version doesn't keep the files of the one before
+      - name: Read the Kotlin version
+        id: kotlin
+        shell: bash
+        run: |
+          # Without the CR of the lines that a checkout on Windows ends with CRLF
+          version=$(tr -d '\r' < gradle/libs.versions.toml | sed -n 's/^kotlin = "\(.*\)"$/\1/p')
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Cache Kotlin/Native
         uses: actions/cache@v4
         with:
           path: ~/.konan
-          key: ${{ runner.os }}-konan-${{ hashFiles('**/*.gradle.kts') }}
-          restore-keys: |
-            ${{ runner.os }}-konan-
+          key: ${{ runner.os }}-konan-${{ steps.kotlin.outputs.version }}
 
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:mingwX64MainKlibrary :sqllin-driver:jvmJar
@@ -170,13 +190,23 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # Kotlin/Native's compiler and the dependencies it downloads, which only change with the Kotlin version: keyed by
+      # it, rather than by the build scripts, whose every change stored another copy of hundreds of megabytes. Without
+      # restore-keys, so that a new version doesn't keep the files of the one before
+      - name: Read the Kotlin version
+        id: kotlin
+        shell: bash
+        run: |
+          # Without the CR of the lines that a checkout on Windows ends with CRLF
+          version=$(tr -d '\r' < gradle/libs.versions.toml | sed -n 's/^kotlin = "\(.*\)"$/\1/p')
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Cache Kotlin/Native
         uses: actions/cache@v4
         with:
           path: ~/.konan
-          key: ${{ runner.os }}-konan-${{ hashFiles('**/*.gradle.kts') }}
-          restore-keys: |
-            ${{ runner.os }}-konan-
+          key: ${{ runner.os }}-konan-${{ steps.kotlin.outputs.version }}
 
       - name: Build sqllin-driver
         run: ./gradlew :sqllin-driver:linuxX64MainKlibrary :sqllin-driver:jvmJar
@@ -251,13 +281,23 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # Kotlin/Native's compiler and the dependencies it downloads, which only change with the Kotlin version: keyed by
+      # it, rather than by the build scripts, whose every change stored another copy of hundreds of megabytes. Without
+      # restore-keys, so that a new version doesn't keep the files of the one before
+      - name: Read the Kotlin version
+        id: kotlin
+        shell: bash
+        run: |
+          # Without the CR of the lines that a checkout on Windows ends with CRLF
+          version=$(tr -d '\r' < gradle/libs.versions.toml | sed -n 's/^kotlin = "\(.*\)"$/\1/p')
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Cache Kotlin/Native
         uses: actions/cache@v4
         with:
           path: ~/.konan
-          key: ${{ runner.os }}-konan-${{ hashFiles('**/*.gradle.kts') }}
-          restore-keys: |
-            ${{ runner.os }}-konan-
+          key: ${{ runner.os }}-konan-${{ steps.kotlin.outputs.version }}
 
       - name: Run sqllin-driver Linux X64 Tests on SQLite ${{ matrix.sqlite }}
         run: ./gradlew :sqllin-driver:cleanLinuxX64Test :sqllin-driver:linuxX64Test --stacktrace
