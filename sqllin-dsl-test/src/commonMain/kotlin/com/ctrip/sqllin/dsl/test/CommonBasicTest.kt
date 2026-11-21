@@ -5256,11 +5256,18 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Covers expression indexes: a function of the table's columns, written without the table's name, which SQLite
      * doesn't allow in an index, while a string literal holding that name keeps it. Unique indexes of `lower(name)`
      * and of `replace(name, 'product.', '')` show that the expressions are indexed, and an expression of another table
-     * is rejected.
+     * is rejected. Android's SQLite 3.9, of Android 7.0 and 7.1, takes `lower` from ICU, which it doesn't mark
+     * deterministic, so that an index can't hold it there, which SQLite reports.
      */
     fun testExpressionIndex() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        val isLowerIndexed = try {
+            database { ProductTable.CREATE_UNIQUE_INDEX("idx_product_lower_name", ProductTable.lower(ProductTable.name)) }
+            true
+        } catch (e: Exception) {
+            assertContains(e.message.orEmpty(), "non-deterministic functions prohibited in index expressions")
+            false
+        }
         database {
-            ProductTable.CREATE_UNIQUE_INDEX("idx_product_lower_name", ProductTable.lower(ProductTable.name))
             ProductTable.CREATE_UNIQUE_INDEX("idx_product_bare_name", ProductTable.replace(ProductTable.name, "product.", ""))
             ProductTable INSERT Product(sku = "SKU-1", name = "Widget", price = 1.0)
         }
@@ -5270,7 +5277,7 @@ class CommonBasicTest(private val path: DatabasePath) {
         } catch (e: Exception) {
             true
         }
-        assertEquals(true, insertFails(Product(sku = "SKU-2", name = "WIDGET", price = 2.0)))
+        assertEquals(isLowerIndexed, insertFails(Product(sku = "SKU-2", name = "WIDGET", price = 2.0)))
         assertEquals(true, insertFails(Product(sku = "SKU-3", name = "product.Widget", price = 3.0)))
         assertEquals(false, insertFails(Product(sku = "SKU-4", name = "Gadget", price = 4.0)))
         assertFailsWith<IllegalArgumentException> {

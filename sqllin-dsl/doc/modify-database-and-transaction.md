@@ -153,6 +153,12 @@ fun sample() {
 A function of the table's columns makes an expression index, which the queries that compare the same expression use, as
 `lower(name)` does for case-insensitive lookups. An index can only hold the columns of its own table.
 
+On Android 7.0 and 7.1, whose SQLite 3.9 takes `lower` and `upper` from ICU, which it doesn't mark deterministic, an
+index can't hold them, and its CREATE fails with `non-deterministic functions prohibited in index expressions`. Where an
+app supports those versions, give the column of the index the collation `NOCASE` instead, as
+`PersonTable.CREATE_INDEX("idx_person_name_nocase", PersonTable.name COLLATE NOCASE)` below, which every version takes,
+but which only ignores the case of the ASCII letters.
+
 Each column of an index can be given the order it is sorted in, as `ORDER_BY` gives it:
 `PersonTable.CREATE_INDEX("idx_person_age", PersonTable.age to DESC)` is `CREATE INDEX idx_person_age ON person(age DESC)`.
 This is experimental. A query that sorts the columns in that order, or the reverse, reads the index in order.

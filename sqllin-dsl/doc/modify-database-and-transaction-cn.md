@@ -144,6 +144,11 @@ fun sample() {
 用表的列的函数可以创建表达式索引，比较同一个表达式的查询会用到它，例如用 `lower(name)` 做不区分大小写的查找。索引只能包含它自己
 所在表的列。
 
+Android 7.0 和 7.1 的 SQLite 3.9 使用 ICU 提供的 `lower` 和 `upper`，而且没有把它们标为确定性函数，所以索引里不能用它们，CREATE
+会报错 `non-deterministic functions prohibited in index expressions`。如果 App 要支持这两个版本，改为给索引的列指定排序规则
+`NOCASE`，比如下文的 `PersonTable.CREATE_INDEX("idx_person_name_nocase", PersonTable.name COLLATE NOCASE)`，所有版本都支持，
+但它只忽略 ASCII 字母的大小写。
+
 索引的每一列都可以像 `ORDER_BY` 那样指定排序方向：`PersonTable.CREATE_INDEX("idx_person_age", PersonTable.age to DESC)` 就是
 `CREATE INDEX idx_person_age ON person(age DESC)`。它是实验性 API。按这个顺序或相反顺序排序的查询，可以按顺序读取索引。
 

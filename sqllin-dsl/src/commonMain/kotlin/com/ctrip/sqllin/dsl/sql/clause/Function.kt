@@ -357,6 +357,9 @@ public fun <T> Relation<T>.random(): ClauseNumber<Long> =
 
 /**
  * UPPER scalar function - converts string to uppercase.
+ *
+ * On Android 7.0 and 7.1, it is ICU's, which their SQLite 3.9 doesn't take as deterministic, so that an index can't
+ * hold it there.
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.upper(element: ClauseString<*>): ClauseString<String> =
@@ -364,6 +367,9 @@ public fun <T> Relation<T>.upper(element: ClauseString<*>): ClauseString<String>
 
 /**
  * LOWER scalar function - converts string to lowercase.
+ *
+ * On Android 7.0 and 7.1, it is ICU's, which their SQLite 3.9 doesn't take as deterministic, so that an index can't
+ * hold it there: give the column of the index the collation NOCASE instead.
  */
 @FunctionDslMaker
 public fun <T> Relation<T>.lower(element: ClauseString<*>): ClauseString<String> =
