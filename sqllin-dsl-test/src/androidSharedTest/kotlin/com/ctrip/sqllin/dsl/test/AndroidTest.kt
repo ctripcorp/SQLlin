@@ -13,13 +13,14 @@ import org.robolectric.annotation.Config
 /**
  * The Android tests, which run on the JVM via Robolectric, as `testAndroidHostTest`, and on an emulator or a device,
  * as `connectedAndroidDeviceTest`: [AndroidJUnit4] runs them on Robolectric on the JVM, where the `sdk` levels of
- * [Config] cover both the `SQLiteDatabase.OpenParams` code path (Android P and above) and the legacy one, and on the
- * device otherwise, at its own level, where [Config] does nothing.
+ * [Config] cover the paths of the framework that the Android driver takes: 26 opens without `SQLiteDatabase.OpenParams`,
+ * which Android P and above have, 34 reads through several connections, as Android 13 and 14 do, and 37 is the latest;
+ * and on the device otherwise, at its own level, where [Config] does nothing.
  * @author Yuang Qiao
  */
 
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [26, 37])
+@Config(sdk = [26, 34, 37])
 class AndroidTest {
 
     private val context = ApplicationProvider.getApplicationContext<Context>()

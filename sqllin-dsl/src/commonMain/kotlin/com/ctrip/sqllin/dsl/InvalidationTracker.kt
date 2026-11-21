@@ -49,6 +49,14 @@ import kotlinx.coroutines.flow.update
  * than for a transaction, so a blocking database scope on another thread can have one open while [track] creates them,
  * and its rollback takes them with it. [refresh] creates them again then.
  *
+ * On Android, a database in WAL mode reads through several connections from Android 13 on, and the TEMP objects are on
+ * the one that writes, which runs every statement of a transaction. Outside one, the framework runs a statement on a
+ * connection that reads where SQLite reports it read-only, as it does for one that does nothing, such as
+ * `CREATE TEMP TRIGGER IF NOT EXISTS` of a trigger that exists: where the trigger doesn't, it would create it, which the
+ * framework refuses, failing with "the connection is read-only". So the tracker reads and writes its objects in a
+ * transaction, as [refresh] does, or with statements that do something, as [track] does, which can't begin one on a
+ * read-only database, as a transaction on Android takes the write lock.
+ *
  * @author Yuang Qiao
  */
 @OptIn(ExperimentalDSLDatabaseAPI::class)
@@ -149,10 +157,12 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
         val newTables = tables - trackedTables.value
         if (newTables.isEmpty())
             return tables
-        connection.execSQL(CREATE_LOG)
+        // Only where the log isn't, so that the statement creates it, see the class's documentation
+        if (trackedTables.value.isEmpty())
+            connection.execSQL(CREATE_LOG)
         val newVirtualTables = newTables intersect virtualTables()
         for (table in newTables) {
-            connection.execSQL(INSERT_LOG_ROW, arrayOf(table))
+            insertLogRow(table)
             if (table !in newVirtualTables)
                 createTriggers(table)
         }
@@ -161,6 +171,19 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
             triggeredTables.value = triggeredTables()
         trackedTables.update { it + newTables }
         return tables
+    }
+
+    /**
+     * Adds the row of [table] to the log, creating the log again where a rollback took it, as one of a blocking scope on
+     * another thread can on the JVM and Kotlin/Native.
+     */
+    private fun insertLogRow(table: String) {
+        try {
+            connection.execSQL(INSERT_LOG_ROW, arrayOf(table))
+        } catch (e: Exception) {
+            connection.execSQL(CREATE_LOG)
+            connection.execSQL(INSERT_LOG_ROW, arrayOf(table))
+        }
     }
 
     /**
@@ -224,26 +247,27 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
         val tables = trackedTables.value
         if (changes == Changes.NONE || tables.isEmpty())
             return
-        if (changes == Changes.SCHEMA) {
-            val virtual = tables intersect virtualTables()
-            virtualTables.value = virtual
-            triggeredTables.value = if (virtual.isEmpty()) emptySet() else triggeredTables()
-        }
-        restoreLostObjects(tables)
-        if (changes == Changes.SCHEMA) {
-            for (table in tables - virtualTables.value)
-                createTriggers(table)
-            connection.execSQL(COUNT_ALL)
-        } else {
-            val virtual = virtualTables.value
-            val writtenVirtualTables = if (writtenTables.any { it in triggeredTables.value }) virtual else virtual intersect writtenTables
-            if (writtenVirtualTables.isNotEmpty()) {
-                val placeholders = writtenVirtualTables.joinToString(",") { "?" }
-                connection.execSQL("$COUNT_ALL WHERE table_name IN ($placeholders)", writtenVirtualTables.toTypedArray())
-            }
-        }
-        // On Android, a query outside a transaction may run on a reader connection, which has no TEMP table
+        // In a transaction, so that it reads and writes the TEMP objects on Android, see the class's documentation; a
+        // scope that changed something can write, so that it can begin one
         val counts = connection.withTransaction {
+            if (changes == Changes.SCHEMA) {
+                val virtual = tables intersect virtualTables()
+                virtualTables.value = virtual
+                triggeredTables.value = if (virtual.isEmpty()) emptySet() else triggeredTables()
+            }
+            restoreLostObjects(tables)
+            if (changes == Changes.SCHEMA) {
+                for (table in tables - virtualTables.value)
+                    createTriggers(table)
+                connection.execSQL(COUNT_ALL)
+            } else {
+                val virtual = virtualTables.value
+                val writtenVirtualTables = if (writtenTables.any { it in triggeredTables.value }) virtual else virtual intersect writtenTables
+                if (writtenVirtualTables.isNotEmpty()) {
+                    val placeholders = writtenVirtualTables.joinToString(",") { "?" }
+                    connection.execSQL("$COUNT_ALL WHERE table_name IN ($placeholders)", writtenVirtualTables.toTypedArray())
+                }
+            }
             it.withQuery(SELECT_LOG) { cursor ->
                 buildMap {
                     cursor.forEachRow { put(cursor.getString(0)!!, cursor.getLong(1)) }
@@ -257,23 +281,20 @@ internal class InvalidationTracker(private val connection: DatabaseConnection) {
 
     /**
      * Creates the TEMP table and the triggers of the tracked [tables] again where they are gone, as a rollback can take
-     * them, and counts a change of each table whose row or triggers were gone, as its changes may have been missed.
+     * them, and counts a change of each table whose row or triggers were gone, as its changes may have been missed. It
+     * runs in the transaction of [refresh].
      */
     private fun restoreLostObjects(tables: Set<String>) {
-        // On Android, a query outside a transaction may run on a reader connection, which has no TEMP objects
-        val (loggedTables, triggerCounts) = connection.withTransaction {
-            val logExists = it.withQuery(LOG_EXISTS) { cursor -> cursor.next() && cursor.getLong(0) > 0 }
-            val logged = if (logExists) it.withQuery(SELECT_LOGGED_TABLES) { cursor ->
-                buildSet<String> {
-                    cursor.forEachRow { add(cursor.getString(0)!!) }
-                }
-            } else null
-            val triggers = it.withQuery(COUNT_TRIGGERS) { cursor ->
-                buildMap<String, Long> {
-                    cursor.forEachRow { put(cursor.getString(0)!!, cursor.getLong(1)) }
-                }
+        val logExists = connection.withQuery(LOG_EXISTS) { cursor -> cursor.next() && cursor.getLong(0) > 0 }
+        val loggedTables = if (logExists) connection.withQuery(SELECT_LOGGED_TABLES) { cursor ->
+            buildSet<String> {
+                cursor.forEachRow { add(cursor.getString(0)!!) }
             }
-            logged to triggers
+        } else null
+        val triggerCounts = connection.withQuery(COUNT_TRIGGERS) { cursor ->
+            buildMap<String, Long> {
+                cursor.forEachRow { put(cursor.getString(0)!!, cursor.getLong(1)) }
+            }
         }
         val virtual = virtualTables.value
         val lostTables = tables.filter { table ->
