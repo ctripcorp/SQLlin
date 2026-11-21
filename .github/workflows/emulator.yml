@@ -10,6 +10,11 @@ name: Emulator Tests
 # - 30: OpenParams, and a single connection, SQLite 3.28
 # - 34: several connections that read, with the PRAGMAs set on each, SQLite 3.39 or 3.42
 # - 37: the latest, SQLite 3.50
+#
+# There is no cache of the AVDs, as the workflow before Robolectric had: with KVM, an emulator boots in about 30
+# seconds, which a snapshot would cut by 20 or so, while each level's would take hundreds of megabytes of the
+# repository's cache, which the other workflows use. Most of a run is the build of the test APKs, which the Gradle cache
+# shortens instead.
 
 on:
   workflow_dispatch:
@@ -35,6 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.levels.outputs.matrix }}
+      first: ${{ steps.levels.outputs.first }}
 
     steps:
       # The packages of API 37 are named android-37.0
@@ -46,6 +52,7 @@ jobs:
           matrix=$(echo "$API_LEVELS" | tr -d ' ' | tr ',' '\n' | jq -R -s -c '
             split("\n") | map(select(length > 0)) | map(if . == "37" then "37.0" else . end) | {"api-level": .}')
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "first=$(echo "$matrix" | jq -r '."api-level"[0]')" >> "$GITHUB_OUTPUT"
           echo "Levels: $matrix"
 
   test-on-emulator:
@@ -76,8 +83,12 @@ jobs:
           distribution: 'zulu'
           java-version: 21
 
+      # The cache is read-only on a pull request by default, so that the build of the APKs never reused its outputs.
+      # Only the job of the first level writes it, so that it is stored once, not once for each level.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ matrix.api-level != needs.levels.outputs.first }}
 
       # Before the emulator starts, so that it only runs the tests
       - name: Build the test APKs
@@ -91,7 +102,9 @@ jobs:
           api-level: ${{ matrix.api-level }}
           target: default
           arch: x86_64
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # -no-snapshot-save: the emulator saves a snapshot as it stops otherwise, which nothing reads, as each run
+          # creates the AVD from scratch
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
             adb shell getprop ro.build.version.sdk
