@@ -60,7 +60,9 @@ internal class QueryDecoder(
     /**
      * Determines the next property to decode from the descriptor.
      *
-     * Skips properties that don't have corresponding columns in the cursor.
+     * Every property is read from the column of its name, and none is skipped: [CommonCursor.getColumnIndex] throws for
+     * a column the rows don't have, on every platform, so that a property without one fails, as a SELECT whose rows don't
+     * fit the type they are read into should. The checks of a negative index only guard a cursor that would return one.
      */
     override tailrec fun decodeElementIndex(descriptor: SerialDescriptor): Int =
         if (elementIndex == descriptor.elementsCount)

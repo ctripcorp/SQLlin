@@ -17,25 +17,30 @@
 package com.ctrip.sqllin.driver.test
 
 import android.content.Context
+import android.os.Build
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.ctrip.sqllin.driver.DatabaseConfiguration
 import com.ctrip.sqllin.driver.toAndroidOpenParams
 import com.ctrip.sqllin.driver.toDatabasePath
+import org.junit.Assume.assumeTrue
 import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Android unit test that runs on the JVM via Robolectric. The `sdk` levels cover both
- * the `SQLiteDatabase.OpenParams` code path (Android P and above) and the legacy one.
+ * The Android tests, which run on the JVM via Robolectric, as `testAndroidHostTest`, and on an emulator or a device,
+ * as `connectedAndroidDeviceTest`: [AndroidJUnit4] runs them on Robolectric on the JVM, where the `sdk` levels of
+ * [Config] cover the paths of the framework that the Android driver takes: 26 opens without `SQLiteDatabase.OpenParams`,
+ * which Android P and above have, 34 reads through several connections, as Android 13 and 14 do, and 37 is the latest;
+ * and on the device otherwise, at its own level, where [Config] does nothing.
  * @author Yuang Qiao
  */
 
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [26, 37])
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [26, 34, 37])
 class AndroidTest {
 
     private val context = ApplicationProvider.getApplicationContext<Context>()
@@ -88,6 +93,8 @@ class AndroidTest {
     @Test
     @Config(sdk = [37])
     fun testLookasideConfig() {
+        // OpenParams, which a device below Android P doesn't have
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
         val config = DatabaseConfiguration(name = SQL.DATABASE_NAME, path = context.toDatabasePath(), version = 1)
         fun lookaside(config: DatabaseConfiguration) = config.toAndroidOpenParams().run { lookasideSlotSize to lookasideSlotCount }
         assertEquals(-1 to -1, lookaside(config))

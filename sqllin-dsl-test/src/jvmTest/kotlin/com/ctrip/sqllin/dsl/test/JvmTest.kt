@@ -25,6 +25,9 @@ class JvmTest {
     fun testInsertGeneratedKeyLast() = commonTest.testInsertGeneratedKeyLast()
 
     @Test
+    fun testInsertManyRows() = commonTest.testInsertManyRows()
+
+    @Test
     fun testDelete() = commonTest.testDelete()
 
     @Test
@@ -95,6 +98,12 @@ class JvmTest {
 
     @Test
     fun testIfNotExists() = commonTest.testIfNotExists()
+
+    @Test
+    fun testDropByName() = commonTest.testDropByName()
+
+    @Test
+    fun testJoinColumnNames() = commonTest.testJoinColumnNames()
 
     @Test
     fun testPartialIndex() = commonTest.testPartialIndex()

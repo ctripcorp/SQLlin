@@ -103,6 +103,57 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertEquals(book, statement?.getResults()?.firstOrNull())
     }
 
+    /**
+     * Covers an INSERT of more rows than SQLite takes the values of in one statement, 999 before SQLite 3.32.0 and
+     * 32766 from then on, by default, which runs in batches: all the rows are inserted, and a conflict in a later batch
+     * undoes the earlier ones, as one statement would, but where `INSERT OR FAIL` keeps the rows before the one that
+     * fails, and `INSERT OR IGNORE` skips it; and in a transaction, `INSERT OR ROLLBACK` rolls back the whole of it.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testInsertManyRows() = Database(getNewAPIDBConfig()).databaseAutoClose { database ->
+        fun skus(): List<String> {
+            lateinit var products: SelectStatement<Product>
+            database { products = ProductTable SELECT X }
+            return products.getResults().map { it.sku }
+        }
+
+        // 12,000 rows of 3 columns bind 36,000 values, more than any SQLite takes by default
+        val many = (1..12_000).map { Product(sku = "SKU-$it", name = "Product $it", price = it.toDouble()) }
+        database { ProductTable INSERT many }
+        assertEquals(many.map { it.sku }.toSet(), skus().toSet())
+        assertEquals(12_000, skus().size)
+
+        // 400 rows bind 1,200 values, so the batches are 333 rows and 67: the last row conflicts, in the second batch
+        val conflicting = (1..399).map { Product(sku = "NEW-$it", name = "New $it", price = 1.0) } +
+            Product(sku = "SKU-1", name = "Duplicate", price = 1.0)
+        fun newRows(): Int = skus().count { it.startsWith("NEW-") }
+
+        assertFails { database { ProductTable INSERT conflicting } }
+        assertEquals(0, newRows())
+        assertFails { database { ProductTable INSERT_OR_ABORT conflicting } }
+        assertEquals(0, newRows())
+
+        assertFails { database { ProductTable INSERT_OR_FAIL conflicting } }
+        assertEquals(399, newRows())
+        database { ProductTable DELETE WHERE(ProductTable.sku LIKE "NEW-%") }
+
+        database { ProductTable INSERT_OR_IGNORE conflicting }
+        assertEquals(399, newRows())
+        database { ProductTable DELETE WHERE(ProductTable.sku LIKE "NEW-%") }
+
+        // In a transaction, a statement before, the earlier batch and the later one are all rolled back
+        assertFails {
+            database {
+                transaction {
+                    ProductTable INSERT Product(sku = "NEW-0", name = "New 0", price = 1.0)
+                    ProductTable INSERT_OR_ROLLBACK conflicting
+                }
+            }
+        }
+        assertEquals(0, newRows())
+        assertEquals(12_000, skus().size)
+    }
+
     fun testInsertGeneratedKeyLast() = Database(getDefaultDBConfig()).databaseAutoClose { database ->
         val result = database {
             CREATE(GeneratedKeyLastTable)
@@ -1110,17 +1161,21 @@ class CommonBasicTest(private val path: DatabasePath) {
                 } AS AuthorBooksView
                 prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
                 personBooks = (PersonWithIdTable INNER_JOIN authorBooks ON (PersonWithIdTable.name EQ AuthorBooksView.author)) SELECT X<PersonBooks>()
-                // The persons under other names join their table with itself
-                val elders = PersonWithIdTable { table ->
-                    table SELECT listOf(name AS Elder::elderName, age AS Elder::elderAge)
-                } AS ElderView
-                pairs = (PersonWithIdTable INNER_JOIN elders ON (ElderView.elderAge GT PersonWithIdTable.age)) SELECT X<YoungerAndElder>()
             }
             assertEquals(listOf(AuthorBooks("Dan Brown", 2)), prolific.getResults())
             assertEquals(
                 listOf(PersonBooks("Dan Brown", 61, 2), PersonBooks("Ken Kousen", 60, 1)),
                 personBooks.getResults().sortedBy { it.name },
             )
+
+            // The persons under other names join their table with itself, through a derived table that SQLite flattens
+            // into the query, which names the result columns as they are written before SQLite 3.20.0, but with AS
+            database {
+                val elders = PersonWithIdTable { table ->
+                    table SELECT listOf(name AS Elder::elderName, age AS Elder::elderAge)
+                } AS ElderView
+                pairs = (PersonWithIdTable INNER_JOIN elders ON (ElderView.elderAge GT PersonWithIdTable.age)) SELECT X<YoungerAndElder>()
+            }
             assertEquals(
                 listOf(YoungerAndElder("Ann", "Dan Brown"), YoungerAndElder("Ann", "Ken Kousen"), YoungerAndElder("Ken Kousen", "Dan Brown")),
                 pairs.getResults().sortedWith(compareBy({ it.name }, { it.elderName })),
@@ -2127,7 +2182,12 @@ class CommonBasicTest(private val path: DatabasePath) {
             database { BookTable { table -> table SELECT (datetime("now", "localtime") AS DateTimes::now) } }
         }
 
-        database { BookTable.CREATE_INDEX("idx_book_day", BookTable.date(BookTable.name)) }
+        // SQLite takes the date and time functions that don't read the clock as deterministic from 3.20.0 on, Android
+        // API 28, and rejects them all in an index before
+        if (sqliteIsAtLeast("3.20.0"))
+            database { BookTable.CREATE_INDEX("idx_book_day", BookTable.date(BookTable.name)) }
+        else
+            assertFails { database { BookTable.CREATE_INDEX("idx_book_day", BookTable.date(BookTable.name)) } }
         assertFailsWith<IllegalArgumentException> {
             database { BookTable.CREATE_INDEX("idx_book_random", BookTable.random()) }
         }
@@ -2905,12 +2965,18 @@ class CommonBasicTest(private val path: DatabasePath) {
             assertEquals(false, plan.details.anyHas("idx_book_author"), plan.toString())
         }
 
-        // The steps of each SELECT of a compound are children of the compound's
+        // The steps of each SELECT of a compound are children of the compound's, from SQLite 3.24.0 on, Android API
+        // 30: an older one lists all the steps without children
         val compoundPlan = compound.getResults()
-        assertEquals(true, compoundPlan.steps.any { it.children.isNotEmpty() }, compoundPlan.toString())
         assertEquals(2, compoundPlan.details.count { "idx_book_author" in it }, compoundPlan.toString())
-        assertEquals(true, compoundPlan.details.size > compoundPlan.steps.size)
-        assertEquals(true, compoundPlan.toString().lines().drop(1).any { it.startsWith("   ") || it.startsWith("|  ") })
+        if (sqliteIsAtLeast("3.24.0")) {
+            assertEquals(true, compoundPlan.steps.any { it.children.isNotEmpty() }, compoundPlan.toString())
+            assertEquals(true, compoundPlan.details.size > compoundPlan.steps.size)
+            assertEquals(true, compoundPlan.toString().lines().drop(1).any { it.startsWith("   ") || it.startsWith("|  ") })
+        } else {
+            assertEquals(true, compoundPlan.steps.all { it.children.isEmpty() }, compoundPlan.toString())
+            assertEquals(compoundPlan.steps.map { it.detail }, compoundPlan.details)
+        }
 
         // In a transaction, and in a versioned read, which only reads
         lateinit var inTransaction: QueryPlanStatement
@@ -3096,8 +3162,14 @@ class CommonBasicTest(private val path: DatabasePath) {
             integrity = PRAGMA_INTEGRITY_CHECK()
             quick = PRAGMA_QUICK_CHECK()
         }
-        assertEquals(1, integrity.getResults().size, integrity.getResults().toString())
-        assertContains(integrity.getResults().single(), "CheckedMembership")
+        // integrity_check and quick_check verify the CHECK constraints from SQLite 3.18.0 on, Android API 26: the
+        // SQLite 3.16.1 of sqlite-jdbc doesn't, and its 3.18.0 does
+        if (sqliteIsAtLeast("3.18.0")) {
+            assertEquals(1, integrity.getResults().size, integrity.getResults().toString())
+            assertContains(integrity.getResults().single(), "CheckedMembership")
+        } else {
+            assertEquals(emptyList(), integrity.getResults())
+        }
         assertEquals(integrity.getResults(), quick.getResults())
 
         // Foreign keys aren't enforced by default, so an order of a user that doesn't exist is a violation
@@ -3356,7 +3428,8 @@ class CommonBasicTest(private val path: DatabasePath) {
         database { CheckedMembershipTable INSERT invalid }
         database { PRAGMA_IGNORE_CHECK_CONSTRAINTS(false) }
         assertContains(assertFails { database { CheckedMembershipTable INSERT invalid } }.message.orEmpty(), "CHECK constraint failed")
-        assertEquals(1, read { PRAGMA_INTEGRITY_CHECK() }.size)
+        // Which integrity_check only does from SQLite 3.18.0 on, see testPragmas
+        assertEquals(if (sqliteIsAtLeast("3.18.0")) 1 else 0, read { PRAGMA_INTEGRITY_CHECK() }.size)
 
         // Checking a table, which an older SQLite can't, so it checks the whole database
         if (sqliteIsAtLeast("3.33.0")) {
@@ -3365,7 +3438,7 @@ class CommonBasicTest(private val path: DatabasePath) {
             assertEquals(emptyList(), read { PRAGMA_QUICK_CHECK("book") })
             assertEquals(1, read { PRAGMA_QUICK_CHECK("CheckedMembership") }.size)
         } else {
-            assertEquals(1, read { PRAGMA_INTEGRITY_CHECK(BookTable) }.size)
+            assertEquals(if (sqliteIsAtLeast("3.18.0")) 1 else 0, read { PRAGMA_INTEGRITY_CHECK(BookTable) }.size)
         }
 
         // A legacy rename doesn't rewrite the view that reads the table, which then reads a table that doesn't exist
@@ -3376,19 +3449,31 @@ class CommonBasicTest(private val path: DatabasePath) {
             database { rows = AdultPersonView SELECT X }
             return rows.getResults().map { it.name }
         }
-        database {
-            PRAGMA_LEGACY_ALTER_TABLE(false)
-            PersonWithIdTable ALTER_RENAME_TABLE_TO renamed
+        if (sqliteIsAtLeast("3.26.0")) {
+            database {
+                PRAGMA_LEGACY_ALTER_TABLE(false)
+                PersonWithIdTable ALTER_RENAME_TABLE_TO renamed
+            }
+            assertEquals(listOf("Adult"), adults(), "legacy_alter_table by default: $legacyByDefault")
+            database { renamed ALTER_RENAME_TABLE_TO PersonWithIdTable }
+            database { PRAGMA_LEGACY_ALTER_TABLE(true) }
+            database { PersonWithIdTable ALTER_RENAME_TABLE_TO renamed }
+            assertContains(assertFails { adults() }.message.orEmpty(), "no such table")
+            database { renamed ALTER_RENAME_TABLE_TO PersonWithIdTable }
+            database { PRAGMA_LEGACY_ALTER_TABLE(legacyByDefault == "1") }
+            assertEquals(listOf("Adult"), adults())
+            println("legacy_alter_table by default: $legacyByDefault")
+        } else if (!sqliteIsAtLeast("3.25.0")) {
+            // Before SQLite 3.25.0, Android API 30, every rename is a legacy one, and the PRAGMA, which SQLite lacks, is
+            // ignored
+            database {
+                PRAGMA_LEGACY_ALTER_TABLE(false)
+                PersonWithIdTable ALTER_RENAME_TABLE_TO renamed
+            }
+            assertContains(assertFails { adults() }.message.orEmpty(), "no such table")
+            database { renamed ALTER_RENAME_TABLE_TO PersonWithIdTable }
+            assertEquals(listOf("Adult"), adults())
         }
-        assertEquals(listOf("Adult"), adults(), "legacy_alter_table by default: $legacyByDefault")
-        database { renamed ALTER_RENAME_TABLE_TO PersonWithIdTable }
-        database { PRAGMA_LEGACY_ALTER_TABLE(true) }
-        database { PersonWithIdTable ALTER_RENAME_TABLE_TO renamed }
-        assertContains(assertFails { adults() }.message.orEmpty(), "no such table")
-        database { renamed ALTER_RENAME_TABLE_TO PersonWithIdTable }
-        database { PRAGMA_LEGACY_ALTER_TABLE(legacyByDefault == "1") }
-        assertEquals(listOf("Adult"), adults())
-        println("legacy_alter_table by default: $legacyByDefault")
 
         // The header of the file
         assertEquals(0, read { PRAGMA_APPLICATION_ID() })
@@ -4573,6 +4658,13 @@ class CommonBasicTest(private val path: DatabasePath) {
                 AlterAfterTable ALTER_ADD_COLUMN AlterAfterTable.nickname
             }
 
+            // RENAME COLUMN needs SQLite 3.25.0, Android API 30. An older one fails it, and the steps after it all read
+            // the renamed column, so the test ends here there; testTableRebuild renames tables on every version.
+            if (!sqliteIsAtLeast("3.25.0")) {
+                assertFails { database { AlterAfterTable.RENAME_COLUMN("name", AlterAfterTable.fullName) } }
+                return@databaseAutoClose
+            }
+
             // RENAME COLUMN, naming the old column by string. Both entities map to 'alter_target'.
             database {
                 AlterAfterTable.RENAME_COLUMN("name", AlterAfterTable.fullName)
@@ -5164,11 +5256,18 @@ class CommonBasicTest(private val path: DatabasePath) {
      * Covers expression indexes: a function of the table's columns, written without the table's name, which SQLite
      * doesn't allow in an index, while a string literal holding that name keeps it. Unique indexes of `lower(name)`
      * and of `replace(name, 'product.', '')` show that the expressions are indexed, and an expression of another table
-     * is rejected.
+     * is rejected. Android's SQLite 3.9, of Android 7.0 and 7.1, takes `lower` from ICU, which it doesn't mark
+     * deterministic, so that an index can't hold it there, which SQLite reports.
      */
     fun testExpressionIndex() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        val isLowerIndexed = try {
+            database { ProductTable.CREATE_UNIQUE_INDEX("idx_product_lower_name", ProductTable.lower(ProductTable.name)) }
+            true
+        } catch (e: Exception) {
+            assertContains(e.message.orEmpty(), "non-deterministic functions prohibited in index expressions")
+            false
+        }
         database {
-            ProductTable.CREATE_UNIQUE_INDEX("idx_product_lower_name", ProductTable.lower(ProductTable.name))
             ProductTable.CREATE_UNIQUE_INDEX("idx_product_bare_name", ProductTable.replace(ProductTable.name, "product.", ""))
             ProductTable INSERT Product(sku = "SKU-1", name = "Widget", price = 1.0)
         }
@@ -5178,12 +5277,72 @@ class CommonBasicTest(private val path: DatabasePath) {
         } catch (e: Exception) {
             true
         }
-        assertEquals(true, insertFails(Product(sku = "SKU-2", name = "WIDGET", price = 2.0)))
+        assertEquals(isLowerIndexed, insertFails(Product(sku = "SKU-2", name = "WIDGET", price = 2.0)))
         assertEquals(true, insertFails(Product(sku = "SKU-3", name = "product.Widget", price = 3.0)))
         assertEquals(false, insertFails(Product(sku = "SKU-4", name = "Gadget", price = 4.0)))
         assertFailsWith<IllegalArgumentException> {
             database { ProductTable.CREATE_INDEX("idx_other_table", BookTable.lower(BookTable.name)) }
         }
+    }
+
+    /**
+     * Covers the names of the columns of a join with a view, which SQLite flattens into the query: before SQLite 3.20.0,
+     * as on Android before API 28, a column without AS is named as it is written, as `adult_person.age`, so that the
+     * rows couldn't be read by their properties' names. Every column of a join is named with AS, in a projection, in
+     * result columns, with DISTINCT, in a compound SELECT and in an outer join.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testJoinColumnNames() = Database(getNewAPIDBConfig(), true).databaseAutoClose { database ->
+        database {
+            CREATE_VIEW(AdultPersonView) AS (PersonWithIdTable SELECT WHERE<AdultPerson>(PersonWithIdTable.age GTE 18))
+            PersonWithIdTable INSERT listOf(
+                PersonWithId(id = null, name = "Ann", age = 30),
+                PersonWithId(id = null, name = "Bob", age = 40),
+                PersonWithId(id = null, name = "Kid", age = 10),
+            )
+            BookTable INSERT listOf(
+                Book(name = "A1", author = "Ann", price = 1.0, pages = 1),
+                Book(name = "A2", author = "Ann", price = 2.0, pages = 2),
+                Book(name = "B1", author = "Bob", price = 3.0, pages = 3),
+                Book(name = "K1", author = "Kid", price = 4.0, pages = 4),
+                Book(name = "N1", author = "Nobody", price = 5.0, pages = 5),
+            )
+        }
+        lateinit var projection: SelectStatement<BookAuthorAge>
+        lateinit var resultColumns: SelectStatement<BookTitleAge>
+        lateinit var distinct: SelectStatement<BookAuthorAge>
+        lateinit var compound: SelectStatement<BookAuthorAge>
+        lateinit var outer: SelectStatement<BookAuthorMaybeAge>
+        database {
+            fun adults() = BookTable INNER_JOIN AdultPersonView ON (AdultPersonView.name EQ BookTable.author)
+            projection = adults() SELECT X<BookAuthorAge>()
+            resultColumns = adults() SELECT listOf(BookTable.name AS BookTitleAge::title)
+            distinct = adults() SELECT_DISTINCT X<BookAuthorAge>()
+            compound = (adults() SELECT WHERE<BookAuthorAge>(BookTable.author EQ "Ann")) UNION
+                (adults() SELECT WHERE<BookAuthorAge>(BookTable.author EQ "Bob"))
+            outer = (BookTable LEFT_OUTER_JOIN AdultPersonView ON (AdultPersonView.name EQ BookTable.author)) SELECT X<BookAuthorMaybeAge>()
+        }
+        assertContains(projection.sqlStr, "book.author AS author,adult_person.age AS age")
+        assertEquals(
+            listOf(BookAuthorAge("Ann", 30), BookAuthorAge("Ann", 30), BookAuthorAge("Bob", 40)),
+            projection.getResults().sortedBy { it.author },
+        )
+        assertEquals(
+            listOf(BookTitleAge("A1", 30), BookTitleAge("A2", 30), BookTitleAge("B1", 40)),
+            resultColumns.getResults().sortedBy { it.title },
+        )
+        assertEquals(listOf(BookAuthorAge("Ann", 30), BookAuthorAge("Bob", 40)), distinct.getResults().sortedBy { it.author })
+        assertEquals(listOf(BookAuthorAge("Ann", 30), BookAuthorAge("Bob", 40)), compound.getResults().sortedBy { it.author })
+        assertEquals(
+            listOf(
+                BookAuthorMaybeAge("Ann", 30),
+                BookAuthorMaybeAge("Ann", 30),
+                BookAuthorMaybeAge("Bob", 40),
+                BookAuthorMaybeAge("Kid", null),
+                BookAuthorMaybeAge("Nobody", null),
+            ),
+            outer.getResults().sortedBy { it.author },
+        )
     }
 
     /**
@@ -5250,6 +5409,109 @@ class CommonBasicTest(private val path: DatabasePath) {
         assertFails { database { DROP(ArticleTable) } }
         assertEquals(true, database.selectFails { ArticleTable SELECT X })
         assertEquals(true, database.selectFails { AdultPersonView SELECT X })
+    }
+
+    /**
+     * Covers dropping a table and a view by their names, with which a migration drops what has no class any more: a
+     * table and a view that version 1 created are gone after the upgrade to version 2, which only names them, and what
+     * it doesn't name stays. DROP_TABLE and DROP_VIEW fail for what doesn't exist, where their IF_EXISTS forms do
+     * nothing; each fails for the other's kind, IF EXISTS or not; an FTS table is dropped as a table; and a blank name
+     * is rejected as the statement is built, so that no statement of its scope runs.
+     */
+    @OptIn(ExperimentalDSLDatabaseAPI::class)
+    fun testDropByName() {
+        fun Database.columnsOf(name: String): List<String> {
+            lateinit var columns: PragmaStatement<List<ColumnInfo>>
+            this { columns = PRAGMA_TABLE_INFO(name) }
+            return columns.getResults().map { it.name }
+        }
+
+        // Version 1 has a table under a name that no class of version 2 has, and a view
+        val version1 = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 1,
+            create = {
+                CREATE(BookTable)
+                CREATE(BookTable.withName("legacy_book"))
+                CREATE(PersonWithIdTable)
+                CREATE_VIEW(AdultPersonView) AS (PersonWithIdTable SELECT WHERE<AdultPerson>(PersonWithIdTable.age GTE 18))
+            },
+        )
+        Database(version1).databaseAutoClose { database ->
+            database { BookTable.withName("legacy_book") INSERT Book(name = "Kotlin Cookbook", author = "Ken Kousen", price = 37.72, pages = 251) }
+            assertEquals(true, database.columnsOf("legacy_book").isNotEmpty())
+            assertEquals(true, database.columnsOf("adult_person").isNotEmpty())
+        }
+
+        val version2 = DSLDBConfiguration(
+            name = DATABASE_NAME,
+            path = path,
+            version = 2,
+            create = {
+                CREATE(BookTable)
+                CREATE(PersonWithIdTable)
+            },
+            upgrade = { oldVersion, _ ->
+                if (oldVersion < 2) {
+                    DROP_TABLE("legacy_book")
+                    DROP_VIEW("adult_person")
+                }
+            },
+        )
+        Database(version2).databaseAutoClose { database ->
+            assertEquals(emptyList(), database.columnsOf("legacy_book"))
+            assertEquals(emptyList(), database.columnsOf("adult_person"))
+            assertEquals(true, database.columnsOf("book").isNotEmpty())
+            assertEquals(true, database.columnsOf("person_with_id").isNotEmpty())
+
+            // What doesn't exist
+            assertFails { database { DROP_TABLE("legacy_book") } }
+            assertFails { database { DROP_VIEW("adult_person") } }
+            database {
+                DROP_TABLE_IF_EXISTS("legacy_book")
+                DROP_VIEW_IF_EXISTS("adult_person")
+            }
+
+            // The other kind: DROP TABLE doesn't drop a view, nor DROP VIEW a table, IF EXISTS or not
+            database {
+                CREATE_VIEW(AdultPersonView) AS (PersonWithIdTable SELECT WHERE<AdultPerson>(PersonWithIdTable.age GTE 18))
+            }
+            assertFails { database { DROP_TABLE("adult_person") } }
+            assertFails { database { DROP_TABLE_IF_EXISTS("adult_person") } }
+            assertFails { database { DROP_VIEW("book") } }
+            assertFails { database { DROP_VIEW_IF_EXISTS("book") } }
+            assertEquals(true, database.columnsOf("adult_person").isNotEmpty())
+            assertEquals(true, database.columnsOf("book").isNotEmpty())
+
+            // A blank name is rejected as the statement is built: the INSERT before it in the scope doesn't run
+            assertFailsWith<IllegalArgumentException> {
+                database {
+                    PersonWithIdTable INSERT PersonWithId(id = null, name = "Ann", age = 30)
+                    DROP_TABLE(" ")
+                }
+            }
+            assertFailsWith<IllegalArgumentException> { database { DROP_TABLE_IF_EXISTS("") } }
+            assertFailsWith<IllegalArgumentException> { database { DROP_VIEW(" ") } }
+            assertFailsWith<IllegalArgumentException> { database { DROP_VIEW_IF_EXISTS("") } }
+            lateinit var persons: SelectStatement<PersonWithId>
+            database { persons = PersonWithIdTable SELECT X }
+            assertEquals(emptyList(), persons.getResults())
+
+            // IF EXISTS drops what exists, and an FTS table is a table
+            database { CREATE(ArticleTable) }
+            assertEquals(true, database.columnsOf("articles").isNotEmpty())
+            database {
+                DROP_VIEW_IF_EXISTS("adult_person")
+                DROP_TABLE_IF_EXISTS("book")
+                DROP_TABLE("articles")
+            }
+            assertEquals(emptyList(), database.columnsOf("adult_person"))
+            assertEquals(emptyList(), database.columnsOf("book"))
+            assertEquals(emptyList(), database.columnsOf("articles"))
+            assertEquals(true, database.selectFails { BookTable SELECT X })
+            assertEquals(true, database.selectFails { ArticleTable SELECT X })
+        }
     }
 
     /**

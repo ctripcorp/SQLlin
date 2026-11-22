@@ -160,7 +160,7 @@ internal object Select : Operation {
 
     /**
      * Appends the columns that the properties of [projection] name, as [from] writes them: with the names of their
-     * relations in a join, which [checkProjection] has checked.
+     * relations in a join, which [checkProjection] has checked, each named as its property with [appendJoinColumn].
      */
     @OptIn(ExperimentalSerializationApi::class)
     private fun StringBuilder.appendColumns(from: From, projection: SerialDescriptor) {
@@ -171,8 +171,20 @@ internal object Select : Operation {
         for (index in 0 ..< projection.elementsCount) {
             if (index > 0)
                 append(',')
-            append(from.find(projection.getElementName(index), projection.serialName).sql)
+            appendJoinColumn(from, projection.getElementName(index), projection.serialName)
         }
+    }
+
+    /**
+     * Appends the column of a join that the property [name] of [projectionName] reads, named as the property with `AS`,
+     * as in `person.name AS name`, by which the row is read. SQLite only names a result column as the SQL says where it
+     * has AS: before 3.20.0, as on Android before API 28, the columns of a query that reads a view, or a derived table,
+     * that SQLite flattens into it are named as they are written, as `person.name`, which the row couldn't be read by.
+     */
+    private fun StringBuilder.appendJoinColumn(from: From, name: String, projectionName: String) {
+        append(from.find(name, projectionName).sql)
+        append(" AS ")
+        append(name)
     }
 
     /**
@@ -208,8 +220,10 @@ internal object Select : Operation {
                     expression.appendSQL(this)
                     append(" AS ")
                     append(name)
+                } else if (from.isJoin) {
+                    appendJoinColumn(from, name, projection.serialName)
                 } else {
-                    append(if (from.isJoin) from.find(name, projection.serialName).sql else name)
+                    append(name)
                 }
             }
             append(" FROM ")

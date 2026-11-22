@@ -155,7 +155,9 @@ and time function for a value or modifier it can't read, so always, except for `
 
 The current time, and the `"localtime"` and `"utc"` modifiers, make a date and time function give different results over
 time, as `random()` does, so an index can't hold such a function: `CREATE_INDEX` rejects it, where SQLite would only
-fail once the table has rows.
+fail once the table has rows. A SQLite before 3.20.0, as Android's before API 28, takes every date and time function
+so, and rejects them all in an index. On Android 7.0 and 7.1, `lower` and `upper` are ICU's, which SQLite 3.9 takes so
+too.
 
 Some functions need a newer SQLite, or a compile-time option of SQLite, than some platforms have, so they are marked
 with [`@PlatformDependentSQLiteAPI`](modify-database-and-transaction.md#apis-that-depend-on-the-sqlite-version):

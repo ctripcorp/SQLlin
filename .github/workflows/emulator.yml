@@ -1,0 +1,123 @@
+name: Emulator Tests
+
+# The Android tests of sqllin-driver and sqllin-dsl on emulators, which run Android's own build of SQLite under the real
+# framework: what neither the native tests on older SQLite versions nor the tests on Robolectric run. They are slow, so
+# they only run by hand: from the Actions tab, once this file is on the default branch, or by adding the label
+# emulator-test to a pull request, which works before.
+#
+# The levels each run one path of the Android driver and one version of Android's SQLite:
+# - 24: the lowest SQLlin supports, SQLite 3.9, opened without OpenParams
+# - 30: OpenParams, and a single connection, SQLite 3.28
+# - 34: several connections that read, with the PRAGMAs set on each, SQLite 3.39 or 3.42
+# - 37: the latest, SQLite 3.50
+#
+# There is no cache of the AVDs, as the workflow before Robolectric had: with KVM, an emulator boots in about 30
+# seconds, which a snapshot would cut by 20 or so, while each level's would take hundreds of megabytes of the
+# repository's cache, which the other workflows use. Most of a run is the build of the test APKs, which the Gradle cache
+# shortens instead.
+
+on:
+  workflow_dispatch:
+    inputs:
+      api-levels:
+        description: 'API levels to run on, separated by commas'
+        required: true
+        default: '24,30,34,37'
+  pull_request:
+    types: [ labeled ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emulator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  levels:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'emulator-test'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.levels.outputs.matrix }}
+      first: ${{ steps.levels.outputs.first }}
+
+    steps:
+      # The packages of API 37 are named android-37.0
+      - name: List the API levels
+        id: levels
+        env:
+          API_LEVELS: ${{ inputs.api-levels || '24,30,34,37' }}
+        run: |
+          matrix=$(echo "$API_LEVELS" | tr -d ' ' | tr ',' '\n' | jq -R -s -c '
+            split("\n") | map(select(length > 0)) | map(if . == "37" then "37.0" else . end) | {"api-level": .}')
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "first=$(echo "$matrix" | jq -r '."api-level"[0]')" >> "$GITHUB_OUTPUT"
+          echo "Levels: $matrix"
+
+  test-on-emulator:
+    needs: levels
+    name: test-on-api-${{ matrix.api-level }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.levels.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Validate Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@v3
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 21
+
+      # The cache is read-only on a pull request by default, so that the build of the APKs never reused its outputs.
+      # Only the job of the first level writes it, so that it is stored once, not once for each level.
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ matrix.api-level != needs.levels.outputs.first }}
+
+      # Before the emulator starts, so that it only runs the tests
+      - name: Build the test APKs
+        run: ./gradlew :sqllin-driver:assembleAndroidDeviceTest :sqllin-dsl-test:assembleAndroidDeviceTest
+
+      # One Gradle run for both modules, with --continue, so that a failure of one doesn't hide the other's, nor fail
+      # unnoticed. The first lines show the level and the SQLite of the system image.
+      - name: Run the tests on API ${{ matrix.api-level }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: default
+          arch: x86_64
+          # -no-snapshot-save: the emulator saves a snapshot as it stops otherwise, which nothing reads, as each run
+          # creates the AVD from scratch
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            adb shell getprop ro.build.version.sdk
+            adb shell "sqlite3 :memory: 'SELECT sqlite_version()'" || true
+            ./gradlew :sqllin-driver:connectedAndroidDeviceTest :sqllin-dsl-test:connectedAndroidDeviceTest --continue --stacktrace
+
+      - name: Upload the reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: Emulator-Reports-API-${{ matrix.api-level }}
+          path: |
+            sqllin-driver/build/reports
+            sqllin-driver/build/outputs/androidTest-results
+            sqllin-dsl-test/build/reports
+            sqllin-dsl-test/build/outputs/androidTest-results
+        if: always()

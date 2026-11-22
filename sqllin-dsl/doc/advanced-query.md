@@ -215,7 +215,8 @@ fun joinSample() {
     lateinit var students: SelectStatement<Student>
     lateinit var scores: SelectStatement<StudentScore>
     database {
-        // SELECT name,person.age,transcript.math,transcript.english FROM person INNER JOIN transcript USING (name)
+        // SELECT name AS name,person.age AS age,transcript.math AS math,transcript.english AS english
+        //     FROM person INNER JOIN transcript USING (name)
         students = (PersonTable INNER_JOIN TranscriptTable USING PersonTable.name) SELECT X<Student>()
         // SELECT person.name AS name,count(transcript.math) AS tests,max(transcript.math) AS bestMath
         //     FROM person LEFT OUTER JOIN transcript ON person.name = transcript.name GROUP BY person.name
@@ -258,7 +259,10 @@ joined relations when the statement is built:
   relation NULL in the rows where it finds no matching row, and so every expression of them but `count`.
 
 SQLlin writes the columns with their relations' names, so that a condition, a function, _GROUP BY_ or _ORDER BY_ can
-name a column that another relation has too. An observed query of a join watches all its relations.
+name a column that another relation has too. Each column a join selects is named as its property with `AS`, as
+`person.age AS age`, by which its rows are read: SQLite only names a column as the SQL says where it has `AS`, and before
+3.20.0, as on Android before API 28, it named the columns of a join with a view, or with a derived table, as they are
+written. An observed query of a join watches all its relations.
 
 ### Migrating From the Old Join API
 
@@ -313,7 +317,8 @@ fun sample() {
         // SELECT authorId,books FROM (SELECT authorId,count(*) AS books FROM book GROUP BY book.authorId) AS author_books
         //     WHERE author_books.books>?
         prolific = authorBooks SELECT WHERE(AuthorBooksView.books GT 1)
-        // SELECT person.name,author_books.books FROM person INNER JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
+        // SELECT person.name AS name,author_books.books AS books
+        //     FROM person INNER JOIN (SELECT ...) AS author_books ON person.id=author_books.authorId
         personBooks = (PersonTable INNER_JOIN authorBooks ON (PersonTable.id EQ AuthorBooksView.authorId)) SELECT X<PersonBooks>()
     }
 }
@@ -357,6 +362,11 @@ data class AuthorId(val authorId: Long)
 // SELECT id,name,age FROM person WHERE person.id IN (SELECT authorId FROM book WHERE book.price>?)
 PersonTable SELECT WHERE(PersonTable.id IN (BookTable SELECT WHERE<AuthorId>(BookTable.price GT 30.0)))
 ```
+
+`IN` also takes a list of values, as `PersonTable.id IN listOf(1L, 2L)`, each of which is bound as a parameter. A SQLite
+before 3.32.0, as Android's before API 31, takes 999 parameters in a statement by default, those of the rest of the
+statement included, so that a longer list fails there with "too many SQL variables": read the values from a table with a
+subquery instead.
 
 `EXISTS` checks whether a _SELECT_ returns any row. The _SELECT_ can refer to the columns of the query it is in, which
 makes it run for each row of that query, as SQLlin writes columns with their tables' names:
@@ -517,6 +527,15 @@ fun persons(database: Database): Flow<PagingData<Person>> =
 * **The thread**: the pages load in `Dispatchers.IO`, or the context given to `pagingSource(context) { }`, as a `Pager`
   may load them on the main thread. Write through `suspendedScope`, which the loads are serialized with, as for an
   observed query.
+* **One SELECT**: a page is the rows of one _SELECT_, read into one type, so it can't hold the rows of a one-to-many
+  relation, as the tags of a note, which a second query would read. Where no query filters by those rows, store them in
+  the row itself, as a `List` in a column converted by its serializer, which
+  [Getting Start](getting-start.md#types-converted-by-serializers) describes; the list also keeps its order so, which
+  the rows of another table only do with a column to order them by. Where queries need them as rows, write a
+  `PagingSource` of your own on [table version tokens](#table-version-tokens): read the page and the related rows each
+  through `versioned { }`, and register the sum of their tokens with `onChange`, so that a change of either table
+  invalidates it. Read the related rows for every page that has rows, even when you know there are none: a table that
+  no read touched isn't in the token, so a row added to it later would never invalidate the source.
 
 ## Full-Text Search
 
